@@ -72,14 +72,25 @@ class SimulatedExecutor(DeviceExecutor):
 
     def _simulate_response(self, action: DeviceAction, urgency: Urgency) -> dict:
         responses = {
+            # Seguridad
             "unlock":          {"status": "unlocked", "duration_seconds": action.params.get("duration_seconds", 300)},
             "lock":            {"status": "locked"},
             "call":            {"status": "calling", "number": action.params.get("number", "911")},
-            "notify":          {"status": "sent", "channels": ["push", "sms"]},
             "alarm":           {"status": "activated", "pattern": action.params.get("pattern", "alert")},
+            "arm":             {"status": "armed", "mode": action.params.get("mode", "away")},
+            # Notificaciones
+            "notify":          {"status": "sent", "channels": ["push", "sms"]},
+            "display":         {"status": "shown", "message": action.params.get("message", "")},
+            # Iluminacion
             "light":           {"status": "on", "brightness": action.params.get("brightness", 100)},
-            "set_brightness":  {"brightness": action.params.get("brightness", 100)},
-            "set_temperature": {"celsius": action.params.get("celsius", 21), "status": "set"},
+            "set_brightness":  {"status": "set", "brightness": action.params.get("brightness", 0)},
+            # Clima
+            "set_temperature": {"status": "set", "celsius": action.params.get("celsius", 21)},
+            "set_position":    {"status": "set", "position": action.params.get("position", 0)},
+            # Energia
+            "turn_off":        {"status": "off", "device": action.device_id},
+            "turn_on":         {"status": "on",  "device": action.device_id},
+            # Sensores
             "read_sensors":    {"readings": {sid: round(random.uniform(15, 25), 1)
                                              for sid in action.params.get("sensor_ids", [])}},
         }

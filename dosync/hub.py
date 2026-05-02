@@ -13,7 +13,8 @@ from typing import Callable, Optional
 
 from .models import (
     ActionPlan, ActionResult, ActuatorSpec, CapabilityManifest,
-    DeviceAction, DeviceEvent, Intent, IntentClass, IntentResult, Urgency,
+    ContextSignalType, DeviceAction, DeviceEvent, Intent, IntentClass,
+    IntentResult, OccupancyState, PresenceSignal, Urgency,
 )
 
 log = logging.getLogger("dosync.hub")
@@ -68,22 +69,10 @@ class CapabilityRegistry:
 
 # Maps intent classes to the tags and actuator types we look for
 INTENT_RESOLUTION_MAP: dict[IntentClass, dict] = {
+    # ── Seguridad ────────────────────────────────────────────────────────────
     IntentClass.ENSURE_SAFETY: {
         "tags":      ["camera", "emergency", "door-lock", "alarm", "communication"],
         "actuators": ["unlock", "call", "alarm", "light"],
-        "require_emergency_capable": False,  # will pick best available
-    },
-    IntentClass.NOTIFY_FAMILY: {
-        "tags":      ["communication", "display", "phone"],
-        "actuators": ["notify", "call", "display"],
-    },
-    IntentClass.REPORT_STATUS: {
-        "tags":      [],   # matches all sensors
-        "actuators": [],
-    },
-    IntentClass.SET_ENVIRONMENT: {
-        "tags":      ["light", "thermostat", "blinds", "climate"],
-        "actuators": ["set_brightness", "set_temperature", "set_position"],
     },
     IntentClass.CONTROL_ACCESS: {
         "tags":      ["door-lock", "gate", "access"],
@@ -92,6 +81,46 @@ INTENT_RESOLUTION_MAP: dict[IntentClass, dict] = {
     IntentClass.MONITOR_HEALTH: {
         "tags":      ["camera", "motion", "wearable", "sensor"],
         "actuators": [],
+    },
+    # ── Familia ──────────────────────────────────────────────────────────────
+    IntentClass.NOTIFY_FAMILY: {
+        "tags":      ["communication", "display", "phone"],
+        "actuators": ["notify", "call", "display"],
+    },
+    IntentClass.REPORT_STATUS: {
+        "tags":      [],
+        "actuators": [],
+    },
+    # ── Ambiente ─────────────────────────────────────────────────────────────
+    IntentClass.SET_ENVIRONMENT: {
+        "tags":      ["light", "thermostat", "blinds", "climate"],
+        "actuators": ["set_brightness", "set_temperature", "set_position"],
+    },
+    # ── Energia y eficiencia ─────────────────────────────────────────────────
+    IntentClass.SAVE_ENERGY: {
+        "tags":      ["light", "thermostat", "smart-plug", "climate", "blinds"],
+        "actuators": ["set_brightness", "set_temperature", "turn_off", "set_position"],
+    },
+    IntentClass.REMIND_CHORE: {
+        "tags":      ["communication", "display", "phone"],
+        "actuators": ["notify", "display"],
+    },
+    IntentClass.ALERT_ANOMALY: {
+        "tags":      ["communication", "phone", "display"],
+        "actuators": ["notify", "call"],
+    },
+    # ── Rutinas ──────────────────────────────────────────────────────────────
+    IntentClass.BEDTIME_ROUTINE: {
+        "tags":      ["light", "blinds", "display", "smart-plug", "climate"],
+        "actuators": ["set_brightness", "set_position", "turn_off", "set_temperature"],
+    },
+    IntentClass.MORNING_ROUTINE: {
+        "tags":      ["light", "blinds", "appliance", "climate", "display"],
+        "actuators": ["set_brightness", "set_position", "turn_on", "set_temperature"],
+    },
+    IntentClass.AWAY_MODE: {
+        "tags":      ["light", "smart-plug", "camera", "alarm", "thermostat"],
+        "actuators": ["turn_off", "set_brightness", "arm", "set_temperature"],
     },
 }
 
@@ -269,7 +298,29 @@ class DoSyncHub:
         self.registry  = CapabilityRegistry()
         self.resolver  = SemanticResolver(self.registry)
         self.audit_log = AuditLog()
+        self.occupancy = OccupancyEngine()
         self._event_handlers: list[Callable] = []
+
+    # ── Occupancy / presence ─────────────────────────────────────────────────
+
+    def update_presence(self, signal: PresenceSignal) -> OccupancyState:
+        """Un context provider actualiza su señal de presencia."""
+        self.occupancy.update(signal)
+        state = self.occupancy.get_occupancy()
+        self.audit_log.append({
+            "type":         "presence_updated",
+            "device_id":    signal.device_id,
+            "signal_type":  signal.signal_type.value,
+            "present":      signal.present,
+            "confidence":   signal.confidence,
+            "occupied":     state.occupied,
+            "occ_confidence": state.confidence,
+        })
+        return state
+
+    def get_occupancy(self) -> OccupancyState:
+        """Estado de ocupacion inferido actual."""
+        return self.occupancy.get_occupancy()
 
     # ── Device management ────────────────────────────────────────────────────
 
@@ -346,3 +397,93 @@ class DoSyncHub:
         for handler in self._event_handlers:
             await asyncio.coroutine(handler)(event) if asyncio.iscoroutinefunction(handler) \
                 else handler(event)
+
+
+# ── Occupancy Engine ──────────────────────────────────────────────────────────
+
+class OccupancyEngine:
+    """
+    Infiere el estado de ocupacion del hogar agregando señales de multiples
+    context providers. Nunca usa una sola fuente — combina y pondera.
+
+    Señales soportadas y su peso por defecto:
+      GPS del celular fuera del perimetro  → ausencia con peso 0.9
+      WiFi del celular desconectado        → ausencia con peso 0.7
+      Sin movimiento PIR por 30+ min       → ausencia con peso 0.4
+      Smartwatch GPS fuera del perimetro   → ausencia con peso 0.8
+      Smart TV apagado                     → ausencia con peso 0.2
+    """
+
+    def __init__(self):
+        self._signals: list[PresenceSignal] = []
+        self._signal_ttl_seconds = 300      # señales expiran en 5 minutos
+
+    def update(self, signal: PresenceSignal) -> None:
+        """Registra o actualiza una señal de presencia."""
+        # Reemplazar señal anterior del mismo dispositivo
+        self._signals = [
+            s for s in self._signals
+            if not (s.device_id == signal.device_id and
+                    s.signal_type == signal.signal_type)
+        ]
+        self._signals.append(signal)
+        log.info(
+            "Presence signal: %s / %s → present=%s (confidence=%.2f)",
+            signal.device_id, signal.signal_type.value,
+            signal.present, signal.confidence,
+        )
+
+    def _active_signals(self) -> list[PresenceSignal]:
+        """Filtra señales expiradas."""
+        cutoff = time.time() - self._signal_ttl_seconds
+        return [s for s in self._signals if s.timestamp >= cutoff]
+
+    def get_occupancy(self) -> OccupancyState:
+        """
+        Calcula el estado de ocupacion actual.
+        Retorna occupied=True si la confianza ponderada de presencia >= 0.5.
+        """
+        signals = self._active_signals()
+        if not signals:
+            # Sin señales = estado desconocido, asumimos ocupado por seguridad
+            return OccupancyState(
+                occupied=True,
+                confidence=0.0,
+                members_home=[],
+                signals_used=0,
+            )
+
+        # Calcular confianza ponderada de presencia
+        total_weight = sum(s.confidence for s in signals)
+        presence_weight = sum(
+            s.confidence for s in signals if s.present
+        )
+
+        confidence_present = presence_weight / total_weight if total_weight > 0 else 0.5
+        occupied = confidence_present >= 0.5
+
+        members_home = list({
+            s.member_id for s in signals
+            if s.present and s.member_id
+        })
+
+        return OccupancyState(
+            occupied=occupied,
+            confidence=abs(confidence_present - 0.5) * 2,  # 0=incertidumbre, 1=certeza
+            members_home=members_home,
+            signals_used=len(signals),
+        )
+
+    def all_signals(self) -> list[dict]:
+        return [
+            {
+                "device_id":   s.device_id,
+                "signal_type": s.signal_type.value,
+                "present":     s.present,
+                "confidence":  s.confidence,
+                "member_id":   s.member_id,
+                "timestamp":   s.timestamp,
+                "age_seconds": round(time.time() - s.timestamp, 1),
+            }
+            for s in self._active_signals()
+        ]

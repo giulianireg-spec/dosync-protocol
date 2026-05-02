@@ -24,19 +24,41 @@ class DeviceCategory(str, Enum):
     HYBRID        = "hybrid"
     COMMUNICATION = "communication"
     EMERGENCY     = "emergency"
+    CONTEXT       = "context"      # contribuye a inferencias de alto nivel
 
 class CertTier(str, Enum):
-    BASIC     = "basic"      # Layers 1–3
-    STANDARD  = "standard"   # Layers 1–4
+    BASIC     = "basic"      # Layers 1-3
+    STANDARD  = "standard"   # Layers 1-4
     EMERGENCY = "emergency"  # All layers + override
 
 class IntentClass(str, Enum):
+    # Seguridad
     ENSURE_SAFETY   = "ensure_safety"
-    NOTIFY_FAMILY   = "notify_family"
-    REPORT_STATUS   = "report_status"
-    SET_ENVIRONMENT = "set_environment"
     CONTROL_ACCESS  = "control_access"
     MONITOR_HEALTH  = "monitor_health"
+    # Familia
+    NOTIFY_FAMILY   = "notify_family"
+    REPORT_STATUS   = "report_status"
+    # Ambiente
+    SET_ENVIRONMENT = "set_environment"
+    # Energia y eficiencia
+    SAVE_ENERGY     = "save_energy"      # nadie en casa -> modo ahorro
+    REMIND_CHORE    = "remind_chore"     # electrodomestico termino -> recordatorio
+    ALERT_ANOMALY   = "alert_anomaly"    # pico de consumo -> investigar
+    # Rutinas
+    BEDTIME_ROUTINE  = "bedtime_routine"  # hora de dormir de los ninos
+    MORNING_ROUTINE  = "morning_routine"  # buenos dias, primera presencia del dia
+    AWAY_MODE        = "away_mode"        # auto salio / todos salieron
+
+
+class ContextSignalType(str, Enum):
+    """Tipo de inferencia a la que contribuye un context provider."""
+    PRESENCE   = "presence"    # si hay alguien en casa
+    LOCATION   = "location"    # ubicacion GPS de un miembro
+    SLEEP      = "sleep"       # estado de sueno
+    HEALTH     = "health"      # signos vitales, actividad fisica
+    ROUTINE    = "routine"     # patron de rutina diaria
+    VEHICLE    = "vehicle"     # estado del auto / garage
 
 
 # ── Capability manifest (Layer 3) ─────────────────────────────────────────────
@@ -64,6 +86,17 @@ class EventSpec:
     description: str = ""
 
 @dataclass
+class ContextSignal:
+    """
+    Declara que este dispositivo contribuye a inferencias de contexto.
+    Ejemplo: un smartwatch contribuye a PRESENCE y HEALTH.
+    """
+    type: ContextSignalType
+    description: str = ""
+    confidence_weight: float = 1.0    # peso relativo en la inferencia (0.0-1.0)
+                                      # GPS del celular pesa mas que un PIR para presencia
+
+@dataclass
 class CapabilityManifest:
     device_id: str
     device_name: str
@@ -72,12 +105,13 @@ class CapabilityManifest:
     firmware: str
     category: DeviceCategory
     tags: list[str]
-    sensors: list[SensorSpec]          = field(default_factory=list)
-    actuators: list[ActuatorSpec]      = field(default_factory=list)
-    events: list[EventSpec]            = field(default_factory=list)
-    emergency_capable: bool            = False
-    cert_tier: CertTier                = CertTier.BASIC
-    dosync_version: str                = "0.1"
+    sensors: list[SensorSpec]              = field(default_factory=list)
+    actuators: list[ActuatorSpec]          = field(default_factory=list)
+    events: list[EventSpec]                = field(default_factory=list)
+    context_signals: list[ContextSignal]   = field(default_factory=list)
+    emergency_capable: bool                = False
+    cert_tier: CertTier                    = CertTier.BASIC
+    dosync_version: str                    = "0.1"
 
     def to_dict(self) -> dict:
         return {
@@ -94,10 +128,42 @@ class CapabilityManifest:
                 "actuators": [a.__dict__ for a in self.actuators],
                 "events":    [{**e.__dict__, "severity": e.severity.value}
                               for e in self.events],
+                "context_signals": [
+                    {**c.__dict__, "type": c.type.value}
+                    for c in self.context_signals
+                ],
             },
             "emergency_capable": self.emergency_capable,
             "cert_tier": self.cert_tier.value,
         }
+
+
+# ── Context model (inferencia de ocupacion y rutinas) ─────────────────────────
+
+@dataclass
+class PresenceSignal:
+    """
+    Una señal individual de presencia emitida por un context provider.
+    El hub las agrega para inferir el estado de ocupacion del hogar.
+    """
+    device_id: str
+    signal_type: ContextSignalType
+    present: bool                          # True = detecta presencia
+    confidence: float                      # 0.0-1.0
+    member_id: Optional[str] = None        # a que miembro de la familia corresponde
+    timestamp: float = field(default_factory=time.time)
+
+@dataclass
+class OccupancyState:
+    """
+    Estado inferido de ocupacion del hogar, calculado por el hub
+    a partir de multiples PresenceSignals.
+    """
+    occupied: bool
+    confidence: float                      # 0.0-1.0
+    members_home: list[str]               # IDs de miembros detectados en casa
+    signals_used: int                      # cuantas señales contribuyeron
+    last_updated: float = field(default_factory=time.time)
 
 
 # ── Intent (Layer 5) ──────────────────────────────────────────────────────────
@@ -127,7 +193,7 @@ class Intent:
         }
 
 
-# ── Device event (Layer 5, device → AI) ──────────────────────────────────────
+# ── Device event (Layer 5, device -> AI) ──────────────────────────────────────
 
 @dataclass
 class DeviceEvent:
