@@ -1,0 +1,17 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Certificados generados
+dosync-cert-*.json
+
+# VS Code
+.vscode/
+
+# Mac
+.DS_Store
