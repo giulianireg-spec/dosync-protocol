@@ -13,8 +13,9 @@ from typing import Callable, Optional
 
 from .models import (
     ActionPlan, ActionResult, ActuatorSpec, CapabilityManifest,
-    ContextSignalType, DeviceAction, DeviceEvent, Intent, IntentClass,
-    IntentResult, OccupancyState, PresenceSignal, Urgency,
+    ContextSignalType, DeviceAction, DeviceEvent, FamilyProfile,
+    Intent, IntentClass, IntentResult, OccupancyState, Phase,
+    PhasedActionPlan, PhaseAction, PresenceSignal, RoutineAction, Urgency,
 )
 
 log = logging.getLogger("dosync.hub")
@@ -163,6 +164,24 @@ class SemanticResolver:
 
         return score
 
+    def _profile_params(self, device: CapabilityManifest,
+                         actuator_type: str, intent: Intent) -> dict | None:
+        """
+        Si el intent tiene acciones explicitas del FamilyProfile en el context,
+        busca los params correspondientes a este dispositivo y actuator.
+        Retorna None si no hay match — el caller usara los defaults.
+        """
+        profile_actions = intent.context.get("actions", [])
+        if not profile_actions:
+            return None
+        for pa in profile_actions:
+            # Matchea si el tag del dispositivo coincide con el tag de la accion
+            # y el tipo de actuador coincide
+            if (pa.get("action_type") == actuator_type and
+                    pa.get("tag") in device.tags):
+                return pa.get("params", {})
+        return None
+
     def _build_actions_for_device(
         self,
         device: CapabilityManifest,
@@ -174,7 +193,9 @@ class SemanticResolver:
 
         for actuator in device.actuators:
             if not target_actuators or actuator.type in target_actuators:
-                params = self._default_params(actuator, intent)
+                # Preferir params del FamilyProfile si existen
+                profile_p = self._profile_params(device, actuator.type, intent)
+                params = profile_p if profile_p is not None                     else self._default_params(actuator, intent)
                 actions.append(DeviceAction(
                     device_id=device.device_id,
                     action=actuator.type,
@@ -295,11 +316,24 @@ class DoSyncHub:
     """
 
     def __init__(self):
-        self.registry  = CapabilityRegistry()
-        self.resolver  = SemanticResolver(self.registry)
-        self.audit_log = AuditLog()
-        self.occupancy = OccupancyEngine()
+        self.registry       = CapabilityRegistry()
+        self.resolver       = SemanticResolver(self.registry)
+        self.audit_log      = AuditLog()
+        self.occupancy      = OccupancyEngine()
+        self.family_profile: FamilyProfile | None = None
         self._event_handlers: list[Callable] = []
+
+    # ── Family profile ───────────────────────────────────────────────────────
+
+    def set_family_profile(self, profile: FamilyProfile) -> None:
+        """Carga el perfil familiar en el hub."""
+        self.family_profile = profile
+        self.audit_log.append({
+            "type":        "profile_loaded",
+            "family_name": profile.family_name,
+            "bedtime":     f"{profile.bedtime_hour:02d}:{profile.bedtime_minute:02d}",
+        })
+        log.info("Family profile loaded: %s", profile.family_name)
 
     # ── Occupancy / presence ─────────────────────────────────────────────────
 
@@ -398,6 +432,64 @@ class DoSyncHub:
             await asyncio.coroutine(handler)(event) if asyncio.iscoroutinefunction(handler) \
                 else handler(event)
 
+    # ── Phased intent execution ──────────────────────────────────────────────
+
+    async def execute_phased(
+        self,
+        plan: PhasedActionPlan,
+        executor: "DeviceExecutor",
+    ) -> list[IntentResult]:
+        """
+        Ejecuta un PhasedActionPlan: cada fase en paralelo,
+        las fases en secuencia con delay entre ellas.
+        Ideal para emergencias donde el orden importa.
+        """
+        all_results = []
+
+        for i, phase in enumerate(plan.phases):
+            log.info(
+                "Executing phase %d/%d: '%s' (%d actions)",
+                i + 1, len(plan.phases), phase.name, len(phase.actions),
+            )
+
+            tasks = [
+                executor.execute(
+                    DeviceAction(
+                        device_id=a.device_id,
+                        action=a.action,
+                        params=a.params,
+                    ),
+                    plan.urgency,
+                )
+                for a in phase.actions
+            ]
+            results = await asyncio.gather(*tasks)
+
+            failed = [r.device_id for r in results if not r.success]
+            phase_result = IntentResult(
+                intent_id=f"{plan.intent_id}-phase{i+1}",
+                success=len(failed) == 0,
+                results=list(results),
+                failed_devices=failed,
+            )
+            all_results.append(phase_result)
+
+            self.audit_log.append({
+                "type":       "phase_executed",
+                "intent_id":  plan.intent_id,
+                "phase":      phase.name,
+                "phase_num":  i + 1,
+                "actions":    len(phase.actions),
+                "failed":     failed,
+                "success":    phase_result.success,
+            })
+
+            if phase.delay_after_ms > 0 and i < len(plan.phases) - 1:
+                log.info("Waiting %dms before next phase...", phase.delay_after_ms)
+                await asyncio.sleep(phase.delay_after_ms / 1000)
+
+        return all_results
+
 
 # ── Occupancy Engine ──────────────────────────────────────────────────────────
 
@@ -487,3 +579,4 @@ class OccupancyEngine:
             }
             for s in self._active_signals()
         ]
+

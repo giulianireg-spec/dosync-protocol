@@ -245,3 +245,81 @@ class IntentResult:
     results: list[ActionResult]
     failed_devices: list[str]         = field(default_factory=list)
     completed_at: float               = field(default_factory=time.time)
+
+
+# ── Phased action plan (para secuencias ordenadas como emergencias) ────────────
+
+@dataclass
+class PhaseAction:
+    """Una accion dentro de una fase del plan."""
+    device_id: str
+    action: str
+    params: dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class Phase:
+    """
+    Un grupo de acciones que se ejecutan en paralelo.
+    Las fases se ejecutan en orden secuencial con delay entre ellas.
+    """
+    name: str
+    actions: list[PhaseAction]
+    delay_after_ms: int = 0    # esperar X ms antes de ejecutar la siguiente fase
+
+@dataclass
+class PhasedActionPlan:
+    intent_id: str
+    phases: list[Phase]
+    urgency: Urgency
+    created_at: float = field(default_factory=time.time)
+
+
+# ── Family profile (rutinas configurables por familia) ────────────────────────
+
+@dataclass
+class RoutineAction:
+    """Una accion dentro de una rutina familiar."""
+    tag: str                           # tag del dispositivo que debe ejecutarla
+    action_type: str                   # tipo de actuador
+    params: dict[str, Any] = field(default_factory=dict)
+    description: str = ""
+
+@dataclass
+class FamilyProfile:
+    """
+    Perfil de rutinas de una familia.
+    Define que acciones ejecutar para cada rutina y a que hora.
+    Cada familia configura el suyo — no hay valores impuestos.
+    """
+    family_name: str
+
+    # Rutina de la manana — disparada por primer movimiento del dia
+    routine_morning: list[RoutineAction] = field(default_factory=list)
+
+    # Rutina de hora de dormir — disparada por scheduler
+    routine_bedtime: list[RoutineAction] = field(default_factory=list)
+    bedtime_hour:   int = 21
+    bedtime_minute: int = 30
+
+    # Modo ausente — disparado por sensor de garage o presencia
+    routine_away: list[RoutineAction] = field(default_factory=list)
+
+    # Metadata
+    timezone: str = "America/Argentina/Cordoba"
+    created_at: float = field(default_factory=time.time)
+
+    def to_dict(self) -> dict:
+        def action_list(actions):
+            return [
+                {"tag": a.tag, "action_type": a.action_type,
+                 "params": a.params, "description": a.description}
+                for a in actions
+            ]
+        return {
+            "family_name":       self.family_name,
+            "bedtime":           f"{self.bedtime_hour:02d}:{self.bedtime_minute:02d}",
+            "timezone":          self.timezone,
+            "routine_morning":   action_list(self.routine_morning),
+            "routine_bedtime":   action_list(self.routine_bedtime),
+            "routine_away":      action_list(self.routine_away),
+        }
