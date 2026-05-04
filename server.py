@@ -25,7 +25,7 @@ logging.basicConfig(
 
 # ── Estado global del hub ─────────────────────────────────────────────────────
 
-hub      = DoSyncHub()
+hub      = DoSyncHub(db_path="dosync.db")
 executor = SimulatedExecutor(failure_rate=0.0)
 
 def on_event(event: DeviceEvent):
@@ -69,6 +69,13 @@ class RegisterDeviceRequest(BaseModel):
     events: list[EventSpecIn] = []
     emergency_capable: bool = False
     cert_tier: str = "basic"
+
+class PresenceSignalRequest(BaseModel):
+    device_id: str
+    signal_type: str
+    present: bool
+    confidence: float = 0.7
+    member_id: Optional[str] = None
 
 class IntentRequest(BaseModel):
     intent: str
@@ -272,4 +279,69 @@ def get_audit_log():
         "count":    len(entries),
         "integrity": hub.audit_log.verify(),
         "entries":  entries,
+    }
+
+
+@app.post("/v1/presence", tags=["Context"])
+async def update_presence(req: PresenceSignalRequest):
+    """
+    Un context provider (celular, smartwatch, sensor PIR) actualiza
+    su señal de presencia. El hub la agrega al OccupancyEngine.
+    """
+    from dosync.models import PresenceSignal, ContextSignalType
+    try:
+        signal_type = ContextSignalType(req.signal_type)
+    except ValueError:
+        valid = [t.value for t in ContextSignalType]
+        raise HTTPException(status_code=422,
+            detail=f"signal_type '{req.signal_type}' not valid. Valid: {valid}")
+
+    signal = PresenceSignal(
+        device_id=req.device_id,
+        signal_type=signal_type,
+        present=req.present,
+        confidence=req.confidence,
+        member_id=req.member_id,
+    )
+    state = hub.update_presence(signal)
+    return {
+        "status":       "updated",
+        "occupied":     state.occupied,
+        "confidence":   round(state.confidence, 3),
+        "members_home": state.members_home,
+        "signals_used": state.signals_used,
+    }
+
+
+@app.get("/v1/presence", tags=["Context"])
+def get_presence():
+    """Estado de ocupación inferido actual del hogar."""
+    state = hub.get_occupancy()
+    signals = hub.occupancy.all_signals()
+    return {
+        "occupied":     state.occupied,
+        "confidence":   round(state.confidence, 3),
+        "members_home": state.members_home,
+        "signals_used": state.signals_used,
+        "signals":      signals,
+    }
+
+
+@app.get("/v1/status", tags=["Status"])
+def get_status():
+    """Estado completo del hub incluyendo estadísticas de la base de datos."""
+    db_stats = hub.db.stats()
+    occupancy = hub.get_occupancy()
+    return {
+        "name":            "DoSync Hub",
+        "version":         "0.1.0",
+        "protocol":        "dosync/0.1",
+        "status":          "running",
+        "devices":         len(hub.registry.all()),
+        "audit_entries":   len(hub.audit_log.entries()),
+        "audit_integrity": hub.audit_log.verify(),
+        "occupied":        occupancy.occupied,
+        "db":              db_stats,
+        "family_profile":  hub.family_profile.family_name
+                            if hub.family_profile else None,
     }

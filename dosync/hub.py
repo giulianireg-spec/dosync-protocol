@@ -11,6 +11,7 @@ import logging
 import time
 from typing import Callable, Optional
 
+from .db import DoSyncDB
 from .models import (
     ActionPlan, ActionResult, ActuatorSpec, CapabilityManifest,
     ContextSignalType, DeviceAction, DeviceEvent, FamilyProfile,
@@ -279,6 +280,7 @@ class AuditLog:
     def __init__(self):
         self._entries: list[dict] = []
         self._prev_hash = "0" * 64
+        self._persist_cb = None   # set by DoSyncHub after db.init()
 
     def append(self, entry: dict) -> str:
         entry["prev_hash"] = self._prev_hash
@@ -288,6 +290,8 @@ class AuditLog:
         entry["hash"] = entry_hash
         self._prev_hash = entry_hash
         self._entries.append(entry)
+        if self._persist_cb:
+            self._persist_cb(entry)
         return entry_hash
 
     def verify(self) -> bool:
@@ -315,19 +319,122 @@ class DoSyncHub:
     Exposes async methods for device registration and intent execution.
     """
 
-    def __init__(self):
+    def __init__(self, db_path: str = "dosync.db"):
         self.registry       = CapabilityRegistry()
         self.resolver       = SemanticResolver(self.registry)
         self.audit_log      = AuditLog()
         self.occupancy      = OccupancyEngine()
         self.family_profile: FamilyProfile | None = None
         self._event_handlers: list[Callable] = []
+        self.db             = DoSyncDB(db_path)
+        self.db.init()
+        self.audit_log._persist_cb = self.db.append_audit
+        self._restore_from_db()
 
     # ── Family profile ───────────────────────────────────────────────────────
 
+    # ── DB restore ──────────────────────────────────────────────────────────
+
+    def _restore_from_db(self) -> None:
+        """
+        Al iniciar el hub, restaura el estado desde SQLite.
+        Los dispositivos, perfil y audit log sobreviven reinicios.
+        """
+        from .models import (
+            ActuatorSpec, CapabilityManifest, CertTier, ContextSignal,
+            ContextSignalType, DeviceCategory, EventSpec, SensorSpec,
+        )
+
+        # Restaurar dispositivos
+        for manifest_dict in self.db.load_devices():
+            try:
+                # Reconstruir el CapabilityManifest desde el dict guardado
+                caps = manifest_dict.get("capabilities", {})
+
+                sensors = [
+                    SensorSpec(
+                        id=s["id"], type=s["type"],
+                        description=s.get("description", ""),
+                        unit=s.get("unit"),
+                        poll_interval_ms=s.get("poll_interval_ms", 30000),
+                    )
+                    for s in caps.get("sensors", [])
+                ]
+                actuators = [
+                    ActuatorSpec(
+                        id=a["id"], type=a["type"],
+                        description=a.get("description", ""),
+                    )
+                    for a in caps.get("actuators", [])
+                ]
+                events = [
+                    EventSpec(
+                        id=e["id"],
+                        severity=Urgency(e.get("severity", "info")),
+                        description=e.get("description", ""),
+                    )
+                    for e in caps.get("events", [])
+                ]
+                context_signals = [
+                    ContextSignal(
+                        type=ContextSignalType(c["type"]),
+                        description=c.get("description", ""),
+                        confidence_weight=c.get("confidence_weight", 1.0),
+                    )
+                    for c in caps.get("context_signals", [])
+                ]
+
+                manifest = CapabilityManifest(
+                    device_id=manifest_dict["device_id"],
+                    device_name=manifest_dict["device_name"],
+                    manufacturer=manifest_dict["manufacturer"],
+                    model=manifest_dict["model"],
+                    firmware=manifest_dict["firmware"],
+                    category=DeviceCategory(manifest_dict["category"]),
+                    tags=manifest_dict["tags"],
+                    sensors=sensors,
+                    actuators=actuators,
+                    events=events,
+                    context_signals=context_signals,
+                    emergency_capable=manifest_dict.get("emergency_capable", False),
+                    cert_tier=CertTier(manifest_dict.get("cert_tier", "basic")),
+                )
+                self.registry.register(manifest)
+            except Exception as e:
+                log.warning("Could not restore device %s: %s",
+                            manifest_dict.get("device_id", "?"), e)
+
+        # Restaurar audit log
+        for entry in self.db.load_audit_log():
+            self.audit_log._entries.append(entry)
+            self.audit_log._prev_hash = entry.get("hash", "0" * 64)
+
+        # Restaurar senales de presencia
+        from .models import PresenceSignal
+        for signal_dict in self.db.load_presence_signals():
+            try:
+                signal = PresenceSignal(
+                    device_id=signal_dict["device_id"],
+                    signal_type=ContextSignalType(signal_dict["signal_type"]),
+                    present=signal_dict["present"],
+                    confidence=signal_dict["confidence"],
+                    member_id=signal_dict.get("member_id"),
+                    timestamp=signal_dict.get("timestamp", time.time()),
+                )
+                self.occupancy._signals.append(signal)
+            except Exception as e:
+                log.warning("Could not restore presence signal: %s", e)
+
+        log.info(
+            "Hub restored: %d device(s), %d audit entries",
+            len(self.registry.all()),
+            len(self.audit_log.entries()),
+        )
+
     def set_family_profile(self, profile: FamilyProfile) -> None:
-        """Carga el perfil familiar en el hub."""
+        """Carga el perfil familiar en el hub y lo persiste."""
         self.family_profile = profile
+        self.db.save_family_profile(profile.to_dict())
         self.audit_log.append({
             "type":        "profile_loaded",
             "family_name": profile.family_name,
@@ -340,6 +447,14 @@ class DoSyncHub:
     def update_presence(self, signal: PresenceSignal) -> OccupancyState:
         """Un context provider actualiza su señal de presencia."""
         self.occupancy.update(signal)
+        self.db.save_presence_signal(signal.device_id, {
+            "device_id":   signal.device_id,
+            "signal_type": signal.signal_type.value,
+            "present":     signal.present,
+            "confidence":  signal.confidence,
+            "member_id":   signal.member_id,
+            "timestamp":   signal.timestamp,
+        })
         state = self.occupancy.get_occupancy()
         self.audit_log.append({
             "type":         "presence_updated",
@@ -360,6 +475,7 @@ class DoSyncHub:
 
     def register_device(self, manifest: CapabilityManifest) -> None:
         self.registry.register(manifest)
+        self.db.save_device(manifest.device_id, manifest.to_dict())
         self.audit_log.append({
             "type": "device_registered",
             "device_id": manifest.device_id,
@@ -368,6 +484,7 @@ class DoSyncHub:
 
     def unregister_device(self, device_id: str) -> None:
         self.registry.unregister(device_id)
+        self.db.delete_device(device_id)
         self.audit_log.append({"type": "device_unregistered", "device_id": device_id})
 
     # ── Intent execution ─────────────────────────────────────────────────────
