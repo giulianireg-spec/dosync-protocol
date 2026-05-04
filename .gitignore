@@ -15,3 +15,6 @@ dosync-cert-*.json
 
 # Mac
 .DS_Store
+dosync.db
+dosync.db-shm
+dosync.db-wal
