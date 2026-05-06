@@ -112,9 +112,11 @@ class CapabilityManifest:
     emergency_capable: bool                = False
     cert_tier: CertTier                    = CertTier.BASIC
     dosync_version: str                    = "0.1"
+    adapter: Optional[str]                 = None
+    adapter_config: dict                   = field(default_factory=dict)
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "dosync_version": self.dosync_version,
             "device_id": self.device_id,
             "device_name": self.device_name,
@@ -136,6 +138,10 @@ class CapabilityManifest:
             "emergency_capable": self.emergency_capable,
             "cert_tier": self.cert_tier.value,
         }
+        if self.adapter:
+            d["adapter"]        = self.adapter
+            d["adapter_config"] = self.adapter_config
+        return d
 
 
 # ── Context model (inferencia de ocupacion y rutinas) ─────────────────────────
