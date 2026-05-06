@@ -327,6 +327,45 @@ def get_presence():
     }
 
 
+@app.post("/v1/discovery/run", tags=["Discovery"])
+async def run_discovery():
+    """
+    Escanea la red local en busca de dispositivos compatibles.
+    Registra automaticamente los que encuentra (WiZ, y futuros adapters).
+    """
+    from dosync.discovery import Discovery
+    disc = Discovery(hub, timeout_override=5.0)
+    new_count = await disc.run()
+    return {
+        "status":       "complete",
+        "new_devices":  new_count,
+        "total_devices": len(hub.registry.all()),
+    }
+
+
+@app.get("/v1/discovery/scan", tags=["Discovery"])
+async def scan_devices():
+    """
+    Escanea la red local y devuelve los dispositivos encontrados
+    sin registrarlos. Util para ver que hay antes de registrar.
+    """
+    from dosync.discovery import discover_wiz
+    wiz_devices = await discover_wiz(timeout=5.0)
+    return {
+        "found": [
+            {
+                "adapter":     d.adapter,
+                "device_id":   d.device_id,
+                "device_name": d.device_name,
+                "ip":          d.ip,
+                "registered":  hub.registry.get(d.device_id) is not None,
+            }
+            for d in wiz_devices
+        ],
+        "count": len(wiz_devices),
+    }
+
+
 @app.get("/v1/status", tags=["Status"])
 def get_status():
     """Estado completo del hub incluyendo estadísticas de la base de datos."""
