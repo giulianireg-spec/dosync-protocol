@@ -546,8 +546,10 @@ class DoSyncHub:
         })
 
         for handler in self._event_handlers:
-            await asyncio.coroutine(handler)(event) if asyncio.iscoroutinefunction(handler) \
-                else handler(event)
+            if asyncio.iscoroutinefunction(handler):
+                await handler(event)
+            else:
+                handler(event)
 
     # ── Phased intent execution ──────────────────────────────────────────────
 

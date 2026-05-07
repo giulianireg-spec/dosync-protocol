@@ -8,8 +8,10 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any, Optional
 
+import json
 import os
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from dosync.hub import DoSyncHub
@@ -35,6 +37,84 @@ executor = SimulatedExecutor(failure_rate=0.0)
 _auth_enabled = os.environ.get("DOSYNC_AUTH", "true").lower() != "false"
 _auth_manager = AuthManager(hub.db, enabled=_auth_enabled)
 set_auth_manager(_auth_manager)
+
+
+# ── WebSocket manager ─────────────────────────────────────────────────────────
+
+class ConnectionManager:
+    """Gestiona todas las conexiones WebSocket activas."""
+
+    def __init__(self):
+        self._connections: list[WebSocket] = []
+
+    async def connect(self, ws: WebSocket) -> None:
+        await ws.accept()
+        self._connections.append(ws)
+        logging.getLogger("dosync.ws").info(
+            "Client connected — total: %d", len(self._connections)
+        )
+
+    def disconnect(self, ws: WebSocket) -> None:
+        self._connections.remove(ws)
+        logging.getLogger("dosync.ws").info(
+            "Client disconnected — total: %d", len(self._connections)
+        )
+
+    async def broadcast(self, event_type: str, data: dict) -> None:
+        """Emite un evento a todos los clientes conectados."""
+        if not self._connections:
+            return
+        message = json.dumps({"type": event_type, "data": data})
+        dead = []
+        for ws in self._connections:
+            try:
+                await ws.send_text(message)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self._connections.remove(ws)
+
+    @property
+    def active_connections(self) -> int:
+        return len(self._connections)
+
+
+ws_manager = ConnectionManager()
+
+
+# ── Hook hub events into WebSocket broadcast ──────────────────────────────────
+
+_original_on_event = hub.receive_event.__wrapped__ if hasattr(hub.receive_event, '__wrapped__') else None
+
+async def _ws_event_handler(event):
+    await ws_manager.broadcast("device_event", {
+        "device_id": event.device_id,
+        "event_id":  event.event_id,
+        "severity":  event.severity.value,
+        "data":      event.data,
+        "timestamp": event.timestamp,
+    })
+
+hub.on_event(_ws_event_handler)
+
+
+# Patch audit log to broadcast intent executions
+_original_audit_append = hub.audit_log.append
+
+def _patched_audit_append(entry: dict) -> str:
+    result = _original_audit_append(entry)
+    import asyncio
+    entry_type = entry.get("type", "")
+    if entry_type in ("intent_executed", "phase_executed", "presence_updated"):
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(ws_manager.broadcast(entry_type, entry))
+        except Exception:
+            pass
+    return result
+
+hub.audit_log.append = _patched_audit_append
 
 def on_event(event: DeviceEvent):
     logging.getLogger("dosync.server").info(
@@ -132,6 +212,48 @@ app = FastAPI(
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    """
+    WebSocket para eventos en tiempo real.
+    
+    Conectar: ws://localhost:47200/ws?token=<api-key>
+    
+    Eventos emitidos:
+        device_event     — un dispositivo emitió un evento
+        intent_executed  — un intent fue ejecutado
+        phase_executed   — una fase de un intent fue ejecutada
+        presence_updated — señal de presencia actualizada
+        ping             — keepalive cada 30s
+    """
+    # Auth via query param (WebSocket no soporta headers custom fácilmente)
+    token = ws.query_params.get("token", "")
+    if _auth_enabled and not _auth_manager.verify(token):
+        await ws.close(code=4001, reason="Unauthorized")
+        return
+
+    await ws_manager.connect(ws)
+    try:
+        # Enviar estado inicial al conectarse
+        await ws.send_text(json.dumps({
+            "type": "connected",
+            "data": {
+                "devices":    len(hub.registry.all()),
+                "hub_version": "0.1.0",
+                "protocol":   "dosync/0.1",
+            }
+        }))
+        # Keepalive loop
+        import asyncio
+        while True:
+            await asyncio.sleep(30)
+            await ws.send_text(json.dumps({"type": "ping", "data": {}}))
+    except WebSocketDisconnect:
+        ws_manager.disconnect(ws)
+    except Exception:
+        ws_manager.disconnect(ws)
+
 
 @app.get("/", tags=["Status"])
 def root():
@@ -416,6 +538,7 @@ def get_status():
         "audit_entries":   len(hub.audit_log.entries()),
         "audit_integrity": hub.audit_log.verify(),
         "occupied":        occupancy.occupied,
+        "ws_connections":  ws_manager.active_connections,
         "db":              db_stats,
         "family_profile":  hub.family_profile.family_name
                             if hub.family_profile else None,
