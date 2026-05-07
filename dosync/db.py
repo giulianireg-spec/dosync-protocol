@@ -45,6 +45,13 @@ CREATE TABLE IF NOT EXISTS presence_signals (
     timestamp       REAL NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS api_keys (
+    key_hash        TEXT PRIMARY KEY,
+    label           TEXT NOT NULL,
+    created_at      REAL NOT NULL,
+    last_used_at    REAL
+);
+
 CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
 CREATE INDEX IF NOT EXISTS idx_presence_timestamp ON presence_signals(timestamp);
 """
@@ -237,3 +244,55 @@ class DoSyncDB:
             "devices":        self.device_count(),
             "audit_entries":  self.audit_count(),
         }
+
+    # ── API Keys ──────────────────────────────────────────────────────────────
+
+    def save_api_key(self, key_hash: str, label: str) -> None:
+        """Guarda una API key (almacenamos el hash, nunca la key en texto plano)."""
+        with self._cursor() as cur:
+            cur.execute("""
+                INSERT OR IGNORE INTO api_keys (key_hash, label, created_at)
+                VALUES (?, ?, ?)
+            """, (key_hash, label, time.time()))
+
+    def verify_api_key(self, key_hash: str) -> bool:
+        """Verifica si una API key existe y actualiza last_used_at."""
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT key_hash FROM api_keys WHERE key_hash = ?", (key_hash,)
+            )
+            row = cur.fetchone()
+            if row:
+                cur.execute(
+                    "UPDATE api_keys SET last_used_at = ? WHERE key_hash = ?",
+                    (time.time(), key_hash)
+                )
+                return True
+        return False
+
+    def list_api_keys(self) -> list[dict]:
+        """Lista todas las API keys registradas (sin el hash completo)."""
+        with self._cursor() as cur:
+            cur.execute("SELECT key_hash, label, created_at, last_used_at FROM api_keys")
+            rows = cur.fetchall()
+        return [
+            {
+                "key_preview": r["key_hash"][:8] + "...",
+                "label":       r["label"],
+                "created_at":  r["created_at"],
+                "last_used_at": r["last_used_at"],
+            }
+            for r in rows
+        ]
+
+    def delete_api_key(self, key_hash: str) -> bool:
+        """Elimina una API key. Retorna True si existía."""
+        with self._cursor() as cur:
+            cur.execute("DELETE FROM api_keys WHERE key_hash = ?", (key_hash,))
+            return cur.rowcount > 0
+
+    def has_any_key(self) -> bool:
+        """True si hay al menos una API key registrada."""
+        with self._cursor() as cur:
+            cur.execute("SELECT COUNT(*) as n FROM api_keys")
+            return cur.fetchone()["n"] > 0
