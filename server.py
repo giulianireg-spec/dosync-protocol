@@ -11,7 +11,8 @@ from typing import Any, Optional
 import json
 import os
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from dosync.hub import DoSyncHub
@@ -255,9 +256,19 @@ async def websocket_endpoint(ws: WebSocket):
         ws_manager.disconnect(ws)
 
 
-@app.get("/", tags=["Status"])
+@app.get("/", response_class=FileResponse, tags=["Status"])
+def dashboard():
+    """Dashboard web del hub DoSync."""
+    from pathlib import Path
+    dashboard_path = Path(__file__).parent / "dashboard.html"
+    if dashboard_path.exists():
+        return FileResponse(dashboard_path, media_type="text/html")
+    return FileResponse.__new__(FileResponse)
+
+
+@app.get("/api", tags=["Status"])
 def root():
-    """Estado del hub."""
+    """Estado del hub (JSON)."""
     return {
         "name": "DoSync Hub",
         "version": "0.1.0",

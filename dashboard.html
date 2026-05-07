@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DoSync Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0a0e1a;
+    --surface:   #111827;
+    --surface2:  #1a2236;
+    --border:    #1e2d45;
+    --navy:      #1B3A5C;
+    --blue:      #2563EB;
+    --blue-dim:  #1d4ed8;
+    --teal:      #0d9488;
+    --amber:     #d97706;
+    --red:       #dc2626;
+    --green:     #16a34a;
+    --text:      #e2e8f0;
+    --text-dim:  #64748b;
+    --text-mute: #334155;
+    --mono:      'JetBrains Mono', monospace;
+    --sans:      'Space Grotesk', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Grid background ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(37,99,235,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(37,99,235,.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Header ── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(10,14,26,.9);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+  }
+
+  .logo-mark {
+    width: 32px; height: 32px;
+    background: var(--blue);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: white;
+    letter-spacing: -1px;
+  }
+
+  .logo-text {
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -.02em;
+  }
+
+  .logo-sub {
+    font-size: .7rem;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    margin-left: .25rem;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .ws-indicator {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .75rem;
+    font-family: var(--mono);
+    color: var(--text-dim);
+  }
+
+  .ws-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--text-mute);
+    transition: background .3s;
+  }
+  .ws-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .ws-dot.error     { background: var(--red); }
+
+  .token-input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: .3rem .6rem;
+    font-family: var(--mono);
+    font-size: .72rem;
+    color: var(--text);
+    width: 220px;
+    outline: none;
+  }
+  .token-input:focus { border-color: var(--blue); }
+  .token-input::placeholder { color: var(--text-mute); }
+
+  .btn {
+    background: var(--blue);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: .35rem .8rem;
+    font-size: .78rem;
+    font-family: var(--sans);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .btn:hover { background: var(--blue-dim); }
+  .btn.sm { padding: .25rem .55rem; font-size: .72rem; }
+  .btn.ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .btn.ghost:hover { border-color: var(--blue); color: var(--text); }
+  .btn.danger { background: var(--red); }
+
+  /* ── Layout ── */
+  .app {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    grid-template-rows: auto 1fr;
+    gap: 0;
+    height: calc(100vh - 56px);
+  }
+
+  /* ── Stats bar ── */
+  .stats-bar {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .stat {
+    flex: 1;
+    padding: .75rem 1.5rem;
+    border-right: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+  }
+  .stat:last-child { border-right: none; }
+
+  .stat-icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .stat-body {}
+  .stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    font-family: var(--mono);
+    line-height: 1;
+  }
+  .stat-label {
+    font-size: .68rem;
+    color: var(--text-dim);
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+
+  /* ── Panels ── */
+  .panel {
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .panel:last-child { border-right: none; }
+
+  .panel-header {
+    padding: .75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+
+  .panel-title {
+    font-size: .78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--text-dim);
+  }
+
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: .75rem;
+  }
+
+  .panel-body::-webkit-scrollbar { width: 4px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── Device cards ── */
+  .device-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .75rem;
+    margin-bottom: .5rem;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+  }
+  .device-card:hover { border-color: var(--blue); background: var(--surface2); }
+  .device-card.emergency { border-left: 2px solid var(--red); }
+  .device-card.active { border-color: var(--teal); }
+
+  .device-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: .35rem;
+  }
+
+  .device-name {
+    font-size: .82rem;
+    font-weight: 600;
+  }
+
+  .device-adapter {
+    font-size: .65rem;
+    font-family: var(--mono);
+    color: var(--text-dim);
+    background: var(--surface2);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .device-id {
+    font-size: .68rem;
+    font-family: var(--mono);
+    color: var(--text-mute);
+    margin-bottom: .35rem;
+  }
+
+  .device-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+  }
+
+  .tag {
+    font-size: .62rem;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: var(--surface2);
+    color: var(--text-dim);
+    font-family: var(--mono);
+  }
+  .tag.emergency { background: rgba(220,38,38,.15); color: var(--red); }
+
+  /* ── Main panel — intent launcher ── */
+  .main-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .intent-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .5rem;
+    padding: .75rem;
+  }
+
+  .intent-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: .9rem 1rem;
+    cursor: pointer;
+    text-align: left;
+    transition: all .2s;
+    color: var(--text);
+  }
+  .intent-btn:hover { border-color: var(--blue); background: var(--surface2); transform: translateY(-1px); }
+  .intent-btn.emergency-btn:hover { border-color: var(--red); }
+  .intent-btn.emergency-btn { border-left: 2px solid var(--red); }
+
+  .intent-icon { font-size: 1.4rem; margin-bottom: .4rem; display: block; }
+  .intent-name { font-size: .82rem; font-weight: 600; margin-bottom: .2rem; }
+  .intent-desc { font-size: .7rem; color: var(--text-dim); line-height: 1.4; }
+
+  /* ── Activity feed ── */
+  .feed-entry {
+    display: flex;
+    gap: .6rem;
+    padding: .55rem .5rem;
+    border-radius: 6px;
+    margin-bottom: .25rem;
+    animation: fadeIn .3s ease;
+    font-size: .78rem;
+  }
+  .feed-entry:hover { background: var(--surface2); }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateX(8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .feed-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+
+  .feed-body {}
+  .feed-type {
+    font-family: var(--mono);
+    font-size: .7rem;
+    font-weight: 600;
+    margin-bottom: 1px;
+  }
+  .feed-detail { color: var(--text-dim); font-size: .7rem; font-family: var(--mono); }
+  .feed-time { color: var(--text-mute); font-size: .65rem; font-family: var(--mono); }
+
+  /* Severity colors */
+  .sev-emergency { color: var(--red); }
+  .sev-warning   { color: var(--amber); }
+  .sev-info      { color: var(--blue); }
+  .sev-success   { color: var(--green); }
+  .sev-teal      { color: var(--teal); }
+
+  .dot-emergency { background: var(--red); box-shadow: 0 0 4px var(--red); }
+  .dot-warning   { background: var(--amber); }
+  .dot-info      { background: var(--blue); }
+  .dot-success   { background: var(--green); }
+  .dot-teal      { background: var(--teal); }
+
+  /* ── Toast ── */
+  .toast-container {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+  }
+
+  .toast {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .75rem 1rem;
+    font-size: .8rem;
+    max-width: 320px;
+    animation: toastIn .3s ease;
+    box-shadow: 0 4px 20px rgba(0,0,0,.4);
+  }
+  .toast.success { border-left: 3px solid var(--green); }
+  .toast.error   { border-left: 3px solid var(--red); }
+  .toast.info    { border-left: 3px solid var(--blue); }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ── Empty state ── */
+  .empty {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--text-mute);
+  }
+  .empty-icon { font-size: 2rem; margin-bottom: .5rem; }
+  .empty-text { font-size: .78rem; }
+
+  /* ── Audit log compact ── */
+  .audit-entry {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .3rem .5rem;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: .68rem;
+    color: var(--text-dim);
+    margin-bottom: 1px;
+  }
+  .audit-entry:hover { background: var(--surface2); }
+  .audit-hash { color: var(--text-mute); width: 72px; flex-shrink: 0; }
+  .audit-type { flex: 1; }
+  .audit-type.intent { color: var(--green); }
+  .audit-type.event  { color: var(--teal); }
+  .audit-type.phase  { color: var(--amber); }
+
+  /* ── Scrollbar for main ── */
+  .main-scroll {
+    flex: 1;
+    overflow-y: auto;
+  }
+  .main-scroll::-webkit-scrollbar { width: 4px; }
+  .main-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .section-title {
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--text-dim);
+    padding: .75rem 1rem .4rem;
+  }
+
+  .integrity-badge {
+    font-size: .68rem;
+    font-family: var(--mono);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .integrity-badge.ok  { background: rgba(22,163,74,.15); color: var(--green); }
+  .integrity-badge.bad { background: rgba(220,38,38,.15); color: var(--red); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark">DS</div>
+    <span class="logo-text">DoSync<span class="logo-sub">Hub v0.1</span></span>
+  </div>
+  <div class="header-right">
+    <div class="ws-indicator">
+      <div class="ws-dot" id="wsDot"></div>
+      <span id="wsStatus">disconnected</span>
+    </div>
+    <input class="token-input" id="tokenInput" type="password"
+           placeholder="API token…" autocomplete="off">
+    <button class="btn sm" onclick="connect()">Connect</button>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- Stats bar -->
+  <div class="stats-bar">
+    <div class="stat">
+      <div class="stat-icon" style="background:rgba(37,99,235,.15)">📡</div>
+      <div class="stat-body">
+        <div class="stat-value" id="statDevices">—</div>
+        <div class="stat-label">Devices</div>
+      </div>
+    </div>
+    <div class="stat">
+      <div class="stat-icon" style="background:rgba(13,148,136,.15)">⚡</div>
+      <div class="stat-body">
+        <div class="stat-value" id="statEvents">0</div>
+        <div class="stat-label">Events today</div>
+      </div>
+    </div>
+    <div class="stat">
+      <div class="stat-icon" style="background:rgba(22,163,74,.15)">✓</div>
+      <div class="stat-body">
+        <div class="stat-value" id="statIntents">0</div>
+        <div class="stat-label">Intents executed</div>
+      </div>
+    </div>
+    <div class="stat">
+      <div class="stat-icon" style="background:rgba(217,119,6,.15)">🏠</div>
+      <div class="stat-body">
+        <div class="stat-value" id="statOccupied">—</div>
+        <div class="stat-label">Occupancy</div>
+      </div>
+    </div>
+    <div class="stat">
+      <div class="stat-icon" style="background:rgba(37,99,235,.1)">🔌</div>
+      <div class="stat-body">
+        <div class="stat-value" id="statWs">0</div>
+        <div class="stat-label">WS clients</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Left: Devices -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">Devices</span>
+      <button class="btn ghost sm" onclick="loadDevices()">↺</button>
+    </div>
+    <div class="panel-body" id="deviceList">
+      <div class="empty">
+        <div class="empty-icon">📡</div>
+        <div class="empty-text">Connect to see devices</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Center: Intent launcher + audit -->
+  <div class="panel main-panel" style="border-right:1px solid var(--border)">
+    <div class="panel-header">
+      <span class="panel-title">Intent Launcher</span>
+    </div>
+    <div class="main-scroll">
+      <div class="intent-grid">
+        <button class="intent-btn emergency-btn" onclick="fireIntent('ensure_safety','emergency')">
+          <span class="intent-icon">🚨</span>
+          <div class="intent-name">Ensure Safety</div>
+          <div class="intent-desc">Emergency response — all emergency-capable devices</div>
+        </button>
+        <button class="intent-btn" onclick="fireIntent('notify_family','warning')">
+          <span class="intent-icon">📱</span>
+          <div class="intent-name">Notify Family</div>
+          <div class="intent-desc">Push + SMS alert to all family phones</div>
+        </button>
+        <button class="intent-btn emergency-btn" onclick="fireSmoke()">
+          <span class="intent-icon">🔥</span>
+          <div class="intent-name">Smoke Emergency</div>
+          <div class="intent-desc">3-phase: Alert → Evacuate → Access</div>
+        </button>
+        <button class="intent-btn" onclick="fireIntent('save_energy','info')">
+          <span class="intent-icon">🏠</span>
+          <div class="intent-name">Save Energy</div>
+          <div class="intent-desc">Nobody home — lights off, thermostat eco</div>
+        </button>
+        <button class="intent-btn" onclick="fireIntent('morning_routine','info')">
+          <span class="intent-icon">☀️</span>
+          <div class="intent-name">Good Morning</div>
+          <div class="intent-desc">Blinds up · Coffee on · Weather display</div>
+        </button>
+        <button class="intent-btn" onclick="fireIntent('bedtime_routine','info')">
+          <span class="intent-icon">🌙</span>
+          <div class="intent-name">Bedtime</div>
+          <div class="intent-desc">Lights dim · Blinds close · 21:30 routine</div>
+        </button>
+        <button class="intent-btn" onclick="fireIntent('remind_chore','info')">
+          <span class="intent-icon">👕</span>
+          <div class="intent-name">Remind Chore</div>
+          <div class="intent-desc">Laundry done notification</div>
+        </button>
+        <button class="intent-btn" onclick="fireIntent('away_mode','info')">
+          <span class="intent-icon">🚗</span>
+          <div class="intent-name">Away Mode</div>
+          <div class="intent-desc">Car left garage — secure the home</div>
+        </button>
+      </div>
+
+      <div class="section-title">Audit Log <span id="integrityBadge"></span></div>
+      <div style="padding:0 .75rem .75rem" id="auditList">
+        <div class="empty"><div class="empty-text">No entries yet</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Live feed -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">Live Events</span>
+      <button class="btn ghost sm" onclick="clearFeed()">Clear</button>
+    </div>
+    <div class="panel-body" id="feedList">
+      <div class="empty">
+        <div class="empty-icon">📡</div>
+        <div class="empty-text">Waiting for events…</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let ws        = null;
+let token     = '';
+let eventCount  = 0;
+let intentCount = 0;
+const HUB = 'http://localhost:47200';
+const WS  = 'ws://localhost:47200';
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  const saved = localStorage.getItem('dosync_token');
+  if (saved) {
+    document.getElementById('tokenInput').value = saved;
+    token = saved;
+    connect();
+  }
+});
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connect() {
+  token = document.getElementById('tokenInput').value.trim();
+  if (token) localStorage.setItem('dosync_token', token);
+
+  if (ws) ws.close();
+
+  const url = token ? `${WS}/ws?token=${token}` : `${WS}/ws`;
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    setWsStatus('connected');
+    loadStatus();
+    loadDevices();
+    loadAudit();
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    handleWsEvent(msg);
+  };
+
+  ws.onclose = (e) => {
+    if (e.code === 4001) {
+      setWsStatus('error');
+      toast('Invalid token — check your API key', 'error');
+    } else {
+      setWsStatus('disconnected');
+      setTimeout(connect, 3000); // auto-reconnect
+    }
+  };
+
+  ws.onerror = () => setWsStatus('error');
+}
+
+function setWsStatus(status) {
+  const dot  = document.getElementById('wsDot');
+  const text = document.getElementById('wsStatus');
+  dot.className  = 'ws-dot ' + status;
+  text.textContent = status;
+}
+
+// ── WS event handler ──────────────────────────────────────────────────────────
+function handleWsEvent(msg) {
+  const { type, data } = msg;
+
+  if (type === 'connected') {
+    document.getElementById('statDevices').textContent = data.devices;
+    return;
+  }
+  if (type === 'ping') return;
+
+  if (type === 'device_event') {
+    eventCount++;
+    document.getElementById('statEvents').textContent = eventCount;
+    addFeedEntry({
+      dot:    'dot-' + (data.severity === 'emergency' ? 'emergency' : data.severity === 'warning' ? 'warning' : 'teal'),
+      type:   'device_event',
+      typeClass: 'sev-teal',
+      detail: `${data.device_id} → ${data.event_id} [${data.severity}]`,
+    });
+    if (data.severity === 'emergency') {
+      toast(`🚨 Emergency: ${data.event_id} from ${data.device_id}`, 'error');
+    }
+    loadAudit();
+  }
+
+  if (type === 'intent_executed') {
+    intentCount++;
+    document.getElementById('statIntents').textContent = intentCount;
+    addFeedEntry({
+      dot:    data.success ? 'dot-success' : 'dot-emergency',
+      type:   'intent_executed',
+      typeClass: 'sev-success',
+      detail: `${data.intent} [${data.urgency}] — ${data.actions} action(s)` +
+              (data.failed?.length ? ` ⚠ ${data.failed.length} failed` : ''),
+    });
+    loadAudit();
+  }
+
+  if (type === 'phase_executed') {
+    addFeedEntry({
+      dot:    'dot-warning',
+      type:   'phase_executed',
+      typeClass: 'sev-teal',
+      detail: `Phase: ${data.phase} [${data.phase_num}]`,
+    });
+  }
+
+  if (type === 'presence_updated') {
+    const conf = Math.round((data.occ_confidence || 0) * 100);
+    document.getElementById('statOccupied').textContent =
+      data.occupied ? `Yes ${conf}%` : `No ${conf}%`;
+    addFeedEntry({
+      dot:    'dot-info',
+      type:   'presence_updated',
+      typeClass: 'sev-info',
+      detail: `occupied=${data.occupied} conf=${conf}%`,
+    });
+  }
+}
+
+// ── Feed ──────────────────────────────────────────────────────────────────────
+function addFeedEntry({ dot, type, typeClass, detail }) {
+  const list = document.getElementById('feedList');
+  const empty = list.querySelector('.empty');
+  if (empty) empty.remove();
+
+  const now  = new Date().toLocaleTimeString();
+  const el   = document.createElement('div');
+  el.className = 'feed-entry';
+  el.innerHTML = `
+    <div class="feed-dot ${dot}"></div>
+    <div class="feed-body">
+      <div class="feed-type ${typeClass}">${type}</div>
+      <div class="feed-detail">${detail}</div>
+      <div class="feed-time">${now}</div>
+    </div>`;
+  list.insertBefore(el, list.firstChild);
+
+  // Keep max 100 entries
+  while (list.children.length > 100) list.lastChild.remove();
+}
+
+function clearFeed() {
+  document.getElementById('feedList').innerHTML =
+    '<div class="empty"><div class="empty-icon">📡</div><div class="empty-text">Waiting for events…</div></div>';
+  eventCount  = 0;
+  intentCount = 0;
+  document.getElementById('statEvents').textContent  = '0';
+  document.getElementById('statIntents').textContent = '0';
+}
+
+// ── API calls ─────────────────────────────────────────────────────────────────
+const headers = () => ({
+  'Content-Type': 'application/json',
+  ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+});
+
+async function api(method, path, body) {
+  try {
+    const r = await fetch(HUB + path, {
+      method,
+      headers: headers(),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    return r.json();
+  } catch (e) {
+    toast(e.message, 'error');
+    throw e;
+  }
+}
+
+async function loadStatus() {
+  try {
+    const s = await api('GET', '/v1/status');
+    document.getElementById('statDevices').textContent = s.devices;
+    document.getElementById('statOccupied').textContent =
+      s.occupied ? 'Yes' : 'No';
+    document.getElementById('statWs').textContent = s.ws_connections ?? 1;
+  } catch {}
+}
+
+async function loadDevices() {
+  try {
+    const data = await api('GET', '/v1/devices');
+    const list = document.getElementById('deviceList');
+    list.innerHTML = '';
+
+    if (!data.devices?.length) {
+      list.innerHTML = '<div class="empty"><div class="empty-icon">📡</div><div class="empty-text">No devices registered</div></div>';
+      return;
+    }
+
+    data.devices.forEach(d => {
+      const isEmerg = d.emergency_capable;
+      const adapter = d.adapter || 'simulated';
+      const tags    = (d.tags || []);
+      const card    = document.createElement('div');
+      card.className = `device-card ${isEmerg ? 'emergency' : ''}`;
+      card.innerHTML = `
+        <div class="device-top">
+          <span class="device-name">${d.device_name}</span>
+          <span class="device-adapter">${adapter}</span>
+        </div>
+        <div class="device-id">${d.device_id}</div>
+        <div class="device-tags">
+          ${tags.map(t => `<span class="tag ${t === 'emergency' ? 'emergency' : ''}">${t}</span>`).join('')}
+        </div>`;
+      list.appendChild(card);
+    });
+  } catch {}
+}
+
+async function loadAudit() {
+  try {
+    const data = await api('GET', '/v1/audit');
+    const list = document.getElementById('auditList');
+    list.innerHTML = '';
+
+    // Integrity badge
+    const badge = document.getElementById('integrityBadge');
+    badge.className = `integrity-badge ${data.integrity ? 'ok' : 'bad'}`;
+    badge.textContent = data.integrity ? '✓ intact' : '✗ tampered';
+
+    if (!data.entries?.length) {
+      list.innerHTML = '<div class="empty"><div class="empty-text">No entries</div></div>';
+      return;
+    }
+
+    // Show last 30 entries, newest first
+    [...data.entries].reverse().slice(0, 30).forEach(e => {
+      const type = e.type || '?';
+      const hash = (e.hash || '').substring(0, 8);
+      let typeClass = '';
+      if (type === 'intent_executed') typeClass = 'intent';
+      else if (type === 'device_event') typeClass = 'event';
+      else if (type === 'phase_executed') typeClass = 'phase';
+
+      const el = document.createElement('div');
+      el.className = 'audit-entry';
+      el.innerHTML = `
+        <span class="audit-hash">${hash}</span>
+        <span class="audit-type ${typeClass}">${type}</span>`;
+      list.appendChild(el);
+    });
+  } catch {}
+}
+
+// ── Intent firing ─────────────────────────────────────────────────────────────
+async function fireIntent(intent, urgency, context = {}) {
+  try {
+    const result = await api('POST', '/v1/intent', {
+      intent, urgency,
+      context: {
+        trigger: 'dashboard',
+        message: `Dashboard triggered: ${intent}`,
+        emergency_number: '911',
+        ...context,
+      },
+    });
+    const ok = result.success;
+    toast(
+      `${ok ? '✓' : '⚠'} ${intent} — ${result.actions_taken} action(s)` +
+      (result.failed_devices?.length ? ` (${result.failed_devices.length} failed)` : ''),
+      ok ? 'success' : 'error'
+    );
+    loadAudit();
+  } catch {}
+}
+
+async function fireSmoke() {
+  // Smoke uses /v1/event to trigger the full phased response
+  try {
+    await api('POST', '/v1/event', {
+      device_id: 'smoke-living-01',
+      event_id:  'smoke_detected',
+      severity:  'emergency',
+      data: { smoke_ppm: 450, location: 'living room', source: 'dashboard' },
+    });
+    // Then fire the intent
+    await fireIntent('ensure_safety', 'emergency', {
+      trigger: 'smoke_detected',
+      message: 'Smoke detected — dashboard test',
+    });
+  } catch {}
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const c  = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ── Periodic refresh ──────────────────────────────────────────────────────────
+setInterval(loadStatus, 10000);
+setInterval(loadDevices, 30000);
+</script>
+</body>
+</html>
