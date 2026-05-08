@@ -31,7 +31,23 @@ logging.basicConfig(
 # ── Estado global del hub ─────────────────────────────────────────────────────
 
 hub      = DoSyncHub(db_path="dosync.db")
-executor = SimulatedExecutor(failure_rate=0.0)
+
+# ── Executor con adapters físicos ─────────────────────────────────────────────
+# Usa AdapterExecutor con WiZAdapter para dispositivos reales.
+# Dispositivos sin adapter (simulated, HA) usan SimulatedExecutor como fallback.
+try:
+    from dosync.adapters import AdapterExecutor
+    from dosync.adapters.wiz import WiZAdapter
+    executor = AdapterExecutor(hub, fallback_to_simulated=True)
+    executor.register(WiZAdapter(hub=hub))
+    logging.getLogger("dosync.server").info(
+        "AdapterExecutor initialized with WiZAdapter"
+    )
+except Exception as _e:
+    logging.getLogger("dosync.server").warning(
+        "AdapterExecutor init failed (%s) — falling back to SimulatedExecutor", _e
+    )
+    executor = SimulatedExecutor(failure_rate=0.0)
 
 # ── Auth setup ────────────────────────────────────────────────────────────────
 # Set DOSYNC_AUTH=false para deshabilitar en desarrollo local

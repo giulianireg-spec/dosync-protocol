@@ -63,7 +63,9 @@ async def discover_wiz(timeout: float = 5.0) -> list[DiscoveredDevice]:
 
         devices = []
         for i, bulb in enumerate(bulbs):
-            ip = bulb.ip
+            ip = getattr(bulb, 'ip_address', None) or getattr(bulb, 'ip', None)
+            if not ip:
+                continue
             devices.append(DiscoveredDevice(
                 adapter="wiz",
                 device_id=f"wiz-auto-{ip.replace('.', '-')}",

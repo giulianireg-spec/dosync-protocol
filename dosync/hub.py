@@ -399,6 +399,10 @@ class DoSyncHub:
                     emergency_capable=manifest_dict.get("emergency_capable", False),
                     cert_tier=CertTier(manifest_dict.get("cert_tier", "basic")),
                 )
+                # Restore adapter fields — critical for physical device control
+                if manifest_dict.get("adapter"):
+                    manifest.adapter        = manifest_dict["adapter"]
+                    manifest.adapter_config = manifest_dict.get("adapter_config", {})
                 self.registry.register(manifest)
             except Exception as e:
                 log.warning("Could not restore device %s: %s",
@@ -698,4 +702,3 @@ class OccupancyEngine:
             }
             for s in self._active_signals()
         ]
-

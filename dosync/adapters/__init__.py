@@ -142,7 +142,7 @@ class AdapterExecutor:
         adapter_name = getattr(device, "adapter", None)
 
         if adapter_name and adapter_name in self._adapters:
-            log.debug(
+            log.info(
                 "Dispatching %s.%s to adapter '%s'",
                 action.device_id, action.action, adapter_name,
             )
@@ -162,7 +162,7 @@ class AdapterExecutor:
 
         # Fallback
         if self._simulated:
-            log.debug(
+            log.info(
                 "No adapter for '%s' (device %s) — using SimulatedExecutor",
                 adapter_name or "none", action.device_id,
             )
