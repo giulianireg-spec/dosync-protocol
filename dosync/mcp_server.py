@@ -494,16 +494,20 @@ async def main():
         )
 
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+        from mcp.server.models import InitializationOptions
+        from mcp.server.lowlevel.server import NotificationOptions
+        caps = server.get_capabilities(
+            notification_options=NotificationOptions(),
+            experimental_capabilities={},
+        )
+
         await server.run(
             read_stream,
             write_stream,
             InitializationOptions(
                 server_name="dosync-hub",
                 server_version="0.1.0",
-                capabilities=server.get_capabilities(
-                    notification_options=None,
-                    experimental_capabilities={},
-                ),
+                capabilities=caps,
             ),
         )
 
