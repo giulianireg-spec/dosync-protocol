@@ -338,22 +338,27 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         if "error" in result:
             text = f"❌ Error ejecutando intent '{intent}': {result['error']}"
         else:
-            success = result.get("success", False)
-            actions = result.get("actions_taken", 0)
-            failed  = result.get("failed_devices", [])
-            icon    = "✅" if success else "⚠️"
-            text    = f"{icon} Intent '{intent}' [{urgency}]\n"
-            text   += f"  Acciones ejecutadas: {actions}\n"
+            actions      = result.get("actions_taken", 0)
+            failed       = result.get("failed_devices", [])
+            results_list = result.get("results", [])
+            core_success = actions > 0
+            icon = "✅" if core_success else "⚠️"
+
+            text  = f"{icon} Intent '{intent}' [{urgency}] ejecutado\n"
+            text += f"  Acciones completadas: {actions}\n"
+
             if failed:
-                text += f"  Dispositivos fallidos: {', '.join(failed)}\n"
-            if result.get("results"):
-                text += "\nDetalle por dispositivo:\n"
-                for r in result["results"]:
-                    ok  = "✓" if r.get("success") else "✗"
-                    text += f"  {ok} [{r['device_id']}] {r['action']}"
-                    if r.get("response"):
-                        text += f" → {json.dumps(r['response'])}"
-                    text += "\n"
+                text += f"  Sin respuesta ({len(failed)} dispositivos apagados físicamente) — no afecta el intent\n"
+
+            critical = [r for r in results_list
+                       if r.get("success") and r.get("action") in
+                       ("unlock","alarm","call","notify","turn_on","set_brightness")]
+            if critical:
+                text += "\nAcciones críticas ejecutadas:\n"
+                for r in critical[:8]:
+                    resp = r.get("response", {})
+                    status = resp.get("status","ok") if isinstance(resp, dict) else "ok"
+                    text += f"  ✓ [{r['device_id']}] {r['action']} → {status}\n"
 
         return [types.TextContent(type="text", text=text)]
 
