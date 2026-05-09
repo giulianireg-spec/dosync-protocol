@@ -267,6 +267,45 @@ async def list_tools() -> list[types.Tool]:
             },
         ),
 
+        types.Tool(
+            name="dosync_control_device",
+            description=(
+                "Control directo de un dispositivo específico. "
+                "Usar cuando el usuario pide controlar un dispositivo concreto: "
+                "'apagá las luces', 'poné las luces en rojo', 'subí el brillo', etc. "
+                "Para luces WiZ soporta: turn_on, turn_off, set_brightness (0-100), "
+                "set_color (r/g/b 0-255), set_color_temp (kelvin 2200-6500). "
+                "Para apagar TODAS las luces, llamar con device_id='all_lights'."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "device_id": {
+                        "type": "string",
+                        "description": "ID del dispositivo o 'all_lights' para todas las luces",
+                    },
+                    "action": {
+                        "type": "string",
+                        "description": "Acción a ejecutar",
+                        "enum": ["turn_on", "turn_off", "set_brightness",
+                                 "set_color", "set_color_temp"],
+                    },
+                    "brightness": {
+                        "type": "integer",
+                        "description": "Brillo 0-100 (para set_brightness o turn_on)",
+                    },
+                    "r": {"type": "integer", "description": "Rojo 0-255"},
+                    "g": {"type": "integer", "description": "Verde 0-255"},
+                    "b": {"type": "integer", "description": "Azul 0-255"},
+                    "kelvin": {
+                        "type": "integer",
+                        "description": "Temperatura de color en Kelvin (2200-6500)",
+                    },
+                },
+                "required": ["device_id", "action"],
+            },
+        ),
+
     ]
 
 
@@ -471,6 +510,60 @@ Niveles de urgencia:
   alert     — situación que requiere atención
   emergency — actúa inmediatamente sin confirmación
 """
+        return [types.TextContent(type="text", text=text)]
+
+    # ── dosync_control_device ─────────────────────────────────────────────────
+    elif name == "dosync_control_device":
+        device_id = arguments.get("device_id")
+        action    = arguments.get("action")
+        params    = {}
+        if "brightness" in arguments: params["brightness"] = arguments["brightness"]
+        if "r" in arguments:          params["r"] = arguments["r"]
+        if "g" in arguments:          params["g"] = arguments["g"]
+        if "b" in arguments:          params["b"] = arguments["b"]
+        if "kelvin" in arguments:     params["kelvin"] = arguments["kelvin"]
+
+        # all_lights: get all light devices and control them
+        if device_id == "all_lights":
+            devices_result = await hub_request("GET", "/v1/devices")
+            if "error" in devices_result:
+                return [types.TextContent(type="text",
+                        text=f"Error obteniendo dispositivos: {devices_result['error']}")]
+
+            light_devices = [
+                d["device_id"] for d in devices_result.get("devices", [])
+                if any(t in d.get("tags", []) for t in ["light", "wiz"])
+            ]
+
+            if not light_devices:
+                return [types.TextContent(type="text",
+                        text="No se encontraron dispositivos de luz registrados.")]
+
+            results = []
+            for did in light_devices:
+                body = {"device_id": did, "action": action, "params": params}
+                r = await hub_request("POST", "/v1/device/action", body)
+                icon = "✓" if not r.get("error") and r.get("success") else "✗"
+                results.append(f"  {icon} {did}")
+
+            icon_on = "✅" if action == "turn_on" else "🌑"
+            text  = f"{icon_on} {action} en {len(light_devices)} luces:\n"
+            text += "\n".join(results)
+            return [types.TextContent(type="text", text=text)]
+
+        # Single device
+        body   = {"device_id": device_id, "action": action, "params": params}
+        result = await hub_request("POST", "/v1/device/action", body)
+
+        if "error" in result:
+            text = f"❌ Error: {result['error']}"
+        elif result.get("success"):
+            text = f"✅ {device_id}: {action} ejecutado"
+            if result.get("response"):
+                text += f" → {json.dumps(result['response'])}"
+        else:
+            text = f"⚠️ {device_id}: {action} falló — {result.get('error', '?')}"
+
         return [types.TextContent(type="text", text=text)]
 
     else:

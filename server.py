@@ -551,6 +551,44 @@ async def scan_devices(auth: str = Depends(require_auth)):
     }
 
 
+@app.post("/v1/device/action", tags=["Devices"])
+async def device_action(
+    req: dict,
+    auth: str = Depends(require_auth),
+):
+    """
+    Ejecuta una acción directa en un dispositivo específico.
+    Bypasa el semantic resolver — control directo vía adapter.
+    """
+    from dosync.models import DeviceAction, Urgency
+    device_id = req.get("device_id")
+    action    = req.get("action")
+    params    = req.get("params", {})
+
+    if not device_id or not action:
+        raise HTTPException(status_code=422,
+            detail="device_id and action are required")
+
+    device = hub.registry.get(device_id)
+    if not device:
+        raise HTTPException(status_code=404,
+            detail=f"Device '{device_id}' not found")
+
+    dev_action = DeviceAction(
+        device_id=device_id,
+        action=action,
+        params=params,
+    )
+    result = await executor.execute(dev_action, Urgency.INFO)
+    return {
+        "device_id": result.device_id,
+        "action":    result.action,
+        "success":   result.success,
+        "response":  result.response,
+        "error":     result.error,
+    }
+
+
 @app.get("/v1/status", tags=["Status"])
 def get_status():
     """Estado completo del hub incluyendo estadísticas de la base de datos."""
