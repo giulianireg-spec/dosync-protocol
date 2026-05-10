@@ -580,6 +580,15 @@ async def device_action(
         params=params,
     )
     result = await executor.execute(dev_action, Urgency.INFO)
+
+    # Broadcast to WebSocket clients
+    await ws_manager.broadcast("device_action", {
+        "device_id": result.device_id,
+        "action":    result.action,
+        "success":   result.success,
+        "response":  result.response,
+    })
+
     return {
         "device_id": result.device_id,
         "action":    result.action,

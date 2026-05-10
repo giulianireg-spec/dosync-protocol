@@ -736,6 +736,20 @@ function handleWsEvent(msg) {
       detail: `occupied=${data.occupied} conf=${conf}%`,
     });
   }
+
+  if (type === 'device_action') {
+    eventCount++;
+    document.getElementById('statEvents').textContent = eventCount;
+    const icon = data.action === 'turn_off' ? '🌑' :
+                 data.action === 'set_color' ? '🎨' :
+                 data.action === 'turn_on'   ? '💡' : '⚡';
+    addFeedEntry({
+      dot:    data.success ? 'dot-success' : 'dot-emergency',
+      type:   'device_action',
+      typeClass: 'sev-teal',
+      detail: `${icon} ${data.device_id} → ${data.action}`,
+    });
+  }
 }
 
 // ── Feed ──────────────────────────────────────────────────────────────────────
