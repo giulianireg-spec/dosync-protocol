@@ -97,38 +97,36 @@ def register_devices():
         {
             "device_id":   "rpi-pir-01",
             "device_name": "PIR — Sensor de movimiento",
+            "manufacturer": "DoSync GPIO",
+            "model":       "HC-SR501",
+            "firmware":    "1.0.0",
+            "category":    "sensor",
             "tags":        ["sensor", "motion", "security", "emergency"],
-            "capabilities": {
-                "sensors": [
-                    {"id": "motion", "type": "motion_detected", "unit": "boolean"}
-                ],
-                "actuators": []
-            },
+            "sensors":     [{"id": "motion", "type": "motion_detected", "unit": "boolean"}],
+            "actuators":   [],
             "emergency_capable": False,
-            "cert_tier": "basic",
-            "adapter": "gpio",
-            "adapter_config": {"gpio": PIR_GPIO, "type": "pir"},
+            "cert_tier":   "basic",
         },
         {
             "device_id":   "rpi-dht22-01",
             "device_name": "DHT22 — Temperatura y Humedad",
+            "manufacturer": "DoSync GPIO",
+            "model":       "DHT22",
+            "firmware":    "1.0.0",
+            "category":    "sensor",
             "tags":        ["sensor", "climate", "temperature", "humidity"],
-            "capabilities": {
-                "sensors": [
-                    {"id": "temperature", "type": "temperature", "unit": "celsius"},
-                    {"id": "humidity",    "type": "humidity",    "unit": "percent"},
-                ],
-                "actuators": []
-            },
+            "sensors":     [
+                {"id": "temperature", "type": "temperature", "unit": "celsius"},
+                {"id": "humidity",    "type": "humidity",    "unit": "percent"},
+            ],
+            "actuators":   [],
             "emergency_capable": False,
-            "cert_tier": "basic",
-            "adapter": "gpio",
-            "adapter_config": {"gpio": DHT_GPIO, "type": "dht22"},
+            "cert_tier":   "basic",
         },
     ]
 
     for device in devices:
-        result = hub_post("/v1/register", device)
+        result = hub_post("/v1/devices/register", device)
         if "error" not in result:
             log.info("Registered: %s", device["device_id"])
         else:
@@ -255,6 +253,7 @@ async def dht_loop():
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 async def main():
+    global HUB_URL, HUB_TOKEN
     parser = argparse.ArgumentParser(description="DoSync GPIO Adapter")
     parser.add_argument("--hub",   default=HUB_URL,   help="Hub URL")
     parser.add_argument("--token", default=HUB_TOKEN, help="API token")
