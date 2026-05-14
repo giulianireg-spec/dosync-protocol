@@ -72,7 +72,10 @@ class ConnectionManager:
         )
 
     def disconnect(self, ws: WebSocket) -> None:
-        self._connections.remove(ws)
+        try:
+            self._connections.remove(ws)
+        except ValueError:
+            pass
         logging.getLogger("dosync.ws").info(
             "Client disconnected — total: %d", len(self._connections)
         )
@@ -265,10 +268,15 @@ async def websocket_endpoint(ws: WebSocket):
         import asyncio
         while True:
             await asyncio.sleep(30)
-            await ws.send_text(json.dumps({"type": "ping", "data": {}}))
+            try:
+                await ws.send_text(json.dumps({"type": "ping", "data": {}}))
+            except Exception:
+                break
     except WebSocketDisconnect:
-        ws_manager.disconnect(ws)
+        pass
     except Exception:
+        pass
+    finally:
         ws_manager.disconnect(ws)
 
 
