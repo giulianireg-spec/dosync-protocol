@@ -183,9 +183,7 @@ class WiZAdapter(DoSyncAdapter):
             pilot = await self._build_pilot(action, urgency)
 
             if action.action == "turn_off" or pilot is None:
-                # turn_off() unreliable in some pywizlight versions
-                # Use brightness=0 which works consistently
-                await bulb.turn_on(PilotBuilder(brightness=0))
+                await bulb.turn_off()
                 response = {"status": "off", "ip": ip}
             else:
                 await bulb.turn_on(pilot)

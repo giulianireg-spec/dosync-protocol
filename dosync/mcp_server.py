@@ -548,7 +548,7 @@ Niveles de urgencia:
             for did in light_devices:
                 body = {"device_id": did, "action": action, "params": params}
                 r = await hub_request("POST", "/v1/device/action", body)
-                icon = "✓" if not r.get("error") and r.get("success") else "✗"
+                icon = "✓" if r.get("success") and not r.get("error") else "✗"
                 results.append(f"  {icon} {did}")
 
             icon_on = "✅" if action == "turn_on" else "🌑"
@@ -560,14 +560,12 @@ Niveles de urgencia:
         body   = {"device_id": device_id, "action": action, "params": params}
         result = await hub_request("POST", "/v1/device/action", body)
 
-        if "error" in result:
+        if result.get("error"):
             text = f"❌ Error: {result['error']}"
         elif result.get("success"):
-            text = f"✅ {device_id}: {action} ejecutado"
-            if result.get("response"):
-                text += f" → {json.dumps(result['response'])}"
+            text = f"✅ {device_id}: {action} ejecutado correctamente"
         else:
-            text = f"⚠️ {device_id}: {action} falló — {result.get('error', '?')}"
+            text = f"⚠️ {device_id}: {action} falló"
 
         return [types.TextContent(type="text", text=text)]
 
