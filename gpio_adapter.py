@@ -53,7 +53,7 @@ def hub_post(path: str, body: dict) -> dict:
         HUB_URL + path, data=data, headers=headers, method="POST"
     )
     try:
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         log.error("HTTP %s: %s", e.code, e.read().decode()[:200])
@@ -147,6 +147,9 @@ async def pir_loop():
     h = lgpio.gpiochip_open(0)
     lgpio.gpio_claim_input(h, PIR_GPIO)
     log.info("PIR listener started on GPIO %d", PIR_GPIO)
+    log.info("PIR warming up — waiting 60s for calibration...")
+    await asyncio.sleep(60)
+    log.info("PIR ready.")
 
     last_event  = 0
     was_moving  = False
