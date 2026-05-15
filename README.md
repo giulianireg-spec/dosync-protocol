@@ -72,6 +72,8 @@ The **Semantic Resolver** matches the intent against every device's **Capability
 
 ## Protocol architecture
 
+![DoSync 5-layer architecture](docs/architecture.svg)
+
 | Layer | Name | Role |
 |-------|------|------|
 | 5 | **Intent** | AI expresses semantic goals |
@@ -130,7 +132,6 @@ python3 certify.py --host localhost --port 47200 --tier emergency
 DoSync ships a native MCP server. Any LLM with MCP support can control the hub directly — no extra configuration.
 
 ```json
-// claude_desktop_config.json
 {
   "mcpServers": {
     "dosync": {
@@ -147,8 +148,8 @@ DoSync ships a native MCP server. Any LLM with MCP support can control the hub d
 
 Once connected, you can say:
 
-> *"Turn off all the lights"*
-> *"There is an emergency at home"*
+> *"Turn off all the lights"*  
+> *"There is an emergency at home"*  
 > *"Nobody is home — save energy"*
 
 And the hub executes the full protocol in real time.
@@ -189,8 +190,7 @@ class MyAdapter(DoSyncAdapter):
         return "myadapter"
 ```
 
-**Available today:** `wiz` · `homeassistant` · `gpio` · `simulated`
-
+**Available today:** `wiz` · `homeassistant` · `gpio` · `simulated`  
 **Planned:** `shelly` · `matter` · `ble` · `zigbee2mqtt`
 
 ---
