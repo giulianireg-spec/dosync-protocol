@@ -33,8 +33,6 @@ logging.basicConfig(
 hub      = DoSyncHub(db_path="dosync.db")
 
 # ── Executor con adapters físicos ─────────────────────────────────────────────
-# Usa AdapterExecutor con WiZAdapter para dispositivos reales.
-# Dispositivos sin adapter (simulated, HA) usan SimulatedExecutor como fallback.
 try:
     from dosync.adapters import AdapterExecutor
     from dosync.adapters.wiz import WiZAdapter
@@ -49,8 +47,15 @@ except Exception as _e:
     )
     executor = SimulatedExecutor(failure_rate=0.0)
 
+# ── Notification adapter ──────────────────────────────────────────────────────
+try:
+    from dosync.adapters.notifications import NotificationAdapter
+    notifier = NotificationAdapter()
+except Exception as _e:
+    notifier = None
+    logging.getLogger("dosync.server").warning("Notifications not available: %s", _e)
+
 # ── Auth setup ────────────────────────────────────────────────────────────────
-# Set DOSYNC_AUTH=false para deshabilitar en desarrollo local
 _auth_enabled = os.environ.get("DOSYNC_AUTH", "true").lower() != "false"
 _auth_manager = AuthManager(hub.db, enabled=_auth_enabled)
 set_auth_manager(_auth_manager)
@@ -145,7 +150,7 @@ def on_event(event: DeviceEvent):
 hub.on_event(on_event)
 
 
-# ── Schemas de entrada (lo que recibe la API) ─────────────────────────────────
+# ── Schemas de entrada ────────────────────────────────────────────────────────
 
 class SensorIn(BaseModel):
     id: str
@@ -204,7 +209,6 @@ class EventRequest(BaseModel):
 async def lifespan(app: FastAPI):
     log = logging.getLogger("dosync.server")
     log.info("DoSync Hub started on port 47200")
-    # Generar key por defecto si no hay ninguna
     first_token = _auth_manager.ensure_default_key()
     if first_token:
         print("\n" + "="*60)
@@ -235,19 +239,6 @@ app = FastAPI(
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
-    """
-    WebSocket para eventos en tiempo real.
-    
-    Conectar: ws://localhost:47200/ws?token=<api-key>
-    
-    Eventos emitidos:
-        device_event     — un dispositivo emitió un evento
-        intent_executed  — un intent fue ejecutado
-        phase_executed   — una fase de un intent fue ejecutada
-        presence_updated — señal de presencia actualizada
-        ping             — keepalive cada 30s
-    """
-    # Auth via query param (WebSocket no soporta headers custom fácilmente)
     token = ws.query_params.get("token", "")
     if _auth_enabled and not _auth_manager.verify(token):
         await ws.close(code=4001, reason="Unauthorized")
@@ -255,7 +246,6 @@ async def websocket_endpoint(ws: WebSocket):
 
     await ws_manager.connect(ws)
     try:
-        # Enviar estado inicial al conectarse
         await ws.send_text(json.dumps({
             "type": "connected",
             "data": {
@@ -264,7 +254,6 @@ async def websocket_endpoint(ws: WebSocket):
                 "protocol":   "dosync/0.1",
             }
         }))
-        # Keepalive loop
         import asyncio
         while True:
             await asyncio.sleep(30)
@@ -282,7 +271,6 @@ async def websocket_endpoint(ws: WebSocket):
 
 @app.get("/", response_class=FileResponse, tags=["Status"])
 def dashboard():
-    """Dashboard web del hub DoSync."""
     from pathlib import Path
     dashboard_path = Path(__file__).parent / "dashboard.html"
     if dashboard_path.exists():
@@ -292,7 +280,6 @@ def dashboard():
 
 @app.get("/api", tags=["Status"])
 def root():
-    """Estado del hub (JSON)."""
     return {
         "name": "DoSync Hub",
         "version": "0.1.0",
@@ -304,10 +291,6 @@ def root():
 
 @app.post("/v1/devices/register", tags=["Devices"])
 def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth)):
-    """
-    Un gadget se anuncia al hub con su manifiesto de capacidades.
-    Este es el primer mensaje que envía cualquier dispositivo DoSync al unirse a la red.
-    """
     try:
         manifest = CapabilityManifest(
             device_id=req.device_id,
@@ -335,7 +318,6 @@ def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth
 
 @app.get("/v1/devices", tags=["Devices"])
 def list_devices(auth: str = Depends(require_auth)):
-    """Lista todos los gadgets registrados y sus capacidades."""
     return {
         "count": len(hub.registry.all()),
         "devices": [d.to_dict() for d in hub.registry.all()],
@@ -344,7 +326,6 @@ def list_devices(auth: str = Depends(require_auth)):
 
 @app.get("/v1/devices/{device_id}", tags=["Devices"])
 def get_device(device_id: str, auth: str = Depends(require_auth)):
-    """Detalle de un gadget específico."""
     device = hub.registry.get(device_id)
     if not device:
         raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
@@ -353,7 +334,6 @@ def get_device(device_id: str, auth: str = Depends(require_auth)):
 
 @app.delete("/v1/devices/{device_id}", tags=["Devices"])
 def unregister_device(device_id: str, auth: str = Depends(require_auth)):
-    """Desregistra un gadget del hub."""
     if not hub.registry.get(device_id):
         raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
     hub.unregister_device(device_id)
@@ -362,14 +342,6 @@ def unregister_device(device_id: str, auth: str = Depends(require_auth)):
 
 @app.post("/v1/intent", tags=["AI"])
 async def execute_intent(req: IntentRequest, auth: str = Depends(require_auth)):
-    """
-    La IA envía una intención semántica al hub.
-    El hub resuelve qué gadgets actúan y cómo, y ejecuta todo en paralelo.
-    
-    Intenciones disponibles:
-    - ensure_safety · notify_family · report_status
-    - set_environment · control_access · monitor_health
-    """
     try:
         intent_class = IntentClass(req.intent)
     except ValueError:
@@ -393,6 +365,23 @@ async def execute_intent(req: IntentRequest, auth: str = Depends(require_auth)):
 
     result = await hub.execute_intent(intent, executor)
 
+    # ── SMS notification for emergency/alert intents ───────────────────────
+    _emergency_intents = {"ensure_safety", "notify_family", "alert_anomaly"}
+    if notifier and (
+        req.urgency in ("emergency", "alert") or
+        req.intent in _emergency_intents
+    ):
+        try:
+            await notifier.notify(
+                intent=req.intent,
+                urgency=req.urgency,
+                context=req.context,
+            )
+        except Exception as _e:
+            logging.getLogger("dosync.server").warning(
+                "SMS notification failed: %s", _e
+            )
+
     return {
         "intent_id":       result.intent_id,
         "success":         result.success,
@@ -413,10 +402,6 @@ async def execute_intent(req: IntentRequest, auth: str = Depends(require_auth)):
 
 @app.post("/v1/event", tags=["Devices"])
 async def receive_event(req: EventRequest, auth: str = Depends(require_auth)):
-    """
-    Un gadget envía un evento al hub (caída detectada, avería, movimiento, etc).
-    El hub lo registra en el audit log y notifica a los handlers de la IA.
-    """
     if not hub.registry.get(req.device_id):
         raise HTTPException(
             status_code=404,
@@ -446,13 +431,11 @@ async def receive_event(req: EventRequest, auth: str = Depends(require_auth)):
 
 @app.get("/v1/keys", tags=["Security"])
 def list_keys(auth: str = Depends(require_auth)):
-    """Lista todas las API keys registradas (sin mostrar el token completo)."""
     return {"keys": _auth_manager.list_keys()}
 
 
 @app.post("/v1/keys", tags=["Security"])
 def create_key(label: str = "new_key", auth: str = Depends(require_auth)):
-    """Genera una nueva API key. El token se muestra solo una vez."""
     token = _auth_manager.generate_key(label)
     return {
         "token": token,
@@ -463,10 +446,6 @@ def create_key(label: str = "new_key", auth: str = Depends(require_auth)):
 
 @app.get("/v1/audit", tags=["Security"])
 def get_audit_log(auth: str = Depends(require_auth)):
-    """
-    Historial completo de todas las acciones del hub.
-    Cada entrada está encadenada con SHA-256 para detectar manipulaciones.
-    """
     entries = hub.audit_log.entries()
     return {
         "count":    len(entries),
@@ -477,10 +456,6 @@ def get_audit_log(auth: str = Depends(require_auth)):
 
 @app.post("/v1/presence", tags=["Context"])
 async def update_presence(req: PresenceSignalRequest, auth: str = Depends(require_auth)):
-    """
-    Un context provider (celular, smartwatch, sensor PIR) actualiza
-    su señal de presencia. El hub la agrega al OccupancyEngine.
-    """
     from dosync.models import PresenceSignal, ContextSignalType
     try:
         signal_type = ContextSignalType(req.signal_type)
@@ -508,7 +483,6 @@ async def update_presence(req: PresenceSignalRequest, auth: str = Depends(requir
 
 @app.get("/v1/presence", tags=["Context"])
 def get_presence(auth: str = Depends(require_auth)):
-    """Estado de ocupación inferido actual del hogar."""
     state = hub.get_occupancy()
     signals = hub.occupancy.all_signals()
     return {
@@ -522,10 +496,6 @@ def get_presence(auth: str = Depends(require_auth)):
 
 @app.post("/v1/discovery/run", tags=["Discovery"])
 async def run_discovery(auth: str = Depends(require_auth)):
-    """
-    Escanea la red local en busca de dispositivos compatibles.
-    Registra automaticamente los que encuentra (WiZ, y futuros adapters).
-    """
     from dosync.discovery import Discovery
     disc = Discovery(hub, timeout_override=5.0)
     new_count = await disc.run()
@@ -538,10 +508,6 @@ async def run_discovery(auth: str = Depends(require_auth)):
 
 @app.get("/v1/discovery/scan", tags=["Discovery"])
 async def scan_devices(auth: str = Depends(require_auth)):
-    """
-    Escanea la red local y devuelve los dispositivos encontrados
-    sin registrarlos. Util para ver que hay antes de registrar.
-    """
     from dosync.discovery import discover_wiz
     wiz_devices = await discover_wiz(timeout=5.0)
     return {
@@ -564,10 +530,6 @@ async def device_action(
     req: dict,
     auth: str = Depends(require_auth),
 ):
-    """
-    Ejecuta una acción directa en un dispositivo específico.
-    Bypasa el semantic resolver — control directo vía adapter.
-    """
     from dosync.models import DeviceAction, Urgency
     device_id = req.get("device_id")
     action    = req.get("action")
@@ -589,7 +551,6 @@ async def device_action(
     )
     result = await executor.execute(dev_action, Urgency.INFO)
 
-    # Broadcast to WebSocket clients
     await ws_manager.broadcast("device_action", {
         "device_id": result.device_id,
         "action":    result.action,
@@ -608,7 +569,6 @@ async def device_action(
 
 @app.get("/v1/status", tags=["Status"])
 def get_status():
-    """Estado completo del hub incluyendo estadísticas de la base de datos."""
     db_stats = hub.db.stats()
     occupancy = hub.get_occupancy()
     return {
