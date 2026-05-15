@@ -70,6 +70,12 @@ class NotificationAdapter:
 
         if intent == "ensure_safety":
             loc = f" en {location}" if location else ""
+            member = context.get("member", "")
+            if member:
+                return (
+                    f"DoSync — {member} llegaron a casa.\n"
+                    f"El sensor de movimiento los detecto y el hogar respondio automaticamente."
+                )
             return (
                 f"DOSYNC EMERGENCIA{loc}\n"
                 f"Se detecto una situacion de emergencia en el hogar.\n"

@@ -179,6 +179,7 @@ async def pir_loop():
                             "trigger":   "motion_detected",
                             "device_id": "rpi-pir-01",
                             "location":  "entrada",
+                            "member":    "Los niños",
                         },
                     )
 
