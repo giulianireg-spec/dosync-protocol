@@ -623,8 +623,8 @@ let ws        = null;
 let token     = '';
 let eventCount  = 0;
 let intentCount = 0;
-const HUB = 'http://localhost:47200';
-const WS  = 'ws://localhost:47200';
+const HUB = `http://${window.location.hostname}:47200`;
+const WS  = `ws://${window.location.hostname}:47200`;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
