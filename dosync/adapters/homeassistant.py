@@ -62,6 +62,8 @@ HA_DOMAIN_MAP = {
                          {"brightness": "int 0-100"}),
             ActuatorSpec("set_color",      "set_color",      "Color RGB",
                          {"r": "int", "g": "int", "b": "int"}),
+            ActuatorSpec("set_effect",     "set_effect",     "Efecto Ambilight",
+                         {"effect": "str"}),
             ActuatorSpec("set_color_temp", "set_color_temp", "Temperatura de color",
                          {"kelvin": "int 2200-6500"}),
         ],
@@ -201,6 +203,8 @@ def dosync_to_ha_service(domain: str, action: str, params: dict) -> tuple[str, s
             "rgb_color": [params.get("r",255), params.get("g",255), params.get("b",255)]
         }
 
+    if action == "set_effect":
+        return domain, "turn_on", {"effect": params.get("effect", "FOLLOW_VIDEO: STANDARD")}
     if action == "set_color_temp":
         return domain, "turn_on", {"color_temp_kelvin": params.get("kelvin", 4000)}
 

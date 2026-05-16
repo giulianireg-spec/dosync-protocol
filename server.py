@@ -38,6 +38,13 @@ try:
     from dosync.adapters.wiz import WiZAdapter
     executor = AdapterExecutor(hub, fallback_to_simulated=True)
     executor.register(WiZAdapter(hub=hub))
+    from dosync.adapters.homeassistant import HABridge
+    _ha_url = os.environ.get("HA_URL", "http://localhost:8123")
+    _ha_token = os.environ.get("HA_TOKEN", "")
+    if _ha_token:
+        ha_bridge = HABridge(ha_url=_ha_url, ha_token=_ha_token, hub=hub)
+        executor.register(ha_bridge)
+        logging.getLogger("dosync.server").info("HABridge registered")
     logging.getLogger("dosync.server").info(
         "AdapterExecutor initialized with WiZAdapter"
     )
