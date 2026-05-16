@@ -288,7 +288,7 @@ async def list_tools() -> list[types.Tool]:
                         "type": "string",
                         "description": "Acción a ejecutar",
                         "enum": ["turn_on", "turn_off", "set_brightness",
-                                 "set_color", "set_color_temp"],
+                                 "set_color", "set_color_temp", "set_effect"],
                     },
                     "brightness": {
                         "type": "integer",
@@ -300,6 +300,10 @@ async def list_tools() -> list[types.Tool]:
                     "kelvin": {
                         "type": "integer",
                         "description": "Temperatura de color en Kelvin (2200-6500)",
+                    },
+                    "effect": {
+                        "type": "string",
+                        "description": "Efecto Ambilight. Valores: FOLLOW_COLOR: HOT_LAVA, FOLLOW_COLOR: DEEP_WATER, FOLLOW_COLOR: FRESH_NATURE, FOLLOW_VIDEO: STANDARD, FOLLOW_VIDEO: VIVID, FOLLOW_AUDIO: ENERGY_ADAPTIVE_BRIGHTNESS, Mode: lounge",
                     },
                 },
                 "required": ["device_id", "action"],
@@ -527,6 +531,7 @@ Niveles de urgencia:
         if "g" in arguments:          params["g"] = arguments["g"]
         if "b" in arguments:          params["b"] = arguments["b"]
         if "kelvin" in arguments:     params["kelvin"] = arguments["kelvin"]
+        if "effect" in arguments:     params["effect"] = arguments["effect"]
 
         # all_lights: get all light devices and control them
         if device_id == "all_lights":
