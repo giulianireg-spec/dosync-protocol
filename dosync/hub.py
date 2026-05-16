@@ -121,7 +121,7 @@ INTENT_RESOLUTION_MAP: dict[IntentClass, dict] = {
         "actuators": ["set_brightness", "set_position", "turn_on", "set_temperature"],
     },
     IntentClass.CHILDREN_ARRIVED: {
-        "tags":      ["light", "climate", "communication"],
+        "tags":      ["children_arrival", "climate"],
         "actuators": ["turn_on", "set_brightness", "set_temperature", "notify"],
     },
     IntentClass.AWAY_MODE: {
