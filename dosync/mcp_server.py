@@ -142,7 +142,7 @@ async def list_tools() -> list[types.Tool]:
                             "ensure_safety", "notify_family", "report_status",
                             "set_environment", "control_access", "monitor_health",
                             "save_energy", "remind_chore", "alert_anomaly",
-                            "bedtime_routine", "morning_routine", "away_mode",
+                            "bedtime_routine", "morning_routine", "away_mode", "children_arrived_home",
                         ],
                     },
                     "urgency": {
@@ -504,6 +504,7 @@ ENERGÍA:
 RUTINAS:
   morning_routine  — Buenos días: persianas, cafetera, clima.
   bedtime_routine  — Hora de dormir: atenuar luces, bajar persianas.
+  children_arrived_home — Niños llegaron del colegio (lun-vie 18:30-19:00): luces sala + hab niños, aire calor.
 
 AMBIENTE:
   set_environment  — Ajustar luces, temperatura, persianas.
