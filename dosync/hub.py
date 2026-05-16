@@ -120,6 +120,10 @@ INTENT_RESOLUTION_MAP: dict[IntentClass, dict] = {
         "tags":      ["light", "blinds", "appliance", "climate", "display"],
         "actuators": ["set_brightness", "set_position", "turn_on", "set_temperature"],
     },
+    IntentClass.CHILDREN_ARRIVED: {
+        "tags":      ["light", "climate", "communication"],
+        "actuators": ["turn_on", "set_brightness", "set_temperature", "notify"],
+    },
     IntentClass.AWAY_MODE: {
         "tags":      ["light", "smart-plug", "camera", "alarm", "thermostat"],
         "actuators": ["turn_off", "set_brightness", "arm", "set_temperature"],
@@ -231,6 +235,22 @@ class SemanticResolver:
         return defaults.get(actuator.type, {})
 
     def resolve(self, intent: Intent) -> ActionPlan:
+        from datetime import datetime
+        # Context validation: schedule-aware intents
+        schedule = intent.context.get("schedule")
+        if schedule:
+            now = datetime.now()
+            days_ok = now.weekday() < 5  # lun-vie = 0-4
+            hour_range = schedule.get("hour_range")
+            if hour_range:
+                h_start, h_end = hour_range
+                hour_ok = h_start <= now.hour * 60 + now.minute <= h_end
+            else:
+                hour_ok = True
+            if not days_ok or not hour_ok:
+                log.info("Intent '%s' blocked by schedule (day=%s hour=%s:%s)",
+                         intent.intent.value, now.weekday(), now.hour, now.minute)
+                return ActionPlan(intent_id=intent.intent_id, actions=[], urgency=intent.urgency)
         resolution = INTENT_RESOLUTION_MAP.get(intent.intent, {"tags": [], "actuators": []})
 
         # Score all devices

@@ -49,6 +49,7 @@ class IntentClass(str, Enum):
     BEDTIME_ROUTINE  = "bedtime_routine"  # hora de dormir de los ninos
     MORNING_ROUTINE  = "morning_routine"  # buenos dias, primera presencia del dia
     AWAY_MODE        = "away_mode"        # auto salio / todos salieron
+    CHILDREN_ARRIVED = "children_arrived_home"  # ninos llegaron del colegio
 
 
 class ContextSignalType(str, Enum):
