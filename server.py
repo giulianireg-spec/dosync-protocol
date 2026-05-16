@@ -58,6 +58,8 @@ except Exception as _e:
 try:
     from dosync.adapters.notifications import NotificationAdapter
     notifier = NotificationAdapter()
+    executor.register(notifier)
+    logging.getLogger("dosync.server").info("NotificationAdapter registered")
 except Exception as _e:
     notifier = None
     logging.getLogger("dosync.server").warning("Notifications not available: %s", _e)

@@ -40,11 +40,12 @@ TWILIO_FROM    = os.environ.get("TWILIO_FROM", "")
 EMERGENCY_TO   = os.environ.get("DOSYNC_EMERGENCY_CONTACT", "")
 
 # Intents que disparan notificaciones
-EMERGENCY_INTENTS = {"ensure_safety", "alert_anomaly", "notify_family"}
+EMERGENCY_INTENTS = {"ensure_safety", "alert_anomaly", "notify_family", "children_arrived_home", "notify"}
 WARNING_INTENTS   = {"report_status", "remind_chore"}
 
 
 class NotificationAdapter:
+    adapter_name = "notifications"
     """Envía SMS via Twilio para intents críticos de DoSync."""
 
     def __init__(self):
@@ -94,8 +95,26 @@ class NotificationAdapter:
         elif intent == "report_status" and trigger == "motion_detected":
             loc = f" en {location}" if location else ""
             return f"DOSYNC INFO\nMovimiento detectado{loc}."
+        elif intent in ("children_arrived_home", "notify"):
+            return ("DoSync — Los ninos llegaron a casa.\n"
+                    "El sensor los detecto automaticamente.")
         else:
             return f"DOSYNC {urgency.upper()}\nIntent: {intent}"
+
+    async def execute(self, action, urgency):
+        from ..models import ActionResult
+        params = action.params or {}
+        message = params.get('message', 'Notificación DoSync')
+        try:
+            await self.notify(
+                intent=action.action,
+                urgency=urgency.value if hasattr(urgency, 'value') else str(urgency),
+                context={'message': message},
+                to=None
+            )
+            return ActionResult(device_id=action.device_id, action=action.action, success=True, response={'status': 'sent'})
+        except Exception as e:
+            return ActionResult(device_id=action.device_id, action=action.action, success=False, error=str(e))
 
     async def notify(self, intent: str, urgency: str, context: dict,
                      to: str = None) -> bool:

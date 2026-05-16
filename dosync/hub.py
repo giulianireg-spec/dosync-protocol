@@ -121,8 +121,8 @@ INTENT_RESOLUTION_MAP: dict[IntentClass, dict] = {
         "actuators": ["set_brightness", "set_position", "turn_on", "set_temperature"],
     },
     IntentClass.CHILDREN_ARRIVED: {
-        "tags":      ["children_arrival", "climate"],
-        "actuators": ["turn_on", "set_brightness", "set_temperature", "notify"],
+        "tags":      ["children_arrival"],
+        "actuators": ["turn_on", "set_brightness", "notify"],
     },
     IntentClass.AWAY_MODE: {
         "tags":      ["light", "smart-plug", "camera", "alarm", "thermostat"],
@@ -151,6 +151,11 @@ class SemanticResolver:
         # Tag overlap
         target_tags = set(resolution.get("tags", []))
         device_tags = set(device.tags)
+        # If resolution uses specific non-generic tags, require exact match
+        generic_tags = {"light", "climate", "communication", "sensor", "appliance", "display"}
+        specific_tags = target_tags - generic_tags
+        if specific_tags and not (specific_tags & device_tags):
+            return 0.0
         score += len(target_tags & device_tags) * 10.0
 
         # Location match (if context has location, prefer devices with matching tag)
