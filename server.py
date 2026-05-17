@@ -54,6 +54,25 @@ except Exception as _e:
     )
     executor = SimulatedExecutor(failure_rate=0.0)
 
+# ── Policy Engine ────────────────────────────────────────────────────────────
+try:
+    from dosync.policies import PolicyEngine, NeverAfterHoursPolicy, RequireConfirmationPolicy, DeviceExclusionPolicy
+    policy_engine = PolicyEngine()
+    policy_engine.add(NeverAfterHoursPolicy(
+        actuator_types=["unlock", "alarm"],
+        blocked_hours_start=0,
+        blocked_hours_end=6,
+        reason="Security policy: no remote unlocking between 00:00 and 06:00"
+    ))
+    policy_engine.add(RequireConfirmationPolicy(
+        actuator_types=["alarm"],
+        reason="Alarm activation requires explicit confirmation"
+    ))
+    hub.policy_engine = policy_engine
+    logging.getLogger("dosync.server").info("PolicyEngine initialized with %d policies", len(policy_engine.list_policies()))
+except Exception as _e:
+    logging.getLogger("dosync.server").warning("PolicyEngine init failed: %s", _e)
+
 # ── Notification adapter ──────────────────────────────────────────────────────
 try:
     from dosync.adapters.notifications import NotificationAdapter

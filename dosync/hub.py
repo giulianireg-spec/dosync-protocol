@@ -462,6 +462,7 @@ class DoSyncHub:
     def __init__(self, db_path: str = "dosync.db"):
         self.registry       = CapabilityRegistry()
         self.resolver       = StateAwareResolver(self.registry, self)
+        self.policy_engine  = None  # set via hub.policy_engine = PolicyEngine()
         self.audit_log      = AuditLog()
         self.occupancy      = OccupancyEngine()
         self.family_profile: FamilyProfile | None = None
@@ -641,6 +642,36 @@ class DoSyncHub:
         log.info("Executing intent: %s [%s]", intent.intent.value, intent.urgency.value)
 
         plan = self.resolver.resolve(intent)
+
+        # Policy Engine evaluation
+        if self.policy_engine:
+            from .policies import PolicyDecision
+            from .models import ActionPlan as _AP
+            policy_result = self.policy_engine.evaluate(intent, plan)
+            if policy_result.decision == PolicyDecision.BLOCK:
+                log.warning("Intent BLOCKED by policy '%s': %s",
+                            policy_result.policy_name, policy_result.reason)
+                self.audit_log.append({
+                    "type": "intent_blocked",
+                    "intent_id": intent.intent_id,
+                    "intent": intent.intent.value,
+                    "policy": policy_result.policy_name,
+                    "reason": policy_result.reason,
+                })
+                return IntentResult(intent_id=intent.intent_id, success=False, results=[], failed_devices=[])
+            elif policy_result.decision == PolicyDecision.CONFIRM:
+                log.info("Intent PENDING CONFIRMATION by policy '%s': %s",
+                         policy_result.policy_name, policy_result.reason)
+                self.audit_log.append({
+                    "type": "intent_pending_confirmation",
+                    "intent_id": intent.intent_id,
+                    "intent": intent.intent.value,
+                    "policy": policy_result.policy_name,
+                    "reason": policy_result.reason,
+                })
+                return IntentResult(intent_id=intent.intent_id, success=False, results=[], failed_devices=[])
+            elif policy_result.decision == PolicyDecision.MODIFY:
+                plan = _AP(intent_id=plan.intent_id, actions=policy_result.modified_actions, urgency=plan.urgency)
 
         # Execute all actions in parallel
         tasks = [
