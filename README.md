@@ -41,9 +41,13 @@ When the hub receives `"ensure_safety / emergency"`, every registered device fig
 
 ## Demo
 
-[![DoSync Demo](https://img.shields.io/badge/▶_Watch_Demo-YouTube-red?style=for-the-badge)](https://youtu.be/2czAqoIrd08)
+**Claude AI controlling real hardware — lights + SMS notification:**  
+[![Claude Demo](https://img.shields.io/badge/▶_Watch_Demo-YouTube-red?style=for-the-badge)](https://youtu.be/I4EAfeOtkLA)
 
-**What you'll see:** A natural language conversation with Claude AI triggers a physical emergency protocol in real time — 10 Philips WiZ bulbs at full brightness, SMS notification sent, audit log updated. No commands. No rules. No cloud.
+**PIR motion sensor triggering the scene automatically (no human input):**  
+[![PIR Demo](https://img.shields.io/badge/▶_Watch_PIR_Demo-YouTube-red?style=for-the-badge)](https://youtube.com/shorts/HgjvgrMO878)
+
+What you're seeing: a semantic intent pipeline running locally on a Raspberry Pi 5. Claude receives a natural language request, the DoSync hub resolves it into a semantic intent, and physical devices respond — lights, SMS notification to a real phone. In the PIR demo, the motion sensor fires the intent automatically with no human intervention. No commands. No rules. No cloud. Latency: ~91ms.
 
 ---
 
@@ -159,18 +163,23 @@ And the hub executes the full protocol in real time.
 ## Hardware demo
 
 Tested with:
-- **Raspberry Pi 5** — runs the hub autonomously 24/7
-- **Philips WiZ** — 10 bulbs controlled via UDP local network
-- **PIR HC-SR501** — motion detection → emergency intent
+- **Raspberry Pi 5** — runs the hub autonomously 24/7 via systemd
+- **Philips WiZ** — 10 bulbs controlled via UDP local network, no cloud
+- **Philips TV Ambilight** — native effects (HOT_LAVA, DEEP_WATER, VIVID...) via Home Assistant bridge
+- **Samsung 75" QLED** — power and input control via Home Assistant bridge
+- **PIR HC-SR501** — motion detection → semantic intent
 - **DHT22** — temperature/humidity sensor → anomaly detection
+- **SMS via Twilio** — real notifications to a real phone
 
 ```
-Motion detected (PIR on Raspberry Pi)
-    → ensure_safety [emergency] fired
-        → 10 WiZ bulbs at full brightness
-        → SMS sent to family
-        → Audit log updated
-All in under 100ms. No internet. No cloud.
+PIR detects movement at entrance
+  ↓ context validator (time: 18:42 ✓, day: tuesday ✓)
+  ↓ semantic resolver → children_arrived_home
+  ↓ DoSync Hub → 6 devices matched
+  ↓ living room lights  → turn_on warm white 100%
+  ↓ kids' room light    → turn_on warm white 60%
+  ↓ SMS                 → "Los niños llegaron a casa"
+total latency: ~91ms. no internet. no cloud.
 ```
 
 ---
@@ -190,7 +199,7 @@ class MyAdapter(DoSyncAdapter):
         return "myadapter"
 ```
 
-**Available today:** `wiz` · `homeassistant` · `gpio` · `simulated`  
+**Available today:** `wiz` · `homeassistant` · `gpio` · `notifications` · `simulated`  
 **Planned:** `shelly` · `matter` · `ble` · `zigbee2mqtt`
 
 ---
@@ -259,6 +268,8 @@ The protocol is the infrastructure. The domain is up to you.
 ## Specification
 
 Full protocol specification: [spec/DOSYNC-SPEC-v0.1.md](spec/DOSYNC-SPEC-v0.1.md)
+
+Full technical writeup: [The Missing Layer Between AI Agents and Physical Systems](https://dev.to/giulianiregspec/the-missing-layer-between-ai-agents-and-physical-systems-4c4)
 
 ---
 
