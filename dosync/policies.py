@@ -392,3 +392,122 @@ class PolicyEngine:
             )
 
         return PolicyResult.allow("no_policy_matched")
+
+
+# ── Intent priority map ───────────────────────────────────────────────────────
+
+INTENT_PRIORITY: dict[str, int] = {
+    # Priority 1 — Emergency (highest)
+    "ensure_safety":         1,
+    "alert_anomaly":         1,
+    # Priority 2 — Security
+    "control_access":        2,
+    # Priority 3 — Presence
+    "children_arrived_home": 3,
+    "notify_family":         3,
+    # Priority 4 — Comfort
+    "set_environment":       4,
+    "morning_routine":       4,
+    "bedtime_routine":       4,
+    "remind_chore":          4,
+    "report_status":         4,
+    # Priority 5 — Efficiency (lowest)
+    "save_energy":           5,
+    "away_mode":             5,
+}
+
+def get_intent_priority(intent_value: str) -> int:
+    """Returns priority for an intent. Lower = higher priority. Default 99."""
+    return INTENT_PRIORITY.get(intent_value, 99)
+
+
+# ── Conflict resolution policy ────────────────────────────────────────────────
+
+class ConflictResolutionPolicy(BasePolicy):
+    """
+    Detects and resolves conflicts between simultaneous intents.
+
+    When two intents affect the same devices simultaneously, the one
+    with higher priority (lower number) wins. The lower priority intent
+    is blocked or has conflicting actions removed.
+
+    Priority scale (lower = higher priority):
+        1 = Emergency
+        2 = Security
+        3 = Presence
+        4 = Comfort
+        5 = Efficiency
+
+    Example:
+        children_arrived_home (priority 3) fires at the same time as
+        save_energy (priority 5) — save_energy loses on shared devices.
+    """
+
+    def __init__(self, hub):
+        self._hub = hub
+
+    @property
+    def name(self) -> str:
+        return "conflict_resolution"
+
+    @property
+    def priority(self) -> int:
+        return 1  # evaluated first
+
+    def evaluate(self, intent: "Intent", plan: "ActionPlan") -> PolicyResult | None:
+        active = getattr(self._hub, "_active_intents", {})
+        if not active:
+            return None
+
+        current_priority = get_intent_priority(intent.intent.value)
+        current_devices = {a.device_id for a in plan.actions}
+
+        for active_intent_value, active_priority in active.items():
+            if active_intent_value == intent.intent.value:
+                continue
+
+            # Check if there are shared devices (conflict)
+            active_devices = getattr(self._hub, "_active_intent_devices", {}).get(
+                active_intent_value, set()
+            )
+            conflict_devices = current_devices & active_devices
+
+            if not conflict_devices:
+                continue
+
+            # Conflict detected
+            if current_priority > active_priority:
+                # Current intent has LOWER priority — block conflicting actions
+                filtered = [a for a in plan.actions if a.device_id not in conflict_devices]
+                if not filtered:
+                    return PolicyResult.block(
+                        self.name,
+                        f"Intent '{intent.intent.value}' (priority {current_priority}) blocked "
+                        f"by '{active_intent_value}' (priority {active_priority}) "
+                        f"on devices: {conflict_devices}"
+                    )
+                log.info(
+                    "ConflictResolution: '%s' loses to '%s' on %d device(s)",
+                    intent.intent.value, active_intent_value, len(conflict_devices)
+                )
+                result = PolicyResult(
+                    decision=PolicyDecision.MODIFY,
+                    policy_name=self.name,
+                    reason=f"Conflict with higher-priority intent '{active_intent_value}'",
+                    modified_actions=filtered,
+                )
+                return result
+
+            elif current_priority < active_priority:
+                # Current intent has HIGHER priority — it wins, log the override
+                log.info(
+                    "ConflictResolution: '%s' (priority %d) overrides '%s' (priority %d) "
+                    "on devices: %s",
+                    intent.intent.value, current_priority,
+                    active_intent_value, active_priority,
+                    conflict_devices,
+                )
+                # No modification needed — current intent executes fully
+                return None
+
+        return None

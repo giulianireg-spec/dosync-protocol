@@ -58,6 +58,8 @@ except Exception as _e:
 try:
     from dosync.policies import PolicyEngine, NeverAfterHoursPolicy, RequireConfirmationPolicy, DeviceExclusionPolicy
     policy_engine = PolicyEngine()
+    from dosync.policies import ConflictResolutionPolicy
+    policy_engine.add(ConflictResolutionPolicy(hub))
     policy_engine.add(NeverAfterHoursPolicy(
         actuator_types=["unlock", "alarm"],
         blocked_hours_start=0,

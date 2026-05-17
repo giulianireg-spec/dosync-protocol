@@ -463,6 +463,8 @@ class DoSyncHub:
         self.registry       = CapabilityRegistry()
         self.resolver       = StateAwareResolver(self.registry, self)
         self.policy_engine  = None  # set via hub.policy_engine = PolicyEngine()
+        self._active_intents: dict[str, int] = {}  # intent_value -> priority
+        self._active_intent_devices: dict[str, set] = {}  # intent_value -> device_ids
         self.audit_log      = AuditLog()
         self.occupancy      = OccupancyEngine()
         self.family_profile: FamilyProfile | None = None
@@ -673,12 +675,22 @@ class DoSyncHub:
             elif policy_result.decision == PolicyDecision.MODIFY:
                 plan = _AP(intent_id=plan.intent_id, actions=policy_result.modified_actions, urgency=plan.urgency)
 
+        # Register active intent for conflict detection
+        from .policies import get_intent_priority
+        intent_value = intent.intent.value
+        self._active_intents[intent_value] = get_intent_priority(intent_value)
+        self._active_intent_devices[intent_value] = {a.device_id for a in plan.actions}
+
         # Execute all actions in parallel
         tasks = [
             executor.execute(action, intent.urgency)
             for action in plan.actions
         ]
         results: list[ActionResult] = await asyncio.gather(*tasks)
+
+        # Unregister active intent
+        self._active_intents.pop(intent_value, None)
+        self._active_intent_devices.pop(intent_value, None)
 
         failed = [r.device_id for r in results if not r.success]
         success = len(failed) == 0
