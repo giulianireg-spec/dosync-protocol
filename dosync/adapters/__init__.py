@@ -141,6 +141,22 @@ class AdapterExecutor:
 
         adapter_name = getattr(device, "adapter", None)
 
+        # State awareness: skip redundant actions
+        from ..hub import StateAwareResolver
+        resolver = getattr(self._hub, 'resolver', None)
+        if isinstance(resolver, StateAwareResolver):
+            dummy_action = action
+            if resolver._is_redundant(dummy_action):
+                log.info("StateAwareResolver: skipped redundant %s on %s",
+                         action.action, action.device_id)
+                from ..models import ActionResult
+                return ActionResult(
+                    device_id=action.device_id,
+                    action=action.action,
+                    success=True,
+                    response={"status": "skipped_redundant"},
+                )
+
         if adapter_name and adapter_name in self._adapters:
             log.info(
                 "Dispatching %s.%s to adapter '%s'",
