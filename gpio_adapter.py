@@ -176,8 +176,8 @@ async def pir_loop():
 
                     # Disparar intent de presencia
                     fire_intent(
-                        intent="ensure_safety",
-                        urgency="emergency",
+                        intent="children_arrived_home",
+                        urgency="info",
                         context={
                             "trigger":   "motion_detected",
                             "device_id": "rpi-pir-01",
