@@ -511,3 +511,124 @@ class ConflictResolutionPolicy(BasePolicy):
                 return None
 
         return None
+
+
+# ── Contextual weighting policy ───────────────────────────────────────────────
+
+class ContextualWeightingPolicy(BasePolicy):
+    """
+    Adjusts intent context based on temporal and environmental factors.
+
+    The same physical event carries different weight depending on context:
+    - A motion sensor at 3am is more likely an intrusion than at 3pm
+    - A temperature anomaly in winter has different implications than in summer
+    - Monday morning routines differ from weekend patterns
+
+    This policy injects a 'context_weight' into the intent context,
+    which the resolver can use to adjust scoring.
+
+    Weight scale:
+        1.0 = normal weight (default)
+        > 1.0 = amplify response (e.g. motion at night = higher urgency)
+        < 1.0 = reduce response (e.g. motion during typical home hours = routine)
+
+    Built-in rules:
+        - motion_detected at night (22:00-06:00) → weight 1.8 (possible intrusion)
+        - motion_detected during work hours (09:00-17:00) weekday → weight 0.6 (likely routine)
+        - any intent on weekend → weight 0.9 (relaxed mode)
+        - temperature anomaly in extreme weather hours → weight 1.5
+    """
+
+    def __init__(self, custom_rules: list[dict] | None = None):
+        self._custom_rules = custom_rules or []
+
+    @property
+    def name(self) -> str:
+        return "contextual_weighting"
+
+    @property
+    def priority(self) -> int:
+        return 2  # evaluated very early, before conflict resolution
+
+    def _compute_weight(self, intent: "Intent") -> float:
+        from datetime import datetime
+        now = datetime.now()
+        hour = now.hour
+        weekday = now.weekday()  # 0=Monday, 6=Sunday
+        is_night = hour >= 22 or hour < 6
+        is_work_hours = 9 <= hour < 17 and weekday < 5
+        is_weekend = weekday >= 5
+        intent_value = intent.intent.value
+        trigger = intent.context.get("trigger", "")
+
+        weight = 1.0
+
+        # Motion at night — possible intrusion
+        if trigger == "motion_detected" and is_night:
+            weight = 1.8
+
+        # Motion during typical work hours on weekday — likely routine
+        elif trigger == "motion_detected" and is_work_hours:
+            weight = 0.6
+
+        # Weekend — relaxed mode
+        if is_weekend and intent_value not in ("ensure_safety", "alert_anomaly"):
+            weight *= 0.9
+
+        # Temperature anomaly at extreme hours
+        if trigger == "temperature_anomaly" and is_night:
+            weight = max(weight, 1.5)
+
+        # Apply custom rules
+        for rule in self._custom_rules:
+            if rule.get("intent") == intent_value:
+                if rule.get("hour_start") is not None and rule.get("hour_end") is not None:
+                    if rule["hour_start"] <= hour < rule["hour_end"]:
+                        weight = rule.get("weight", weight)
+
+        return round(weight, 2)
+
+    def evaluate(self, intent: "Intent", plan: "ActionPlan") -> PolicyResult | None:
+        from .models import Urgency
+        # Emergency always full weight
+        if intent.urgency == Urgency.EMERGENCY:
+            return None
+
+        weight = self._compute_weight(intent)
+
+        if weight == 1.0:
+            return None  # no adjustment needed
+
+        # Inject weight into intent context for resolver awareness
+        intent.context["context_weight"] = weight
+
+        if weight < 0.7:
+            # Very low weight — reduce scope by keeping only high-scoring devices
+            log.info(
+                "ContextualWeighting: low weight %.2f for '%s' — reducing scope",
+                weight, intent.intent.value
+            )
+            high_priority_actions = plan.actions[:max(1, len(plan.actions) // 2)]
+            return PolicyResult(
+                decision=PolicyDecision.MODIFY,
+                policy_name=self.name,
+                reason=f"Low contextual weight ({weight}) — reduced scope",
+                modified_actions=high_priority_actions,
+            )
+
+        if weight > 1.5:
+            # High weight — escalate urgency in context
+            log.info(
+                "ContextualWeighting: high weight %.2f for '%s' — escalating context",
+                weight, intent.intent.value
+            )
+            intent.context["escalated"] = True
+            intent.context["original_urgency"] = intent.urgency.value
+
+        log.info(
+            "ContextualWeighting: weight=%.2f applied to '%s' (hour=%d, trigger=%s)",
+            weight, intent.intent.value,
+            __import__("datetime").datetime.now().hour,
+            intent.context.get("trigger", "none")
+        )
+        return None  # let intent proceed with modified context
