@@ -131,7 +131,35 @@ INTENT_RESOLUTION_MAP: dict[IntentClass, dict] = {
 }
 
 
-class SemanticResolver:
+
+# ── Resolver interface ────────────────────────────────────────────────────────
+
+class BaseResolver:
+    """
+    Formal interface for DoSync semantic resolvers.
+
+    The protocol defines WHAT a resolver must do, not HOW.
+    Third-party implementations can be dropped in by subclassing this
+    and passing the instance to DoSyncHub.
+
+    A resolver receives an Intent and returns an ActionPlan.
+    It has read-only access to the CapabilityRegistry.
+
+    To implement a custom resolver:
+        class MyResolver(BaseResolver):
+            async def resolve(self, intent: Intent) -> ActionPlan:
+                ...
+    """
+
+    def __init__(self, registry: 'CapabilityRegistry'):
+        self.registry = registry
+
+    def resolve(self, intent: Intent) -> ActionPlan:
+        raise NotImplementedError(
+            'Subclasses must implement resolve(intent) -> ActionPlan'
+        )
+
+class CapabilityMatchingResolver(BaseResolver):
     """
     Layer 4: resolves an Intent into an ActionPlan by matching
     against registered device capabilities.
@@ -294,6 +322,93 @@ class SemanticResolver:
         )
 
 
+
+
+# ── State-aware resolver ──────────────────────────────────────────────────────
+
+class StateAwareResolver(CapabilityMatchingResolver):
+    """
+    Extends CapabilityMatchingResolver with device state awareness.
+
+    Before executing an action, queries the current device state
+    and skips redundant actions:
+    - Does not turn on a light that is already at full brightness
+    - Does not unlock a door that is already unlocked
+    - Does not set a temperature that is already at target
+
+    This is the recommended resolver for production deployments.
+    """
+
+    def __init__(self, registry: 'CapabilityRegistry', hub: 'DoSyncHub'):
+        super().__init__(registry)
+        self._hub = hub
+        self._state_cache: dict = {}
+
+    def _get_device_state(self, device_id: str) -> dict:
+        """Returns cached device state or empty dict if unknown."""
+        return self._state_cache.get(device_id, {})
+
+    def update_state(self, device_id: str, state: dict) -> None:
+        """Called by adapters after execution to update state cache."""
+        if device_id not in self._state_cache:
+            self._state_cache[device_id] = {}
+        self._state_cache[device_id].update(state)
+
+    def _is_redundant(self, action: DeviceAction) -> bool:
+        """Returns True if the action would have no effect given current state."""
+        state = self._get_device_state(action.device_id)
+        if not state:
+            return False  # unknown state — execute to be safe
+
+        if action.action == 'turn_on' and state.get('on') is True:
+            brightness = action.params.get('brightness', 100)
+            current_brightness = state.get('brightness', 0)
+            if current_brightness >= brightness:
+                log.debug('Skipping redundant turn_on for %s (already on at %s%%)',
+                          action.device_id, current_brightness)
+                return True
+
+        if action.action == 'turn_off' and state.get('on') is False:
+            log.debug('Skipping redundant turn_off for %s (already off)', action.device_id)
+            return True
+
+        if action.action == 'unlock' and state.get('locked') is False:
+            log.debug('Skipping redundant unlock for %s (already unlocked)', action.device_id)
+            return True
+
+        if action.action == 'lock' and state.get('locked') is True:
+            log.debug('Skipping redundant lock for %s (already locked)', action.device_id)
+            return True
+
+        if action.action == 'set_temperature':
+            target = action.params.get('celsius')
+            current = state.get('temperature')
+            if target and current and abs(target - current) < 0.5:
+                log.debug('Skipping redundant set_temperature for %s (already at %.1f)',
+                          action.device_id, current)
+                return True
+
+        return False
+
+    def resolve(self, intent: Intent) -> ActionPlan:
+        """Resolves intent and filters redundant actions based on device state."""
+        plan = super().resolve(intent)
+
+        if not self._state_cache:
+            return plan  # no state info yet — pass through
+
+        filtered = [a for a in plan.actions if not self._is_redundant(a)]
+        skipped = len(plan.actions) - len(filtered)
+        if skipped:
+            log.info('StateAwareResolver: skipped %d redundant action(s) for intent %s',
+                     skipped, intent.intent.value)
+
+        return ActionPlan(
+            intent_id=plan.intent_id,
+            actions=filtered,
+            urgency=plan.urgency,
+        )
+
 # ── Audit log ─────────────────────────────────────────────────────────────────
 
 class AuditLog:
@@ -346,7 +461,7 @@ class DoSyncHub:
 
     def __init__(self, db_path: str = "dosync.db"):
         self.registry       = CapabilityRegistry()
-        self.resolver       = SemanticResolver(self.registry)
+        self.resolver       = StateAwareResolver(self.registry, self)
         self.audit_log      = AuditLog()
         self.occupancy      = OccupancyEngine()
         self.family_profile: FamilyProfile | None = None

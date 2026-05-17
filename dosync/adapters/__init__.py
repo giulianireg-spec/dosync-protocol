@@ -147,7 +147,10 @@ class AdapterExecutor:
                 action.device_id, action.action, adapter_name,
             )
             try:
-                return await self._adapters[adapter_name].execute(action, urgency)
+                result = await self._adapters[adapter_name].execute(action, urgency)
+                if result.success:
+                    self._update_resolver_state(action)
+                return result
             except Exception as e:
                 log.error(
                     "Adapter '%s' failed for %s.%s: %s",
@@ -174,3 +177,27 @@ class AdapterExecutor:
             success=False,
             error=f"No adapter registered for '{adapter_name}'",
         )
+
+    def _update_resolver_state(self, action: DeviceAction) -> None:
+        """Notifica al StateAwareResolver el nuevo estado tras una accion exitosa."""
+        from ..hub import StateAwareResolver
+        resolver = getattr(self._hub, 'resolver', None)
+        if not isinstance(resolver, StateAwareResolver):
+            return
+        state_update = {}
+        if action.action == 'turn_on':
+            state_update = {'on': True, 'brightness': action.params.get('brightness', 100)}
+        elif action.action == 'turn_off':
+            state_update = {'on': False, 'brightness': 0}
+        elif action.action == 'set_brightness':
+            state_update = {'on': True, 'brightness': action.params.get('brightness', 100)}
+        elif action.action == 'unlock':
+            state_update = {'locked': False}
+        elif action.action == 'lock':
+            state_update = {'locked': True}
+        elif action.action == 'set_temperature':
+            state_update = {'temperature': action.params.get('celsius')}
+        if state_update:
+            resolver.update_state(action.device_id, state_update)
+
+
