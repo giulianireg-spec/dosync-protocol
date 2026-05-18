@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
 
   dosync-hub:
@@ -13,25 +11,23 @@ services:
       - DOSYNC_AUTH=false
       - DOSYNC_DB_PATH=/data/dosync.db
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:47200/v1/status"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:47200/v1/status')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
-  dosync-simulator:
+  dosync-seed:
     build: .
-    container_name: dosync-simulator
+    container_name: dosync-seed
     depends_on:
       dosync-hub:
         condition: service_healthy
     environment:
-      - DOSYNC_HUB_URL=http://dosync-hub:47200
-      - DOSYNC_AUTH=false
       - PYTHONPATH=/app
-    command: python3 examples/demo_full.py
+    command: python3 demo_seed.py --hub http://dosync-hub:47200
     volumes:
-      - ./examples:/app/examples
+      - ./demo_seed.py:/app/demo_seed.py
     restart: "no"
 
 volumes:
