@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+
+  dosync-hub:
+    build: .
+    container_name: dosync-hub
+    ports:
+      - "47200:47200"
+    volumes:
+      - dosync-data:/data
+    environment:
+      - DOSYNC_AUTH=false
+      - DOSYNC_DB_PATH=/data/dosync.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:47200/v1/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  dosync-simulator:
+    build: .
+    container_name: dosync-simulator
+    depends_on:
+      dosync-hub:
+        condition: service_healthy
+    environment:
+      - DOSYNC_HUB_URL=http://dosync-hub:47200
+      - DOSYNC_AUTH=false
+      - PYTHONPATH=/app
+    command: python3 examples/demo_full.py
+    volumes:
+      - ./examples:/app/examples
+    restart: "no"
+
+volumes:
+  dosync-data:
