@@ -231,14 +231,30 @@ def generate_ca(force: bool = False) -> None:
     CA_KEY_PATH.chmod(0o600)
 
     log.info("Generating CA self-signed certificate (valid %d days)...", CA_VALIDITY_DAYS)
-    # CA extension file — keyUsage requerido por Python/OpenSSL moderno
+    # Config file completo — requerido por OpenSSL 3.0 en Debian/Raspberry Pi OS
+    # El approach con -subj + -extensions falla en OpenSSL 3.0 sin -config
     ca_ext_file = CERTS_DIR / "ca_ext.cnf"
     ca_ext_file.write_text(
+        "[req]\n"
+        "default_bits = 4096\n"
+        "prompt = no\n"
+        "default_md = sha256\n"
+        "distinguished_name = dn\n"
+        "x509_extensions = v3_ca\n"
+        "\n"
+        "[dn]\n"
+        "C = AR\n"
+        "ST = Cordoba\n"
+        "L = Cordoba\n"
+        "O = DoSync Local PKI\n"
+        "OU = Certificate Authority\n"
+        "CN = DoSync CA\n"
+        "\n"
         "[v3_ca]\n"
-        "subjectKeyIdentifier=hash\n"
-        "authorityKeyIdentifier=keyid:always,issuer\n"
-        "basicConstraints=critical,CA:TRUE\n"
-        "keyUsage=critical,digitalSignature,cRLSign,keyCertSign\n"
+        "subjectKeyIdentifier = hash\n"
+        "authorityKeyIdentifier = keyid:always,issuer\n"
+        "basicConstraints = critical,CA:TRUE\n"
+        "keyUsage = critical,digitalSignature,cRLSign,keyCertSign\n"
     )
     _run([
         "openssl", "req",
@@ -246,9 +262,7 @@ def generate_ca(force: bool = False) -> None:
         "-key", str(CA_KEY_PATH),
         "-out", str(CA_CERT_PATH),
         "-days", str(CA_VALIDITY_DAYS),
-        "-subj", CA_SUBJECT,
-        "-extensions", "v3_ca",
-        "-extfile", str(ca_ext_file),
+        "-config", str(ca_ext_file),
     ])
     ca_ext_file.unlink(missing_ok=True)
 
@@ -296,10 +310,20 @@ def generate_hub_cert(
         "-subj", HUB_SUBJECT,
     ])
 
-    # SAN (Subject Alternative Names) — IPs y hostnames válidos
-    san = f"subjectAltName=IP:{hub_ip},IP:127.0.0.1,DNS:{hub_hostname},DNS:localhost"
+    # SAN config file completo — requerido por OpenSSL 3.0
     ext_file = CERTS_DIR / "hub_ext.cnf"
-    ext_file.write_text(f"[v3_req]\n{san}\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n")
+    ext_file.write_text(
+        "[req]\n"
+        "distinguished_name = dn\n"
+        "req_extensions = v3_req\n"
+        "prompt = no\n"
+        "[dn]\n"
+        "CN = dosync-hub\n"
+        "[v3_req]\n"
+        f"subjectAltName = IP:{hub_ip},IP:127.0.0.1,DNS:{hub_hostname},DNS:localhost\n"
+        "keyUsage = digitalSignature,keyEncipherment\n"
+        "extendedKeyUsage = serverAuth\n"
+    )
 
     log.info("Signing hub certificate with CA (valid %d days)...", CERT_VALIDITY_DAYS)
     _run([
