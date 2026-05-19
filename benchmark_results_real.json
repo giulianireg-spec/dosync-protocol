@@ -1,0 +1,203 @@
+{
+  "CapabilityMatchingResolver": {
+    "label": "CapabilityMatchingResolver",
+    "n_devices": 38,
+    "n_iter": 500,
+    "mean": 0.05289116199997679,
+    "median": 0.04734749999979471,
+    "p95": 0.07369400000101223,
+    "p99": 0.10673300000085817,
+    "min": 0.014331000000922245,
+    "max": 3.803817999999737,
+    "mean_actions": 52.348,
+    "per_intent": {
+      "ensure_safety": {
+        "mean_ms": 0.05242627272707092,
+        "mean_actions": 74,
+        "samples": 33
+      },
+      "alert_anomaly": {
+        "mean_ms": 0.042464909091079826,
+        "mean_actions": 41.13636363636363,
+        "samples": 44
+      },
+      "control_access": {
+        "mean_ms": 0.03425638235283615,
+        "mean_actions": 24.294117647058822,
+        "samples": 34
+      },
+      "monitor_health": {
+        "mean_ms": 0.035864638297940614,
+        "mean_actions": 33.8936170212766,
+        "samples": 47
+      },
+      "notify_family": {
+        "mean_ms": 0.037084081632474175,
+        "mean_actions": 33.3469387755102,
+        "samples": 49
+      },
+      "report_status": {
+        "mean_ms": 0.035702032258154395,
+        "mean_actions": 28.70967741935484,
+        "samples": 31
+      },
+      "set_environment": {
+        "mean_ms": 0.1622299090908584,
+        "mean_actions": 66.51515151515152,
+        "samples": 33
+      },
+      "save_energy": {
+        "mean_ms": 0.05093860975613214,
+        "mean_actions": 68.26829268292683,
+        "samples": 41
+      },
+      "remind_chore": {
+        "mean_ms": 0.039344428571398894,
+        "mean_actions": 40.31428571428572,
+        "samples": 35
+      },
+      "bedtime_routine": {
+        "mean_ms": 0.04910557894738669,
+        "mean_actions": 67,
+        "samples": 38
+      },
+      "morning_routine": {
+        "mean_ms": 0.05604038095229939,
+        "mean_actions": 68.4047619047619,
+        "samples": 42
+      },
+      "away_mode": {
+        "mean_ms": 0.05746946874995995,
+        "mean_actions": 67,
+        "samples": 32
+      },
+      "children_arrived_home": {
+        "mean_ms": 0.053535707317053385,
+        "mean_actions": 73.4390243902439,
+        "samples": 41
+      }
+    }
+  },
+  "StateAwareResolver": {
+    "label": "StateAwareResolver",
+    "n_devices": 38,
+    "n_iter": 500,
+    "mean": 0.05290371000002736,
+    "median": 0.056527499999958764,
+    "p95": 0.08356000000020458,
+    "p99": 0.10855400000053805,
+    "min": 0.014515000000159262,
+    "max": 0.1609580000003774,
+    "mean_actions": 33.674,
+    "per_intent": {
+      "ensure_safety": {
+        "mean_ms": 0.0681753636362628,
+        "mean_actions": 48,
+        "samples": 33
+      },
+      "alert_anomaly": {
+        "mean_ms": 0.049931886363657245,
+        "mean_actions": 26.818181818181817,
+        "samples": 44
+      },
+      "control_access": {
+        "mean_ms": 0.037440352941143326,
+        "mean_actions": 15.529411764705882,
+        "samples": 34
+      },
+      "monitor_health": {
+        "mean_ms": 0.0424824042552968,
+        "mean_actions": 22.04255319148936,
+        "samples": 47
+      },
+      "notify_family": {
+        "mean_ms": 0.041574163265343425,
+        "mean_actions": 21.510204081632654,
+        "samples": 49
+      },
+      "report_status": {
+        "mean_ms": 0.03856541935478861,
+        "mean_actions": 18.806451612903224,
+        "samples": 31
+      },
+      "set_environment": {
+        "mean_ms": 0.06077663636361308,
+        "mean_actions": 42.515151515151516,
+        "samples": 33
+      },
+      "save_energy": {
+        "mean_ms": 0.0610926585366829,
+        "mean_actions": 43.26829268292683,
+        "samples": 41
+      },
+      "remind_chore": {
+        "mean_ms": 0.044367371428778925,
+        "mean_actions": 26.2,
+        "samples": 35
+      },
+      "bedtime_routine": {
+        "mean_ms": 0.06107705263166221,
+        "mean_actions": 43,
+        "samples": 38
+      },
+      "morning_routine": {
+        "mean_ms": 0.05999285714282839,
+        "mean_actions": 43.404761904761905,
+        "samples": 42
+      },
+      "away_mode": {
+        "mean_ms": 0.06181365625002044,
+        "mean_actions": 43,
+        "samples": 32
+      },
+      "children_arrived_home": {
+        "mean_ms": 0.06392212195133873,
+        "mean_actions": 47.4390243902439,
+        "samples": 41
+      }
+    }
+  },
+  "scale": {
+    "10": {
+      "mean": 0.011786940000089174,
+      "p95": 0.01684199999907321,
+      "p99": 0.0379739999996076
+    },
+    "50": {
+      "mean": 0.05048642333330614,
+      "p95": 0.07245099999941829,
+      "p99": 0.08669199999999933
+    },
+    "100": {
+      "mean": 0.09628314999999905,
+      "p95": 0.14082399999892914,
+      "p99": 0.19549199999957523
+    },
+    "500": {
+      "mean": 0.49762367666665125,
+      "p95": 0.7372569999990475,
+      "p99": 1.4861620000008458
+    },
+    "1000": {
+      "mean": 1.0132915433333227,
+      "p95": 1.3753970000003335,
+      "p99": 3.0439819999994455
+    },
+    "2000": {
+      "mean": 2.459458050000064,
+      "p95": 4.98589300000063,
+      "p99": 8.389107999999368
+    },
+    "5000": {
+      "mean": 5.299716813333338,
+      "p95": 9.128481999997717,
+      "p99": 11.391625999998212
+    }
+  },
+  "overhead": {
+    "direct_command_mean_ms": 0.0012532219999954464,
+    "semantic_resolver_mean_ms": 0.05289116199997679,
+    "overhead_abs_ms": 0.05163793999998134,
+    "overhead_multiplier": 42.20414419805028
+  }
+}

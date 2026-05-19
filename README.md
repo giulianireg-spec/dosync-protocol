@@ -130,7 +130,7 @@ python3 certify.py --host localhost --port 47200 --tier emergency
 | WebSocket real-time events | ✅ |
 | Web dashboard | ✅ |
 | API key authentication + SHA-256 audit log | ✅ |
-| Semantic resolver (7 intent classes) | ✅ |
+| Semantic resolver (13 intent classes) | ✅ |
 | Certification CLI — 16/16 tests | ✅ |
 | Philips WiZ adapter (UDP local) | ✅ |
 | Home Assistant bridge (10 domains) | ✅ |
@@ -139,6 +139,37 @@ python3 certify.py --host localhost --port 47200 --tier emergency
 | SMS notifications via Twilio | ✅ |
 | Device discovery (UDP broadcast) | ✅ |
 | SQLite persistence (survives restarts) | ✅ |
+| BaseResolver formal interface (v0.2) | ✅ |
+| StateAwareResolver — redundancy elimination | ✅ |
+| Policy engine (6 policies) | ✅ |
+| Resolver benchmark — p99 < 0.11ms @ 38 devices | ✅ |
+
+---
+
+## Performance
+
+The semantic resolver is designed to be fast enough to never be the bottleneck.
+
+| Resolver | Mean | p95 | p99 | Avg actions/intent |
+|---|---|---|---|---|
+| `CapabilityMatchingResolver` | 0.053ms | 0.074ms | 0.107ms | 52.3 |
+| `StateAwareResolver` | 0.053ms | 0.084ms | 0.109ms | **33.7** |
+
+Measured on the production registry (38 real devices, 500 iterations, seed 42).  
+`StateAwareResolver` eliminates **35% of redundant actions** at the same latency cost.
+
+**Scalability** (CapabilityMatchingResolver, O(n)):
+
+| Devices | Mean | p99 | Within 500ms spec |
+|---|---|---|---|
+| 100 | 0.096ms | 0.196ms | ✓ |
+| 1000 | 1.013ms | 3.044ms | ✓ |
+| 5000 | 5.300ms | 11.392ms | ✓ |
+
+**Semantic overhead vs direct command:** 0.051ms absolute — less than 1% of total execution time when accounting for real network latency (WiZ UDP: ~5–15ms, HA HTTP: ~20–80ms).
+
+→ Full benchmark methodology and results: [docs/BENCHMARK-RESULTS.md](docs/BENCHMARK-RESULTS.md)  
+→ Reproducible script: [benchmark_resolver.py](benchmark_resolver.py)
 
 ---
 
@@ -250,10 +281,15 @@ dosync-protocol/
 ├── ha_bridge.py               # Home Assistant import CLI
 ├── gpio_adapter.py            # Raspberry Pi GPIO adapter
 ├── manage.py                  # Key and DB management CLI
+├── benchmark_resolver.py      # Resolver performance benchmark
 ├── examples/
 │   └── demo_full.py           # 7-scenario demo
-└── spec/
-    └── DOSYNC-SPEC-v0.1.md    # Full protocol specification
+├── spec/
+│   ├── DOSYNC-SPEC-v0.1.md    # Full protocol specification
+│   └── RESOLVER-SPEC-v0.2.md  # Resolver interface specification
+└── docs/
+    ├── architecture.svg
+    └── BENCHMARK-RESULTS.md   # Benchmark results and methodology
 ```
 
 ---
@@ -273,7 +309,8 @@ The protocol is the infrastructure. The domain is up to you.
 
 ## Specification
 
-Full protocol specification: [spec/DOSYNC-SPEC-v0.1.md](spec/DOSYNC-SPEC-v0.1.md)
+Full protocol specification: [spec/DOSYNC-SPEC-v0.1.md](spec/DOSYNC-SPEC-v0.1.md)  
+Resolver interface: [spec/RESOLVER-SPEC-v0.2.md](spec/RESOLVER-SPEC-v0.2.md)
 
 ---
 
