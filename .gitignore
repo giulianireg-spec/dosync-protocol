@@ -19,3 +19,4 @@ dosync.db
 dosync.db-shm
 dosync.db-wal
 .env
+certs/

@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from dosync.hub import DoSyncHub
 from dosync.executor import SimulatedExecutor
 from dosync.auth import AuthManager, require_auth, set_auth_manager
+from dosync.security import get_status as get_pki_status
 from dosync.models import (
     ActuatorSpec, CapabilityManifest, CertTier, DeviceCategory,
     DeviceEvent, EventSpec, Intent, IntentClass, SensorSpec, Urgency,
@@ -251,6 +252,19 @@ async def lifespan(app: FastAPI):
         print("="*60 + "\n")
     elif not _auth_enabled:
         log.warning("Auth DISABLED — do not use in production")
+    # PKI status check
+    try:
+        from dosync.security import get_status as get_pki_status
+        _pki = get_pki_status()
+        if _pki.is_ready:
+            log.info("=== TLS/PKI: ACTIVE === CA valid %d days · Hub cert valid %d days · %d adapter cert(s)",
+                     _pki.ca_info.days_until_expiry, _pki.hub_info.days_until_expiry, len(_pki.adapter_certs))
+            if _pki.hub_info.is_expiring_soon:
+                log.warning("Hub cert expires in %d days — run: python3 -m dosync.security renew hub", _pki.hub_info.days_until_expiry)
+        else:
+            log.warning("=== TLS/PKI: NOT CONFIGURED === Hub running on plain HTTP. Run: bash setup_pki.sh")
+    except Exception as _pki_e:
+        log.warning("PKI status check failed: %s", _pki_e)
     yield
     log.info("DoSync Hub shutting down")
 
