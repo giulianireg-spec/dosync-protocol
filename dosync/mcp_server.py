@@ -67,6 +67,7 @@ except ImportError:
 
 HUB_URL   = os.environ.get("DOSYNC_HUB_URL", "http://localhost:47200")
 HUB_TOKEN = os.environ.get("DOSYNC_TOKEN", "")
+CA_CERT    = os.environ.get("DOSYNC_CA_CERT", None)
 
 # ── HTTP helper ───────────────────────────────────────────────────────────────
 
@@ -92,7 +93,7 @@ async def hub_request(method: str, path: str, body: dict = None) -> dict:
         except Exception as e:
             return {"error": str(e)}
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(verify=CA_CERT if CA_CERT else True) as client:
         try:
             if method == "GET":
                 r = await client.get(HUB_URL + path, headers=headers, timeout=10)
