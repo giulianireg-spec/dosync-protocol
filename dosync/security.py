@@ -231,6 +231,15 @@ def generate_ca(force: bool = False) -> None:
     CA_KEY_PATH.chmod(0o600)
 
     log.info("Generating CA self-signed certificate (valid %d days)...", CA_VALIDITY_DAYS)
+    # CA extension file — keyUsage requerido por Python/OpenSSL moderno
+    ca_ext_file = CERTS_DIR / "ca_ext.cnf"
+    ca_ext_file.write_text(
+        "[v3_ca]\n"
+        "subjectKeyIdentifier=hash\n"
+        "authorityKeyIdentifier=keyid:always,issuer\n"
+        "basicConstraints=critical,CA:TRUE\n"
+        "keyUsage=critical,digitalSignature,cRLSign,keyCertSign\n"
+    )
     _run([
         "openssl", "req",
         "-new", "-x509",
@@ -239,7 +248,9 @@ def generate_ca(force: bool = False) -> None:
         "-days", str(CA_VALIDITY_DAYS),
         "-subj", CA_SUBJECT,
         "-extensions", "v3_ca",
+        "-extfile", str(ca_ext_file),
     ])
+    ca_ext_file.unlink(missing_ok=True)
 
     log.info("CA generated successfully:")
     log.info("  Key:  %s", CA_KEY_PATH)
