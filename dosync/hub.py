@@ -343,7 +343,6 @@ class StateAwareResolver(CapabilityMatchingResolver):
         super().__init__(registry)
         self._hub = hub
         self._state_cache: dict = {}
-        self._load_state_from_db()
 
     def _get_device_state(self, device_id: str) -> dict:
         """Returns cached device state or empty dict if unknown."""
@@ -492,6 +491,9 @@ class DoSyncHub:
         self._event_handlers: list[Callable] = []
         self.db             = DoSyncDB(db_path)
         self.db.init()
+        # Cargar estado persistido ahora que db esta lista
+        if hasattr(self, "resolver"):
+            self.resolver._load_state_from_db()
         self.audit_log._persist_cb = self.db.append_audit
         self._restore_from_db()
 
