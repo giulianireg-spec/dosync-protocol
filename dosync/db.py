@@ -54,6 +54,11 @@ CREATE TABLE IF NOT EXISTS api_keys (
 
 CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
 CREATE INDEX IF NOT EXISTS idx_presence_timestamp ON presence_signals(timestamp);
+CREATE TABLE IF NOT EXISTS device_state (
+    device_id       TEXT PRIMARY KEY,
+    state_json      TEXT NOT NULL,
+    updated_at      REAL NOT NULL
+);
 """
 
 
@@ -296,3 +301,39 @@ class DoSyncDB:
         with self._cursor() as cur:
             cur.execute("SELECT COUNT(*) as n FROM api_keys")
             return cur.fetchone()["n"] > 0
+
+    # ── Device State (StateAwareResolver persistence) ─────────────────────────
+
+    def save_device_state(self, device_id: str, state: dict) -> None:
+        """Persiste el estado de un dispositivo. Upsert por device_id."""
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO device_state (device_id, state_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(device_id) DO UPDATE SET
+                    state_json = excluded.state_json,
+                    updated_at = excluded.updated_at
+                """,
+                (device_id, json.dumps(state), time.time()),
+            )
+
+    def load_device_state(self, device_id: str) -> dict:
+        """Carga el estado de un dispositivo. Retorna {} si no existe."""
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT state_json FROM device_state WHERE device_id = ?",
+                (device_id,),
+            )
+            row = cur.fetchone()
+        if row:
+            return json.loads(row[0])
+        return {}
+
+    def load_all_device_states(self) -> dict:
+        """Carga todos los estados persistidos. Retorna {device_id: state_dict}."""
+        with self._cursor() as cur:
+            cur.execute("SELECT device_id, state_json FROM device_state")
+            rows = cur.fetchall()
+        return {row[0]: json.loads(row[1]) for row in rows}
+

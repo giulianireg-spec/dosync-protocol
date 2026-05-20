@@ -343,16 +343,37 @@ class StateAwareResolver(CapabilityMatchingResolver):
         super().__init__(registry)
         self._hub = hub
         self._state_cache: dict = {}
+        self._load_state_from_db()
 
     def _get_device_state(self, device_id: str) -> dict:
         """Returns cached device state or empty dict if unknown."""
         return self._state_cache.get(device_id, {})
 
     def update_state(self, device_id: str, state: dict) -> None:
-        """Called by adapters after execution to update state cache."""
+        """Called by adapters after execution to update state cache and persist to DB."""
         if device_id not in self._state_cache:
             self._state_cache[device_id] = {}
         self._state_cache[device_id].update(state)
+        # Persistir en SQLite para sobrevivir reinicios
+        try:
+            db = getattr(self._hub, 'db', None)
+            if db:
+                db.save_device_state(device_id, self._state_cache[device_id])
+        except Exception as _e:
+            log.warning('StateAwareResolver: failed to persist state for %s: %s', device_id, _e)
+
+    def _load_state_from_db(self) -> None:
+        """Carga el state cache desde SQLite al arrancar. Silencioso si no hay datos."""
+        try:
+            db = getattr(self._hub, 'db', None)
+            if db:
+                states = db.load_all_device_states()
+                if states:
+                    self._state_cache.update(states)
+                    log.info('StateAwareResolver: loaded state for %d device(s) from DB',
+                             len(states))
+        except Exception as _e:
+            log.warning('StateAwareResolver: failed to load state from DB: %s', _e)
 
     def _is_redundant(self, action: DeviceAction) -> bool:
         """Returns True if the action would have no effect given current state."""
