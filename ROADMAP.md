@@ -40,13 +40,16 @@
 
 ## Planned
 
-### v0.3 — Learned Patterns + Persistent State
+### v0.3 — Observability + Persistent State
 **Target:** Q3 2026
 
-- **Learned patterns in the resolver** — weight updates based on execution history (frequency, success rate, recency). The resolver becomes progressively smarter without requiring an LLM.
-- **Persistent state cache** — `StateAwareResolver` persists device state to SQLite. Survives hub restarts. Configurable TTL per device type.
+- **Persistent state cache** — `StateAwareResolver` persists device state to SQLite. Survives hub restarts. ✅ Shipped in v0.2.
+- **Device Health Monitor** — tracks execution success rate per device. Surfaces alerts when a device fails consistently. The resolver does not modify scores autonomously — the operator decides how to act on the data. See [docs/DESIGN-PRINCIPLES.md](docs/DESIGN-PRINCIPLES.md) for the reasoning.
+- **Explainability endpoint** — `GET /v1/intents/{id}/explain` returns the resolver's reasoning: which devices scored, why, and what was filtered by policies. Structured for both human review and AI interpretation.
 - **Tag-based indexing** — pre-group devices by tag to bring large registries (5000+ devices) to near-O(1) resolution. Current O(n) algorithm handles production scale well; indexing unlocks industrial deployments.
-- **Explainability endpoint** — `GET /v1/intents/{id}/explain` returns the resolver's reasoning: which devices scored, why, and what was filtered by policies.
+- **Execution metrics dashboard** — aggregated statistics visible in the web dashboard: actions per intent class, success rates, policy blocks, resolver latency over time.
+
+**Design note:** autonomous learned patterns (weight updates based on execution history) were evaluated and rejected for the default resolver. The risks — unpredictability in critical environments, feedback loop failure modes, cold start problems — outweigh the benefits for a general-purpose protocol. See [docs/DESIGN-PRINCIPLES.md](docs/DESIGN-PRINCIPLES.md).
 
 ### v0.4 — Multi-Agent + Physical Hardware
 **Target:** Q4 2026
