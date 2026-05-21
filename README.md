@@ -311,6 +311,7 @@ The protocol is the infrastructure. The domain is up to you.
 
 Full protocol specification: [spec/DOSYNC-SPEC-v0.1.md](spec/DOSYNC-SPEC-v0.1.md)  
 Resolver interface: [spec/RESOLVER-SPEC-v0.2.md](spec/RESOLVER-SPEC-v0.2.md)
+Design principles: [docs/DESIGN-PRINCIPLES.md](docs/DESIGN-PRINCIPLES.md)
 
 ---
 
