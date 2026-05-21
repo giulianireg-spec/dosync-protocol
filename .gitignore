@@ -20,3 +20,4 @@ dosync.db-shm
 dosync.db-wal
 .env
 certs/
+implementations/dosync-node/node_modules/
