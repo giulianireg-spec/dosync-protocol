@@ -1,0 +1,126 @@
+# DoSync Protocol — Design Principles
+
+This document explains the deliberate design decisions behind DoSync — not what it does, but *why* it was designed this way. It is intended for engineers evaluating the protocol for production use, researchers studying its architecture, and contributors proposing changes.
+
+---
+
+## Core principle: the protocol is infrastructure, not intelligence
+
+DoSync's job is to translate a semantic intent into a coordinated set of device actions, execute those actions reliably, and produce a tamper-evident record of everything that happened.
+
+That is the full scope of the protocol's responsibility.
+
+DoSync does not decide whether an action was *wise*. It does not learn from outcomes autonomously. It does not adapt its behavior without explicit configuration. It does not interpret data for the operator.
+
+These are not limitations — they are deliberate design constraints that make DoSync suitable for safety-critical environments.
+
+---
+
+## The three-layer model
+
+Any deployment of DoSync operates within a three-layer model:
+
+```
+Layer 1 — Data (DoSync)
+  Deterministic, auditable, structured.
+  The protocol generates clean data: execution records, device states,
+  audit log entries, intent outcomes. Every action is logged with
+  a tamper-evident SHA-256 chain. This layer never lies.
+
+Layer 2 — Interpretation (optional AI layer)
+  Contextual, assistive, non-authoritative.
+  An AI system (via the MCP server or any integration) can read
+  Layer 1 data and translate it into human-readable insights:
+  "Device X has been failing more than usual since 14:00."
+  This layer assists — it does not decide.
+
+Layer 3 — Decision (human operator)
+  Final, accountable, irreplaceable.
+  A human reads the data (directly or via Layer 2 interpretation)
+  and decides what to do. This layer holds responsibility.
+```
+
+**Layer 1 must never be bypassed or replaced by Layer 2.** The AI interpretation is only as good as the underlying data. If Layer 1 is clean and detailed, Layer 2 can be useful. If Layer 1 is ambiguous or incomplete, Layer 2 amplifies the ambiguity.
+
+**Layer 3 must never be replaced by Layer 2.** An AI interpreting data correctly is not the same as a human taking responsibility for a decision. In regulated environments — industrial, healthcare, public safety — the accountability chain requires a human at the end. An operator cannot delegate responsibility to an AI interpretation.
+
+---
+
+## Why DoSync does not learn autonomously
+
+A natural evolution of the resolver would be to update device scores based on execution history — penalizing devices that fail frequently, rewarding devices that consistently succeed. This appears useful and has been deliberately rejected for the default resolver.
+
+The reasoning:
+
+**Unpredictability in critical environments.** A resolver that modifies its own behavior based on history produces different results for the same input over time. In a factory, a hospital, or any safety-critical environment, this unpredictability is unacceptable. Operators need to know that if they configure the system correctly today, it will behave the same way tomorrow.
+
+**Feedback loop risk.** If a device's score drops below the inclusion threshold because it failed during a network outage, the resolver stops including it. Without inclusion, there are no new execution attempts. Without new attempts, the score cannot recover. The device is effectively silenced by a transient failure — potentially a critical device in a critical scenario.
+
+**Domain mismatch.** Learned patterns make sense in a home with stable routines. They are dangerous in an industrial environment where variability is a signal of a problem, not a pattern to learn from. A protocol designed for general use cannot optimize for one domain at the cost of others.
+
+**The correct model for device health** is observability, not autonomy: monitor execution outcomes, surface anomalies as alerts, and let the human operator decide whether to adjust the configuration. DoSync provides the data. The operator makes the decision.
+
+---
+
+## What the audit log is for
+
+The SHA-256 tamper-evident audit log is not a debugging tool. It is an accountability infrastructure.
+
+Every intent execution, every device action, every policy decision is logged with a cryptographic chain. Modifying any entry breaks the chain — making tampering detectable.
+
+This design serves several purposes:
+
+- **Post-incident analysis** — after any unexpected outcome, the full execution history is available for reconstruction
+- **Regulatory compliance** — in environments with audit requirements, the log provides a verifiable record of system behavior
+- **AI interpretation substrate** — the log is structured and detailed enough that an AI system can analyze it and surface meaningful insights without any loss of fidelity
+- **Human accountability** — the log makes it possible to answer "what happened, when, and why" with precision
+
+The log should be preserved, backed up, and treated as critical infrastructure — not as debug output to be rotated and discarded.
+
+---
+
+## On AI integration
+
+DoSync ships a native MCP server that allows any LLM with MCP support to query hub state, fire intents, and read the audit log. This is intentional — AI agents are a primary use case for the protocol.
+
+The design principle for AI integration is:
+
+**AI can observe and act. It cannot override safety constraints.**
+
+- An AI can fire any intent within the normal policy framework
+- Emergency intents bypass policy constraints — but this is a protocol-level design, not an AI privilege
+- An AI cannot modify device manifests, policies, or the audit log
+- An AI cannot grant itself permissions that a human operator has not configured
+
+The MCP server exposes the protocol's capabilities, not elevated access. An AI acting through DoSync operates within the same constraints as any other client.
+
+---
+
+## On domain applicability
+
+DoSync's 5-layer architecture is domain-agnostic. The same protocol stack operates in a home, a hotel, a factory, or a smart building.
+
+However, domain applicability has limits that must be stated clearly:
+
+**DoSync is not certified for safety-critical medical applications.** Using DoSync in the direct care pathway of medical devices requires certifications (IEC 62304, ISO 14971) that the protocol does not currently hold. Appropriate use in healthcare is in peripheral systems — lighting, access control, comfort — never in the critical path of clinical decisions.
+
+**DoSync does not replace domain-specific safety systems.** A factory fire suppression system, a hospital emergency call system, or a building evacuation system should not be replaced by DoSync. DoSync can complement these systems — coordinating non-safety-critical devices in response to their signals — but never replaces them.
+
+**The protocol is infrastructure. The safety model belongs to the deployment.** DoSync provides the tools for safe operation: policy engine, audit log, emergency override, certification CLI. How those tools are configured and what safeguards surround them is the responsibility of the deploying organization.
+
+---
+
+## Summary
+
+| Principle | What it means in practice |
+|---|---|
+| Deterministic resolver | Same input always produces same output. No autonomous learning. |
+| Tamper-evident audit log | Every action is logged and verifiable. Nothing is hidden. |
+| Human decision layer | DoSync informs. Humans decide. AI assists, never replaces. |
+| Policy engine | Safety constraints are explicit, configurable, and auditable. |
+| Domain agnosticism | The protocol works anywhere. Safety configuration is deployment-specific. |
+| AI as observer and actor | AI can use DoSync. It cannot override its safety model. |
+
+---
+
+*DoSync Protocol · Apache 2.0 · github.com/giulianireg-spec/dosync-protocol*
