@@ -361,6 +361,65 @@ def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth
         raise HTTPException(status_code=422, detail=str(e))
 
 
+@app.get("/v1/intents/{intent_class}/explain", tags=["intents"])
+async def explain_intent(
+    intent_class: str,
+    urgency: str = "info",
+    location: str = "",
+    auth=Depends(require_auth),
+):
+    """
+    Explainability endpoint — muestra el razonamiento del resolver para un intent.
+
+    Para cada dispositivo registrado, detalla:
+    - Score total y desglose (tag overlap, location bonus, emergency bonus, actuator match)
+    - Por qué fue incluido o excluido del ActionPlan
+    - Tags que matchearon con las resolution tags del intent
+
+    Nota: este endpoint muestra el scoring del resolver. El PolicyEngine puede
+    modificar el plan antes de la ejecución — ver el audit log para el resultado real.
+
+    Diseñado para ser consumido tanto por humanos como por sistemas de IA
+    que interpreten el comportamiento del hub. Ver docs/DESIGN-PRINCIPLES.md.
+    """
+    from dosync.models import Intent, IntentClass, Urgency as _Urgency
+    import uuid, time as _time
+
+    # Validar intent_class
+    try:
+        intent_cls = IntentClass(intent_class)
+    except ValueError:
+        valid = [e.value for e in IntentClass]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid intent class '{intent_class}'. Valid values: {valid}"
+        )
+
+    # Validar urgency
+    try:
+        urgency_cls = _Urgency(urgency)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid urgency '{urgency}'. Valid values: info, warning, alert, emergency"
+        )
+
+    # Construir intent de prueba
+    context = {}
+    if location:
+        context["location"] = location
+
+    intent = Intent(
+        intent=intent_cls,
+        urgency=urgency_cls,
+        context=context,
+    )
+
+    # Obtener explicación del resolver
+    explanation = hub.resolver.explain(intent)
+    return explanation
+
+
 @app.get("/v1/health/devices", tags=["health"])
 async def get_device_health(
     threshold: float = 0.7,

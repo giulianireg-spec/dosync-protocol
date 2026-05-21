@@ -202,6 +202,89 @@ class CapabilityMatchingResolver(BaseResolver):
 
         return score
 
+    def explain(self, intent: Intent) -> dict:
+        """
+        Explica el razonamiento del resolver para un intent dado.
+        Muestra el score de cada dispositivo y por qué fue incluido o excluido.
+        Calculado on-demand — refleja el estado actual del registry.
+        """
+        resolution = INTENT_RESOLUTION_MAP.get(intent.intent, {"tags": [], "actuators": []})
+        target_tags      = set(resolution.get("tags", []))
+        target_actuators = set(resolution.get("actuators", []))
+        generic_tags     = {"light", "climate", "communication", "sensor", "appliance", "display"}
+        specific_tags    = target_tags - generic_tags
+        location         = intent.context.get("location", "")
+
+        included = []
+        excluded = []
+
+        for device in self.registry.all():
+            device_tags      = set(device.tags)
+            device_actuators = {a.type for a in device.actuators}
+
+            # Calcular breakdown del score
+            tag_overlap_tags = target_tags & device_tags
+            tag_overlap      = len(tag_overlap_tags) * 10.0
+            location_bonus   = 15.0 if (location and location in device_tags) else 0.0
+            emergency_bonus  = 30.0 if (intent.urgency == Urgency.EMERGENCY and device.emergency_capable) else 0.0
+            actuator_matched = target_actuators & device_actuators
+            actuator_bonus   = len(actuator_matched) * 8.0
+            score            = tag_overlap + location_bonus + emergency_bonus + actuator_bonus
+
+            # Razón de exclusión si score == 0
+            if score == 0:
+                if specific_tags and not (specific_tags & device_tags):
+                    reason = f"required specific tags {specific_tags} not in device tags {device_tags}"
+                elif not (target_tags & device_tags):
+                    reason = "no tag overlap with intent resolution tags"
+                else:
+                    reason = "score = 0"
+                excluded.append({
+                    "device_id":   device.device_id,
+                    "device_name": device.device_name,
+                    "device_tags": sorted(device.tags),
+                    "reason":      reason,
+                    "included":    False,
+                })
+            else:
+                included.append({
+                    "device_id":   device.device_id,
+                    "device_name": device.device_name,
+                    "device_tags": sorted(device.tags),
+                    "score":       score,
+                    "score_breakdown": {
+                        "tag_overlap":      tag_overlap,
+                        "matched_tags":     sorted(tag_overlap_tags),
+                        "location_bonus":   location_bonus,
+                        "emergency_bonus":  emergency_bonus,
+                        "actuator_match":   actuator_bonus,
+                        "matched_actuators": sorted(actuator_matched),
+                    },
+                    "emergency_capable": device.emergency_capable,
+                    "included": True,
+                })
+
+        # Ordenar incluidos por score descendente
+        included.sort(key=lambda x: x["score"], reverse=True)
+
+        return {
+            "intent":              intent.intent.value,
+            "urgency":             intent.urgency.value,
+            "context":             intent.context,
+            "resolution_tags":     sorted(target_tags),
+            "resolution_actuators": sorted(target_actuators),
+            "devices_evaluated":   len(included) + len(excluded),
+            "devices_included":    len(included),
+            "devices_excluded":    len(excluded),
+            "included":            included,
+            "excluded":            excluded,
+            "note": (
+                "This explanation reflects the resolver scoring only. "
+                "The PolicyEngine may further block, modify, or request confirmation "
+                "before execution. See the audit log for actual execution outcomes."
+            ),
+        }
+
     def _profile_params(self, device: CapabilityManifest,
                          actuator_type: str, intent: Intent) -> dict | None:
         """
