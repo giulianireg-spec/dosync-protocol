@@ -166,18 +166,22 @@ class AdapterExecutor:
                 result = await self._adapters[adapter_name].execute(action, urgency)
                 if result.success:
                     self._update_resolver_state(action)
+                # Device Health Monitor — registrar resultado
+                self._record_health(action, result)
                 return result
             except Exception as e:
                 log.error(
                     "Adapter '%s' failed for %s.%s: %s",
                     adapter_name, action.device_id, action.action, e,
                 )
-                return ActionResult(
+                err_result = ActionResult(
                     device_id=action.device_id,
                     action=action.action,
                     success=False,
                     error=f"Adapter error: {e}",
                 )
+                self._record_health(action, err_result)
+                return err_result
 
         # Fallback
         if self._simulated:
@@ -193,6 +197,21 @@ class AdapterExecutor:
             success=False,
             error=f"No adapter registered for '{adapter_name}'",
         )
+
+    def _record_health(self, action: DeviceAction, result) -> None:
+        """Registra el resultado en el Device Health Monitor."""
+        try:
+            db = getattr(self._hub, 'db', None)
+            if db:
+                db.record_execution(
+                    device_id=action.device_id,
+                    action=action.action,
+                    success=result.success,
+                    error=getattr(result, 'error', None),
+                )
+        except Exception as _e:
+            log.warning('DeviceHealthMonitor: failed to record execution for %s: %s',
+                        action.device_id, _e)
 
     def _update_resolver_state(self, action: DeviceAction) -> None:
         """Notifica al StateAwareResolver el nuevo estado tras una accion exitosa."""

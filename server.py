@@ -361,6 +361,47 @@ def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth
         raise HTTPException(status_code=422, detail=str(e))
 
 
+@app.get("/v1/health/devices", tags=["health"])
+async def get_device_health(
+    threshold: float = 0.7,
+    last_n: int = 100,
+    auth=Depends(require_auth),
+):
+    """
+    Device Health Monitor — estadísticas de ejecución por dispositivo.
+
+    Retorna la tasa de éxito de cada dispositivo basada en las últimas `last_n` ejecuciones.
+    Los dispositivos con tasa por debajo de `threshold` aparecen en `alerts`.
+
+    Usar para detectar dispositivos que fallan frecuentemente y requieren atención.
+    La decisión de qué hacer con esa información es siempre del operador humano.
+    """
+    all_health = hub.db.get_all_health(last_n=last_n)
+    alerts     = hub.db.get_health_alerts(threshold=threshold, last_n=last_n)
+
+    return {
+        "devices":    all_health,
+        "alerts":     alerts,
+        "threshold":  threshold,
+        "last_n":     last_n,
+        "total_devices_monitored": len(all_health),
+        "total_alerts": len(alerts),
+    }
+
+
+@app.get("/v1/health/devices/{device_id}", tags=["health"])
+async def get_single_device_health(
+    device_id: str,
+    last_n: int = 100,
+    auth=Depends(require_auth),
+):
+    """Estadísticas de salud de un dispositivo específico."""
+    health = hub.db.get_device_health(device_id, last_n=last_n)
+    if health["total"] == 0:
+        raise HTTPException(status_code=404, detail=f"No execution history for device '{device_id}'")
+    return health
+
+
 @app.get("/v1/devices", tags=["Devices"])
 def list_devices(auth: str = Depends(require_auth)):
     return {

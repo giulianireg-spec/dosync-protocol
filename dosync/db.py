@@ -54,6 +54,14 @@ CREATE TABLE IF NOT EXISTS api_keys (
 
 CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
 CREATE INDEX IF NOT EXISTS idx_presence_timestamp ON presence_signals(timestamp);
+CREATE TABLE IF NOT EXISTS device_health (
+    device_id       TEXT NOT NULL,
+    action          TEXT NOT NULL,
+    success         INTEGER NOT NULL,  -- 1 = ok, 0 = fail
+    error           TEXT,
+    timestamp       REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_health_device ON device_health(device_id, timestamp);
 CREATE TABLE IF NOT EXISTS device_state (
     device_id       TEXT PRIMARY KEY,
     state_json      TEXT NOT NULL,
@@ -336,4 +344,89 @@ class DoSyncDB:
             cur.execute("SELECT device_id, state_json FROM device_state")
             rows = cur.fetchall()
         return {row[0]: json.loads(row[1]) for row in rows}
+
+    # ── Device Health Monitor ─────────────────────────────────────────────────
+
+    def record_execution(self, device_id: str, action: str,
+                         success: bool, error: str = None) -> None:
+        """Registra el resultado de una ejecución. Llamar tras cada adapter.execute()."""
+        with self._cursor() as cur:
+            cur.execute(
+                """INSERT INTO device_health (device_id, action, success, error, timestamp)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (device_id, action, 1 if success else 0, error, time.time()),
+            )
+
+    def get_device_health(self, device_id: str, last_n: int = 100) -> dict:
+        """
+        Estadísticas de salud de un dispositivo.
+        Retorna: {device_id, total, success, failed, success_rate, last_error, last_seen}
+        """
+        with self._cursor() as cur:
+            cur.execute(
+                """SELECT action, success, error, timestamp
+                   FROM device_health
+                   WHERE device_id = ?
+                   ORDER BY timestamp DESC
+                   LIMIT ?""",
+                (device_id, last_n),
+            )
+            rows = cur.fetchall()
+
+        if not rows:
+            return {
+                "device_id": device_id,
+                "total": 0,
+                "success": 0,
+                "failed": 0,
+                "success_rate": None,
+                "last_error": None,
+                "last_seen": None,
+            }
+
+        total   = len(rows)
+        success = sum(1 for r in rows if r[1] == 1)
+        failed  = total - success
+        last_error = next((r[2] for r in rows if r[1] == 0), None)
+        last_seen  = rows[0][3] if rows else None
+
+        return {
+            "device_id":    device_id,
+            "total":        total,
+            "success":      success,
+            "failed":       failed,
+            "success_rate": round(success / total, 3) if total else None,
+            "last_error":   last_error,
+            "last_seen":    last_seen,
+        }
+
+    def get_all_health(self, last_n: int = 100, min_executions: int = 1) -> list:
+        """
+        Estadísticas de salud de todos los dispositivos con al menos min_executions.
+        Ordenado por tasa de éxito ascendente (peores primero).
+        """
+        with self._cursor() as cur:
+            cur.execute("SELECT DISTINCT device_id FROM device_health")
+            device_ids = [r[0] for r in cur.fetchall()]
+
+        results = []
+        for device_id in device_ids:
+            health = self.get_device_health(device_id, last_n)
+            if health["total"] >= min_executions:
+                results.append(health)
+
+        # Peores primero (tasa de éxito ascendente), None al final
+        results.sort(key=lambda x: x["success_rate"] if x["success_rate"] is not None else 1.1)
+        return results
+
+    def get_health_alerts(self, threshold: float = 0.7, last_n: int = 100) -> list:
+        """
+        Dispositivos cuya tasa de éxito está por debajo del umbral.
+        threshold=0.7 significa alertar cuando menos del 70% de las ejecuciones son exitosas.
+        """
+        all_health = self.get_all_health(last_n=last_n, min_executions=3)
+        return [
+            h for h in all_health
+            if h["success_rate"] is not None and h["success_rate"] < threshold
+        ]
 
