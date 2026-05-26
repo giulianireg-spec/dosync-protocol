@@ -55,11 +55,14 @@ def request(method: str, url: str, body: Optional[dict] = None) -> tuple[int, di
     else:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
-    # Si la URL es http://, intentar https:// automáticamente
-    https_url = url.replace("http://", "https://", 1)
-    req = urllib.request.Request(https_url, data=data, headers=headers, method=method)
+    # Si es localhost usar HTTP, sino HTTPS automáticamente
+    import re
+    is_local = re.search(r'localhost|127\.0\.0\.1', url)
+    final_url = url if is_local else url.replace("http://", "https://", 1)
+    req = urllib.request.Request(final_url, data=data, headers=headers, method=method)
+    ctx_arg = None if is_local else ctx
     try:
-        with urllib.request.urlopen(req, timeout=5, context=ctx) as resp:
+        with urllib.request.urlopen(req, timeout=5, context=ctx_arg) as resp:
             return resp.status, json.loads(resp.read())
     except urllib.error.HTTPError as e:
         return e.code, json.loads(e.read())

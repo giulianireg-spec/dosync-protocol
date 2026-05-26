@@ -139,6 +139,16 @@ app.get('/v1/devices', async () => {
   return { count: devices.length, devices }
 })
 
+// GET /v1/status
+app.get('/v1/status', async () => ({
+  name:          'DoSync Hub',
+  version:       VERSION,
+  protocol:      PROTOCOL,
+  status:        'running',
+  devices:       registry.size,
+  audit_entries: auditLog.length,
+}))
+
 // GET /v1/devices/:device_id
 app.get('/v1/devices/:device_id', async (req, reply) => {
   const manifest = registry.get(req.params.device_id)
