@@ -94,6 +94,7 @@ set_auth_manager(_auth_manager)
 
 # Device authentication manager
 hub.db.init_device_tokens_table()
+hub.db.init_emergency_snapshots_table()
 _device_auth_manager = DeviceAuthManager(hub.db)
 set_device_auth_manager(_device_auth_manager)
 
@@ -271,6 +272,38 @@ async def lifespan(app: FastAPI):
             log.warning("=== TLS/PKI: NOT CONFIGURED === Hub running on plain HTTP. Run: bash setup_pki.sh")
     except Exception as _pki_e:
         log.warning("PKI status check failed: %s", _pki_e)
+    # ── Startup recovery — re-disparar emergencias activas pre-corte ─────────
+    try:
+        active = hub.db.get_active_emergency_snapshots()
+        if active:
+            log.warning("STARTUP RECOVERY: %d emergency intent(s) were active before shutdown", len(active))
+            for snap in active:
+                age_minutes = ((__import__('time').time() - snap['fired_at']) / 60)
+                if age_minutes < 60:  # solo re-disparar si fue hace menos de 1 hora
+                    log.warning("Re-firing intent '%s' (was active %.1f min ago)", snap['intent_class'], age_minutes)
+                    try:
+                        from dosync.models import Intent, IntentClass, Urgency
+                        import uuid, time as _time
+                        recovery_intent = Intent(
+                            intent=IntentClass(snap['intent_class']),
+                            intent_id=f"recovery-{uuid.uuid4().hex[:8]}",
+                            urgency=Urgency(snap['urgency']),
+                            context={**snap['context'], "recovery": True, "original_intent_id": snap['intent_id']},
+                            source="startup_recovery",
+                            timestamp=_time.time()
+                        )
+                        hub.fire_intent(recovery_intent)
+                        hub.db.resolve_emergency_snapshot(snap['intent_id'])
+                        log.info("Recovery intent '%s' fired successfully", snap['intent_class'])
+                    except Exception as _re:
+                        log.error("Failed to re-fire recovery intent '%s': %s", snap['intent_class'], _re)
+                else:
+                    log.info("Skipping stale emergency snapshot '%s' (%.1f min ago — too old)", snap['intent_class'], age_minutes)
+                    hub.db.resolve_emergency_snapshot(snap['intent_id'])
+        hub.db.clear_old_snapshots(max_age_hours=24)
+    except Exception as _recovery_e:
+        log.error("Startup recovery failed: %s", _recovery_e)
+
     yield
     log.info("DoSync Hub shutting down")
 

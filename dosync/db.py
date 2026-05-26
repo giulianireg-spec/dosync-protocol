@@ -478,3 +478,64 @@ class DoSyncDB:
         )
         return [{"device_id": r[0], "label": r[1], "created_at": r[2]} for r in cur.fetchall()]
 
+    # ── Emergency snapshots ───────────────────────────────────────────────────
+
+    def init_emergency_snapshots_table(self) -> None:
+        """Tabla para persistir intents de emergencia activos."""
+        self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS emergency_snapshots (
+                intent_id   TEXT PRIMARY KEY,
+                intent_class TEXT NOT NULL,
+                urgency     TEXT NOT NULL,
+                context     TEXT NOT NULL,
+                fired_at    REAL NOT NULL,
+                resolved_at REAL,
+                status      TEXT DEFAULT 'active'
+            )
+        """)
+        self._conn.commit()
+
+    def save_emergency_snapshot(self, intent_id: str, intent_class: str,
+                                 urgency: str, context: dict) -> None:
+        import time, json
+        self._conn.execute("""
+            INSERT OR REPLACE INTO emergency_snapshots
+                (intent_id, intent_class, urgency, context, fired_at, status)
+            VALUES (?, ?, ?, ?, ?, 'active')
+        """, (intent_id, intent_class, urgency, json.dumps(context), time.time()))
+        self._conn.commit()
+
+    def resolve_emergency_snapshot(self, intent_id: str) -> None:
+        import time
+        self._conn.execute("""
+            UPDATE emergency_snapshots
+            SET resolved_at=?, status='resolved'
+            WHERE intent_id=?
+        """, (time.time(), intent_id))
+        self._conn.commit()
+
+    def get_active_emergency_snapshots(self) -> list[dict]:
+        import json
+        cur = self._conn.execute("""
+            SELECT intent_id, intent_class, urgency, context, fired_at
+            FROM emergency_snapshots
+            WHERE status='active'
+            ORDER BY fired_at DESC
+        """)
+        return [
+            {"intent_id": r[0], "intent_class": r[1], "urgency": r[2],
+             "context": json.loads(r[3]), "fired_at": r[4]}
+            for r in cur.fetchall()
+        ]
+
+    def clear_old_snapshots(self, max_age_hours: int = 24) -> int:
+        """Limpia snapshots resueltos o muy antiguos."""
+        import time
+        cutoff = time.time() - (max_age_hours * 3600)
+        cur = self._conn.execute("""
+            DELETE FROM emergency_snapshots
+            WHERE status='resolved' OR fired_at < ?
+        """, (cutoff,))
+        self._conn.commit()
+        return cur.rowcount
+
