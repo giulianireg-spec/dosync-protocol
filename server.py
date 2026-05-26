@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from dosync.hub import DoSyncHub
 from dosync.executor import SimulatedExecutor
-from dosync.auth import AuthManager, require_auth, set_auth_manager
+from dosync.auth import AuthManager, require_auth, set_auth_manager, DeviceAuthManager, set_device_auth_manager
 from dosync.security import get_status as get_pki_status
 from dosync.models import (
     ActuatorSpec, CapabilityManifest, CertTier, DeviceCategory,
@@ -91,6 +91,11 @@ except Exception as _e:
 _auth_enabled = os.environ.get("DOSYNC_AUTH", "true").lower() != "false"
 _auth_manager = AuthManager(hub.db, enabled=_auth_enabled)
 set_auth_manager(_auth_manager)
+
+# Device authentication manager
+hub.db.init_device_tokens_table()
+_device_auth_manager = DeviceAuthManager(hub.db)
+set_device_auth_manager(_device_auth_manager)
 
 
 # ── WebSocket manager ─────────────────────────────────────────────────────────
@@ -214,6 +219,7 @@ class RegisterDeviceRequest(BaseModel):
     events: list[EventSpecIn] = []
     emergency_capable: bool = False
     cert_tier: str = "basic"
+    device_token: Optional[str] = None  # token de autenticación del dispositivo
 
 class PresenceSignalRequest(BaseModel):
     device_id: str
@@ -336,6 +342,20 @@ def root():
 
 @app.post("/v1/devices/register", tags=["Devices"])
 def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth)):
+    # ── Device authentication ──────────────────────────────────────────────
+    from dosync.auth import get_device_auth_manager
+    device_auth = get_device_auth_manager()
+    if device_auth:
+        if req.device_token:
+            valid, reason = device_auth.verify(req.device_id, req.device_token)
+            if not valid:
+                raise HTTPException(status_code=403, detail=f"Device auth failed: {reason}")
+        elif device_auth.strict:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Device '{req.device_id}' requires a device_token (strict mode)"
+            )
+    # ── Registro normal ────────────────────────────────────────────────────
     try:
         manifest = CapabilityManifest(
             device_id=req.device_id,
@@ -475,6 +495,52 @@ def get_device(device_id: str, auth: str = Depends(require_auth)):
     if not device:
         raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
     return device.to_dict()
+
+
+@app.post("/v1/devices/provision", tags=["Devices"])
+def provision_device(body: dict, auth: str = Depends(require_auth)):
+    """
+    Pre-registra un device_id y genera su token de autenticación.
+    El token se muestra UNA SOLA VEZ — guardarlo de inmediato.
+    """
+    from dosync.auth import get_device_auth_manager
+    device_auth = get_device_auth_manager()
+    if not device_auth:
+        raise HTTPException(status_code=503, detail="Device auth not configured")
+    device_id = body.get("device_id")
+    if not device_id:
+        raise HTTPException(status_code=422, detail="device_id required")
+    label = body.get("label", device_id)
+    token = device_auth.provision(device_id, label)
+    return {
+        "device_id": device_id,
+        "device_token": token,
+        "warning": "Store this token immediately — it will not be shown again.",
+        "usage": "Include device_token in your /v1/devices/register request"
+    }
+
+
+@app.get("/v1/devices/provisioned", tags=["Devices"])
+def list_provisioned_devices(auth: str = Depends(require_auth)):
+    """Lista todos los device_ids pre-registrados."""
+    from dosync.auth import get_device_auth_manager
+    device_auth = get_device_auth_manager()
+    if not device_auth:
+        return {"provisioned": []}
+    return {"provisioned": device_auth.list_provisioned()}
+
+
+@app.delete("/v1/devices/{device_id}/token", tags=["Devices"])
+def revoke_device_token(device_id: str, auth: str = Depends(require_auth)):
+    """Revoca el token de un dispositivo — deberá ser re-provisionado."""
+    from dosync.auth import get_device_auth_manager
+    device_auth = get_device_auth_manager()
+    if not device_auth:
+        raise HTTPException(status_code=503, detail="Device auth not configured")
+    revoked = device_auth.revoke(device_id)
+    if not revoked:
+        raise HTTPException(status_code=404, detail=f"Device '{device_id}' not provisioned")
+    return {"status": "revoked", "device_id": device_id}
 
 
 @app.delete("/v1/devices/{device_id}", tags=["Devices"])

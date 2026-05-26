@@ -171,3 +171,70 @@ async def optional_auth(
     if manager.verify(credentials.credentials):
         return credentials.credentials
     return None
+
+
+# ── Device token manager ──────────────────────────────────────────────────────
+
+class DeviceAuthManager:
+    """
+    Gestiona tokens de autenticación por dispositivo.
+
+    Flujo:
+        1. Operador pre-registra un dispositivo → obtiene device_token
+        2. Dispositivo incluye device_token al registrar su manifest
+        3. Hub valida el token → solo permite el device_id autorizado
+
+    Backward compatible: si device_token no se incluye en el manifest,
+    el registro procede sin validación (modo legacy).
+    Configurable via DOSYNC_DEVICE_AUTH=strict para requerir token siempre.
+    """
+
+    def __init__(self, db):
+        self.db = db
+        self.strict = os.environ.get("DOSYNC_DEVICE_AUTH", "permissive") == "strict"
+
+    def provision(self, device_id: str, label: str = "") -> str:
+        """
+        Pre-registra un device_id y genera su token de acceso.
+        Retorna el token en texto plano — mostrar UNA SOLA VEZ al operador.
+        """
+        token = secrets.token_urlsafe(32)
+        token_hash = hash_token(token)
+        self.db.save_device_token(device_id, token_hash, label or device_id)
+        log.info("Device token provisioned: device_id='%s'", device_id)
+        return token
+
+    def verify(self, device_id: str, token: str) -> tuple[bool, str]:
+        """
+        Verifica que el token corresponde al device_id declarado.
+        Retorna (valid: bool, reason: str).
+        """
+        token_hash = hash_token(token)
+        if self.db.verify_device_token(device_id, token_hash):
+            return True, "ok"
+        if self.db.device_is_provisioned(device_id):
+            return False, f"Invalid token for device_id '{device_id}'"
+        if self.strict:
+            return False, f"Device '{device_id}' not provisioned — strict mode enabled"
+        return True, "unprovisioned — permissive mode"
+
+    def is_provisioned(self, device_id: str) -> bool:
+        return self.db.device_is_provisioned(device_id)
+
+    def revoke(self, device_id: str) -> bool:
+        return self.db.delete_device_token(device_id)
+
+    def list_provisioned(self) -> list[dict]:
+        return self.db.list_device_tokens()
+
+
+# Referencia global al device auth manager
+_device_auth_manager: Optional[AuthManager] = None
+
+def set_device_auth_manager(manager: "DeviceAuthManager") -> None:
+    global _device_auth_manager
+    _device_auth_manager = manager
+
+def get_device_auth_manager() -> Optional["DeviceAuthManager"]:
+    return _device_auth_manager
+
