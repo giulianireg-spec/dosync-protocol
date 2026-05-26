@@ -434,7 +434,7 @@ class DoSyncDB:
 
     def init_device_tokens_table(self) -> None:
         """Crear tabla device_tokens si no existe."""
-        self.conn.execute("""
+        self._conn.execute("""
             CREATE TABLE IF NOT EXISTS device_tokens (
                 device_id   TEXT PRIMARY KEY,
                 token_hash  TEXT NOT NULL,
@@ -442,38 +442,38 @@ class DoSyncDB:
                 created_at  REAL NOT NULL
             )
         """)
-        self.conn.commit()
+        self._conn.commit()
 
     def save_device_token(self, device_id: str, token_hash: str, label: str = "") -> None:
         import time
-        self.conn.execute("""
+        self._conn.execute("""
             INSERT OR REPLACE INTO device_tokens (device_id, token_hash, label, created_at)
             VALUES (?, ?, ?, ?)
         """, (device_id, token_hash, label, time.time()))
-        self.conn.commit()
+        self._conn.commit()
 
     def verify_device_token(self, device_id: str, token_hash: str) -> bool:
-        cur = self.conn.execute(
+        cur = self._conn.execute(
             "SELECT 1 FROM device_tokens WHERE device_id=? AND token_hash=?",
             (device_id, token_hash)
         )
         return cur.fetchone() is not None
 
     def device_is_provisioned(self, device_id: str) -> bool:
-        cur = self.conn.execute(
+        cur = self._conn.execute(
             "SELECT 1 FROM device_tokens WHERE device_id=?", (device_id,)
         )
         return cur.fetchone() is not None
 
     def delete_device_token(self, device_id: str) -> bool:
-        cur = self.conn.execute(
+        cur = self._conn.execute(
             "DELETE FROM device_tokens WHERE device_id=?", (device_id,)
         )
-        self.conn.commit()
+        self._conn.commit()
         return cur.rowcount > 0
 
     def list_device_tokens(self) -> list[dict]:
-        cur = self.conn.execute(
+        cur = self._conn.execute(
             "SELECT device_id, label, created_at FROM device_tokens ORDER BY created_at DESC"
         )
         return [{"device_id": r[0], "label": r[1], "created_at": r[2]} for r in cur.fetchall()]
