@@ -289,7 +289,6 @@ async def lifespan(app: FastAPI):
                             intent_id=f"recovery-{uuid.uuid4().hex[:8]}",
                             urgency=Urgency(snap['urgency']),
                             context={**snap['context'], "recovery": True, "original_intent_id": snap['intent_id']},
-                            source="startup_recovery",
                             timestamp=_time.time()
                         )
                         hub.fire_intent(recovery_intent)
@@ -608,6 +607,21 @@ async def execute_intent(req: IntentRequest, auth: str = Depends(require_auth)):
     )
 
     result = await hub.execute_intent(intent, executor)
+
+    # -- Emergency snapshot - persistir para startup recovery
+    _snap_intents = {"ensure_safety", "notify_family", "alert_anomaly"}
+    if req.intent in _snap_intents or req.urgency in ("emergency", "alert"):
+        try:
+            hub.db.save_emergency_snapshot(
+                intent_id=result.intent_id,
+                intent_class=req.intent,
+                urgency=req.urgency,
+                context=req.context,
+            )
+        except Exception as _snap_e:
+            logging.getLogger("dosync.server").warning(
+                "Failed to save emergency snapshot: %s", _snap_e
+            )
 
     # ── SMS notification for emergency/alert intents ───────────────────────
     _emergency_intents = {"ensure_safety", "notify_family", "alert_anomaly"}
