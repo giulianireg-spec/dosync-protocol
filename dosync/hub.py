@@ -817,12 +817,36 @@ class DoSyncHub:
         self._active_intents[intent_value] = get_intent_priority(intent_value)
         self._active_intent_devices[intent_value] = {a.device_id for a in plan.actions}
 
-        # Execute all actions in parallel
-        tasks = [
-            executor.execute(action, intent.urgency)
+        # Execute all actions in parallel with global timeout
+        import os as _os
+        _default_timeout = 5.0 if intent.urgency.value == "emergency" else 10.0
+        _intent_timeout = float(_os.environ.get("DOSYNC_INTENT_TIMEOUT", str(_default_timeout)))
+
+        _tasks = {
+            asyncio.ensure_future(executor.execute(action, intent.urgency)): action
             for action in plan.actions
-        ]
-        results: list[ActionResult] = await asyncio.gather(*tasks)
+        }
+        results: list = []
+        if _tasks:
+            done, pending = await asyncio.wait(
+                _tasks.keys(),
+                timeout=_intent_timeout
+            )
+            for fut in done:
+                results.append(fut.result())
+            for fut in pending:
+                action = _tasks[fut]
+                log.warning("Intent timeout: %s/%s after %.1fs — marking unreachable",
+                            action.device_id, action.action, _intent_timeout)
+                if hasattr(self.resolver, "mark_unreachable"):
+                    self.resolver.mark_unreachable(action.device_id)
+                results.append(ActionResult(
+                    device_id=action.device_id,
+                    action=action.action,
+                    success=False,
+                    error=f"timeout after {_intent_timeout}s",
+                ))
+                fut.cancel()
 
         # Unregister active intent
         self._active_intents.pop(intent_value, None)
