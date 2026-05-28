@@ -431,6 +431,36 @@ class StateAwareResolver(CapabilityMatchingResolver):
         """Returns cached device state or empty dict if unknown."""
         return self._state_cache.get(device_id, {})
 
+    def mark_unreachable(self, device_id: str, ttl_seconds: int = None) -> None:
+        """
+        Marks a device as unreachable for TTL seconds.
+        TTL is configured via DOSYNC_UNREACHABLE_TTL env var (default: 1800s = 30min).
+        Called when an adapter fails with a connection error.
+        """
+        import time as _time
+        ttl = ttl_seconds if ttl_seconds is not None else self._UNREACHABLE_TTL
+        if device_id not in self._state_cache:
+            self._state_cache[device_id] = {}
+        self._state_cache[device_id]['unreachable'] = True
+        self._state_cache[device_id]['unreachable_until'] = _time.time() + ttl
+        self._state_cache[device_id]['unreachable_since'] = _time.time()
+        log.info('StateAwareResolver: device %s marked unreachable for %ds (TTL)', device_id, ttl)
+        try:
+            db = getattr(self._hub, 'db', None)
+            if db:
+                db.save_device_state(device_id, self._state_cache[device_id])
+        except Exception as _e:
+            log.warning('StateAwareResolver: failed to persist unreachable state for %s: %s', device_id, _e)
+
+    def clear_unreachable(self, device_id: str) -> None:
+        """Clears unreachable mark — called when device responds successfully."""
+        state = self._state_cache.get(device_id, {})
+        state.pop('unreachable', None)
+        state.pop('unreachable_until', None)
+        state.pop('unreachable_since', None)
+        self._state_cache[device_id] = state
+        log.info('StateAwareResolver: device %s unreachable mark cleared', device_id)
+
     def update_state(self, device_id: str, state: dict) -> None:
         """Called by adapters after execution to update state cache and persist to DB."""
         if device_id not in self._state_cache:
