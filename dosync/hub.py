@@ -73,8 +73,8 @@ class CapabilityRegistry:
 INTENT_RESOLUTION_MAP: dict[IntentClass, dict] = {
     # ── Seguridad ────────────────────────────────────────────────────────────
     IntentClass.ENSURE_SAFETY: {
-        "tags":      ["camera", "emergency", "door-lock", "alarm", "communication"],
-        "actuators": ["unlock", "call", "alarm", "light"],
+        "tags":      ["camera", "emergency", "door-lock", "alarm", "communication", "notification"],
+        "actuators": ["unlock", "call", "alarm", "light", "notify"],
     },
     IntentClass.CONTROL_ACCESS: {
         "tags":      ["door-lock", "gate", "access"],
@@ -104,8 +104,8 @@ INTENT_RESOLUTION_MAP: dict[IntentClass, dict] = {
         "actuators": ["set_brightness", "set_temperature", "turn_off", "set_position"],
     },
     IntentClass.REMIND_CHORE: {
-        "tags":      ["communication", "display", "phone"],
-        "actuators": ["notify", "display"],
+        "tags":      ["display", "phone"],
+        "actuators": ["display"],
     },
     IntentClass.ALERT_ANOMALY: {
         "tags":      ["communication", "phone", "display"],

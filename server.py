@@ -623,22 +623,10 @@ async def execute_intent(req: IntentRequest, auth: str = Depends(require_auth)):
                 "Failed to save emergency snapshot: %s", _snap_e
             )
 
-    # ── SMS notification for emergency/alert intents ───────────────────────
-    _emergency_intents = {"ensure_safety", "notify_family", "alert_anomaly"}
-    if notifier and (
-        req.urgency in ("emergency", "alert") or
-        req.intent in _emergency_intents
-    ):
-        try:
-            await notifier.notify(
-                intent=req.intent,
-                urgency=req.urgency,
-                context=req.context,
-            )
-        except Exception as _e:
-            logging.getLogger("dosync.server").warning(
-                "SMS notification failed: %s", _e
-            )
+    # SMS notifications are now handled by the NotificationAdapter
+    # via the ActionPlan resolver — no hardcoded side effects here.
+    # notifier-sms-01 is registered as a device with tags: notification, communication, children_arrival
+    # The resolver selects it automatically for: ensure_safety, notify_family, alert_anomaly, children_arrived_home
 
     return {
         "intent_id":       result.intent_id,
