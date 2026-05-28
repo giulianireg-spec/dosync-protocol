@@ -31,6 +31,19 @@ class CertTier(str, Enum):
     STANDARD  = "standard"   # Layers 1-4
     EMERGENCY = "emergency"  # All layers + override
 
+class FailurePolicy(str, Enum):
+    """
+    Define el comportamiento del executor cuando una acción falla.
+
+    CONTINUE  — comportamiento actual: continúa con las acciones restantes
+    ABORT     — detiene las acciones pendientes al primer fallo
+    RETRY     — reintenta la acción fallida N veces antes de continuar
+    """
+    CONTINUE = "continue"
+    ABORT    = "abort"
+    RETRY    = "retry"
+
+
 class IntentClass(str, Enum):
     # Seguridad
     ENSURE_SAFETY   = "ensure_safety"
@@ -235,6 +248,9 @@ class ActionPlan:
     actions: list[DeviceAction]
     urgency: Urgency
     created_at: float                 = field(default_factory=time.time)
+    failure_policy: "FailurePolicy"   = field(default=None)
+    max_retries: int                  = 1
+    # failure_policy=None → usa CONTINUE (backward compatible)
 
 @dataclass
 class ActionResult:
@@ -252,6 +268,10 @@ class IntentResult:
     results: list[ActionResult]
     failed_devices: list[str]         = field(default_factory=list)
     completed_at: float               = field(default_factory=time.time)
+    status: str                       = "success"
+    # "success"  — todas las acciones completadas
+    # "partial"  — algunas acciones fallaron pero el intent se ejecutó
+    # "failed"   — todas las acciones fallaron o el intent fue bloqueado
 
 
 # ── Phased action plan (para secuencias ordenadas como emergencias) ────────────
