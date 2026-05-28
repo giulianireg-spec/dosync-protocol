@@ -438,7 +438,8 @@ class StateAwareResolver(CapabilityMatchingResolver):
         Called when an adapter fails with a connection error.
         """
         import time as _time
-        ttl = ttl_seconds if ttl_seconds is not None else self._UNREACHABLE_TTL
+        import os as _os
+        ttl = ttl_seconds if ttl_seconds is not None else int(_os.environ.get("DOSYNC_UNREACHABLE_TTL", "1800"))
         if device_id not in self._state_cache:
             self._state_cache[device_id] = {}
         self._state_cache[device_id]['unreachable'] = True

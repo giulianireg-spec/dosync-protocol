@@ -207,11 +207,9 @@ class WiZAdapter(DoSyncAdapter):
                 response=response,
             )
 
-        except Exception as _wiz_e:
-            # Check if it's a timeout (asyncio.TimeoutError or concurrent.futures.TimeoutError)
+        except Exception as e:
             import asyncio as _asyncio
-            is_timeout = isinstance(_wiz_e, _asyncio.TimeoutError)
-            if is_timeout:
+            if isinstance(e, _asyncio.TimeoutError):
                 log.warning("WiZ timeout %s @ %s — marking unreachable",
                             action.device_id, ip)
                 if self._hub and hasattr(self._hub, 'resolver'):
@@ -221,9 +219,8 @@ class WiZAdapter(DoSyncAdapter):
                     device_id=action.device_id,
                     action=action.action,
                     success=False,
-                    error=f"WiZ timeout — device unreachable",
+                    error="WiZ timeout — device unreachable",
                 )
-        except Exception as e:
             log.error("WiZ error %s @ %s: %s", action.device_id, ip, e)
             return ActionResult(
                 device_id=action.device_id,
