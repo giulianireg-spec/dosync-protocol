@@ -149,7 +149,7 @@ class AdapterExecutor:
             if resolver._is_redundant(dummy_action):
                 log.info("StateAwareResolver: skipped redundant %s on %s",
                          action.action, action.device_id)
-                from ..models import ActionResult
+                # ActionResult already imported at module level (line 25)
                 return ActionResult(
                     device_id=action.device_id,
                     action=action.action,
