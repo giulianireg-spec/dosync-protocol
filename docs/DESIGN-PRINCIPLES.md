@@ -91,6 +91,75 @@ The TTL is not a health metric. It is an execution optimization. The Device Heal
 
 ---
 
+## PKI rotation policy
+
+DoSync's local PKI has two components with different rotation schedules:
+
+```
+certs/
+├── ca.crt / ca.key    — CA root. Valid 10 years. Rotated manually and rarely.
+└── hub.crt / hub.key  — Hub certificate. Valid 1 year. Rotated annually.
+```
+
+**The CA is not rotated annually.** The CA is the root of trust for every client that connects to the hub — the Mac, `certify.py`, Claude Desktop, any adapter. Rotating the CA means every client loses trust and must receive the new CA cert before reconnecting. This is a significant operational event that should happen deliberately, not on a schedule.
+
+**The hub certificate is rotated annually.** It is signed by the CA and can be replaced without touching the CA or redistributing anything to clients. The CA cert on the Mac remains valid after a hub cert rotation.
+
+### Checking certificate status
+
+```bash
+# On the Pi — verify PKI health and days remaining
+python3 -m dosync.security verify
+
+# Or with the rotation script in check-only mode
+bash rotate_pki.sh --check
+```
+
+### Annual rotation procedure
+
+The `rotate_pki.sh` script automates the rotation:
+
+```bash
+# On the Pi
+cd ~/dosync-protocol
+
+# Check state first
+bash rotate_pki.sh --check
+
+# Rotate when hub cert is within 30 days of expiry (or use --force)
+bash rotate_pki.sh
+
+# The script:
+#   1. Backs up current hub.crt and hub.key to certs/backup/<timestamp>/
+#   2. Calls: python3 -m dosync.security renew hub
+#   3. Verifies the new cert chains correctly to the CA
+#   4. Restarts the dosync systemd service
+#   5. Confirms the hub came back up
+#   6. Prints manual steps for the Mac
+```
+
+After running the script, no Mac-side action is required unless the CA itself changed (it doesn't in a normal annual rotation). The Mac trusts the CA, and the new hub cert is signed by the same CA.
+
+### When the CA must be rotated
+
+CA rotation is rare and must be planned. It is necessary only if:
+
+- The CA private key (`ca.key`) is compromised or suspected compromised
+- The CA is approaching its 10-year expiry
+- A deliberate security policy requires shorter CA lifetimes
+
+When the CA is rotated, every client that has the old `ca.crt` in its trust store must receive the new one. For the reference deployment this means:
+
+1. Generate new CA: `python3 -m dosync.security setup --force`
+2. Copy new CA to Mac: `scp rgiuliani@<pi-ip>:~/dosync-protocol/certs/ca.crt ~/Desktop/dosync-ca.crt`
+3. Update Claude Desktop config with the new CA cert path
+4. Reissue all adapter certs: `python3 -m dosync.security renew gpio`
+5. Restart the hub
+
+CA rotation is a deliberate operational event, not an automated one.
+
+---
+
 ## What the audit log is for
 
 The SHA-256 tamper-evident audit log is not a debugging tool. It is an accountability infrastructure.
@@ -150,6 +219,7 @@ However, domain applicability has limits that must be stated clearly:
 | Domain agnosticism | The protocol works anywhere. Safety configuration is deployment-specific. |
 | AI as observer and actor | AI can use DoSync. It cannot override its safety model. |
 | Unreachable device TTL | Transient failures are excluded temporarily, not permanently. Recovery is automatic. |
+| PKI rotation policy | Hub cert rotates annually. CA rotates only on compromise or expiry. Never automated. |
 
 ---
 
