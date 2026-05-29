@@ -62,6 +62,35 @@ The reasoning:
 
 ---
 
+## On unreachable devices and transient failures
+
+The `StateAwareResolver` tracks device state in memory. When a device fails to respond — a network timeout, a low-power sleep state, a transient outage — the resolver marks it as `unreachable` and excludes it from subsequent action plans for a configurable period.
+
+This behavior is controlled by `DOSYNC_UNREACHABLE_TTL` (default: 1800 seconds).
+
+The design decision here is deliberate and worth explaining.
+
+**Why exclude unreachable devices at all?** Without exclusion, every intent resolution that includes an unreachable device pays the full adapter timeout cost — potentially blocking execution for seconds. In emergency scenarios, that latency is unacceptable. Marking a device unreachable after its first failure makes subsequent resolutions fast and predictable.
+
+**Why a TTL, not permanent exclusion?** A device that failed at 03:00 because the home WiFi rebooted is not a broken device — it's a temporarily unavailable one. Permanent exclusion would require manual intervention to restore it. A TTL means the device automatically re-enters the resolver's consideration after the configured period, without any operator action. The system recovers on its own.
+
+**Why not learn from failure patterns?** The TTL is a blunt instrument by design. It does not penalize devices that fail often more than devices that fail once. It does not track failure history. Once the TTL expires, the device is treated exactly as it was before the failure. This is consistent with the broader principle that DoSync does not modify its behavior based on historical patterns — the same input always produces the same output.
+
+**The failure pattern this addresses.** Production data from the reference deployment revealed a concrete scenario: `save_energy` executed at night sent UDP commands to WiZ bulbs that were physically off and in low-power state. The adapter timed out, the intent resolved as `partial`, and the audit log recorded 0% success for those devices. With TTL-based exclusion active, after the first timeout the bulbs are excluded for the configured window — subsequent `save_energy` intents resolve faster and without unnecessary UDP traffic to sleeping devices.
+
+**Configuring the TTL.** The default of 1800 seconds (30 minutes) suits home deployments where transient failures are typically short-lived. Industrial or hospital deployments with stricter availability requirements may lower this value to reduce re-inclusion latency. Deployments where devices frequently enter low-power states may raise it to avoid constant re-exclusion cycles.
+
+```bash
+# Environment variable — set in .env or systemd service file
+DOSYNC_UNREACHABLE_TTL=1800   # 30 minutes (default)
+DOSYNC_UNREACHABLE_TTL=300    # 5 minutes — for high-availability deployments
+DOSYNC_UNREACHABLE_TTL=3600   # 1 hour — for low-power device-heavy deployments
+```
+
+The TTL is not a health metric. It is an execution optimization. The Device Health Monitor is the correct tool for tracking device reliability over time — the TTL only determines how long the resolver waits before retrying a device that recently failed.
+
+---
+
 ## What the audit log is for
 
 The SHA-256 tamper-evident audit log is not a debugging tool. It is an accountability infrastructure.
@@ -120,6 +149,7 @@ However, domain applicability has limits that must be stated clearly:
 | Policy engine | Safety constraints are explicit, configurable, and auditable. |
 | Domain agnosticism | The protocol works anywhere. Safety configuration is deployment-specific. |
 | AI as observer and actor | AI can use DoSync. It cannot override its safety model. |
+| Unreachable device TTL | Transient failures are excluded temporarily, not permanently. Recovery is automatic. |
 
 ---
 
