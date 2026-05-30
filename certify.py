@@ -67,7 +67,7 @@ def request(
     req = urllib.request.Request(final_url, data=data, headers=headers, method=method)
     ctx_arg = None if is_local else ctx
     try:
-        with urllib.request.urlopen(req, timeout=10, context=ctx_arg) as resp:
+        with urllib.request.urlopen(req, timeout=60, context=ctx_arg) as resp:
             return resp.status, json.loads(resp.read())
     except urllib.error.HTTPError as e:
         try:
