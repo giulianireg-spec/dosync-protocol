@@ -78,6 +78,45 @@ def request(
         return 0, {"error": str(e)}
 
 
+# ── Async intent helper ──────────────────────────────────────────────────────
+
+def fire_intent(base: str, body: dict) -> tuple[int, dict]:
+    """POST /v1/intent/async then poll GET /v1/intent/{id} until completed.
+    
+    Returns the same (status_code, result_dict) interface as request() so
+    existing test logic does not need to change.
+    Timeout: DOSYNC_INTENT_TIMEOUT + 3s margin (8s emergency, 13s info/alert).
+    """
+    import time as _t
+
+    urgency = body.get("urgency", "info")
+    hub_timeout = 5.0 if urgency == "emergency" else 10.0
+    poll_timeout = hub_timeout + 3.0
+
+    # Fire
+    status, fire = request("POST", f"{base}/v1/intent/async", body)
+    if status != 200 or "error" in fire:
+        return status, fire
+
+    intent_id = fire.get("intent_id")
+    if not intent_id:
+        return 0, {"error": "No intent_id in async response"}
+
+    # Poll
+    deadline = _t.monotonic() + poll_timeout
+    while _t.monotonic() < deadline:
+        _t.sleep(1.0)
+        poll_status, poll = request("GET", f"{base}/v1/intent/{intent_id}")
+        if poll_status != 200:
+            return poll_status, poll
+        if poll.get("status") != "pending":
+            return 200, poll
+
+    # Timeout — return last known state
+    return 200, {**fire, "status": "timeout",
+                 "success": None, "actions_taken": 0, "results": [], "failed_devices": []}
+
+
 # ── Result types ──────────────────────────────────────────────────────────────
 
 @dataclass
@@ -264,7 +303,7 @@ def run_standard(base: str, report: CertReport):
     section("── Tier STANDARD — Intents, events, health ─────────────")
 
     # S1. Hub accepts notify_family intent
-    status, body = request("POST", f"{base}/v1/intent", {
+    status, body = fire_intent(base, {
         "intent":  "notify_family",
         "urgency": "info",
         "context": {"message": "DoSync certification test — notify intent"},
@@ -283,7 +322,7 @@ def run_standard(base: str, report: CertReport):
     ))
 
     # S3. save_energy intent executes
-    status, body_se = request("POST", f"{base}/v1/intent", {
+    status, body_se = fire_intent(base, {
         "intent":  "save_energy",
         "urgency": "info",
         "context": {},
@@ -295,7 +334,7 @@ def run_standard(base: str, report: CertReport):
     ))
 
     # S4. bedtime_routine intent executes
-    status, body_bt = request("POST", f"{base}/v1/intent", {
+    status, body_bt = fire_intent(base, {
         "intent":  "bedtime_routine",
         "urgency": "info",
         "context": {},
@@ -307,7 +346,7 @@ def run_standard(base: str, report: CertReport):
     ))
 
     # S5. alert urgency returns faster / is accepted
-    status, body_alert = request("POST", f"{base}/v1/intent", {
+    status, body_alert = fire_intent(base, {
         "intent":  "alert_anomaly",
         "urgency": "alert",
         "context": {"trigger": "certification_test"},
@@ -332,7 +371,7 @@ def run_standard(base: str, report: CertReport):
     ))
 
     # S7. Unknown intent returns 422
-    status_unk, _ = request("POST", f"{base}/v1/intent", {
+    status_unk, _ = fire_intent(base, {
         "intent": "intent_that_does_not_exist_certify",
         "urgency": "info",
         "context": {},
@@ -405,7 +444,7 @@ def run_emergency(base: str, report: CertReport):
     # Note: partial failures (unreachable physical devices) are acceptable —
     # the test verifies that the hub responded and executed the intent, not
     # that every physical device was reachable.
-    status, body = request("POST", f"{base}/v1/intent", {
+    status, body = fire_intent(base, {
         "intent":  "ensure_safety",
         "urgency": "emergency",
         "subject": "certify-test-subject",
@@ -436,7 +475,7 @@ def run_emergency(base: str, report: CertReport):
     # Note: this intent has a time-based policy (weekdays 18:30-19:00).
     # The test verifies the hub accepted and processed the intent, not that
     # it produced actions. Zero actions outside the policy window is correct.
-    status, body_ch = request("POST", f"{base}/v1/intent", {
+    status, body_ch = fire_intent(base, {
         "intent":  "children_arrived_home",
         "urgency": "info",
         "context": {"trigger": "certification_test"},
@@ -448,7 +487,7 @@ def run_emergency(base: str, report: CertReport):
     ))
 
     # E4. away_mode intent executes
-    status, body_aw = request("POST", f"{base}/v1/intent", {
+    status, body_aw = fire_intent(base, {
         "intent":  "away_mode",
         "urgency": "info",
         "context": {},
