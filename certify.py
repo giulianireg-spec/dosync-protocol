@@ -432,16 +432,19 @@ def run_emergency(base: str, report: CertReport):
         f"active devices: {emergency_devices}",
     ))
 
-    # E3. children_arrived_home intent executes
+    # E3. children_arrived_home intent is accepted by the hub
+    # Note: this intent has a time-based policy (weekdays 18:30-19:00).
+    # The test verifies the hub accepted and processed the intent, not that
+    # it produced actions. Zero actions outside the policy window is correct.
     status, body_ch = request("POST", f"{base}/v1/intent", {
         "intent":  "children_arrived_home",
         "urgency": "info",
         "context": {"trigger": "certification_test"},
     })
     report.add(TestResult(
-        "E03  children_arrived_home intent executes",
+        "E03  children_arrived_home intent accepted by hub",
         status == 200 and body_ch.get("success") is not None,
-        f"actions_taken={body_ch.get('actions_taken', 0)}",
+        f"actions_taken={body_ch.get('actions_taken', 0)} (0 valid outside policy window)",
     ))
 
     # E4. away_mode intent executes
