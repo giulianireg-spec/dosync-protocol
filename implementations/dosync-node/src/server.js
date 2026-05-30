@@ -25,10 +25,19 @@ const VERSION  = '0.2.0'
 
 // ── In-memory storage ─────────────────────────────────────────────────────────
 
-const registry   = new Map()   // device_id → manifest
-const auditLog   = []          // audit log entries (SHA-256 chained)
-const eventLog   = []          // device events
-const healthLog  = new Map()   // device_id → { ok, total }
+const registry    = new Map()   // device_id → manifest
+const auditLog    = []          // audit log entries (SHA-256 chained)
+const eventLog    = []          // device events
+const healthLog   = new Map()   // device_id → { ok, total }
+const intentStore = new Map()   // intent_id → { status, result, createdAt }
+const INTENT_STORE_TTL = 300_000  // 5 minutes in ms
+
+function intentStoreCleanup() {
+  const now = Date.now()
+  for (const [id, entry] of intentStore) {
+    if (now - entry.createdAt > INTENT_STORE_TTL) intentStore.delete(id)
+  }
+}
 
 // ── Authentication ────────────────────────────────────────────────────────────
 
@@ -232,8 +241,13 @@ app.post('/v1/device/action', async (req, reply) => {
 
 // ── Intents ───────────────────────────────────────────────────────────────────
 
-// POST /v1/intent
-app.post('/v1/intent', async (req, reply) => {
+// POST /v1/intent — deprecated, redirects to /v1/intent/async (308)
+app.post('/v1/intent', { schema: { hide: true } }, async (req, reply) => {
+  return reply.status(308).header('Location', '/v1/intent/async').send()
+})
+
+// POST /v1/intent/async — fire intent, return intent_id immediately
+app.post('/v1/intent/async', async (req, reply) => {
   if (!checkAuth(req, reply)) return
   const { intent, urgency = 'info', context = {} } = req.body || {}
 
@@ -245,42 +259,75 @@ app.post('/v1/intent', async (req, reply) => {
     return reply.status(422).send({ detail: `Invalid urgency '${urgency}'` })
 
   const intentId = randomUUID()
-  const actions  = resolve(intent, urgency, context)
-  const results  = actions.map(a => ({
-    device_id: a.device_id,
-    action:    a.action,
-    success:   true,
-    response:  { status: 'simulated' },
-  }))
 
-  // Track health
-  const devicesSeen = new Set(results.map(r => r.device_id))
-  for (const deviceId of devicesSeen) {
-    const h = healthLog.get(deviceId) || { ok: 0, total: 0 }
-    h.ok    += 1
-    h.total += 1
-    healthLog.set(deviceId, h)
-  }
-
-  appendAudit({
-    type:        'intent_executed',
-    intent_id:   intentId,
+  // Store as pending immediately
+  intentStoreCleanup()
+  intentStore.set(intentId, {
+    status:    'pending',
+    result:    null,
+    createdAt: Date.now(),
     intent,
     urgency,
-    actions:     results.length,
-    failed:      [],
-    success:     true,
   })
 
-  return {
-    success:        true,
-    intent_id:      intentId,
-    intent,
-    urgency,
-    actions_taken:  results.length,
-    results,
-    failed_devices: [],
-  }
+  // Execute in background (setImmediate = next event loop tick)
+  setImmediate(() => {
+    const actions = resolve(intent, urgency, context)
+    const results = actions.map(a => ({
+      device_id: a.device_id,
+      action:    a.action,
+      success:   true,
+      response:  { status: 'simulated' },
+    }))
+
+    // Track health
+    const devicesSeen = new Set(results.map(r => r.device_id))
+    for (const deviceId of devicesSeen) {
+      const h = healthLog.get(deviceId) || { ok: 0, total: 0 }
+      h.ok    += 1
+      h.total += 1
+      healthLog.set(deviceId, h)
+    }
+
+    appendAudit({
+      type:      'intent_executed',
+      intent_id: intentId,
+      intent,
+      urgency,
+      actions:   results.length,
+      failed:    [],
+      success:   true,
+    })
+
+    intentStore.set(intentId, {
+      status:    'success',
+      createdAt: Date.now(),
+      intent,
+      urgency,
+      result: {
+        intent_id:      intentId,
+        success:        true,
+        actions_taken:  results.length,
+        failed_devices: [],
+        results,
+      },
+    })
+  })
+
+  return { intent_id: intentId, status: 'pending', intent, urgency }
+})
+
+// GET /v1/intent/:intent_id — poll result of async intent
+app.get('/v1/intent/:intent_id', async (req, reply) => {
+  if (!checkAuth(req, reply)) return
+  const entry = intentStore.get(req.params.intent_id)
+  if (!entry)
+    return reply.status(404).send({ detail: `Intent '${req.params.intent_id}' not found` })
+
+  if (entry.status === 'pending')
+    return { intent_id: req.params.intent_id, status: 'pending', intent: entry.intent, urgency: entry.urgency }
+
+  return { intent_id: req.params.intent_id, status: entry.status, ...entry.result }
 })
 
 // GET /v1/intents/:intent_class/explain — scoring breakdown
