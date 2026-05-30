@@ -199,19 +199,47 @@ Fix: set `emergency_capable: true` on every device that should respond to `ensur
 Use the explainability endpoint to inspect how the resolver scores your devices for a given intent:
 
 ```bash
-# Check which devices are included/excluded for bedtime_routine
-curl -s https://<hub-ip>:47200/v1/intents/bedtime_routine/explain \
+curl -sk https://<hub-ip>:47200/v1/intents/bedtime_routine/explain \
   -H "Authorization: Bearer <token>" \
   --cacert certs/ca.crt | python3 -m json.tool
-
-# Key fields in the response:
-# devices_evaluated — total devices in registry
-# devices_included  — devices that scored > 0
-# devices_excluded  — devices that scored 0 (check their tags)
-# included[].matched_tags — which tags triggered inclusion
 ```
 
-If a device appears in `excluded` for an intent where you expect it to participate, add the missing tag from the intent's resolution tag set (see table above) to its manifest and re-register it.
+The response structure:
+
+```json
+{
+  "devices_evaluated": 38,
+  "devices_included": 15,
+  "devices_excluded": 23,
+  "included": [
+    {
+      "device_id": "wiz-living1-01",
+      "device_tags": ["light", "climate", "children_arrival", "wiz"],
+      "score": 36.0,
+      "score_breakdown": {
+        "tag_overlap": 20.0,
+        "matched_tags": ["climate", "light"],
+        "actuator_match": 16.0,
+        "matched_actuators": ["set_brightness", "turn_off"]
+      }
+    }
+  ],
+  "excluded": [
+    {
+      "device_id": "rpi-pir-01",
+      "device_tags": ["emergency", "motion", "security", "sensor"],
+      "reason": "required specific tags {'blinds', 'smart-plug'} not in device tags {...}"
+    }
+  ]
+}
+```
+
+The `reason` field on excluded devices tells you exactly which tags are missing. If a device appears in `excluded` for an intent where you expect it to participate:
+
+1. Read the `reason` field — it lists the specific missing tags
+2. Add those tags to the device's manifest
+3. Re-register the device (see section below)
+4. Verify with the explainability endpoint that it now appears in `included`
 
 ---
 
