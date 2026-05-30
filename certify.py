@@ -18,7 +18,7 @@ import urllib.error
 import ssl
 import os
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 
@@ -91,7 +91,7 @@ class CertReport:
     host: str
     port: int
     tier: str
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
     tests: list[TestResult] = field(default_factory=list)
     passed: int = 0
     failed: int = 0
