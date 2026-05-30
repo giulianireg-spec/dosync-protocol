@@ -1,28 +1,30 @@
 #!/bin/bash
-# DoSync PKI Rotation — renovación anual del certificado del hub
+# DoSync PKI Rotation — annual hub certificate renewal
 #
-# Uso:
-#   bash rotate_pki.sh                        # rota hub cert (IP auto-detectada)
-#   bash rotate_pki.sh 192.168.100.109        # rota hub cert con IP explícita
-#   bash rotate_pki.sh --check                # solo verifica estado, no rota
-#   bash rotate_pki.sh --force                # rota aunque no esté próximo a vencer
+# Usage:
+#   bash rotate_pki.sh                        # rotate hub cert (IP auto-detected)
+#   bash rotate_pki.sh 192.168.100.109        # rotate hub cert with explicit IP
+#   bash rotate_pki.sh --check                # check status only, no rotation
+#   bash rotate_pki.sh --force                # rotate even if not near expiry
 #
-# Qué hace este script:
-#   1. Verifica el estado actual de la PKI
-#   2. Hace backup de los certs actuales
-#   3. Renueva hub.crt y hub.key (la CA NO cambia)
-#   4. Reinicia el hub via systemd
-#   5. Verifica que el hub levantó correctamente
-#   6. Imprime instrucciones para actualizar el Mac
+# What this script does:
+#   1. Checks current PKI status and days remaining on each cert
+#   2. Backs up current hub.crt and hub.key
+#   3. Renews hub.crt and hub.key (the CA does NOT change)
+#   4. Verifies the new cert chains correctly to the CA
+#   5. Restarts the hub via systemd
+#   6. Confirms the hub came back up
+#   7. Prints manual steps for any connected client machines
 #
-# Qué NO hace:
-#   - Rotar la CA (válida 10 años — no requiere rotación anual)
-#   - Modificar certs de adapters (rotar con: python3 -m dosync.security renew <nombre>)
-#   - Distribuir automáticamente el CA cert al Mac (requiere acción manual)
+# What this script does NOT do:
+#   - Rotate the CA (valid 10 years — does not require annual rotation)
+#   - Modify adapter certs (rotate with: python3 -m dosync.security renew <name>)
+#   - Automatically distribute the CA cert to clients (manual step, not needed
+#     for hub cert rotation since the CA is unchanged)
 #
-# La CA no se rota en este script porque hacerlo invalidaría todos los clientes
-# que ya confían en ella (Mac, certify.py, Claude Desktop). La CA es la raíz de
-# confianza del sistema — su rotación es un proceso separado y deliberado.
+# The CA is not rotated here because doing so would invalidate every client
+# that already trusts it. The CA is the system's root of trust — its rotation
+# is a separate, deliberate event. See DESIGN-PRINCIPLES.md for details.
 
 set -e
 
@@ -33,7 +35,7 @@ HUB_IP="${1:-}"
 CHECK_ONLY=false
 FORCE=false
 
-# ── Parsear argumentos ────────────────────────────────────────────────────────
+# ── Parse arguments ───────────────────────────────────────────────────────────
 
 for arg in "$@"; do
     case $arg in
@@ -42,25 +44,25 @@ for arg in "$@"; do
     esac
 done
 
-# Si el primer argumento parece una IP, úsarla
+# If the first argument looks like an IP, use it
 if [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     HUB_IP="$1"
 fi
 
-# ── Colores ───────────────────────────────────────────────────────────────────
+# ── Colors ────────────────────────────────────────────────────────────────────
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 ok()   { echo -e "  ${GREEN}✓${NC}  $1"; }
 warn() { echo -e "  ${YELLOW}⚠${NC}  $1"; }
 err()  { echo -e "  ${RED}✗${NC}  $1"; }
 info() { echo -e "  ${BLUE}→${NC}  $1"; }
 
-# ── Verificaciones previas ────────────────────────────────────────────────────
+# ── Pre-flight checks ─────────────────────────────────────────────────────────
 
 echo ""
 echo "==================================="
@@ -68,41 +70,40 @@ echo "  DoSync PKI Rotation"
 echo "==================================="
 echo ""
 
-# Verificar que estamos en el repo correcto
+# Verify we are in the correct repo
 if [ ! -d "$REPO_DIR" ]; then
-    err "Repo no encontrado en $REPO_DIR"
+    err "Repo not found at $REPO_DIR"
     exit 1
 fi
 
 cd "$REPO_DIR"
 
-# Verificar que existe la CA (no debería faltar nunca)
+# Verify CA exists (should never be missing in a running deployment)
 if [ ! -f "$CERTS_DIR/ca.crt" ] || [ ! -f "$CERTS_DIR/ca.key" ]; then
-    err "CA no encontrada en $CERTS_DIR — la PKI no está inicializada"
-    info "Correr: bash setup_pki.sh"
+    err "CA not found at $CERTS_DIR — PKI is not initialized"
+    info "Run: bash setup_pki.sh"
     exit 1
 fi
 
-# Activar virtualenv
+# Activate virtualenv if present
 if [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
 fi
 
-# Detectar IP del hub si no se pasó
+# Auto-detect hub IP if not provided
 if [ -z "$HUB_IP" ]; then
     HUB_IP=$(hostname -I | awk '{print $1}')
 fi
 
-# ── Verificar estado actual ───────────────────────────────────────────────────
+# ── Check current status ──────────────────────────────────────────────────────
 
-echo "Estado actual de la PKI:"
+echo "Current PKI status:"
 echo ""
 
-# Fechas de los certs actuales
 CA_EXPIRY=$(openssl x509 -in "$CERTS_DIR/ca.crt" -noout -enddate 2>/dev/null | cut -d= -f2)
 HUB_EXPIRY=$(openssl x509 -in "$CERTS_DIR/hub.crt" -noout -enddate 2>/dev/null | cut -d= -f2)
 
-# Días restantes del hub cert
+# Days remaining on hub cert
 HUB_DAYS=$(python3 -c "
 import datetime, subprocess
 r = subprocess.run(['openssl','x509','-in','$CERTS_DIR/hub.crt','-noout','-enddate'],
@@ -116,14 +117,14 @@ print((exp - datetime.datetime.now(datetime.timezone.utc)).days)
 ok "CA cert:      $CA_EXPIRY"
 
 if [ "$HUB_DAYS" -le 0 ]; then
-    err "Hub cert:     $HUB_EXPIRY  — EXPIRADO"
+    err "Hub cert:     $HUB_EXPIRY  — EXPIRED"
 elif [ "$HUB_DAYS" -le 30 ]; then
-    warn "Hub cert:     $HUB_EXPIRY  — vence en ${HUB_DAYS} días"
+    warn "Hub cert:     $HUB_EXPIRY  — expires in ${HUB_DAYS} days"
 else
-    ok "Hub cert:     $HUB_EXPIRY  — ${HUB_DAYS} días restantes"
+    ok "Hub cert:     $HUB_EXPIRY  — ${HUB_DAYS} days remaining"
 fi
 
-# Verificar certs de adapters
+# Check adapter certs
 if [ -d "$CERTS_DIR/adapters" ]; then
     for cert in "$CERTS_DIR/adapters"/*.crt; do
         [ -f "$cert" ] || continue
@@ -138,29 +139,29 @@ exp = datetime.datetime.strptime(date_str, '%b %d %H:%M:%S %Y %Z').replace(
 print((exp - datetime.datetime.now(datetime.timezone.utc)).days)
 " 2>/dev/null || echo "0")
         if [ "$days" -le 0 ]; then
-            err "Adapter $name: EXPIRADO"
+            err "Adapter $name: EXPIRED"
         elif [ "$days" -le 30 ]; then
-            warn "Adapter $name: vence en ${days} días"
+            warn "Adapter $name: expires in ${days} days"
         else
-            ok "Adapter $name: ${days} días restantes"
+            ok "Adapter $name: ${days} days remaining"
         fi
     done
 fi
 
 echo ""
 
-# Si solo se pidió verificar, terminar acá
+# Check-only mode: exit here
 if [ "$CHECK_ONLY" = true ]; then
-    echo "Modo --check: no se realizaron cambios."
+    echo "--check mode: no changes made."
     echo ""
     exit 0
 fi
 
-# ── Decidir si rotar ──────────────────────────────────────────────────────────
+# ── Decide whether to rotate ──────────────────────────────────────────────────
 
 if [ "$HUB_DAYS" -gt 30 ] && [ "$FORCE" = false ]; then
-    warn "El hub cert vence en ${HUB_DAYS} días — no es necesario rotar todavía."
-    info "Usar --force para rotar de todas formas."
+    warn "Hub cert expires in ${HUB_DAYS} days — rotation not required yet."
+    info "Use --force to rotate anyway."
     echo ""
     exit 0
 fi
@@ -170,16 +171,16 @@ fi
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_PATH="$BACKUP_DIR/$TIMESTAMP"
 
-echo "Haciendo backup de certs actuales..."
+echo "Backing up current certs..."
 mkdir -p "$BACKUP_PATH"
 cp "$CERTS_DIR/hub.crt" "$BACKUP_PATH/hub.crt"
 cp "$CERTS_DIR/hub.key" "$BACKUP_PATH/hub.key"
-ok "Backup guardado en: $BACKUP_PATH"
+ok "Backup saved to: $BACKUP_PATH"
 echo ""
 
-# ── Rotación del hub cert ─────────────────────────────────────────────────────
+# ── Rotate hub cert ───────────────────────────────────────────────────────────
 
-echo "Renovando hub certificate..."
+echo "Renewing hub certificate..."
 echo ""
 
 PYTHONPATH=. python3 -m dosync.security renew hub --ip "$HUB_IP" 2>&1 | \
@@ -187,68 +188,64 @@ PYTHONPATH=. python3 -m dosync.security renew hub --ip "$HUB_IP" 2>&1 | \
 
 echo ""
 
-# Verificar que el nuevo cert es válido
+# Verify the new cert chains correctly to the CA
 if openssl verify -CAfile "$CERTS_DIR/ca.crt" "$CERTS_DIR/hub.crt" &>/dev/null; then
     NEW_EXPIRY=$(openssl x509 -in "$CERTS_DIR/hub.crt" -noout -enddate | cut -d= -f2)
-    ok "Nuevo hub cert válido — vence: $NEW_EXPIRY"
+    ok "New hub cert valid — expires: $NEW_EXPIRY"
 else
-    err "El nuevo hub cert no pasa la verificación de cadena"
-    info "Restaurando backup..."
+    err "New hub cert failed chain verification"
+    info "Restoring backup..."
     cp "$BACKUP_PATH/hub.crt" "$CERTS_DIR/hub.crt"
     cp "$BACKUP_PATH/hub.key" "$CERTS_DIR/hub.key"
-    err "Backup restaurado. Sin cambios aplicados."
+    err "Backup restored. No changes applied."
     exit 1
 fi
 
 echo ""
 
-# ── Reinicio del hub ──────────────────────────────────────────────────────────
+# ── Restart hub ───────────────────────────────────────────────────────────────
 
-echo "Reiniciando hub DoSync..."
+echo "Restarting DoSync hub..."
 
 if systemctl is-active --quiet dosync; then
     sudo systemctl restart dosync
     sleep 3
 
     if systemctl is-active --quiet dosync; then
-        ok "Hub reiniciado correctamente"
+        ok "Hub restarted successfully"
     else
-        err "El hub no levantó después del reinicio"
-        info "Ver logs: sudo journalctl -u dosync -n 50"
-        info "Restaurando backup manualmente si es necesario:"
+        err "Hub did not come back up after restart"
+        info "Check logs: sudo journalctl -u dosync -n 50"
+        info "To restore manually:"
         info "  cp $BACKUP_PATH/hub.crt $CERTS_DIR/hub.crt"
         info "  cp $BACKUP_PATH/hub.key $CERTS_DIR/hub.key"
         info "  sudo systemctl restart dosync"
         exit 1
     fi
 else
-    warn "Servicio dosync no está corriendo via systemd"
-    info "Reiniciar manualmente el hub para aplicar los nuevos certs"
+    warn "dosync systemd service is not running"
+    info "Restart the hub manually to apply the new certificate"
 fi
 
 echo ""
 
-# ── Instrucciones post-rotación ───────────────────────────────────────────────
+# ── Post-rotation instructions ────────────────────────────────────────────────
 
 echo "==================================="
-echo "  Rotación completada"
+echo "  Rotation complete"
 echo ""
-echo "  El CA cert NO cambió — no es necesario redistribuirlo."
+echo "  The CA cert did NOT change — no redistribution needed."
 echo ""
-echo "  Pasos manuales en el Mac:"
+echo "  Manual steps on any connected client machine:"
 echo ""
-echo "  1. Actualizar copia local del CA cert (opcional, no cambió):"
-echo "     scp rgiuliani@$HUB_IP:$CERTS_DIR/ca.crt ~/Desktop/dosync-ca.crt"
-echo ""
-echo "  2. Verificar desde el Mac:"
+echo "  1. Verify from the client:"
 echo "     DOSYNC_TOKEN=<token> \\"
-echo "     DOSYNC_CA_CERT=~/Desktop/dosync-ca.crt \\"
+echo "     DOSYNC_CA_CERT=<path-to-ca.crt> \\"
 echo "     python3 certify.py --host $HUB_IP --port 47200 --tier standard"
 echo ""
-echo "  3. Actualizar Claude Desktop si era necesario:"
-echo "     cat ~/Library/Application\\ Support/Claude/claude_desktop_config.yaml"
-echo "     # Verificar que DOSYNC_HUB_URL apunta a https://$HUB_IP:47200"
+echo "  2. If the CA cert is not yet on the client machine:"
+echo "     scp rgiuliani@$HUB_IP:$CERTS_DIR/ca.crt <destination>"
 echo ""
-echo "  Backup anterior en: $BACKUP_PATH"
+echo "  Previous backup: $BACKUP_PATH"
 echo "==================================="
 echo ""
