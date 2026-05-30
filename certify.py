@@ -374,10 +374,12 @@ def run_standard(base: str, report: CertReport):
 
     # S11. Explainability endpoint returns scoring breakdown
     status, body_exp = request("GET", f"{base}/v1/intents/ensure_safety/explain")
+    required_exp = ["intent", "devices_evaluated", "devices_included", "included"]
+    missing_exp  = [f for f in required_exp if f not in body_exp]
     report.add(TestResult(
         "S11  Explainability endpoint returns scoring breakdown",
-        status == 200 and "devices" in body_exp,
-        f"{len(body_exp.get('devices', []))} devices scored" if status == 200 else f"status={status}",
+        status == 200 and len(missing_exp) == 0,
+        f"{body_exp.get('devices_evaluated', 0)} evaluated, {body_exp.get('devices_included', 0)} included" if status == 200 else f"status={status}",
     ))
 
     # S12. Direct device action endpoint works
@@ -481,7 +483,7 @@ def run_emergency(base: str, report: CertReport):
     # E8. Audit log entry contains required fields
     if entries:
         sample = entries[0]
-        required_entry = ["intent", "urgency", "timestamp", "actions_taken"]
+        required_entry = ["intent", "urgency", "timestamp", "actions", "success", "hash", "prev_hash"]
         missing = [f for f in required_entry if f not in sample]
         report.add(TestResult(
             "E08  Audit log entries contain required fields",
