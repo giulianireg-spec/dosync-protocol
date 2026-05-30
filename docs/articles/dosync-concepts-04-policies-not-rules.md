@@ -9,13 +9,13 @@ series: DoSync Concepts
 
 ---
 
-Picture this: it's 03:00. An AI agent detects an intruder at the front entrance and fires `ensure_safety [emergency]`. The action plan includes unlocking the front door for emergency services.
+Picture this: it's 03:00. A camera detects that an elderly person has fallen in the bedroom. The AI agent fires `ensure_safety [emergency]`. The action plan includes unlocking the front door so emergency services can get in.
 
 But someone wrote a rule three months ago: *never unlock after midnight.*
 
-The rule wins. The door stays locked.
+The rule wins. The door stays locked. The paramedics arrive and can't get in.
 
-This is not a bug in the AI. It's not a bug in the rule. It's a design problem — and it's the exact problem that appears when you build physical AI systems on top of automation logic that was never designed for an AI to act on.
+This is not a bug in the AI. It's not a bug in the rule — in any other context, locking the door at night is exactly right. It's a design problem — and it's the exact problem that appears when you build physical AI systems on top of automation logic that was never designed for an AI to act on.
 
 The difference between a **rule** and a **policy** looks small from a distance. Both constrain behavior. Both say "don't do X in situation Y." But they operate at different levels of the system — and getting this distinction wrong in a physical environment has real consequences.
 
