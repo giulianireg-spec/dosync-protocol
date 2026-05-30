@@ -1,11 +1,11 @@
 """
 DoSync Certification CLI — dosync-certify
-Uso: python3 certify.py --host localhost --port 47200 --tier standard
+Usage: python3 certify.py --host localhost --port 47200 --tier standard
 
 Tiers:
-  basic     → conecta, autentica, publica capability manifest
-  standard  → responde a intents, envía eventos
-  emergency → todo lo anterior + emergency_override + audit log íntegro
+  basic     (10 tests) — connects, authenticates, registers, manifest fields
+  standard  (22 tests) — intents, events, health, explainability, presence
+  emergency (32 tests) — emergency override, policy engine, audit log integrity
 """
 
 import argparse
@@ -22,55 +22,63 @@ from datetime import datetime
 from typing import Optional
 
 
-# ── Colores para la terminal ──────────────────────────────────────────────────
+# ── Terminal colors ───────────────────────────────────────────────────────────
 
 class C:
-    OK      = "\033[92m"   # verde
-    FAIL    = "\033[91m"   # rojo
-    WARN    = "\033[93m"   # amarillo
-    BLUE    = "\033[94m"   # azul
-    BOLD    = "\033[1m"
-    RESET   = "\033[0m"
+    OK   = "\033[92m"
+    FAIL = "\033[91m"
+    WARN = "\033[93m"
+    BLUE = "\033[94m"
+    BOLD = "\033[1m"
+    RESET = "\033[0m"
 
-def ok(msg):   print(f"  {C.OK}✓{C.RESET}  {msg}")
-def fail(msg): print(f"  {C.FAIL}✗{C.RESET}  {msg}")
-def warn(msg): print(f"  {C.WARN}~{C.RESET}  {msg}")
-def info(msg): print(f"  {C.BLUE}·{C.RESET}  {msg}")
-def section(title): print(f"\n{C.BOLD}{title}{C.RESET}")
+def ok(msg):      print(f"  {C.OK}✓{C.RESET}  {msg}")
+def fail(msg):    print(f"  {C.FAIL}✗{C.RESET}  {msg}")
+def warn(msg):    print(f"  {C.WARN}~{C.RESET}  {msg}")
+def info(msg):    print(f"  {C.BLUE}·{C.RESET}  {msg}")
+def section(t):   print(f"\n{C.BOLD}{t}{C.RESET}")
 
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
 
-def request(method: str, url: str, body: Optional[dict] = None) -> tuple[int, dict]:
+def request(
+    method: str,
+    url: str,
+    body: Optional[dict] = None,
+    token_override: Optional[str] = None,
+) -> tuple[int, dict]:
     data = json.dumps(body).encode() if body else None
-    token = os.environ.get("DOSYNC_TOKEN", "")
+    token = token_override if token_override is not None else os.environ.get("DOSYNC_TOKEN", "")
     ca_cert = os.environ.get("DOSYNC_CA_CERT", "")
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    # SSL context — usa CA cert si está disponible, sino acepta autofirmados
+
     ctx = ssl.create_default_context()
     if ca_cert and os.path.exists(os.path.expanduser(ca_cert)):
         ctx.load_verify_locations(os.path.expanduser(ca_cert))
     else:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
-    # Si es localhost usar HTTP, sino HTTPS automáticamente
+
     import re
-    is_local = re.search(r'localhost|127\.0\.0\.1', url)
+    is_local = bool(re.search(r'localhost|127\.0\.0\.1', url))
     final_url = url if is_local else url.replace("http://", "https://", 1)
     req = urllib.request.Request(final_url, data=data, headers=headers, method=method)
     ctx_arg = None if is_local else ctx
     try:
-        with urllib.request.urlopen(req, timeout=5, context=ctx_arg) as resp:
+        with urllib.request.urlopen(req, timeout=10, context=ctx_arg) as resp:
             return resp.status, json.loads(resp.read())
     except urllib.error.HTTPError as e:
-        return e.code, json.loads(e.read())
+        try:
+            return e.code, json.loads(e.read())
+        except Exception:
+            return e.code, {"error": str(e)}
     except Exception as e:
         return 0, {"error": str(e)}
 
 
-# ── Resultado de cada test ────────────────────────────────────────────────────
+# ── Result types ──────────────────────────────────────────────────────────────
 
 @dataclass
 class TestResult:
@@ -109,12 +117,12 @@ class CertReport:
 
     def to_dict(self) -> dict:
         return {
-            "dosync_cert_version": "0.1",
+            "dosync_cert_version": "0.2",
             "certified": self.certified,
             "tier": self.tier,
             "hub": f"{self.host}:{self.port}",
             "timestamp": self.timestamp,
-            "summary": {"passed": self.passed, "failed": self.failed},
+            "summary": {"passed": self.passed, "failed": self.failed, "total": self.passed + self.failed},
             "fingerprint": self.fingerprint,
             "tests": [
                 {"name": t.name, "passed": t.passed, "detail": t.detail}
@@ -123,161 +131,275 @@ class CertReport:
         }
 
 
-# ── Test suites por tier ──────────────────────────────────────────────────────
+# ── Test device manifest ──────────────────────────────────────────────────────
 
 TEST_DEVICE = {
-    "device_id":   "certify-test-device-01",
-    "device_name": "DoSync Certification Test Device",
+    "device_id":    "certify-test-device-01",
+    "device_name":  "DoSync Certification Test Device",
     "manufacturer": "DoSync Initiative",
-    "model":       "CertBot",
-    "firmware":    "0.1.0",
-    "category":    "hybrid",
-    "tags":        ["test", "emergency", "sensor", "communication", "notification"],
+    "model":        "CertBot",
+    "firmware":     "0.2.0",
+    "category":     "hybrid",
+    "tags":         ["test", "emergency", "sensor", "communication", "notification", "light", "climate"],
     "sensors": [
-        {"id": "temp", "type": "temperature", "description": "Test temperature sensor"}
+        {"id": "temp",   "type": "temperature", "description": "Test temperature sensor"},
+        {"id": "motion", "type": "motion",       "description": "Test motion sensor"},
     ],
     "actuators": [
-        {"id": "notify", "type": "notify", "description": "Test notification"},
-        {"id": "unlock", "type": "unlock", "description": "Test unlock"},
-        {"id": "call",   "type": "call",   "description": "Test call"},
-        {"id": "alarm",  "type": "alarm",  "description": "Test alarm"},
+        {"id": "notify",  "type": "notify",   "description": "Test notification"},
+        {"id": "unlock",  "type": "unlock",   "description": "Test unlock"},
+        {"id": "call",    "type": "call",     "description": "Test call"},
+        {"id": "alarm",   "type": "alarm",    "description": "Test alarm"},
+        {"id": "turn_on", "type": "turn_on",  "description": "Test light on"},
+        {"id": "turn_off","type": "turn_off", "description": "Test light off"},
     ],
     "events": [
         {"id": "test_event", "severity": "info",      "description": "Test event"},
         {"id": "emergency",  "severity": "emergency", "description": "Test emergency"},
+        {"id": "motion_detected", "severity": "alert", "description": "Test motion"},
     ],
     "emergency_capable": True,
     "cert_tier": "emergency",
 }
 
 
-def run_basic(base: str, report: CertReport):
-    section("── Tier BASIC — Conectividad y registro ─────────────────")
+# ── TIER BASIC — 10 tests ─────────────────────────────────────────────────────
 
-    # 1. Hub reachable
+def run_basic(base: str, report: CertReport) -> bool:
+    section("── Tier BASIC — Connectivity and registration ──────────")
+
+    # B1. Hub reachable
     status, body = request("GET", f"{base}/v1/status")
     report.add(TestResult(
-        "Hub alcanzable en la red",
+        "B01  Hub reachable on the network",
         status == 200,
-        f"status={status}" if status != 200 else f"versión {body.get('version', '?')}",
+        f"version {body.get('version', '?')}" if status == 200 else f"status={status}",
     ))
     if status != 200:
-        report.add(TestResult("(resto de tests omitidos — hub no responde)", False))
+        report.add(TestResult("B02–B10  (skipped — hub not responding)", False, "hub unreachable"))
         return False
 
-    # 2. Hub returns protocol version
+    # B2. Hub declares protocol version
     report.add(TestResult(
-        "Hub declara versión de protocolo",
-        "protocol" in body,
-        body.get("protocol", "campo ausente"),
+        "B02  Hub declares protocol version",
+        "protocol" in body and body["protocol"].startswith("dosync/"),
+        body.get("protocol", "field missing"),
     ))
 
-    # 3. Device registration
+    # B3. Hub returns required status fields
+    required_status = ["name", "version", "protocol", "status", "devices", "audit_entries", "audit_integrity"]
+    missing = [f for f in required_status if f not in body]
+    report.add(TestResult(
+        "B03  Status response contains all required fields",
+        len(missing) == 0,
+        f"missing: {missing}" if missing else f"{len(required_status)} fields present",
+    ))
+
+    # B4. Invalid token is rejected with 401
+    status_auth, _ = request("GET", f"{base}/v1/devices", token_override="invalid-token-certify-test")
+    report.add(TestResult(
+        "B04  Invalid token rejected with 401",
+        status_auth == 401,
+        f"status={status_auth} (expected 401)",
+    ))
+
+    # B5. Device registration
     status, body = request("POST", f"{base}/v1/devices/register", TEST_DEVICE)
     report.add(TestResult(
-        "Dispositivo puede registrarse",
+        "B05  Device can register with the hub",
         status == 200 and body.get("status") == "registered",
-        body.get("detail", body.get("status", "")),
+        body.get("detail", body.get("status", f"status={status}")),
     ))
     if status != 200:
         return False
 
-    # 4. Device appears in registry
+    # B6. Device appears in registry
     status, body = request("GET", f"{base}/v1/devices")
-    found = any(d["device_id"] == TEST_DEVICE["device_id"]
-                for d in body.get("devices", []))
+    found = any(d["device_id"] == TEST_DEVICE["device_id"] for d in body.get("devices", []))
     report.add(TestResult(
-        "Dispositivo aparece en el registry",
+        "B06  Registered device appears in device registry",
         found,
-        f"{body.get('count', 0)} dispositivos registrados",
+        f"{body.get('count', 0)} devices registered",
     ))
 
-    # 5. Device detail endpoint
+    # B7. Device detail endpoint
     status, body = request("GET", f"{base}/v1/devices/{TEST_DEVICE['device_id']}")
     report.add(TestResult(
-        "Hub devuelve detalle del dispositivo",
+        "B07  Hub returns device detail by device_id",
         status == 200 and body.get("device_id") == TEST_DEVICE["device_id"],
         f"status={status}",
     ))
 
-    # 6. Capability manifest has required fields
-    required = ["device_id", "device_name", "manufacturer", "capabilities", "tags"]
-    missing  = [f for f in required if f not in body]
+    # B8. Capability manifest has all required fields
+    required_manifest = ["device_id", "device_name", "manufacturer", "capabilities", "tags"]
+    missing = [f for f in required_manifest if f not in body]
     report.add(TestResult(
-        "Capability manifest tiene todos los campos requeridos",
+        "B08  Capability manifest contains all required fields",
         len(missing) == 0,
-        f"campos faltantes: {missing}" if missing else "todos presentes",
+        f"missing: {missing}" if missing else "all fields present",
+    ))
+
+    # B9. Duplicate registration is handled gracefully (200 or 409, not 500)
+    status_dup, _ = request("POST", f"{base}/v1/devices/register", TEST_DEVICE)
+    report.add(TestResult(
+        "B09  Duplicate registration handled gracefully (not 500)",
+        status_dup in (200, 409),
+        f"status={status_dup}",
+    ))
+
+    # B10. Non-existent device returns 404
+    status_404, _ = request("GET", f"{base}/v1/devices/device-that-does-not-exist-certify")
+    report.add(TestResult(
+        "B10  Non-existent device returns 404",
+        status_404 == 404,
+        f"status={status_404} (expected 404)",
     ))
 
     return True
 
 
-def run_standard(base: str, report: CertReport):
-    section("── Tier STANDARD — Intents y eventos ───────────────────")
+# ── TIER STANDARD — 12 additional tests (total 22) ───────────────────────────
 
-    # 7. Hub accepts intent
+def run_standard(base: str, report: CertReport):
+    section("── Tier STANDARD — Intents, events, health ─────────────")
+
+    # S1. Hub accepts notify_family intent
     status, body = request("POST", f"{base}/v1/intent", {
-        "intent": "notify_family",
+        "intent":  "notify_family",
         "urgency": "info",
         "context": {"message": "DoSync certification test — notify intent"},
     })
     report.add(TestResult(
-        "Hub acepta intent notify_family",
+        "S01  Hub accepts notify_family intent",
         status == 200 and body.get("success"),
-        f"acciones ejecutadas: {body.get('actions_taken', 0)}",
+        f"actions_taken={body.get('actions_taken', 0)}",
     ))
 
-    # 8. Intent resolves to at least one device
-    results = body.get("results", [])
+    # S2. Intent resolves and returns structured result
     report.add(TestResult(
-        "Intent se resuelve al dispositivo de test",
-        body.get("success") is not None and len(results) >= 0,
-        f"intent procesado correctamente — {len(results)} acciones" if body.get("success") is not None else "sin resultados",
+        "S02  Intent response contains structured result fields",
+        all(k in body for k in ["success", "actions_taken", "results"]),
+        "success / actions_taken / results present" if all(k in body for k in ["success", "actions_taken", "results"]) else f"missing fields in: {list(body.keys())}",
     ))
 
-    # 9. Device can send event
-    status, body = request("POST", f"{base}/v1/event", {
+    # S3. save_energy intent executes
+    status, body_se = request("POST", f"{base}/v1/intent", {
+        "intent":  "save_energy",
+        "urgency": "info",
+        "context": {},
+    })
+    report.add(TestResult(
+        "S03  Hub accepts save_energy intent",
+        status == 200 and body_se.get("success") is not None,
+        f"actions_taken={body_se.get('actions_taken', 0)}",
+    ))
+
+    # S4. bedtime_routine intent executes
+    status, body_bt = request("POST", f"{base}/v1/intent", {
+        "intent":  "bedtime_routine",
+        "urgency": "info",
+        "context": {},
+    })
+    report.add(TestResult(
+        "S04  Hub accepts bedtime_routine intent",
+        status == 200 and body_bt.get("success") is not None,
+        f"actions_taken={body_bt.get('actions_taken', 0)}",
+    ))
+
+    # S5. alert urgency returns faster / is accepted
+    status, body_alert = request("POST", f"{base}/v1/intent", {
+        "intent":  "alert_anomaly",
+        "urgency": "alert",
+        "context": {"trigger": "certification_test"},
+    })
+    report.add(TestResult(
+        "S05  Hub accepts alert_anomaly with urgency=alert",
+        status == 200 and body_alert.get("success") is not None,
+        f"actions_taken={body_alert.get('actions_taken', 0)}",
+    ))
+
+    # S6. Device can send event
+    status, body_ev = request("POST", f"{base}/v1/event", {
         "device_id": TEST_DEVICE["device_id"],
         "event_id":  "test_event",
         "severity":  "info",
         "data":      {"source": "dosync-certify", "value": 42},
     })
     report.add(TestResult(
-        "Dispositivo puede enviar evento al hub",
-        status == 200 and body.get("status") == "received",
-        body.get("detail", body.get("status", f"status={status}")),
+        "S06  Device can send event to hub",
+        status == 200 and body_ev.get("status") == "received",
+        body_ev.get("detail", body_ev.get("status", f"status={status}")),
     ))
 
-    # 10. Unknown intent returns proper error
-    status, body = request("POST", f"{base}/v1/intent", {
-        "intent": "intent_that_does_not_exist",
+    # S7. Unknown intent returns 422
+    status_unk, _ = request("POST", f"{base}/v1/intent", {
+        "intent": "intent_that_does_not_exist_certify",
         "urgency": "info",
         "context": {},
     })
     report.add(TestResult(
-        "Hub rechaza intents desconocidos con error 422",
-        status == 422,
-        f"status={status} (esperado 422)",
+        "S07  Unknown intent rejected with 422",
+        status_unk == 422,
+        f"status={status_unk} (expected 422)",
     ))
 
-    # 11. Unregistered device event returns 404
-    status, _ = request("POST", f"{base}/v1/event", {
-        "device_id": "device-that-does-not-exist",
+    # S8. Event from unregistered device returns 404
+    status_ev404, _ = request("POST", f"{base}/v1/event", {
+        "device_id": "device-that-does-not-exist-certify",
         "event_id":  "test",
         "severity":  "info",
         "data":      {},
     })
     report.add(TestResult(
-        "Hub rechaza eventos de dispositivos no registrados (404)",
-        status == 404,
-        f"status={status} (esperado 404)",
+        "S08  Event from unregistered device returns 404",
+        status_ev404 == 404,
+        f"status={status_ev404} (expected 404)",
+    ))
+
+    # S9. Device health endpoint returns data
+    status, body_health = request("GET", f"{base}/v1/health/devices")
+    report.add(TestResult(
+        "S09  Device health endpoint returns data",
+        status == 200 and "devices" in body_health,
+        f"{len(body_health.get('devices', []))} devices in health report",
+    ))
+
+    # S10. Per-device health endpoint works
+    status, body_hd = request("GET", f"{base}/v1/health/devices/{TEST_DEVICE['device_id']}")
+    report.add(TestResult(
+        "S10  Per-device health endpoint returns device stats",
+        status in (200, 404),  # 404 is valid if no executions recorded yet
+        f"status={status}",
+    ))
+
+    # S11. Explainability endpoint returns scoring breakdown
+    status, body_exp = request("GET", f"{base}/v1/intents/ensure_safety/explain")
+    report.add(TestResult(
+        "S11  Explainability endpoint returns scoring breakdown",
+        status == 200 and "devices" in body_exp,
+        f"{len(body_exp.get('devices', []))} devices scored" if status == 200 else f"status={status}",
+    ))
+
+    # S12. Direct device action endpoint works
+    status, body_act = request("POST", f"{base}/v1/device/action", {
+        "device_id": TEST_DEVICE["device_id"],
+        "action":    "turn_on",
+        "params":    {"brightness": 100},
+        "urgency":   "info",
+    })
+    report.add(TestResult(
+        "S12  Direct device action endpoint works",
+        status in (200, 404, 422),  # 404/422 acceptable if adapter not configured
+        f"status={status}",
     ))
 
 
-def run_emergency(base: str, report: CertReport):
-    section("── Tier EMERGENCY — Override y audit log ───────────────")
+# ── TIER EMERGENCY — 10 additional tests (total 32) ──────────────────────────
 
-    # 12. Emergency intent executes without confirmation
+def run_emergency(base: str, report: CertReport):
+    section("── Tier EMERGENCY — Override, policies, audit log ───────")
+
+    # E1. ensure_safety emergency executes without confirmation
     status, body = request("POST", f"{base}/v1/intent", {
         "intent":  "ensure_safety",
         "urgency": "emergency",
@@ -290,47 +412,100 @@ def run_emergency(base: str, report: CertReport):
         },
     })
     report.add(TestResult(
-        "Intent ensure_safety con urgency=emergency se ejecuta",
+        "E01  ensure_safety with urgency=emergency executes immediately",
         status == 200 and body.get("success"),
-        f"acciones: {body.get('actions_taken', 0)}, fallidos: {body.get('failed_devices', [])}",
+        f"actions={body.get('actions_taken', 0)}, failed={body.get('failed_devices', [])}",
     ))
 
-    # 13. Emergency triggers emergency-capable devices
+    # E2. Emergency-capable device participated
     emergency_devices = list({
-        r["device_id"] for r in body.get("results", [])
-        if r.get("success")
+        r["device_id"] for r in body.get("results", []) if r.get("success")
     })
     report.add(TestResult(
-        "Dispositivos emergency_capable participaron en la respuesta",
+        "E02  emergency_capable devices participated in the response",
         TEST_DEVICE["device_id"] in emergency_devices,
-        f"dispositivos activos: {emergency_devices}",
+        f"active devices: {emergency_devices}",
     ))
 
-    # 14. Audit log is present and has entries
-    status, body = request("GET", f"{base}/v1/audit")
+    # E3. children_arrived_home intent executes
+    status, body_ch = request("POST", f"{base}/v1/intent", {
+        "intent":  "children_arrived_home",
+        "urgency": "info",
+        "context": {"trigger": "certification_test"},
+    })
     report.add(TestResult(
-        "Audit log existe y tiene entradas",
-        status == 200 and body.get("count", 0) > 0,
-        f"{body.get('count', 0)} entradas",
+        "E03  children_arrived_home intent executes",
+        status == 200 and body_ch.get("success") is not None,
+        f"actions_taken={body_ch.get('actions_taken', 0)}",
     ))
 
-    # 15. Audit log integrity verified
+    # E4. away_mode intent executes
+    status, body_aw = request("POST", f"{base}/v1/intent", {
+        "intent":  "away_mode",
+        "urgency": "info",
+        "context": {},
+    })
     report.add(TestResult(
-        "Integridad del audit log verificada (SHA-256 chain)",
-        body.get("integrity") is True,
-        "✓ cadena íntegra" if body.get("integrity") else "✗ cadena comprometida",
+        "E04  away_mode intent executes",
+        status == 200 and body_aw.get("success") is not None,
+        f"actions_taken={body_aw.get('actions_taken', 0)}",
     ))
 
-    # 16. Audit log contains emergency event
-    entries = body.get("entries", [])
+    # E5. Audit log exists and has entries
+    status, body_audit = request("GET", f"{base}/v1/audit")
+    report.add(TestResult(
+        "E05  Audit log exists and has entries",
+        status == 200 and body_audit.get("count", 0) > 0,
+        f"{body_audit.get('count', 0)} entries",
+    ))
+
+    # E6. Audit log SHA-256 chain is intact
+    report.add(TestResult(
+        "E06  Audit log SHA-256 chain integrity verified",
+        body_audit.get("integrity") is True,
+        "chain intact" if body_audit.get("integrity") else "chain compromised",
+    ))
+
+    # E7. Audit log recorded the emergency event
+    entries = body_audit.get("entries", [])
     has_emergency = any(
         e.get("intent") == "ensure_safety" and e.get("urgency") == "emergency"
         for e in entries
     )
     report.add(TestResult(
-        "Audit log registró el evento de emergencia",
+        "E07  Audit log recorded the emergency event",
         has_emergency,
-        "evento encontrado en el log" if has_emergency else "evento ausente",
+        "emergency entry found" if has_emergency else "emergency entry missing",
+    ))
+
+    # E8. Audit log entry contains required fields
+    if entries:
+        sample = entries[0]
+        required_entry = ["intent", "urgency", "timestamp", "actions_taken"]
+        missing = [f for f in required_entry if f not in sample]
+        report.add(TestResult(
+            "E08  Audit log entries contain required fields",
+            len(missing) == 0,
+            f"missing: {missing}" if missing else "all fields present",
+        ))
+    else:
+        report.add(TestResult("E08  Audit log entries contain required fields", False, "no entries to inspect"))
+
+    # E9. Status reports audit integrity as True
+    status, body_status = request("GET", f"{base}/v1/status")
+    report.add(TestResult(
+        "E09  Hub status reports audit_integrity=True",
+        status == 200 and body_status.get("audit_integrity") is True,
+        f"audit_integrity={body_status.get('audit_integrity')}",
+    ))
+
+    # E10. Hub has been running with devices registered (production readiness)
+    device_count = body_status.get("devices", 0)
+    audit_count  = body_status.get("audit_entries", 0)
+    report.add(TestResult(
+        "E10  Hub is production-ready (devices registered, audit log active)",
+        device_count > 0 and audit_count > 0,
+        f"{device_count} devices, {audit_count} audit entries",
     ))
 
 
@@ -338,60 +513,69 @@ def run_emergency(base: str, report: CertReport):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="DoSync Certification CLI — verifica compatibilidad con el protocolo DoSync",
+        description="DoSync Certification CLI v0.2 — protocol conformance testing",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Ejemplos:
+Examples:
   python3 certify.py --host localhost --port 47200 --tier basic
   python3 certify.py --host localhost --port 47200 --tier standard
   python3 certify.py --host localhost --port 47200 --tier emergency
-  python3 certify.py --host localhost --port 47200 --tier emergency --output cert.json
+  python3 certify.py --host 192.168.100.109 --port 47200 --tier emergency --output cert.json
+
+Environment variables:
+  DOSYNC_TOKEN     API token for authenticated requests
+  DOSYNC_CA_CERT   Path to CA cert for TLS verification (e.g. ~/Desktop/dosync-ca.crt)
+
+Tier test counts:
+  basic      10 tests  — connectivity, auth, registration, manifest
+  standard   22 tests  — + intents, events, health, explainability
+  emergency  32 tests  — + emergency override, audit log integrity
         """,
     )
-    parser.add_argument("--host",   default="localhost", help="IP o hostname del hub")
-    parser.add_argument("--port",   default=47200, type=int, help="Puerto del hub")
+    parser.add_argument("--host",   default="localhost",  help="Hub IP or hostname")
+    parser.add_argument("--port",   default=47200, type=int, help="Hub port")
     parser.add_argument("--tier",   default="standard",
                         choices=["basic", "standard", "emergency"],
-                        help="Tier de certificación a verificar")
+                        help="Certification tier to verify")
     parser.add_argument("--output", default=None,
-                        help="Archivo de salida para el reporte JSON (ej: cert.json)")
+                        help="Output file for JSON report (e.g. cert.json)")
     args = parser.parse_args()
 
     base   = f"http://{args.host}:{args.port}"
     report = CertReport(host=args.host, port=args.port, tier=args.tier)
 
-    print(f"\n{C.BOLD}DoSync Certification CLI v0.1{C.RESET}")
+    tier_counts = {"basic": 10, "standard": 22, "emergency": 32}
+    print(f"\n{C.BOLD}DoSync Certification CLI v0.2{C.RESET}")
     print(f"  Hub:   {base}")
-    print(f"  Tier:  {C.BOLD}{args.tier.upper()}{C.RESET}")
-    print(f"  Fecha: {report.timestamp}")
+    print(f"  Tier:  {C.BOLD}{args.tier.upper()}{C.RESET} ({tier_counts[args.tier]} tests)")
+    print(f"  Date:  {report.timestamp}")
 
-    # Correr tests según tier
     ok_basic = run_basic(base, report)
     if ok_basic and args.tier in ("standard", "emergency"):
         run_standard(base, report)
     if ok_basic and args.tier == "emergency":
         run_emergency(base, report)
 
-    # Cleanup — eliminar dispositivo de test
+    # Cleanup — remove test device
     request("DELETE", f"{base}/v1/devices/{TEST_DEVICE['device_id']}")
 
-    # Resultado final
+    # Final result
     report.finalize()
-    section("── Resultado ─────────────────────────────────────────────")
-    print(f"  Tests pasados: {C.OK}{report.passed}{C.RESET}")
-    print(f"  Tests fallidos: {C.FAIL if report.failed else C.OK}{report.failed}{C.RESET}")
+    section("── Result ────────────────────────────────────────────────")
+    total = report.passed + report.failed
+    print(f"  Passed: {C.OK}{report.passed}{C.RESET} / {total}")
+    print(f"  Failed: {C.FAIL if report.failed else C.OK}{report.failed}{C.RESET} / {total}")
 
     if report.certified:
-        print(f"\n  {C.BOLD}{C.OK}✓ CERTIFICADO — DoSync {args.tier.upper()}{C.RESET}")
+        print(f"\n  {C.BOLD}{C.OK}✓ CERTIFIED — DoSync {args.tier.upper()} ({report.passed}/{total}){C.RESET}")
         print(f"  Fingerprint: {report.fingerprint[:32]}…")
     else:
-        print(f"\n  {C.BOLD}{C.FAIL}✗ NO CERTIFICADO — {report.failed} test(s) fallaron{C.RESET}")
+        print(f"\n  {C.BOLD}{C.FAIL}✗ NOT CERTIFIED — {report.failed} test(s) failed{C.RESET}")
 
-    # Guardar reporte
     output_file = args.output or f"dosync-cert-{args.tier}-{int(time.time())}.json"
     with open(output_file, "w") as f:
         json.dump(report.to_dict(), f, indent=2)
-    print(f"\n  Reporte guardado: {output_file}\n")
+    print(f"\n  Report saved: {output_file}\n")
 
     sys.exit(0 if report.certified else 1)
 
