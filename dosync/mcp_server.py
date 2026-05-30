@@ -69,6 +69,15 @@ HUB_URL   = os.environ.get("DOSYNC_HUB_URL", "http://localhost:47200")
 HUB_TOKEN = os.environ.get("DOSYNC_TOKEN", "")
 CA_CERT    = os.environ.get("DOSYNC_CA_CERT", None)
 
+# Polling timeout for async intents.
+# Derived from DOSYNC_INTENT_TIMEOUT + 3s network margin.
+# emergency default: 5 + 3 = 8s, info/alert default: 10 + 3 = 13s
+_EMERGENCY_HUB_TIMEOUT = float(os.environ.get("DOSYNC_INTENT_TIMEOUT", "5"))
+_DEFAULT_HUB_TIMEOUT   = float(os.environ.get("DOSYNC_INTENT_TIMEOUT", "10"))
+MCP_EMERGENCY_TIMEOUT  = _EMERGENCY_HUB_TIMEOUT + 3
+MCP_DEFAULT_TIMEOUT    = _DEFAULT_HUB_TIMEOUT + 3
+POLL_INTERVAL          = 1.0  # seconds between polls
+
 # ── HTTP helper ───────────────────────────────────────────────────────────────
 
 async def hub_request(method: str, path: str, body: dict = None) -> dict:
@@ -338,36 +347,62 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             },
         }
 
-        result = await hub_request("POST", "/v1/intent", body)
+        # Fire async — returns intent_id immediately, no blocking
+        fire_result = await hub_request("POST", "/v1/intent/async", body)
 
-        if "error" in result:
-            text = f"❌ Error ejecutando intent '{intent}': {result['error']}"
-        else:
-            actions      = result.get("actions_taken", 0)
-            failed       = result.get("failed_devices", [])
-            results_list = result.get("results", [])
-            core_success = actions > 0
-            icon = "✅" if core_success else "⚠️"
+        if "error" in fire_result:
+            return [types.TextContent(type="text",
+                text=f"❌ Error ejecutando intent '{intent}': {fire_result['error']}")]
 
-            text  = f"{icon} Intent '{intent}' [{urgency}] ejecutado\n"
-            text += f"  Acciones completadas: {actions}\n"
+        intent_id = fire_result.get("intent_id")
+        if not intent_id:
+            return [types.TextContent(type="text",
+                text=f"❌ Hub no retornó intent_id para '{intent}'")]
 
-            if failed:
-                text += f"  Sin respuesta ({len(failed)} dispositivos apagados físicamente) — no afecta el intent\n"
+        # Poll until completed or timeout
+        # Timeout = DOSYNC_INTENT_TIMEOUT + 3s network margin
+        poll_timeout = MCP_EMERGENCY_TIMEOUT if urgency == "emergency" else MCP_DEFAULT_TIMEOUT
+        import time as _mcp_time
+        deadline = _mcp_time.monotonic() + poll_timeout
+        result = None
 
-            critical = [r for r in results_list
-                       if r.get("success") and r.get("action") in
-                       ("unlock","alarm","call","notify","turn_on","set_brightness")]
-            if critical:
-                text += "\nAcciones críticas ejecutadas:\n"
-                for r in critical[:8]:
-                    resp = r.get("response", {})
-                    status = resp.get("status","ok") if isinstance(resp, dict) else "ok"
-                    text += f"  ✓ [{r['device_id']}] {r['action']} → {status}\n"
+        while _mcp_time.monotonic() < deadline:
+            await asyncio.sleep(POLL_INTERVAL)
+            poll = await hub_request("GET", f"/v1/intent/{intent_id}")
+            if "error" in poll:
+                break
+            if poll.get("status") != "pending":
+                result = poll
+                break
+
+        if result is None:
+            text  = f"⚠️ Intent '{intent}' [{urgency}] en ejecución (timeout de polling {poll_timeout:.0f}s)\n"
+            text += f"  El hub sigue ejecutando — consultá el audit log para el resultado final.\n"
+            return [types.TextContent(type="text", text=text)]
+
+        actions      = result.get("actions_taken", 0)
+        failed       = result.get("failed_devices", [])
+        results_list = result.get("results", [])
+        core_success = actions > 0
+        icon = "✅" if core_success else "⚠️"
+
+        text  = f"{icon} Intent '{intent}' [{urgency}] ejecutado\n"
+        text += f"  Acciones completadas: {actions}\n"
+
+        if failed:
+            text += f"  Sin respuesta ({len(failed)} dispositivos físicamente apagados) — excluidos automáticamente por ~30 min\n"
+
+        critical = [r for r in results_list
+                   if r.get("success") and r.get("action") in
+                   ("unlock","alarm","call","notify","turn_on","set_brightness")]
+        if critical:
+            text += "\nAcciones críticas ejecutadas:\n"
+            for r in critical[:8]:
+                resp = r.get("response", {})
+                status = resp.get("status","ok") if isinstance(resp, dict) else "ok"
+                text += f"  ✓ [{r['device_id']}] {r['action']} → {status}\n"
 
         return [types.TextContent(type="text", text=text)]
-
-    # ── dosync_list_devices ───────────────────────────────────────────────────
     elif name == "dosync_list_devices":
         filter_tag     = arguments.get("filter_tag", "")
         emergency_only = arguments.get("emergency_only", False)

@@ -33,6 +33,19 @@ logging.basicConfig(
 
 hub      = DoSyncHub(db_path="dosync.db")
 
+# ── Async intent store ────────────────────────────────────────────────────────
+# In-memory store for async intent results. TTL: 5 minutes.
+import time as _time
+_intent_store: dict = {}
+_INTENT_STORE_TTL = 300  # seconds
+
+def _store_cleanup():
+    """Remove intent results older than TTL."""
+    now = _time.time()
+    expired = [k for k, v in _intent_store.items() if now - v["created_at"] > _INTENT_STORE_TTL]
+    for k in expired:
+        del _intent_store[k]
+
 # ── Executor con adapters físicos ─────────────────────────────────────────────
 try:
     from dosync.adapters import AdapterExecutor
@@ -583,16 +596,20 @@ def unregister_device(device_id: str, auth: str = Depends(require_auth)):
     return {"status": "unregistered", "device_id": device_id}
 
 
-@app.post("/v1/intent", tags=["AI"])
-async def execute_intent(req: IntentRequest, auth: str = Depends(require_auth)):
+@app.post("/v1/intent", tags=["AI"], include_in_schema=False)
+async def execute_intent_legacy(req: IntentRequest, auth: str = Depends(require_auth)):
+    """Deprecated — use POST /v1/intent/async instead."""
+    from fastapi.responses import Response
+    return Response(status_code=308, headers={"Location": "/v1/intent/async"})
+
+
+@app.post("/v1/intent/async", tags=["AI"])
+async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_auth)):
     try:
         intent_class = IntentClass(req.intent)
     except ValueError:
         valid = [i.value for i in IntentClass]
-        raise HTTPException(
-            status_code=422,
-            detail=f"Intent '{req.intent}' not recognized. Valid: {valid}"
-        )
+        raise HTTPException(status_code=422, detail=f"Intent '{req.intent}' not recognized. Valid: {valid}")
 
     try:
         urgency = Urgency(req.urgency)
@@ -606,44 +623,67 @@ async def execute_intent(req: IntentRequest, auth: str = Depends(require_auth)):
         context=req.context,
     )
 
-    result = await hub.execute_intent(intent, executor)
+    _store_cleanup()
+    _intent_store[intent.intent_id] = {
+        "status":     "pending",
+        "result":     None,
+        "created_at": _time.time(),
+        "intent":     req.intent,
+        "urgency":    req.urgency,
+    }
 
-    # -- Emergency snapshot - persistir para startup recovery
-    _snap_intents = {"ensure_safety", "notify_family", "alert_anomaly"}
-    if req.intent in _snap_intents or req.urgency in ("emergency", "alert"):
-        try:
-            hub.db.save_emergency_snapshot(
-                intent_id=result.intent_id,
-                intent_class=req.intent,
-                urgency=req.urgency,
-                context=req.context,
-            )
-        except Exception as _snap_e:
-            logging.getLogger("dosync.server").warning(
-                "Failed to save emergency snapshot: %s", _snap_e
-            )
+    async def _run_intent():
+        result = await hub.execute_intent(intent, executor)
+        _snap_intents = {"ensure_safety", "notify_family", "alert_anomaly"}
+        if req.intent in _snap_intents or req.urgency in ("emergency", "alert"):
+            try:
+                hub.db.save_emergency_snapshot(
+                    intent_id=result.intent_id,
+                    intent_class=req.intent,
+                    urgency=req.urgency,
+                    context=req.context,
+                )
+            except Exception as _snap_e:
+                logging.getLogger("dosync.server").warning("Failed to save emergency snapshot: %s", _snap_e)
 
-    # SMS notifications are now handled by the NotificationAdapter
-    # via the ActionPlan resolver — no hardcoded side effects here.
-    # notifier-sms-01 is registered as a device with tags: notification, communication, children_arrival
-    # The resolver selects it automatically for: ensure_safety, notify_family, alert_anomaly, children_arrived_home
+        _intent_store[intent.intent_id] = {
+            "status":     result.status if hasattr(result, "status") else ("success" if result.success else "partial"),
+            "result":     {
+                "intent_id":      result.intent_id,
+                "success":        result.success,
+                "actions_taken":  len(result.results),
+                "failed_devices": result.failed_devices,
+                "results": [
+                    {"device_id": r.device_id, "action": r.action, "success": r.success,
+                     "response": r.response, "error": r.error}
+                    for r in result.results
+                ],
+            },
+            "created_at": _time.time(),
+            "intent":     req.intent,
+            "urgency":    req.urgency,
+        }
+
+    asyncio.create_task(_run_intent())
 
     return {
-        "intent_id":       result.intent_id,
-        "success":         result.success,
-        "actions_taken":   len(result.results),
-        "failed_devices":  result.failed_devices,
-        "results": [
-            {
-                "device_id":   r.device_id,
-                "action":      r.action,
-                "success":     r.success,
-                "response":    r.response,
-                "error":       r.error,
-            }
-            for r in result.results
-        ],
+        "intent_id": intent.intent_id,
+        "status":    "pending",
+        "intent":    req.intent,
+        "urgency":   req.urgency,
     }
+
+
+@app.get("/v1/intent/{intent_id}", tags=["AI"])
+async def get_intent_result(intent_id: str, auth: str = Depends(require_auth)):
+    """Poll the result of an async intent execution."""
+    entry = _intent_store.get(intent_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail=f"Intent '{intent_id}' not found")
+    if entry["status"] == "pending":
+        return {"intent_id": intent_id, "status": "pending",
+                "intent": entry.get("intent"), "urgency": entry.get("urgency")}
+    return {"intent_id": intent_id, "status": entry["status"], **entry["result"]}
 
 
 @app.post("/v1/event", tags=["Devices"])
