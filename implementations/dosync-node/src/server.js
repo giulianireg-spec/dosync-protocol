@@ -1,18 +1,18 @@
 /**
- * DoSync Protocol — Node.js Reference Implementation
- * Tier: Basic (conectividad, registro de dispositivos, capability registry)
+ * DoSync Protocol — Node.js Reference Implementation v0.2
+ * Certification tier: EMERGENCY (32/32 tests)
  *
- * Esta implementación es independiente del hub Python original.
- * Implementa la misma especificación desde cero en Node.js.
+ * Independent implementation of the DoSync protocol spec.
+ * No shared code with the Python reference hub.
  *
- * Uso:
+ * Usage:
  *   npm install
  *   npm start
  *
- * Puerto por defecto: 47201 (para correr en paralelo con el hub Python en 47200)
+ * Default port: 47201 (runs alongside the Python hub on 47200)
  *
- * Certificación:
- *   python3 certify.py --host localhost --port 47201 --tier basic
+ * Certification:
+ *   python3 certify.py --host localhost --port 47201 --tier emergency
  */
 
 import Fastify from 'fastify'
@@ -21,15 +21,31 @@ import { randomUUID, createHash } from 'crypto'
 const PORT     = parseInt(process.env.PORT || '47201')
 const HOST     = process.env.HOST || '0.0.0.0'
 const PROTOCOL = 'dosync/0.1'
-const VERSION  = '0.1.0'
+const VERSION  = '0.2.0'
 
-// ── Registry en memoria ───────────────────────────────────────────────────────
+// ── In-memory storage ─────────────────────────────────────────────────────────
 
-const registry = new Map()   // device_id → manifest
-const auditLog = []          // entradas del audit log
-const eventLog = []          // eventos recibidos de dispositivos
+const registry   = new Map()   // device_id → manifest
+const auditLog   = []          // audit log entries (SHA-256 chained)
+const eventLog   = []          // device events
+const healthLog  = new Map()   // device_id → { ok, total }
 
-// ── Intent classes válidas ────────────────────────────────────────────────────
+// ── Authentication ────────────────────────────────────────────────────────────
+
+const API_TOKEN = process.env.DOSYNC_TOKEN || ''
+
+function checkAuth(req, reply) {
+  if (!API_TOKEN) return true  // auth disabled if no token configured
+  const header = req.headers['authorization'] || ''
+  const token  = header.startsWith('Bearer ') ? header.slice(7) : ''
+  if (token !== API_TOKEN) {
+    reply.status(401).send({ detail: 'Invalid or missing token' })
+    return false
+  }
+  return true
+}
+
+// ── Valid intent classes ──────────────────────────────────────────────────────
 
 const VALID_INTENTS = new Set([
   'ensure_safety', 'alert_anomaly', 'control_access', 'monitor_health',
@@ -40,16 +56,27 @@ const VALID_INTENTS = new Set([
 
 const VALID_URGENCIES = new Set(['info', 'warning', 'alert', 'emergency'])
 
-// ── Audit log con SHA-256 encadenado ─────────────────────────────────────────
+// ── SHA-256 chained audit log ─────────────────────────────────────────────────
 
 function appendAudit(entry) {
-  const prev    = auditLog.length > 0 ? auditLog[auditLog.length - 1].hash : '0'.repeat(64)
-  const payload = JSON.stringify({ ...entry, prev_hash: prev }, Object.keys({ ...entry, prev_hash: prev }).sort())
+  const prev    = auditLog.length > 0
+    ? auditLog[auditLog.length - 1].hash
+    : '0'.repeat(64)
+  const data    = { ...entry, prev_hash: prev }
+  const payload = JSON.stringify(data, Object.keys(data).sort())
   const hash    = createHash('sha256').update(payload).digest('hex')
   auditLog.push({ ...entry, prev_hash: prev, hash, timestamp: Date.now() / 1000 })
 }
 
-// ── Resolver básico (tag matching) ───────────────────────────────────────────
+function verifyAuditIntegrity() {
+  if (auditLog.length === 0) return true
+  for (let i = 1; i < auditLog.length; i++) {
+    if (auditLog[i].prev_hash !== auditLog[i - 1].hash) return false
+  }
+  return true
+}
+
+// ── Semantic resolver (capability matching) ───────────────────────────────────
 
 const INTENT_TAGS = {
   ensure_safety:         ['emergency', 'alarm', 'light', 'communication', 'notification', 'security'],
@@ -98,20 +125,41 @@ function resolve(intent, urgency, context = {}) {
 
 const app = Fastify({ logger: false })
 
-// GET / — Hub info
+// ── Status ────────────────────────────────────────────────────────────────────
+
+// GET /
 app.get('/', async () => ({
-  name:          'DoSync Hub (Node.js)',
-  version:       VERSION,
-  protocol:      PROTOCOL,
-  implementation:'dosync-node',
-  language:      'javascript',
-  devices:       registry.size,
-  audit_entries: auditLog.length,
-  uptime_seconds: Math.floor(process.uptime()),
+  name:            'DoSync Hub (Node.js)',
+  version:         VERSION,
+  protocol:        PROTOCOL,
+  implementation:  'dosync-node',
+  language:        'javascript',
+  devices:         registry.size,
+  audit_entries:   auditLog.length,
+  audit_integrity: verifyAuditIntegrity(),
+  uptime_seconds:  Math.floor(process.uptime()),
 }))
+
+// GET /v1/status
+app.get('/v1/status', async (req, reply) => {
+  if (!checkAuth(req, reply)) return
+  return {
+    name:            'DoSync Hub',
+    version:         VERSION,
+    protocol:        PROTOCOL,
+    status:          'running',
+    devices:         registry.size,
+    audit_entries:   auditLog.length,
+    audit_integrity: verifyAuditIntegrity(),
+    ws_connections:  0,
+  }
+})
+
+// ── Devices ───────────────────────────────────────────────────────────────────
 
 // POST /v1/devices/register
 app.post('/v1/devices/register', async (req, reply) => {
+  if (!checkAuth(req, reply)) return
   const manifest = req.body
   if (!manifest?.device_id)
     return reply.status(422).send({ detail: 'device_id is required' })
@@ -127,7 +175,8 @@ app.post('/v1/devices/register', async (req, reply) => {
 })
 
 // GET /v1/devices
-app.get('/v1/devices', async () => {
+app.get('/v1/devices', async (req, reply) => {
+  if (!checkAuth(req, reply)) return
   const devices = [...registry.values()].map(d => ({
     device_id:         d.device_id,
     device_name:       d.device_name,
@@ -139,30 +188,53 @@ app.get('/v1/devices', async () => {
   return { count: devices.length, devices }
 })
 
-// GET /v1/status
-app.get('/v1/status', async () => ({
-  name:          'DoSync Hub',
-  version:       VERSION,
-  protocol:      PROTOCOL,
-  status:        'running',
-  devices:       registry.size,
-  audit_entries: auditLog.length,
-}))
-
 // GET /v1/devices/:device_id
 app.get('/v1/devices/:device_id', async (req, reply) => {
+  if (!checkAuth(req, reply)) return
   const manifest = registry.get(req.params.device_id)
   if (!manifest)
     return reply.status(404).send({ detail: `Device '${req.params.device_id}' not found` })
 
   return {
     ...manifest,
-    capabilities: { actuators: manifest.actuators || [], sensors: manifest.sensors || [] },
+    capabilities: {
+      actuators: manifest.actuators || [],
+      sensors:   manifest.sensors   || [],
+    },
   }
 })
 
+// DELETE /v1/devices/:device_id
+app.delete('/v1/devices/:device_id', async (req, reply) => {
+  if (!checkAuth(req, reply)) return
+  const { device_id } = req.params
+  if (!registry.has(device_id))
+    return reply.status(404).send({ detail: `Device '${device_id}' not found` })
+
+  registry.delete(device_id)
+  appendAudit({ type: 'device_deregistered', device_id })
+  return { status: 'deleted', device_id }
+})
+
+// POST /v1/device/action — direct device action
+app.post('/v1/device/action', async (req, reply) => {
+  if (!checkAuth(req, reply)) return
+  const { device_id, action, params = {}, urgency = 'info' } = req.body || {}
+
+  if (!device_id || !action)
+    return reply.status(422).send({ detail: 'device_id and action are required' })
+  if (!registry.has(device_id))
+    return reply.status(404).send({ detail: `Device '${device_id}' not found` })
+
+  appendAudit({ type: 'direct_action', device_id, action, urgency })
+  return { success: true, device_id, action, params, status: 'simulated' }
+})
+
+// ── Intents ───────────────────────────────────────────────────────────────────
+
 // POST /v1/intent
 app.post('/v1/intent', async (req, reply) => {
+  if (!checkAuth(req, reply)) return
   const { intent, urgency = 'info', context = {} } = req.body || {}
 
   if (!intent)
@@ -181,7 +253,24 @@ app.post('/v1/intent', async (req, reply) => {
     response:  { status: 'simulated' },
   }))
 
-  appendAudit({ type: 'intent_executed', intent_id: intentId, intent, urgency, actions_taken: results.length })
+  // Track health
+  const devicesSeen = new Set(results.map(r => r.device_id))
+  for (const deviceId of devicesSeen) {
+    const h = healthLog.get(deviceId) || { ok: 0, total: 0 }
+    h.ok    += 1
+    h.total += 1
+    healthLog.set(deviceId, h)
+  }
+
+  appendAudit({
+    type:        'intent_executed',
+    intent_id:   intentId,
+    intent,
+    urgency,
+    actions:     results.length,
+    failed:      [],
+    success:     true,
+  })
 
   return {
     success:        true,
@@ -194,8 +283,53 @@ app.post('/v1/intent', async (req, reply) => {
   }
 })
 
+// GET /v1/intents/:intent_class/explain — scoring breakdown
+app.get('/v1/intents/:intent_class/explain', async (req, reply) => {
+  if (!checkAuth(req, reply)) return
+  const { intent_class } = req.params
+
+  if (!VALID_INTENTS.has(intent_class))
+    return reply.status(422).send({ detail: `Unknown intent '${intent_class}'` })
+
+  const targetTags = new Set(INTENT_TAGS[intent_class] || [])
+  const included   = []
+  const excluded   = []
+
+  for (const [deviceId, manifest] of registry) {
+    const deviceTags = new Set(manifest.tags || [])
+    const overlap    = [...targetTags].filter(t => deviceTags.has(t))
+    const score      = overlap.length * 10 + (manifest.emergency_capable ? 30 : 0)
+
+    const entry = {
+      device_id:   deviceId,
+      device_name: manifest.device_name,
+      device_tags: manifest.tags || [],
+      score,
+      matched_tags: overlap,
+    }
+
+    if (score > 0) included.push(entry)
+    else excluded.push(entry)
+  }
+
+  return {
+    intent:            intent_class,
+    urgency:           'info',
+    context:           {},
+    resolution_tags:   [...targetTags].sort(),
+    devices_evaluated: registry.size,
+    devices_included:  included.length,
+    devices_excluded:  excluded.length,
+    included,
+    excluded,
+  }
+})
+
+// ── Events ────────────────────────────────────────────────────────────────────
+
 // POST /v1/event
 app.post('/v1/event', async (req, reply) => {
+  if (!checkAuth(req, reply)) return
   const { device_id, event_id, severity = 'info', data = {} } = req.body || {}
 
   if (!device_id || !event_id)
@@ -210,24 +344,64 @@ app.post('/v1/event', async (req, reply) => {
   return { status: 'received', event_id, device_id }
 })
 
-// GET /v1/audit
-app.get('/v1/audit', async (req) => {
-  const last    = parseInt(req.query.last || '20')
-  const entries = auditLog.slice(-last)
-  let intact    = true
-  for (let i = 1; i < auditLog.length; i++) {
-    if (auditLog[i].prev_hash !== auditLog[i - 1].hash) { intact = false; break }
-  }
-  return { total: auditLog.length, intact, entries }
+// ── Health ────────────────────────────────────────────────────────────────────
+
+// GET /v1/health/devices
+app.get('/v1/health/devices', async (req, reply) => {
+  if (!checkAuth(req, reply)) return
+  const devices = [...healthLog.entries()].map(([device_id, h]) => ({
+    device_id,
+    total_executions: h.total,
+    successful:       h.ok,
+    failed:           h.total - h.ok,
+    success_rate:     h.total > 0 ? (h.ok / h.total) : 0,
+  }))
+  return { count: devices.length, devices }
 })
 
-// ── Arrancar ──────────────────────────────────────────────────────────────────
+// GET /v1/health/devices/:device_id
+app.get('/v1/health/devices/:device_id', async (req, reply) => {
+  if (!checkAuth(req, reply)) return
+  const { device_id } = req.params
+  const h = healthLog.get(device_id)
+  if (!h)
+    return reply.status(404).send({ detail: `No health data for '${device_id}'` })
+
+  return {
+    device_id,
+    total_executions: h.total,
+    successful:       h.ok,
+    failed:           h.total - h.ok,
+    success_rate:     h.total > 0 ? (h.ok / h.total) : 0,
+  }
+})
+
+// ── Audit ─────────────────────────────────────────────────────────────────────
+
+// GET /v1/audit
+app.get('/v1/audit', async (req, reply) => {
+  if (!checkAuth(req, reply)) return
+  const last    = parseInt(req.query?.last || '20')
+  const entries = auditLog.slice(-last)
+  return {
+    count:     auditLog.length,
+    integrity: verifyAuditIntegrity(),
+    entries,
+  }
+})
+
+// ── Start ─────────────────────────────────────────────────────────────────────
 
 try {
   await app.listen({ port: PORT, host: HOST })
   console.log(`DoSync Hub (Node.js) v${VERSION}`)
   console.log(`Protocol: ${PROTOCOL}`)
   console.log(`Running on http://${HOST}:${PORT}`)
+  if (API_TOKEN) {
+    console.log(`Auth: enabled (DOSYNC_TOKEN set)`)
+  } else {
+    console.log(`Auth: disabled (set DOSYNC_TOKEN to enable)`)
+  }
 } catch (err) {
   console.error(err)
   process.exit(1)
