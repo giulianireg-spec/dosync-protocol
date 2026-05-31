@@ -423,30 +423,23 @@ class CapabilityMatchingResolver(BaseResolver):
         generic_tags  = {"light", "climate", "communication", "sensor", "appliance", "display"}
         specific_tags = target_tags - generic_tags
 
-        if specific_tags:
-            # Intersection: devices must have ALL specific tags
-            # Then union with generic_tag candidates for full coverage
-            specific_candidates = set(
-                d.device_id for d in self.registry.find_by_required_tags(specific_tags)
-            )
-            # Also include devices that match via generic tags (broader net)
-            if target_tags & generic_tags:
-                generic_candidates = set(
-                    d.device_id for d in self.registry.find_by_tags(
-                        list(target_tags & generic_tags)
-                    )
-                )
-                candidate_ids = specific_candidates | generic_candidates
-            else:
-                candidate_ids = specific_candidates
-            candidates = [self.registry.get(did) for did in candidate_ids
-                         if self.registry.get(did)]
-        elif target_tags:
-            # Only generic tags — union index
+        if target_tags:
+            # Union index: candidates are devices with ANY of the target tags.
+            # O(|target_tags| + |candidates|) with the inverted index.
             candidates = self.registry.find_by_tags(list(target_tags))
         else:
             # report_status or similar — all devices
             candidates = self.registry.all()
+
+        # Emergency intents: always include emergency_capable devices as candidates,
+        # even if their tags don't overlap with the intent's resolution tags.
+        # This ensures physical safety devices (lights at max brightness, alarms)
+        # are never excluded by the tag filter on emergency intents.
+        if intent.urgency == Urgency.EMERGENCY:
+            candidate_ids = {d.device_id for d in candidates}
+            for device in self.registry.find_emergency_capable():
+                if device.device_id not in candidate_ids:
+                    candidates.append(device)
 
         # Score candidates only
         scored: list[tuple[float, CapabilityManifest]] = []
