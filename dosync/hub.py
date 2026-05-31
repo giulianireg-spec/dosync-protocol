@@ -33,15 +33,35 @@ class CapabilityRegistry:
     def __init__(self):
         self._devices: dict[str, CapabilityManifest] = {}
         self._listeners: list[Callable] = []
+        # Inverted tag index for O(1) device lookup by tag.
+        # Maps tag -> set of device_ids that declare that tag.
+        self._tag_index: dict[str, set[str]] = {}
+        # Emergency-capable device ids for O(1) emergency lookup
+        self._emergency_ids: set[str] = set()
 
     def register(self, manifest: CapabilityManifest) -> None:
+        old = self._devices.get(manifest.device_id)
+        if old:
+            for tag in old.tags:
+                self._tag_index.get(tag, set()).discard(manifest.device_id)
+            self._emergency_ids.discard(manifest.device_id)
         self._devices[manifest.device_id] = manifest
+        for tag in manifest.tags:
+            if tag not in self._tag_index:
+                self._tag_index[tag] = set()
+            self._tag_index[tag].add(manifest.device_id)
+        if manifest.emergency_capable:
+            self._emergency_ids.add(manifest.device_id)
         log.info("Registered device: %s (%s)", manifest.device_id, manifest.device_name)
         for cb in self._listeners:
             cb(manifest)
 
     def unregister(self, device_id: str) -> None:
-        self._devices.pop(device_id, None)
+        manifest = self._devices.pop(device_id, None)
+        if manifest:
+            for tag in manifest.tags:
+                self._tag_index.get(tag, set()).discard(device_id)
+            self._emergency_ids.discard(device_id)
         log.info("Unregistered device: %s", device_id)
 
     def get(self, device_id: str) -> Optional[CapabilityManifest]:
@@ -51,11 +71,36 @@ class CapabilityRegistry:
         return list(self._devices.values())
 
     def find_by_tags(self, tags: list[str]) -> list[CapabilityManifest]:
-        return [d for d in self._devices.values()
-                if any(t in d.tags for t in tags)]
+        """Return devices that have at least one of the given tags.
+        O(|tags| + |candidates|) with the inverted index, not O(n).
+        """
+        candidate_ids: set[str] = set()
+        for tag in tags:
+            candidate_ids |= self._tag_index.get(tag, set())
+        return [self._devices[did] for did in candidate_ids if did in self._devices]
+
+    def find_by_required_tags(self, required_tags: set[str]) -> list[CapabilityManifest]:
+        """Return devices that have ALL of the required tags (intersection index).
+        O(|result|) — starts with the smallest tag set and intersects progressively.
+        Significantly faster than union-based lookup when tags are specific.
+        """
+        if not required_tags:
+            return self.all()
+        # Sort by set size ascending — smallest set first minimizes intersection cost
+        sets = sorted(
+            [self._tag_index.get(t, set()) for t in required_tags],
+            key=len,
+        )
+        result_ids = sets[0].copy()
+        for s in sets[1:]:
+            result_ids &= s
+            if not result_ids:
+                break
+        return [self._devices[did] for did in result_ids if did in self._devices]
 
     def find_emergency_capable(self) -> list[CapabilityManifest]:
-        return [d for d in self._devices.values() if d.emergency_capable]
+        """Return emergency-capable devices. O(|emergency_devices|) with index."""
+        return [self._devices[did] for did in self._emergency_ids if did in self._devices]
 
     def find_by_actuator(self, actuator_type: str) -> list[CapabilityManifest]:
         return [
@@ -369,9 +414,43 @@ class CapabilityMatchingResolver(BaseResolver):
                 return ActionPlan(intent_id=intent.intent_id, actions=[], urgency=intent.urgency)
         resolution = INTENT_RESOLUTION_MAP.get(intent.intent, {"tags": [], "actuators": []})
 
-        # Score all devices
+        # Candidate selection via inverted tag index.
+        # Strategy:
+        #   specific_tags → intersection index: O(|result|), devices must have ALL
+        #   generic_tags only → union index: O(|tags| + |candidates|)
+        #   no tags (report_status) → all devices
+        target_tags   = set(resolution.get("tags", []))
+        generic_tags  = {"light", "climate", "communication", "sensor", "appliance", "display"}
+        specific_tags = target_tags - generic_tags
+
+        if specific_tags:
+            # Intersection: devices must have ALL specific tags
+            # Then union with generic_tag candidates for full coverage
+            specific_candidates = set(
+                d.device_id for d in self.registry.find_by_required_tags(specific_tags)
+            )
+            # Also include devices that match via generic tags (broader net)
+            if target_tags & generic_tags:
+                generic_candidates = set(
+                    d.device_id for d in self.registry.find_by_tags(
+                        list(target_tags & generic_tags)
+                    )
+                )
+                candidate_ids = specific_candidates | generic_candidates
+            else:
+                candidate_ids = specific_candidates
+            candidates = [self.registry.get(did) for did in candidate_ids
+                         if self.registry.get(did)]
+        elif target_tags:
+            # Only generic tags — union index
+            candidates = self.registry.find_by_tags(list(target_tags))
+        else:
+            # report_status or similar — all devices
+            candidates = self.registry.all()
+
+        # Score candidates only
         scored: list[tuple[float, CapabilityManifest]] = []
-        for device in self.registry.all():
+        for device in candidates:
             score = self._relevance_score(device, intent, resolution)
             if score > 0:
                 scored.append((score, device))

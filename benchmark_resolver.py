@@ -327,26 +327,53 @@ def direct_command_baseline(registry, n=500):
 
 # ── Escala sintética ──────────────────────────────────────────────────────────
 
-TAG_POOLS = [
-    ["light","climate"], ["sensor","motion","security"], ["communication","notification"],
-    ["emergency","alarm","security"], ["lock","door","access"], ["appliance","climate"],
-    ["sensor","climate","temperature"], ["light","emergency"], ["children_arrival","light"],
-]
-ACT_POOLS = [
-    ["turn_on","turn_off","set_brightness"],
-    ["alarm"], ["notify"], ["unlock","lock"], ["turn_on","turn_off"],
+# Realistic device type distribution for scale benchmarks.
+# Reflects a multi-building deployment with diverse specific tags.
+# Distribution: ~30% lights, ~15% smart-plugs, ~20% sensors,
+#               ~10% security, ~10% communication, ~10% climate, ~5% cameras
+DEVICE_TYPE_POOLS = [
+    # (weight, tags, actuators, emergency_capable)
+    (30, ["light", "wiz"],                                    ["turn_on","turn_off","set_brightness"], False),
+    (5,  ["light", "climate", "wiz"],                        ["turn_on","turn_off","set_brightness"], False),
+    (10, ["smart-plug", "appliance"],                        ["turn_on","turn_off"], False),
+    (5,  ["smart-plug", "climate"],                          ["turn_on","turn_off","set_temperature"], False),
+    (8,  ["sensor", "motion", "security"],                   [], False),
+    (5,  ["sensor", "climate", "temperature"],               [], False),
+    (3,  ["sensor", "health", "wearable"],                   [], False),
+    (4,  ["sensor", "motion", "emergency"],                  [], True),
+    (5,  ["door-lock", "access", "security"],                ["lock","unlock"], False),
+    (3,  ["door-lock", "access", "emergency"],               ["lock","unlock"], True),
+    (2,  ["alarm", "security", "emergency"],                 ["alarm","arm"], True),
+    (5,  ["communication", "notification", "phone"],         ["notify","call"], False),
+    (3,  ["communication", "notification", "children_arrival"], ["notify"], False),
+    (2,  ["communication", "notification", "emergency"],     ["notify","call"], True),
+    (5,  ["thermostat", "climate"],                          ["set_temperature"], False),
+    (3,  ["blinds", "climate"],                              ["set_position"], False),
+    (3,  ["camera", "security", "emergency"],                [], True),
+    (2,  ["camera", "monitor_health"],                       [], False),
 ]
 
+_TYPE_TOTAL = sum(t[0] for t in DEVICE_TYPE_POOLS)
+
 def gen_devices(n):
-    random.seed(7)
+    """Generate n synthetic devices with realistic tag distribution."""
+    rng = __import__('random').Random(7)
+    cumulative = []
+    total = 0
+    for w, *_ in DEVICE_TYPE_POOLS:
+        total += w
+        cumulative.append(total)
     out = []
     for i in range(n):
-        tags = random.choice(TAG_POOLS)[:]
-        acts = [ActuatorSpec(a) for a in random.choice(ACT_POOLS)]
+        r = rng.randint(1, _TYPE_TOTAL)
+        for idx, cum in enumerate(cumulative):
+            if r <= cum:
+                _, tags, acts, emerg = DEVICE_TYPE_POOLS[idx]
+                break
         out.append(CapabilityManifest(
             device_id=f"dev-{i:05d}", device_name=f"Device {i}",
-            tags=tags, actuators=acts,
-            emergency_capable="emergency" in tags,
+            tags=tags[:], actuators=[ActuatorSpec(a) for a in acts],
+            emergency_capable=emerg,
         ))
     return out
 
