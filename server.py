@@ -316,7 +316,31 @@ async def lifespan(app: FastAPI):
     except Exception as _recovery_e:
         log.error("Startup recovery failed: %s", _recovery_e)
 
+    # ── Background state refresher ──────────────────────────────────────────
+    # Periodically queries device state via get_state() to keep the cache fresh.
+    # Only runs if the resolver is StateAwareResolver and executor is AdapterExecutor.
+    _refresh_task = None
+    try:
+        from dosync.adapters import AdapterExecutor
+        if isinstance(hub.resolver, __import__('dosync.hub', fromlist=['StateAwareResolver']).StateAwareResolver)                 and isinstance(executor, AdapterExecutor):
+            _refresh_task = asyncio.create_task(
+                hub.resolver.start_background_refresh(executor)
+            )
+            log.info("Background state refresher started")
+        else:
+            log.debug("Background state refresher not started (resolver or executor not compatible)")
+    except Exception as _refresh_e:
+        log.warning("Failed to start background state refresher: %s", _refresh_e)
+
     yield
+
+    # Cancel background refresher on shutdown
+    if _refresh_task and not _refresh_task.done():
+        _refresh_task.cancel()
+        try:
+            await _refresh_task
+        except asyncio.CancelledError:
+            pass
     log.info("DoSync Hub shutting down")
 
 app = FastAPI(

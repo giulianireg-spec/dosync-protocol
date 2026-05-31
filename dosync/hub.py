@@ -549,6 +549,83 @@ class StateAwareResolver(CapabilityMatchingResolver):
         except Exception as _e:
             log.warning('StateAwareResolver: failed to persist state for %s: %s', device_id, _e)
 
+    async def start_background_refresh(
+        self,
+        executor: "DeviceExecutor",
+        interval: float = None,
+    ) -> None:
+        """
+        Background task that periodically queries device state via get_state().
+        Updates the state cache without blocking intent resolution.
+
+        Only queries devices whose adapter implements get_state().
+        Devices that don't respond are silently skipped — unreachable marking
+        is handled by the executor, not by the refresher.
+
+        Args:
+            executor:  AdapterExecutor instance to get adapters from
+            interval:  refresh interval in seconds. Defaults to
+                       DOSYNC_STATE_REFRESH_INTERVAL env var (default: 60s)
+        """
+        import os as _os
+        import time as _time
+
+        if interval is None:
+            interval = float(_os.environ.get("DOSYNC_STATE_REFRESH_INTERVAL", "60"))
+
+        log.info("StateAwareResolver: background refresh started (interval=%.0fs)", interval)
+
+        while True:
+            try:
+                await asyncio.sleep(interval)
+                await self._refresh_cycle(executor)
+            except asyncio.CancelledError:
+                log.info("StateAwareResolver: background refresh stopped")
+                break
+            except Exception as e:
+                log.warning("StateAwareResolver: refresh cycle error: %s", e)
+
+    async def _refresh_cycle(self, executor: "DeviceExecutor") -> None:
+        """Run one refresh cycle — query all devices whose adapter supports get_state()."""
+        from .adapters import AdapterExecutor
+        if not isinstance(executor, AdapterExecutor):
+            return
+
+        refreshed = 0
+        skipped   = 0
+
+        for device in self.registry.all():
+            adapter = executor.get_adapter(device.adapter)
+            if adapter is None:
+                skipped += 1
+                continue
+
+            try:
+                state = await asyncio.wait_for(
+                    adapter.get_state(device.device_id),
+                    timeout=3.0,
+                )
+            except (asyncio.TimeoutError, Exception):
+                skipped += 1
+                continue
+
+            if state is None:
+                skipped += 1
+                continue
+
+            # Update cache — only if device responded (positive signal only)
+            self.update_state(device.device_id, state)
+            # Clear unreachable mark if device is responding
+            if self._state_cache.get(device.device_id, {}).get("unreachable"):
+                self.clear_unreachable(device.device_id)
+                log.info("StateAwareResolver: %s back online (detected by refresher)",
+                         device.device_id)
+            refreshed += 1
+
+        if refreshed > 0:
+            log.debug("StateAwareResolver: refresh cycle done — %d updated, %d skipped",
+                      refreshed, skipped)
+
     def _load_state_from_db(self) -> None:
         """Carga el state cache desde SQLite al arrancar. Silencioso si no hay datos."""
         try:

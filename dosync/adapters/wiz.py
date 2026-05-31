@@ -229,6 +229,41 @@ class WiZAdapter(DoSyncAdapter):
                 error=str(e),
             )
 
+    async def get_state(self, device_id: str) -> dict | None:
+        """
+        Query current WiZ bulb state via UDP updateState.
+        Returns {"on": bool, "brightness": int} or None on failure.
+        Timeout: 3 seconds.
+        """
+        ip = None
+        if self._hub:
+            device = self._hub.registry.get(device_id)
+            if device and device.adapter_config:
+                ip = device.adapter_config.get("ip")
+        if not ip:
+            return None
+        if not WIZ_AVAILABLE:
+            return None
+        try:
+            import asyncio as _asyncio
+            bulb = wizlight(ip)
+            pilot = await _asyncio.wait_for(bulb.updateState(), timeout=3.0)
+            await bulb.async_close()
+            if pilot:
+                pr = pilot.pilotResult
+                return {
+                    "on":         pr.get("state", False),
+                    "brightness": pr.get("dimming", 0),
+                    "r":          pr.get("r"),
+                    "g":          pr.get("g"),
+                    "b":          pr.get("b"),
+                    "temp":       pr.get("temp"),
+                }
+            return None
+        except Exception as e:
+            log.debug("WiZ get_state %s @ %s: %s", device_id, ip, e)
+            return None
+
     async def _build_pilot(self, action: DeviceAction, urgency: Urgency) -> "PilotBuilder":
         """Construye el PilotBuilder de pywizlight según la acción DoSync."""
         params = action.params

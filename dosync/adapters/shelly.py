@@ -201,6 +201,58 @@ class ShellyAdapter(DoSyncAdapter):
     def adapter_name(self) -> str:
         return "shelly"
 
+    async def get_state(self, device_id: str) -> dict | None:
+        """
+        Query current Shelly device state via HTTP.
+        Supports Gen1 (/status) and Gen2 (Shelly.GetStatus).
+        Timeout: 3 seconds.
+        """
+        if not self._hub:
+            return None
+        device = self._hub.registry.get(device_id)
+        if not device or not device.adapter_config:
+            return None
+        config = device.adapter_config
+        ip  = config.get("ip")
+        gen = int(config.get("gen", 1))
+        if not ip:
+            return None
+        try:
+            import asyncio as _asyncio
+            if gen == 1:
+                client = _ShellyGen1(ip)
+                raw = await _asyncio.wait_for(
+                    _asyncio.get_event_loop().run_in_executor(None, client.get_status),
+                    timeout=3.0,
+                )
+                relays = raw.get("relays", [])
+                lights = raw.get("lights", [])
+                if relays:
+                    return {"on": relays[0].get("ison", False)}
+                if lights:
+                    return {"on": lights[0].get("ison", False),
+                            "brightness": lights[0].get("brightness", 0)}
+                return None
+            else:
+                client = _ShellyGen2(ip)
+                raw = await _asyncio.wait_for(
+                    _asyncio.get_event_loop().run_in_executor(None, client.get_status),
+                    timeout=3.0,
+                )
+                switches = raw.get("result", {}).get("switch:0", {})
+                if switches:
+                    return {"on": switches.get("output", False)}
+                lights = raw.get("result", {}).get("light:0", {})
+                if lights:
+                    return {"on": lights.get("output", False),
+                            "brightness": lights.get("brightness", 0)}
+                return None
+        except Exception as e:
+            import logging as _log
+            _log.getLogger("dosync.adapters.shelly").debug(
+                "get_state %s @ %s: %s", device_id, ip, e)
+            return None
+
     async def execute(self, action: DeviceAction, urgency: Urgency) -> ActionResult:
         config = action.params.get("_adapter_config", {})
         ip = config.get("ip")

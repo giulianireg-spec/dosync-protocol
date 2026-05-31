@@ -73,6 +73,22 @@ class DoSyncAdapter(ABC):
         """Cierra la conexión. Opcional."""
         pass
 
+    async def get_state(self, device_id: str) -> dict | None:
+        """
+        Query current device state directly from the physical device.
+
+        Returns a state dict if supported, None if not implemented.
+        The StateAwareResolver background refresher calls this periodically
+        to keep the state cache fresh without blocking intent resolution.
+
+        Example return values:
+            {"on": True, "brightness": 80}       — WiZ bulb
+            {"on": False}                         — Shelly relay
+            {"state": "locked"}                   — door lock
+            None                                  — adapter does not support state query
+        """
+        return None  # default: not supported — override in subclasses
+
     @property
     @abstractmethod
     def adapter_name(self) -> str:
@@ -119,6 +135,11 @@ class AdapterExecutor:
         """Registra un adapter por su nombre."""
         self._adapters[adapter.adapter_name] = adapter
         log.info("Adapter registered: %s", adapter.adapter_name)
+
+    def get_adapter(self, adapter_name: str) -> DoSyncAdapter | None:
+        """Returns the adapter instance for a given adapter name, or None if not registered."""
+        return self._adapters.get(adapter_name)
+
 
     def registered_adapters(self) -> list[str]:
         """Lista de adapters registrados."""

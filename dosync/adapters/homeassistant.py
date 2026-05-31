@@ -491,6 +491,47 @@ class HABridge(DoSyncAdapter):
                 error=str(e),
             )
 
+    async def get_state(self, device_id: str) -> dict | None:
+        """
+        Query current HA entity state via REST API.
+        Returns normalized state dict or None on failure.
+        Timeout: 3 seconds.
+        """
+        if self._simulated:
+            return None
+        if not self._hub:
+            return None
+        device = self._hub.registry.get(device_id)
+        if not device or not device.adapter_config:
+            return None
+        entity_id = device.adapter_config.get("entity_id")
+        if not entity_id:
+            return None
+        try:
+            session = await self._get_session()
+            async with session.get(
+                f"{self._url}/api/states/{entity_id}",
+                timeout=3.0,
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+                state_str = data.get("state", "")
+                attrs     = data.get("attributes", {})
+                # Normalize to a common state format
+                on = state_str not in ("off", "unavailable", "unknown", "0")
+                result = {"on": on, "state": state_str}
+                if "brightness" in attrs:
+                    result["brightness"] = round(attrs["brightness"] / 255 * 100)
+                if "temperature" in attrs:
+                    result["temperature"] = attrs["temperature"]
+                if "current_temperature" in attrs:
+                    result["current_temperature"] = attrs["current_temperature"]
+                return result
+        except Exception as e:
+            log.debug("HABridge get_state %s (%s): %s", device_id, entity_id, e)
+            return None
+
     async def close(self) -> None:
         """Cierra la sesión HTTP."""
         if self._session:
