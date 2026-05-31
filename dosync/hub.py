@@ -243,7 +243,7 @@ class CapabilityMatchingResolver(BaseResolver):
         # Actuator match
         target_actuators = set(resolution.get("actuators", []))
         device_actuators = {a.type for a in device.actuators}
-        score += len(target_actuators & device_actuators) * 8.0
+        score += len(target_actuators & device_actuators) * 12.0
 
         return score
 
@@ -273,7 +273,7 @@ class CapabilityMatchingResolver(BaseResolver):
             location_bonus   = 15.0 if (location and location in device_tags) else 0.0
             emergency_bonus  = 30.0 if (intent.urgency == Urgency.EMERGENCY and device.emergency_capable) else 0.0
             actuator_matched = target_actuators & device_actuators
-            actuator_bonus   = len(actuator_matched) * 8.0
+            actuator_bonus   = len(actuator_matched) * 12.0
             score            = tag_overlap + location_bonus + emergency_bonus + actuator_bonus
 
             # Razón de exclusión si score == 0
@@ -428,7 +428,9 @@ class CapabilityMatchingResolver(BaseResolver):
             # O(|target_tags| + |candidates|) with the inverted index.
             candidates = self.registry.find_by_tags(list(target_tags))
         else:
-            # report_status or similar — all devices
+            # Intents with no resolution tags (e.g. report_status) select all devices.
+            # This is intentional — report_status is a status query across the
+            # entire deployment, not a targeted action.
             candidates = self.registry.all()
 
         # Emergency intents: always include emergency_capable devices as candidates,
