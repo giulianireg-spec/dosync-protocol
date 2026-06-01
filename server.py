@@ -10,7 +10,7 @@ from typing import Any, Optional
 
 import json
 import os
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -233,7 +233,8 @@ class RegisterDeviceRequest(BaseModel):
     events: list[EventSpecIn] = []
     emergency_capable: bool = False
     cert_tier: str = "basic"
-    device_token: Optional[str] = None  # token de autenticación del dispositivo
+    device_token:    Optional[str] = None  # token de autenticación del dispositivo
+    certificate_pem: Optional[str] = None  # PEM certificate for mTLS auth (optional)
 
 class PresenceSignalRequest(BaseModel):
     device_id: str
@@ -389,6 +390,8 @@ async def websocket_endpoint(ws: WebSocket):
         ws_manager.disconnect(ws)
 
 
+
+
 @app.get("/", response_class=FileResponse, tags=["Status"])
 def dashboard():
     from pathlib import Path
@@ -424,6 +427,36 @@ def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth
                 status_code=403,
                 detail=f"Device '{req.device_id}' requires a device_token (strict mode)"
             )
+
+    # ── Certificate authentication (Option C) ─────────────────────────────
+    # Device can include certificate_pem in the register body.
+    # This PEM is verified against the local CA — same logic as /v1/devices/verify-cert.
+    # If valid, the manifest is marked cert_authenticated=True.
+    # Devices without certificate_pem fall back to token-based auth (backward compatible).
+    cert_authenticated = False
+    cert_pem = getattr(req, 'certificate_pem', None)
+    if cert_pem:
+        try:
+            import tempfile
+            from pathlib import Path
+            from dosync.security import verify_chain, _cert_info
+            with tempfile.NamedTemporaryFile(
+                mode='w', suffix='.crt', delete=False
+            ) as f:
+                f.write(cert_pem.strip())
+                tmp_path = Path(f.name)
+            try:
+                chain_valid = verify_chain(tmp_path)
+                cert_info   = _cert_info(tmp_path)
+            finally:
+                tmp_path.unlink(missing_ok=True)
+            if chain_valid and cert_info and not cert_info.is_expired:
+                cert_authenticated = True
+                logging.getLogger("dosync.server").info("Device %s authenticated via certificate (expires in %d days)",
+                         req.device_id, cert_info.days_until_expiry)
+        except Exception as _cert_e:
+            logging.getLogger("dosync.server").debug("Certificate verification for %s: %s", req.device_id, _cert_e)
+
     # ── Registro normal ────────────────────────────────────────────────────
     try:
         manifest = CapabilityManifest(
@@ -444,8 +477,18 @@ def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth
             emergency_capable=req.emergency_capable,
             cert_tier=CertTier(req.cert_tier),
         )
+        # Store mTLS authentication status in adapter_config
+        if cert_authenticated:
+            manifest.adapter_config = {
+                **(manifest.adapter_config or {}),
+                "cert_authenticated": True,
+            }
         hub.register_device(manifest)
-        return {"status": "registered", "device_id": req.device_id}
+        return {
+            "status": "registered",
+            "device_id": req.device_id,
+            "cert_authenticated": cert_authenticated,
+        }
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -587,6 +630,85 @@ def provision_device(body: dict, auth: str = Depends(require_auth)):
         "warning": "Store this token immediately — it will not be shown again.",
         "usage": "Include device_token in your /v1/devices/register request"
     }
+
+
+@app.post("/v1/devices/verify-cert", tags=["Devices"])
+async def verify_device_cert(body: dict, auth: str = Depends(require_auth)):
+    """
+    Verify a device's client certificate against the local CA.
+
+    The device presents its certificate PEM and the hub verifies:
+    - It is a valid X.509 certificate
+    - It was signed by the local DoSync CA
+    - It has not expired
+    - It identifies as a DoSync adapter (CN starts with 'dosync-adapter-')
+
+    Returns cert_authenticated=True if all checks pass.
+    The device should include certificate_pem in /v1/devices/register
+    to record the cert_authenticated status in its manifest.
+
+    Example usage (device side):
+        cert_pem = open("certs/adapters/gpio.crt").read()
+        r = requests.post("/v1/devices/verify-cert", json={"certificate_pem": cert_pem})
+        if r.json()["cert_authenticated"]:
+            # include certificate_pem in /v1/devices/register body
+    """
+    import tempfile, os as _os
+    from pathlib import Path
+    from dosync.security import verify_chain, _cert_info
+
+    cert_pem = body.get("certificate_pem", "").strip()
+    if not cert_pem:
+        raise HTTPException(status_code=422, detail="certificate_pem is required")
+
+    try:
+        # Write to temp file for openssl verification
+        with tempfile.NamedTemporaryFile(
+            mode='w', suffix='.crt', delete=False
+        ) as f:
+            f.write(cert_pem)
+            tmp_path = Path(f.name)
+
+        try:
+            # Verify chain against local CA
+            chain_valid = verify_chain(tmp_path)
+            cert_info   = _cert_info(tmp_path)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+        if not cert_info:
+            return {
+                "cert_authenticated": False,
+                "reason": "Could not parse certificate",
+            }
+
+        if cert_info.is_expired:
+            return {
+                "cert_authenticated": False,
+                "reason": f"Certificate expired {abs(cert_info.days_until_expiry)} days ago",
+            }
+
+        if not chain_valid:
+            return {
+                "cert_authenticated": False,
+                "reason": "Certificate not signed by local DoSync CA",
+            }
+
+        logging.getLogger("dosync.server").info("Device cert verified: %s (expires in %d days)",
+                 cert_info.subject, cert_info.days_until_expiry)
+
+        return {
+            "cert_authenticated": True,
+            "subject":            cert_info.subject,
+            "issuer":             cert_info.issuer,
+            "expires":            cert_info.not_after,
+            "days_until_expiry":  cert_info.days_until_expiry,
+            "serial":             cert_info.serial,
+        }
+
+    except Exception as e:
+        logging.getLogger("dosync.server").warning("verify-cert error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Certificate verification error: {e}")
 
 
 @app.get("/v1/devices/provisioned", tags=["Devices"])
