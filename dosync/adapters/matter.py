@@ -168,10 +168,11 @@ class MatterAdapter(DoSyncAdapter):
     """
 
     def __init__(self, ha_url: Optional[str] = None,
-                 ha_token: Optional[str] = None):
+                 ha_token: Optional[str] = None, hub=None):
         import os
-        self._ha_url = ha_url or os.environ.get("HA_URL", "http://localhost:8123")
+        self._ha_url   = ha_url or os.environ.get("HA_URL", "http://localhost:8123")
         self._ha_token = ha_token or os.environ.get("HA_TOKEN", "")
+        self._hub      = hub
         self._client: Optional[_MatterViaHA] = None
         if self._ha_token:
             self._client = _MatterViaHA(self._ha_url, self._ha_token)
@@ -179,6 +180,34 @@ class MatterAdapter(DoSyncAdapter):
     @property
     def adapter_name(self) -> str:
         return "matter"
+
+    async def get_state(self, device_id: str) -> dict | None:
+        """Query current Matter device state via HA REST API."""
+        if not self._client or not self._hub:
+            return None
+        device = self._hub.registry.get(device_id)
+        if not device or not device.adapter_config:
+            return None
+        entity_id = device.adapter_config.get("entity_id")
+        if not entity_id:
+            return None
+        try:
+            import asyncio as _asyncio
+            raw = await _asyncio.get_event_loop().run_in_executor(
+                None, lambda: self._client.get_state(entity_id)
+            )
+            state_str = raw.get("state", "")
+            attrs     = raw.get("attributes", {})
+            on = state_str not in ("off", "unavailable", "unknown", "0")
+            result = {"on": on, "state": state_str}
+            if "brightness" in attrs:
+                result["brightness"] = round(attrs["brightness"] / 255 * 100)
+            if "current_temperature" in attrs:
+                result["current_temperature"] = attrs["current_temperature"]
+            return result
+        except Exception as e:
+            log.debug("MatterAdapter get_state %s: %s", device_id, e)
+            return None
 
     async def execute(self, action: DeviceAction, urgency: Urgency) -> ActionResult:
         config = action.params.get("_adapter_config", {})
