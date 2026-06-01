@@ -236,6 +236,33 @@ The index is most effective for safety-critical intents with specific tags. Comf
 
 ---
 
+## On adapter-side fallback ("local fallback without hub")
+
+A recurring question in protocol design is whether adapters should be able to operate independently when the hub is unavailable — executing actions directly on physical devices without going through the semantic resolution layer.
+
+**DoSync deliberately does not implement this.** The reasoning:
+
+A protocol cannot have a "mode without the protocol." If the hub is unavailable, the protocol is unavailable — this is correct and expected behavior, not a failure to be worked around. HTTP does not function without servers. Matter does not function without a fabric controller. DoSync does not function without a hub.
+
+Bypass mechanisms that allow adapters to act without the hub would:
+
+- Break the audit chain — actions executed without the hub produce no SHA-256 chained log entries
+- Break the policy engine — safety constraints are not evaluated
+- Break the semantic model — actions become commands again, which is exactly what DoSync was designed to avoid
+
+**The correct resilience model for DoSync is hub availability, not adapter autonomy:**
+
+- `FailurePolicy.RETRY` handles transient adapter failures
+- Emergency snapshots (v0.2) re-fire critical intents on hub restart
+- The `StateAwareResolver` TTL handles temporary device unavailability
+- Hub deployment on reliable hardware (systemd service with `Restart=always`) handles hub restarts
+
+These mechanisms collectively ensure that the hub recovers quickly from failures and that critical intents are not permanently lost. They do not attempt to replicate hub intelligence in the adapters — which would defeat the purpose of having a hub.
+
+---
+
+---
+
 ## Summary
 
 | Principle | What it means in practice |
