@@ -1,0 +1,19 @@
+[Unit]
+Description=DoSync Hub
+After=network.target
+[Service]
+Type=simple
+User=rgiuliani
+WorkingDirectory=/home/rgiuliani/dosync-protocol
+Environment="HA_URL=http://localhost:8123" "HA_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2MDFiZWY0NTdlZWE0MGUxOTc5MjkxNGE1NDdhYmJiMyIsImlhdCI6MTc3ODg5OTkyMCwiZXhwIjoyMDk0MjU5OTIwfQ.gqsYvemtBJfs7Fe0_0OH8_PY6QfJYTZ67c6U0hYuD6I"
+ExecStart=/home/rgiuliani/dosync-protocol/venv/bin/uvicorn server:app \
+  --host 0.0.0.0 \
+  --port 47200 \
+  --ssl-keyfile certs/hub.key \
+  --ssl-certfile certs/hub.crt \
+  --ssl-ca-certs certs/ca.crt \
+  --ssl-cert-reqs 1
+Restart=always
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
