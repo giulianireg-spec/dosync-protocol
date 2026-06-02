@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DoSync Protocol — The semantic layer between AI and physical devices</title>
+<meta name="description" content="DoSync is an open protocol (Apache 2.0) that lets AI agents interact with physical devices using semantic intent — no hardcoded rules, no pre-written automations.">
+<meta property="og:title" content="DoSync Protocol">
+<meta property="og:description" content="AI speaks in goals. Devices speak in commands. DoSync is the bridge.">
+<meta property="og:image" content="https://dosync.dev/og.png">
+<meta property="og:url" content="https://dosync.dev">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{
+  --purple:#534AB7;
+  --purple-light:#EEEDFE;
+  --purple-mid:#AFA9EC;
+  --purple-dark:#3C3489;
+  --teal:#1D9E75;
+  --teal-light:#E1F5EE;
+  --gray-50:#FAFAF8;
+  --gray-100:#F1EFE8;
+  --gray-200:#D3D1C7;
+  --gray-400:#888780;
+  --gray-600:#5F5E5A;
+  --gray-900:#1A1A18;
+  --text:#1A1A18;
+  --text-muted:#5F5E5A;
+  --text-faint:#888780;
+  --border:#E2E0D8;
+  --bg:#FFFFFF;
+  --bg-subtle:#FAFAF8;
+  --font-sans:'DM Sans',sans-serif;
+  --font-mono:'DM Mono',monospace;
+  --font-display:'DM Serif Display',serif;
+  --radius:8px;
+  --radius-lg:12px;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:var(--font-sans);color:var(--text);background:var(--bg);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+
+a{color:inherit;text-decoration:none}
+
+/* Nav */
+nav{
+  position:sticky;top:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 40px;height:60px;
+  background:rgba(255,255,255,0.92);
+  border-bottom:0.5px solid var(--border);
+  backdrop-filter:blur(8px);
+}
+.nav-logo{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:500;letter-spacing:-0.02em}
+.nav-logo svg{width:22px;height:22px}
+.nav-links{display:flex;gap:28px;align-items:center}
+.nav-links a{font-size:14px;color:var(--text-muted);transition:color .15s}
+.nav-links a:hover{color:var(--text)}
+.nav-cta{background:var(--purple);color:#fff;border:none;padding:8px 18px;border-radius:var(--radius);font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font-sans);transition:opacity .15s}
+.nav-cta:hover{opacity:.88}
+.nav-pill{font-size:11px;font-weight:500;background:var(--purple-light);color:var(--purple-dark);padding:3px 9px;border-radius:20px;letter-spacing:.02em}
+
+/* Hero */
+.hero{
+  padding:88px 40px 72px;
+  max-width:1100px;margin:0 auto;
+  display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;
+}
+.hero-eyebrow{font-size:12px;font-weight:500;color:var(--purple);letter-spacing:.08em;text-transform:uppercase;margin-bottom:16px}
+.hero h1{font-family:var(--font-display);font-size:44px;line-height:1.1;letter-spacing:-.01em;margin-bottom:20px;color:var(--text)}
+.hero h1 em{font-style:italic;color:var(--purple)}
+.hero-sub{font-size:17px;color:var(--text-muted);line-height:1.65;margin-bottom:32px;max-width:440px}
+.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:40px}
+.btn-primary{background:var(--purple);color:#fff;border:none;padding:11px 22px;border-radius:var(--radius);font-size:15px;font-weight:500;cursor:pointer;font-family:var(--font-sans);display:inline-flex;align-items:center;gap:7px;transition:opacity .15s}
+.btn-primary:hover{opacity:.88}
+.btn-secondary{background:transparent;color:var(--text);border:0.5px solid var(--gray-200);padding:11px 22px;border-radius:var(--radius);font-size:15px;cursor:pointer;font-family:var(--font-sans);transition:border-color .15s,background .15s}
+.btn-secondary:hover{border-color:var(--gray-400);background:var(--bg-subtle)}
+.hero-stats{display:flex;gap:28px;flex-wrap:wrap}
+.stat{display:flex;flex-direction:column;gap:2px}
+.stat-num{font-size:22px;font-weight:500;color:var(--text);letter-spacing:-.02em}
+.stat-label{font-size:12px;color:var(--text-faint)}
+
+/* Compare card — hero right */
+.compare{display:flex;flex-direction:column;gap:12px}
+.compare-label{font-size:12px;font-weight:500;color:var(--text-faint);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.compare-label .dot{width:6px;height:6px;border-radius:50%;background:var(--gray-200)}
+.compare-label .dot.active{background:var(--purple)}
+.compare-card{background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px}
+.compare-card.accent{background:var(--purple-light);border-color:var(--purple-mid)}
+.compare-code{font-family:var(--font-mono);font-size:13px;color:var(--text-muted);line-height:2}
+.compare-card.accent .compare-code{color:var(--purple-dark)}
+.compare-code .comment{color:var(--gray-400);font-style:italic}
+
+/* Section common */
+section{padding:72px 40px;border-top:0.5px solid var(--border)}
+.section-inner{max-width:1100px;margin:0 auto}
+.section-eyebrow{font-size:12px;font-weight:500;color:var(--purple);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px}
+.section-title{font-family:var(--font-display);font-size:34px;line-height:1.15;margin-bottom:16px;letter-spacing:-.01em}
+.section-sub{font-size:16px;color:var(--text-muted);max-width:520px;line-height:1.65}
+
+/* How it works */
+.layers{display:grid;grid-template-columns:repeat(5,1fr);gap:2px;margin-top:40px;border-radius:var(--radius-lg);overflow:hidden;border:0.5px solid var(--border)}
+.layer{padding:20px 16px;background:var(--bg-subtle);text-align:center;position:relative}
+.layer:first-child{background:var(--purple-light)}
+.layer-num{font-size:11px;font-weight:500;color:var(--text-faint);margin-bottom:6px}
+.layer:first-child .layer-num{color:var(--purple)}
+.layer-name{font-size:14px;font-weight:500;color:var(--text);margin-bottom:4px}
+.layer:first-child .layer-name{color:var(--purple-dark)}
+.layer-desc{font-size:12px;color:var(--text-faint);line-height:1.5}
+.layer:first-child .layer-desc{color:var(--purple)}
+
+/* Demo */
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:40px;align-items:start}
+.demo-terminal{background:var(--gray-900);border-radius:var(--radius-lg);overflow:hidden}
+.terminal-bar{display:flex;align-items:center;gap:6px;padding:12px 16px;background:#111110}
+.dot-r{width:10px;height:10px;border-radius:50%;background:#FF5F57}
+.dot-y{width:10px;height:10px;border-radius:50%;background:#FFBD2E}
+.dot-g{width:10px;height:10px;border-radius:50%;background:#28C840}
+.terminal-body{padding:20px;font-family:var(--font-mono);font-size:13px;line-height:2;color:#C8C6BB}
+.t-prompt{color:#1D9E75}
+.t-cmd{color:#F0EEE8}
+.t-comment{color:#5F5E5A;font-style:italic}
+.t-success{color:#1D9E75}
+.t-device{color:#7F77DD}
+.t-action{color:#EF9F27}
+.demo-video-box{background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.video-placeholder{aspect-ratio:16/9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:var(--gray-100);cursor:pointer}
+.play-btn{width:52px;height:52px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;transition:transform .15s}
+.play-btn:hover{transform:scale(1.06)}
+.play-btn svg{width:20px;height:20px;fill:#fff;margin-left:3px}
+.video-label{font-size:13px;color:var(--text-muted)}
+.demo-caption{padding:16px 20px;border-top:0.5px solid var(--border)}
+.demo-caption p{font-size:13px;color:var(--text-muted);line-height:1.6}
+
+/* Quick start */
+.qs-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px}
+.qs-step{background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.qs-step-header{padding:14px 18px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;gap:10px}
+.qs-step-num{width:22px;height:22px;border-radius:50%;background:var(--purple);color:#fff;font-size:11px;font-weight:500;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.qs-step-title{font-size:14px;font-weight:500}
+.qs-code{padding:16px 18px;font-family:var(--font-mono);font-size:12.5px;color:var(--text-muted);line-height:1.9;background:var(--gray-900);color:#C8C6BB}
+.qs-code .prompt{color:#1D9E75}
+
+/* Use cases */
+.use-cases{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:40px}
+.use-case{background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:20px}
+.use-case-icon{font-size:24px;margin-bottom:12px}
+.use-case-name{font-size:15px;font-weight:500;margin-bottom:6px}
+.use-case-desc{font-size:13px;color:var(--text-muted);line-height:1.55}
+
+/* Certification */
+.cert-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px}
+.cert-tier{border-radius:var(--radius-lg);padding:24px;border:0.5px solid var(--border)}
+.cert-tier.featured{background:var(--purple-light);border-color:var(--purple-mid)}
+.cert-tier-badge{font-size:11px;font-weight:500;background:var(--gray-100);color:var(--gray-600);padding:3px 10px;border-radius:20px;display:inline-block;margin-bottom:14px}
+.cert-tier.featured .cert-tier-badge{background:var(--purple);color:#fff}
+.cert-tier-name{font-size:18px;font-weight:500;margin-bottom:8px}
+.cert-tier.featured .cert-tier-name{color:var(--purple-dark)}
+.cert-tier-desc{font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.55}
+.cert-tier.featured .cert-tier-desc{color:var(--purple)}
+.cert-requirements{list-style:none;display:flex;flex-direction:column;gap:6px}
+.cert-requirements li{font-size:13px;color:var(--text-muted);display:flex;align-items:flex-start;gap:8px}
+.cert-requirements li::before{content:"✓";color:var(--teal);font-weight:500;flex-shrink:0}
+.cert-tier.featured .cert-requirements li{color:var(--purple-dark)}
+.cert-cta{margin-top:40px;background:var(--gray-900);border-radius:var(--radius-lg);padding:24px 28px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.cert-cta-text{color:#C8C6BB;font-family:var(--font-mono);font-size:13px;line-height:1.8}
+.cert-cta-text .prompt{color:#1D9E75}
+
+/* Status */
+.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:40px;align-items:start}
+.status-items{display:flex;flex-direction:column;gap:10px}
+.status-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius)}
+.status-badge{font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.status-badge.done{background:var(--teal-light);color:#085041}
+.status-badge.wip{background:#FAEEDA;color:#633806}
+.status-badge.planned{background:var(--gray-100);color:var(--gray-600)}
+.status-item-name{font-size:14px;color:var(--text)}
+.roadmap{background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:24px}
+.roadmap h3{font-size:15px;font-weight:500;margin-bottom:16px}
+.roadmap-items{display:flex;flex-direction:column;gap:12px}
+.roadmap-item{display:flex;gap:14px;align-items:flex-start}
+.roadmap-q{font-size:12px;font-weight:500;color:var(--purple);width:48px;flex-shrink:0;padding-top:1px}
+.roadmap-text{font-size:13px;color:var(--text-muted);line-height:1.5}
+
+/* Footer */
+footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-subtle)}
+.footer-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px}
+.footer-logo{font-size:15px;font-weight:500;display:flex;align-items:center;gap:8px}
+.footer-links{display:flex;gap:24px;flex-wrap:wrap}
+.footer-links a{font-size:13px;color:var(--text-muted);transition:color .15s}
+.footer-links a:hover{color:var(--text)}
+.footer-note{font-size:12px;color:var(--text-faint)}
+
+/* Responsive */
+@media(max-width:900px){
+  nav{padding:0 20px}
+  .nav-links{gap:16px}
+  .hero{grid-template-columns:1fr;padding:48px 20px}
+  .hero h1{font-size:34px}
+  .layers{grid-template-columns:1fr}
+  .demo-grid,.status-grid,.qs-steps,.use-cases,.cert-grid{grid-template-columns:1fr}
+  section{padding:48px 20px}
+  footer{padding:32px 20px}
+  .cert-cta{flex-direction:column}
+}
+
+/* Animations */
+@keyframes fade-up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.hero-eyebrow{animation:fade-up .5s ease both}
+.hero h1{animation:fade-up .5s .1s ease both}
+.hero-sub{animation:fade-up .5s .2s ease both}
+.hero-actions{animation:fade-up .5s .3s ease both}
+.hero-stats{animation:fade-up .5s .4s ease both}
+.compare{animation:fade-up .5s .2s ease both}
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="nav-logo">
+    <svg viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="11" cy="11" r="3" fill="#534AB7"/>
+      <circle cx="3" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
+      <circle cx="19" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
+      <circle cx="3" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
+      <circle cx="19" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
+      <line x1="5" y1="6" x2="9" y2="10" stroke="#AFA9EC" stroke-width="1"/>
+      <line x1="17" y1="6" x2="13" y2="10" stroke="#AFA9EC" stroke-width="1"/>
+      <line x1="5" y1="16" x2="9" y2="12" stroke="#AFA9EC" stroke-width="1"/>
+      <line x1="17" y1="16" x2="13" y2="12" stroke="#AFA9EC" stroke-width="1"/>
+    </svg>
+    DoSync
+    <span class="nav-pill">v0.3</span>
+  </div>
+  <div class="nav-links">
+    <a href="#how">How it works</a>
+    <a href="#demo">Demo</a>
+    <a href="#certification">Certification</a>
+    <a href="https://github.com/giulianireg-spec/dosync-protocol">GitHub ↗</a>
+    <button class="nav-cta" onclick="window.location='#quickstart'">Get started</button>
+  </div>
+</nav>
+
+<!-- Hero -->
+<div style="max-width:1100px;margin:0 auto;padding:0 40px">
+  <div class="hero" style="padding-left:0;padding-right:0">
+    <div>
+      <p class="hero-eyebrow">Open Protocol · Apache 2.0</p>
+      <h1>AI speaks in goals.<br>Devices speak in<br>commands.<br><em>DoSync is the bridge.</em></h1>
+      <p class="hero-sub">An open communication protocol that lets AI agents interact with physical devices using semantic intent — no hardcoded rules, no manual configuration per device.</p>
+      <div class="hero-actions">
+        <button class="btn-primary" onclick="window.location='#quickstart'">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M3 7.5h9M8.5 4l3.5 3.5L8.5 11" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Quick start
+        </button>
+        <button class="btn-secondary" onclick="window.location='#demo'">Watch the demo</button>
+      </div>
+      <div class="hero-stats">
+        <div class="stat"><span class="stat-num">32/32</span><span class="stat-label">certification tests</span></div>
+        <div class="stat"><span class="stat-num">2</span><span class="stat-label">implementations</span></div>
+        <div class="stat"><span class="stat-num">&lt;100ms</span><span class="stat-label">intent to action</span></div>
+        <div class="stat"><span class="stat-num">Apache 2.0</span><span class="stat-label">open source</span></div>
+      </div>
+    </div>
+    <div class="compare">
+      <div class="compare-card">
+        <p class="compare-label"><span class="dot"></span>Existing protocols</p>
+        <div class="compare-code">
+          lock.unlock()<br>
+          light.set_brightness(100)<br>
+          thermostat.set_temperature(21)<br>
+          <span class="comment">// hardcoded, per-device, per-scenario</span>
+        </div>
+      </div>
+      <div class="compare-card accent">
+        <p class="compare-label"><span class="dot active"></span>DoSync</p>
+        <div class="compare-code">
+          "there is an emergency at home"<br>
+          "nobody is home — save energy"<br>
+          "good morning"<br>
+          <span style="color:#7F77DD;font-style:italic">// every device resolves its own role</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- How it works -->
+<section id="how">
+  <div class="section-inner">
+    <p class="section-eyebrow">Architecture</p>
+    <h2 class="section-title">Five layers. One semantic bridge.</h2>
+    <p class="section-sub">DoSync is a 5-layer protocol stack. Each layer has a single responsibility and doesn't need to know how the others work.</p>
+    <div class="layers">
+      <div class="layer">
+        <p class="layer-num">Layer 5</p>
+        <p class="layer-name">Intent</p>
+        <p class="layer-desc">AI expresses semantic goals</p>
+      </div>
+      <div class="layer">
+        <p class="layer-num">Layer 4</p>
+        <p class="layer-name">Semantic</p>
+        <p class="layer-desc">Resolver maps intent → device actions</p>
+      </div>
+      <div class="layer">
+        <p class="layer-num">Layer 3</p>
+        <p class="layer-name">Registry</p>
+        <p class="layer-desc">Devices self-declare capabilities on join</p>
+      </div>
+      <div class="layer">
+        <p class="layer-num">Layer 2</p>
+        <p class="layer-name">Security</p>
+        <p class="layer-desc">mTLS, local PKI — no internet required</p>
+      </div>
+      <div class="layer">
+        <p class="layer-num">Layer 1</p>
+        <p class="layer-name">Transport</p>
+        <p class="layer-desc">WiFi · BLE · Zigbee · Z-Wave · Thread</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Demo -->
+<section id="demo">
+  <div class="section-inner">
+    <p class="section-eyebrow">Demo</p>
+    <h2 class="section-title">From natural language to physical action.</h2>
+    <p class="section-sub">A conversation with Claude AI triggers a physical emergency protocol in real time — 10 Philips WiZ bulbs, SMS notification, audit log. No commands. No rules. No cloud.</p>
+    <div class="demo-grid">
+      <div class="demo-terminal">
+        <div class="terminal-bar">
+          <span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span>
+        </div>
+        <div class="terminal-body">
+          <div><span class="t-prompt">user → </span><span class="t-cmd">"there is an emergency at home"</span></div>
+          <div style="margin-top:8px"><span class="t-comment"># DoSync hub receives intent</span></div>
+          <div><span class="t-comment"># ensure_safety [emergency]</span></div>
+          <div style="margin-top:8px"><span class="t-device">wiz-living1-01</span> <span class="t-action">turn_on</span> <span style="color:#5F5E5A">brightness=100</span> <span class="t-success">✓</span></div>
+          <div><span class="t-device">wiz-living1-02</span> <span class="t-action">turn_on</span> <span style="color:#5F5E5A">brightness=100</span> <span class="t-success">✓</span></div>
+          <div><span class="t-device">wiz-living2-01</span> <span class="t-action">turn_on</span> <span style="color:#5F5E5A">brightness=100</span> <span class="t-success">✓</span></div>
+          <div><span class="t-device">alarm-test-01</span> <span class="t-action">alarm</span> <span style="color:#5F5E5A">pattern=emergency</span> <span class="t-success">✓</span></div>
+          <div><span class="t-device">notifier-sms-01</span> <span class="t-action">notify</span> <span style="color:#5F5E5A">→ +543513...</span> <span class="t-success">✓</span></div>
+          <div style="margin-top:8px"><span class="t-comment"># 18 actions · 5 devices · 79ms</span></div>
+          <div><span class="t-comment"># audit log updated · SHA-256 chain intact</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="demo-video-box">
+          <a href="https://youtu.be/2czAqoIrd08" target="_blank" rel="noopener">
+            <div class="video-placeholder">
+              <div class="play-btn">
+                <svg viewBox="0 0 20 20"><path d="M6 4l12 6-12 6V4z"/></svg>
+              </div>
+              <span class="video-label">Watch the demo — 2 min</span>
+            </div>
+          </a>
+          <div class="demo-caption">
+            <p>Raspberry Pi 5 running the hub autonomously · 10 Philips WiZ bulbs via UDP · SMS via Twilio · zero internet dependency</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Quick start -->
+<section id="quickstart">
+  <div class="section-inner">
+    <p class="section-eyebrow">Quick start</p>
+    <h2 class="section-title">Up and running in three commands.</h2>
+    <p class="section-sub">No hardware required. The Docker demo starts the hub and registers 8 simulated devices automatically.</p>
+    <div class="qs-steps">
+      <div class="qs-step">
+        <div class="qs-step-header">
+          <span class="qs-step-num">1</span>
+          <span class="qs-step-title">Clone the repo</span>
+        </div>
+        <div class="qs-code">
+          <span class="prompt">$</span> git clone https://github.com/<br>
+          &nbsp;&nbsp;giulianireg-spec/dosync-protocol
+        </div>
+      </div>
+      <div class="qs-step">
+        <div class="qs-step-header">
+          <span class="qs-step-num">2</span>
+          <span class="qs-step-title">Start with Docker</span>
+        </div>
+        <div class="qs-code">
+          <span class="prompt">$</span> cd dosync-protocol<br>
+          <span class="prompt">$</span> docker compose up
+        </div>
+      </div>
+      <div class="qs-step">
+        <div class="qs-step-header">
+          <span class="qs-step-num">3</span>
+          <span class="qs-step-title">Open the dashboard</span>
+        </div>
+        <div class="qs-code">
+          open http://localhost:47200<br>
+          <span style="color:#5F5E5A"># hub · devices · audit log</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Use cases -->
+<section>
+  <div class="section-inner">
+    <p class="section-eyebrow">Use cases</p>
+    <h2 class="section-title">Not just for the home.</h2>
+    <p class="section-sub">The same 5-layer stack works anywhere an AI needs to coordinate physical systems.</p>
+    <div class="use-cases">
+      <div class="use-case">
+        <div class="use-case-icon">🏠</div>
+        <p class="use-case-name">Smart home</p>
+        <p class="use-case-desc">Emergencies, routines, energy efficiency — orchestrated by intent, not rules.</p>
+      </div>
+      <div class="use-case">
+        <div class="use-case-icon">🏥</div>
+        <p class="use-case-name">Hospital</p>
+        <p class="use-case-desc">"Prepare OR 3 for emergency" → equipment, lighting, and access coordinated automatically.</p>
+      </div>
+      <div class="use-case">
+        <div class="use-case-icon">🏨</div>
+        <p class="use-case-name">Hotel</p>
+        <p class="use-case-desc">"Guest in 412 has arrived" → room configured to saved preferences, no configuration needed.</p>
+      </div>
+      <div class="use-case">
+        <div class="use-case-icon">🏭</div>
+        <p class="use-case-name">Factory</p>
+        <p class="use-case-desc">"Line B failure" → safe shutdown, notifications, tamper-evident audit trail.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Certification -->
+<section id="certification">
+  <div class="section-inner">
+    <p class="section-eyebrow">Certification</p>
+    <h2 class="section-title">Self-certify your device in minutes.</h2>
+    <p class="section-sub">Three tiers, self-certifiable with the CLI. No manual approval required for Basic and Standard.</p>
+    <div class="cert-grid">
+      <div class="cert-tier">
+        <span class="cert-tier-badge">Basic</span>
+        <p class="cert-tier-name">DoSync Basic</p>
+        <p class="cert-tier-desc">Layers 1–3: connectivity, authentication, capability manifest.</p>
+        <ul class="cert-requirements">
+          <li>Connects and authenticates</li>
+          <li>Publishes capability manifest</li>
+          <li>Appears in device registry</li>
+        </ul>
+      </div>
+      <div class="cert-tier featured">
+        <span class="cert-tier-badge">Standard</span>
+        <p class="cert-tier-name">DoSync Standard</p>
+        <p class="cert-tier-desc">Layers 1–4: intent response, events, health reporting.</p>
+        <ul class="cert-requirements">
+          <li>Responds to all intent classes</li>
+          <li>Sends events to the hub</li>
+          <li>Passes explainability checks</li>
+        </ul>
+      </div>
+      <div class="cert-tier">
+        <span class="cert-tier-badge">Emergency</span>
+        <p class="cert-tier-name">DoSync Emergency</p>
+        <p class="cert-tier-desc">All layers + emergency override + tamper-evident audit log.</p>
+        <ul class="cert-requirements">
+          <li>Emergency override without confirmation</li>
+          <li>SHA-256 chained audit log</li>
+          <li>mTLS per-device authentication</li>
+        </ul>
+      </div>
+    </div>
+    <div class="cert-cta">
+      <div class="cert-cta-text">
+        <div><span class="prompt">$</span> python3 certify.py --host &lt;device-ip&gt; --port 47200 --tier emergency</div>
+        <div style="color:#5F5E5A;font-style:italic"># generates dosync-cert.json — signed certification report</div>
+      </div>
+      <button class="btn-primary" style="white-space:nowrap" onclick="window.open('https://github.com/giulianireg-spec/dosync-protocol','_blank')">View on GitHub ↗</button>
+    </div>
+  </div>
+</section>
+
+<!-- Status -->
+<section>
+  <div class="section-inner">
+    <p class="section-eyebrow">Project status</p>
+    <h2 class="section-title">Honest about where we are.</h2>
+    <p class="section-sub">v0.3 — reference implementation. Apache 2.0. One person building it. Here's what's real today.</p>
+    <div class="status-grid">
+      <div class="status-items">
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">REST API · WebSocket · Dashboard</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Certification CLI — 32/32 tests</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Philips WiZ adapter (UDP local)</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Home Assistant bridge (10 domains)</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Native MCP server (Claude, any LLM)</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Local PKI + mTLS per-device auth</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Raspberry Pi 5 — autonomous 24/7</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">dosync-node — Node.js implementation</span></div>
+        <div class="status-item"><span class="status-badge wip">In progress</span><span class="status-item-name">Distributed state — multi-hub</span></div>
+        <div class="status-item"><span class="status-badge planned">Planned</span><span class="status-item-name">BLE transport adapter</span></div>
+        <div class="status-item"><span class="status-badge planned">Planned</span><span class="status-item-name">Third-party device certifications</span></div>
+      </div>
+      <div class="roadmap">
+        <h3>Roadmap</h3>
+        <div class="roadmap-items">
+          <div class="roadmap-item">
+            <span class="roadmap-q">Q2 2026</span>
+            <span class="roadmap-text">Distributed state multi-hub · benchmark under concurrent load · penetration testing</span>
+          </div>
+          <div class="roadmap-item">
+            <span class="roadmap-q">Q3 2026</span>
+            <span class="roadmap-text">Second independent implementation · BLE transport · first external device certification</span>
+          </div>
+          <div class="roadmap-item">
+            <span class="roadmap-q">Q4 2026</span>
+            <span class="roadmap-text">IEEE WF-IoT 2026 paper · outreach to device manufacturers · dosync.dev v2</span>
+          </div>
+          <div class="roadmap-item">
+            <span class="roadmap-q">2027+</span>
+            <span class="roadmap-text">FamilyOS integration · DoSync as native protocol in commercial devices</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-logo">
+      <svg width="18" height="18" viewBox="0 0 22 22" fill="none">
+        <circle cx="11" cy="11" r="3" fill="#534AB7"/>
+        <circle cx="3" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
+        <circle cx="19" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
+        <circle cx="3" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
+        <circle cx="19" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
+        <line x1="5" y1="6" x2="9" y2="10" stroke="#AFA9EC" stroke-width="1"/>
+        <line x1="17" y1="6" x2="13" y2="10" stroke="#AFA9EC" stroke-width="1"/>
+        <line x1="5" y1="16" x2="9" y2="12" stroke="#AFA9EC" stroke-width="1"/>
+        <line x1="17" y1="16" x2="13" y2="12" stroke="#AFA9EC" stroke-width="1"/>
+      </svg>
+      DoSync Protocol
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/giulianireg-spec/dosync-protocol">GitHub</a>
+      <a href="https://dev.to/giulianiregspec">dev.to</a>
+      <a href="https://github.com/giulianireg-spec/dosync-protocol/blob/main/spec/DOSYNC-SPEC-v0.1.md">Spec</a>
+      <a href="mailto:giulianireg@gmail.com">Contact</a>
+    </div>
+    <p class="footer-note">Apache 2.0 · © 2026 Rodrigo Giuliani · giulianireg@gmail.com</p>
+  </div>
+</footer>
+
+</body>
+</html>
