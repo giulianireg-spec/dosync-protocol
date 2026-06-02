@@ -89,9 +89,9 @@ nav{
 .compare-label{font-size:12px;font-weight:500;color:var(--text-faint);margin-bottom:8px;display:flex;align-items:center;gap:6px}
 .compare-label .dot{width:6px;height:6px;border-radius:50%;background:#2C2C2A}
 .compare-label .dot.active{background:#7F77DD}
-.compare-card{background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px}
+.compare-card{background:#1A1A18;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:20px 22px}
 .compare-card.accent{background:#1A1830;border-color:#534AB7}
-.compare-code{font-family:var(--font-mono);font-size:13px;color:var(--text-muted);line-height:2}
+.compare-code{font-family:var(--font-mono);font-size:13px;color:#C8C6BB;line-height:2}
 .compare-card.accent .compare-code{color:#AFA9EC}
 .compare-code .comment{color:var(--gray-400);font-style:italic}
 
@@ -120,7 +120,7 @@ section{padding:72px 40px;border-top:0.5px solid var(--border)}
 .dot-r{width:10px;height:10px;border-radius:50%;background:#FF5F57}
 .dot-y{width:10px;height:10px;border-radius:50%;background:#FFBD2E}
 .dot-g{width:10px;height:10px;border-radius:50%;background:#28C840}
-.terminal-body{padding:20px;font-family:var(--font-mono);font-size:13px;line-height:2;color:#C8C6BB}
+.terminal-body{padding:20px;font-family:var(--font-mono);font-size:13px;line-height:2;color:#C8C6BB;background:#111110}
 .t-prompt{color:#1D9E75}
 .t-cmd{color:#F0EEE8}
 .t-comment{color:#5F5E5A;font-style:italic}
@@ -128,7 +128,7 @@ section{padding:72px 40px;border-top:0.5px solid var(--border)}
 .t-device{color:#7F77DD}
 .t-action{color:#EF9F27}
 .demo-video-box{background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
-.video-placeholder{aspect-ratio:16/9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#1A1A18;cursor:pointer}
+.video-placeholder{aspect-ratio:16/9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#111110;cursor:pointer;border-bottom:0.5px solid #2C2C2A}
 .play-btn{width:52px;height:52px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;transition:transform .15s}
 .play-btn:hover{transform:scale(1.06)}
 .play-btn svg{width:20px;height:20px;fill:#fff;margin-left:3px}
@@ -142,7 +142,7 @@ section{padding:72px 40px;border-top:0.5px solid var(--border)}
 .qs-step-header{padding:14px 18px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;gap:10px}
 .qs-step-num{width:22px;height:22px;border-radius:50%;background:var(--purple);color:#fff;font-size:11px;font-weight:500;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .qs-step-title{font-size:14px;font-weight:500}
-.qs-code{padding:16px 18px;font-family:var(--font-mono);font-size:12.5px;color:var(--text-muted);line-height:1.9;background:var(--gray-900);color:#C8C6BB}
+.qs-code{padding:16px 18px;font-family:var(--font-mono);font-size:12.5px;line-height:1.9;background:#111110;color:#C8C6BB;border-top:0.5px solid #2C2C2A}
 .qs-code .prompt{color:#1D9E75}
 
 /* Use cases */
@@ -166,7 +166,7 @@ section{padding:72px 40px;border-top:0.5px solid var(--border)}
 .cert-requirements li{font-size:13px;color:var(--text-muted);display:flex;align-items:flex-start;gap:8px}
 .cert-requirements li::before{content:"✓";color:var(--teal);font-weight:500;flex-shrink:0}
 .cert-tier.featured .cert-requirements li{color:#AFA9EC}
-.cert-cta{margin-top:40px;background:var(--gray-900);border-radius:var(--radius-lg);padding:24px 28px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.cert-cta{margin-top:40px;background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:24px 28px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
 .cert-cta-text{color:#C8C6BB;font-family:var(--font-mono);font-size:13px;line-height:1.8}
 .cert-cta-text .prompt{color:#1D9E75}
 
@@ -175,7 +175,7 @@ section{padding:72px 40px;border-top:0.5px solid var(--border)}
 .status-items{display:flex;flex-direction:column;gap:10px}
 .status-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius)}
 .status-badge{font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px;white-space:nowrap}
-.status-badge.done{background:#0A2018;color:#5DCAA5}
+.status-badge.done{background:#0A2018;color:#5DCAA5;border:0.5px solid #1D6B4A}
 .status-badge.wip{background:#FAEEDA;color:#633806}
 .status-badge.planned{background:var(--gray-100);color:var(--gray-600)}
 .status-item-name{font-size:14px;color:var(--text)}
@@ -274,7 +274,7 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
           lock.unlock()<br>
           light.set_brightness(100)<br>
           thermostat.set_temperature(21)<br>
-          <span class="comment">// hardcoded, per-device, per-scenario</span>
+          <span style="color:#444441;font-style:italic">// hardcoded, per-device, per-scenario</span>
         </div>
       </div>
       <div class="compare-card accent">
@@ -555,9 +555,9 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
       <a href="https://github.com/giulianireg-spec/dosync-protocol">GitHub</a>
       <a href="https://dev.to/giulianiregspec">dev.to</a>
       <a href="https://github.com/giulianireg-spec/dosync-protocol/blob/main/spec/DOSYNC-SPEC-v0.1.md">Spec</a>
-      <a href="mailto:giulianireg@gmail.com">Contact</a>
+      <a href="mailto:rgiuliani@dosync.dev">Contact</a>
     </div>
-    <p class="footer-note">Apache 2.0 · © 2026 Rodrigo Giuliani · giulianireg@gmail.com</p>
+    <p class="footer-note">Apache 2.0 · © 2026 Rodrigo Giuliani · rgiuliani@dosync.dev</p>
   </div>
 </footer>
 
