@@ -3,13 +3,57 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DoSync Protocol — The semantic layer between AI and physical devices</title>
-<meta name="description" content="DoSync is an open protocol (Apache 2.0) that lets AI agents interact with physical devices using semantic intent — no hardcoded rules, no pre-written automations.">
-<meta property="og:title" content="DoSync Protocol">
-<meta property="og:description" content="AI speaks in goals. Devices speak in commands. DoSync is the bridge.">
-<meta property="og:image" content="https://dosync.dev/og.png">
+<title>DoSync Protocol — Open semantic IoT protocol for AI agents</title>
+<meta name="description" content="DoSync is an open protocol (Apache 2.0) that lets AI agents control smart home and IoT devices using semantic intent — no hardcoded rules, no cloud, no manual configuration. Alternative to Matter, Zigbee, Z-Wave for AI-native deployments.">
+<link rel="canonical" href="https://dosync.dev/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="DoSync Protocol">
+<meta property="og:title" content="DoSync — The semantic layer between AI agents and physical devices">
+<meta property="og:description" content="AI speaks in goals. Devices speak in commands. DoSync is the bridge. Open protocol, Apache 2.0, self-certifiable.">
+<meta property="og:image" content="https://dosync.dev/og.svg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:url" content="https://dosync.dev">
+
+<!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DoSync — Semantic IoT protocol for AI agents">
+<meta name="twitter:description" content="AI speaks in goals. Devices speak in commands. DoSync is the bridge. Open source, Apache 2.0.">
+<meta name="twitter:image" content="https://dosync.dev/og.svg">
+
+<!-- SEO keywords -->
+<meta name="keywords" content="IoT protocol, smart home AI, semantic intent, Matter alternative, open source IoT, AI smart home, Home Assistant, MCP server, DoSync, semantic IoT">
+<meta name="author" content="Rodrigo Giuliani">
+<meta name="robots" content="index, follow">
+
+<!-- Schema.org -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "DoSync Protocol",
+  "description": "An open communication protocol that lets AI agents interact with physical devices using semantic intent.",
+  "url": "https://dosync.dev",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Linux, macOS, Docker",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "license": "https://www.apache.org/licenses/LICENSE-2.0",
+  "codeRepository": "https://github.com/giulianireg-spec/dosync-protocol",
+  "author": {
+    "@type": "Person",
+    "name": "Rodrigo Giuliani",
+    "email": "rgiuliani@dosync.dev"
+  },
+  "version": "0.3",
+  "releaseNotes": "https://dosync.dev/#status"
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
@@ -295,7 +339,7 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
   <div class="section-inner">
     <p class="section-eyebrow">Architecture</p>
     <h2 class="section-title">Five layers. One semantic bridge.</h2>
-    <p class="section-sub">DoSync is a 5-layer protocol stack. Each layer has a single responsibility and doesn't need to know how the others work.</p>
+    <p class="section-sub">DoSync is a 5-layer protocol stack. Each layer has a single responsibility and doesn't need to know how the others work. Compatible with Home Assistant, Philips WiZ, Shelly, Matter, Zigbee, and any WiFi device.</p>
     <div class="layers">
       <div class="layer">
         <p class="layer-num">Layer 5</p>
@@ -602,7 +646,8 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
     <div class="footer-links">
       <a href="https://github.com/giulianireg-spec/dosync-protocol">GitHub</a>
       <a href="https://dev.to/giulianiregspec">dev.to</a>
-      <a href="https://github.com/giulianireg-spec/dosync-protocol/blob/main/spec/DOSYNC-SPEC-v0.1.md">Spec</a>
+      <a href="https://github.com/giulianireg-spec/dosync-protocol/blob/main/spec/DOSYNC-SPEC-v0.1.md">Protocol spec</a>
+      <a href="https://github.com/giulianireg-spec/dosync-protocol/blob/main/spec/RESOLVER-SPEC-v0.2.md">Resolver spec</a>
       <a href="mailto:rgiuliani@dosync.dev">Contact</a>
     </div>
     <p class="footer-note">Apache 2.0 · © 2026 Rodrigo Giuliani · rgiuliani@dosync.dev</p>
