@@ -291,7 +291,7 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
 </div>
 
 <!-- How it works -->
-<section id="how">
+<section id="how" style="padding:56px 40px 48px">
   <div class="section-inner">
     <p class="section-eyebrow">Architecture</p>
     <h2 class="section-title">Five layers. One semantic bridge.</h2>
@@ -327,7 +327,7 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
 </section>
 
 <!-- Demo -->
-<section id="demo">
+<section id="demo" style="padding:80px 40px">
   <div class="section-inner">
     <p class="section-eyebrow">Demo</p>
     <h2 class="section-title">From natural language to physical action.</h2>
@@ -404,6 +404,54 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
         <div class="qs-code">
           open http://localhost:47200<br>
           <span style="color:#5F5E5A"># hub · devices · audit log</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Custom adapter -->
+<section style="padding:48px 40px;border-top:0.5px solid var(--border)">
+  <div class="section-inner">
+    <p class="section-eyebrow">Extensibility</p>
+    <h2 class="section-title" style="font-size:28px">Adding your own device takes one method.</h2>
+    <p class="section-sub">Any device that can receive a network message can be a DoSync adapter. You implement one method — the hub handles the rest.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:32px;align-items:start">
+      <div>
+        <div class="demo-terminal">
+          <div class="terminal-bar">
+            <span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span>
+            <span style="font-family:var(--font-mono);font-size:11px;color:#5F5E5A;margin-left:8px">my_adapter.py</span>
+          </div>
+          <div class="terminal-body" style="font-size:12px;line-height:1.9">
+<span style="color:#7F77DD">class</span> <span style="color:#EF9F27">MyBrandAdapter</span>(<span style="color:#5DCAA5">DoSyncAdapter</span>):<br>
+<br>
+&nbsp;&nbsp;<span style="color:#7F77DD">async def</span> <span style="color:#EF9F27">execute</span>(self, action, urgency):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#5F5E5A"># translate DoSync action to your device</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7F77DD">await</span> self.device.send(action.action, action.params)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7F77DD">return</span> <span style="color:#5DCAA5">ActionResult</span>(success=<span style="color:#EF9F27">True</span>)<br>
+<br>
+&nbsp;&nbsp;<span style="color:#888780">@property</span><br>
+&nbsp;&nbsp;<span style="color:#7F77DD">def</span> <span style="color:#EF9F27">adapter_name</span>(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7F77DD">return</span> <span style="color:#5DCAA5">"mybrand"</span><br>
+<br>
+<span style="color:#5F5E5A"># register once — hub uses it automatically</span><br>
+executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;padding-top:8px">
+        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">Available today</p>
+          <p style="font-family:var(--font-mono);font-size:12px;color:#888780;line-height:1.9">wiz · homeassistant · shelly · matter · gpio · simulated</p>
+        </div>
+        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">The adapter contract</p>
+          <p style="font-size:13px;color:#888780;line-height:1.6">One method: <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">execute(action, urgency)</code>. The hub handles routing, audit logging, policy evaluation, and state tracking. Your adapter only speaks to the device.</p>
+        </div>
+        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">Optional: state querying</p>
+          <p style="font-size:13px;color:#888780;line-height:1.6">Implement <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">get_state(device_id)</code> to participate in the background state refresher — the hub polls your device every 60s and skips redundant actions automatically.</p>
         </div>
       </div>
     </div>
@@ -490,7 +538,7 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
 </section>
 
 <!-- Status -->
-<section>
+<section style="padding:56px 40px 48px">
   <div class="section-inner">
     <p class="section-eyebrow">Project status</p>
     <h2 class="section-title">Honest about where we are.</h2>
