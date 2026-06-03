@@ -46,6 +46,23 @@ Layer 3 — Decision (human operator)
 
 ---
 
+## Urgency levels — protocol-controlled values
+
+The urgency level is one of only two values the protocol controls directly (the other being the intent class name format). It has direct safety implications across the stack.
+
+| Level | Value | Behavior |
+|---|---|---|
+| `emergency` | Bypasses all policy constraints. Executes immediately. Emergency-capable devices always included. |
+| `alert` | High priority. Confirmation policies may apply. |
+| `warning` | Elevated priority. Warrants attention but no immediate action. All policies apply. |
+| `info` | Normal priority. All policies apply. Default for routine operations. |
+
+Only `emergency` triggers the emergency override path. The three remaining levels go through full policy evaluation. The distinction between `alert` and `warning` is intentional: `alert` implies a condition that may require the system to act; `warning` implies a condition that should be logged and monitored but not acted upon automatically.
+
+**When to use `warning`:** anomalies that are notable but not urgent — a high temperature reading, an unusual sensor pattern, a device behaving unexpectedly. The gpio_adapter uses `warning` for DHT22 temperature thresholds above 35°C: the reading is significant enough to log and notify, but not significant enough to bypass policies or trigger emergency-capable devices.
+
+---
+
 ## Open intent class vocabulary — the protocol defines format, not meaning
 
 DoSync v0.4 introduces a fundamental architectural change: intent classes are no longer hardcoded in the protocol. The protocol defines the *format* of an intent class name, not its *vocabulary*.
@@ -212,6 +229,7 @@ However, domain applicability has limits that must be stated clearly:
 | Unreachable device TTL | Transient failures are excluded temporarily, not permanently. Recovery is automatic. |
 | Open intent vocabulary | The protocol defines format, not meaning. Domain vocabularies are deployment-specific. |
 | Five universal intents | ensure_safety, alert_anomaly, control_access, report_status, notify — valid in any domain. |
+| Four urgency levels | emergency > alert > warning > info. Only emergency bypasses policy constraints. |
 
 ---
 

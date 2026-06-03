@@ -224,7 +224,28 @@ The semantic resolver follows this algorithm:
 7. Collect results → emit IntentResult
 ```
 
-### 6.3 Built-in intent classes (v0.1)
+### 6.3 Urgency levels
+
+Every intent carries an urgency level that controls execution behavior across the protocol stack — policy evaluation, emergency override, audit logging priority, and device inclusion.
+
+| Level | Value | Behavior |
+|---|---|---|
+| `emergency` | `"emergency"` | Bypasses all policy constraints. Executes immediately without confirmation. Emergency-capable devices always included. All actions logged as critical with SHA-256 chain. |
+| `alert` | `"alert"` | High priority. Confirmation policies may apply depending on hub configuration. Devices with `emergency_capable: true` score higher. |
+| `warning` | `"warning"` | Elevated priority. A condition that warrants attention but does not require immediate action. All policies apply. Used for anomalies that are notable but not urgent (e.g. high temperature, unusual sensor reading). |
+| `info` | `"info"` | Normal priority. All policies apply. Default for routine operations, status updates, and scheduled events. |
+
+**The urgency hierarchy:** `emergency > alert > warning > info`
+
+Only `emergency` triggers the emergency override path — bypassing policy constraints and confirmation requirements. The other three levels are subject to full policy evaluation.
+
+**Usage guidance:**
+- Use `emergency` only for genuine safety threats where milliseconds matter and bypassing policies is acceptable
+- Use `alert` for conditions that may require human decision before acting  
+- Use `warning` for anomalies that should be logged and monitored but not acted upon immediately
+- Use `info` for all routine operations
+
+### 6.4 Built-in intent classes (v0.1)
 
 | Intent class | Description | Typical devices triggered |
 |---|---|---|
@@ -235,7 +256,7 @@ The semantic resolver follows this algorithm:
 | `control_access` | Lock/unlock entry points | Door locks, gates |
 | `monitor_health` | Ongoing observation | Camera, motion sensor, wearable |
 
-### 6.4 Emergency escalation
+### 6.5 Emergency escalation
 
 When `urgency = "emergency"` and `emergency_override = true` on a device:
 
