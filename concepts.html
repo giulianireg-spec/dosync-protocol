@@ -87,11 +87,34 @@ nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-co
 
 /* Responsive */
 @media(max-width:860px){
-  .layout{grid-template-columns:1fr;padding:32px 20px;gap:32px}
-  .sidebar{position:static}
-  nav{padding:0 20px}
-  .series-title{font-size:30px}
-  .article-title{font-size:24px}
+  nav{padding:0 16px}
+  .layout{
+    grid-template-columns:1fr;
+    padding:24px 20px 100px 20px;
+    gap:0;
+  }
+  .series-title{font-size:28px}
+  .article-title{font-size:22px}
+
+  /* Sidebar desktop — ocultar */
+  .sidebar{display:none}
+
+  /* Bottom nav mobile — fijo en la parte inferior */
+  .mobile-nav{
+    display:flex !important;
+    position:fixed;
+    bottom:0;left:0;right:0;
+    background:rgba(13,13,12,0.97);
+    border-top:0.5px solid var(--border);
+    backdrop-filter:blur(12px);
+    z-index:200;
+    padding:10px 12px 14px;
+    justify-content:space-around;
+    gap:4px;
+  }
+}
+@media(min-width:861px){
+  .mobile-nav{display:none !important}
 }
 </style>
 </head>
@@ -470,6 +493,30 @@ Capability:  device declares emergency_capable: true
 </div>
 
 <!-- Footer -->
+<!-- Mobile bottom nav -->
+<nav class="mobile-nav" id="mobile-nav">
+  <a class="mobile-nav-item active" href="#concept-1">
+    <span class="mobile-nav-num">1</span>
+    <span class="mobile-nav-label">Semantic intent</span>
+  </a>
+  <a class="mobile-nav-item" href="#concept-2">
+    <span class="mobile-nav-num">2</span>
+    <span class="mobile-nav-label">Automations</span>
+  </a>
+  <a class="mobile-nav-item" href="#concept-3">
+    <span class="mobile-nav-num">3</span>
+    <span class="mobile-nav-label">Event vs intent</span>
+  </a>
+  <a class="mobile-nav-item" href="#concept-4">
+    <span class="mobile-nav-num">4</span>
+    <span class="mobile-nav-label">Policies</span>
+  </a>
+  <a class="mobile-nav-item" href="#concept-5">
+    <span class="mobile-nav-num">5</span>
+    <span class="mobile-nav-label">Capability</span>
+  </a>
+</nav>
+
 <footer style="border-top:0.5px solid var(--border);padding:40px;background:var(--bg-subtle);margin-top:0">
   <div style="max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px">
     <div style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:500;color:var(--text)">
@@ -498,14 +545,14 @@ Capability:  device declares emergency_capable: true
 
 <script>
 const items=document.querySelectorAll('.sidebar-item');
+const mobileItems=document.querySelectorAll('.mobile-nav-item');
 const articles=document.querySelectorAll('.article');
 const observer=new IntersectionObserver(entries=>{
   entries.forEach(e=>{
     if(e.isIntersecting){
       const id=e.target.id;
-      items.forEach(i=>{
-        i.classList.toggle('active',i.getAttribute('href')==='#'+id);
-      });
+      items.forEach(i=>i.classList.toggle('active',i.getAttribute('href')==='#'+id));
+      mobileItems.forEach(i=>i.classList.toggle('active',i.getAttribute('href')==='#'+id));
     }
   });
 },{threshold:0.25});
