@@ -253,7 +253,7 @@ class CapabilityMatchingResolver(BaseResolver):
         Muestra el score de cada dispositivo y por qué fue incluido o excluido.
         Calculado on-demand — refleja el estado actual del registry.
         """
-        resolution = INTENT_RESOLUTION_MAP.get(intent.intent, {"tags": [], "actuators": []})
+        resolution = self._get_resolution(intent)
         target_tags      = set(resolution.get("tags", []))
         target_actuators = set(resolution.get("actuators", []))
         generic_tags     = {"light", "climate", "communication", "sensor", "appliance", "display"}
@@ -395,6 +395,26 @@ class CapabilityMatchingResolver(BaseResolver):
         }
         return defaults.get(actuator.type, {})
 
+    def _get_resolution(self, intent: Intent) -> dict:
+        """Return resolution tags/actuators — built-in first, then custom DB."""
+        resolution = INTENT_RESOLUTION_MAP.get(intent.intent)
+        if resolution:
+            return resolution
+        try:
+            hub = getattr(self, "hub", None)
+            db  = getattr(hub, "db", None)
+            if db:
+                name = intent.intent if isinstance(intent.intent, str) else intent.intent.value
+                custom = db.get_custom_intent_class(name)
+                if custom:
+                    return {
+                        "tags":      custom["resolution_tags"],
+                        "actuators": custom["resolution_actuators"],
+                    }
+        except Exception:
+            pass
+        return {"tags": [], "actuators": []}
+
     def resolve(self, intent: Intent) -> ActionPlan:
         from datetime import datetime
         # Context validation: schedule-aware intents
@@ -412,7 +432,7 @@ class CapabilityMatchingResolver(BaseResolver):
                 log.info("Intent '%s' blocked by schedule (day=%s hour=%s:%s)",
                          intent.intent.value, now.weekday(), now.hour, now.minute)
                 return ActionPlan(intent_id=intent.intent_id, actions=[], urgency=intent.urgency)
-        resolution = INTENT_RESOLUTION_MAP.get(intent.intent, {"tags": [], "actuators": []})
+        resolution = self._get_resolution(intent)
 
         # Candidate selection via inverted tag index.
         # Strategy:

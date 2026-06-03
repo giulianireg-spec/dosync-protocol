@@ -67,6 +67,15 @@ CREATE TABLE IF NOT EXISTS device_state (
     state_json      TEXT NOT NULL,
     updated_at      REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS custom_intent_classes (
+    name            TEXT PRIMARY KEY,
+    urgency         TEXT NOT NULL DEFAULT 'info',
+    resolution_tags TEXT NOT NULL,   -- JSON array
+    resolution_actuators TEXT NOT NULL DEFAULT '[]',  -- JSON array
+    description     TEXT NOT NULL DEFAULT '',
+    domain          TEXT NOT NULL DEFAULT 'general',
+    created_at      REAL NOT NULL
+);
 """
 
 
@@ -538,4 +547,60 @@ class DoSyncDB:
         """, (cutoff,))
         self._conn.commit()
         return cur.rowcount
+
+
+    # ── Custom Intent Classes ─────────────────────────────────────────────────
+
+    def save_custom_intent_class(self, name: str, urgency: str,
+                                  resolution_tags: list, resolution_actuators: list,
+                                  description: str, domain: str) -> None:
+        import time, json
+        self._conn.execute("""
+            INSERT OR REPLACE INTO custom_intent_classes
+            (name, urgency, resolution_tags, resolution_actuators,
+             description, domain, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (name, urgency, json.dumps(resolution_tags),
+              json.dumps(resolution_actuators),
+              description, domain, time.time()))
+        self._conn.commit()
+
+    def get_custom_intent_class(self, name: str) -> dict | None:
+        import json
+        row = self._conn.execute(
+            "SELECT * FROM custom_intent_classes WHERE name = ?", (name,)
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "name": row["name"],
+            "urgency": row["urgency"],
+            "resolution_tags": json.loads(row["resolution_tags"]),
+            "resolution_actuators": json.loads(row["resolution_actuators"]),
+            "description": row["description"],
+            "domain": row["domain"],
+            "created_at": row["created_at"],
+        }
+
+    def list_custom_intent_classes(self) -> list[dict]:
+        import json
+        rows = self._conn.execute(
+            "SELECT * FROM custom_intent_classes ORDER BY created_at ASC"
+        ).fetchall()
+        return [{
+            "name": r["name"],
+            "urgency": r["urgency"],
+            "resolution_tags": json.loads(r["resolution_tags"]),
+            "resolution_actuators": json.loads(r["resolution_actuators"]),
+            "description": r["description"],
+            "domain": r["domain"],
+            "created_at": r["created_at"],
+        } for r in rows]
+
+    def delete_custom_intent_class(self, name: str) -> bool:
+        cur = self._conn.execute(
+            "DELETE FROM custom_intent_classes WHERE name = ?", (name,)
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
 

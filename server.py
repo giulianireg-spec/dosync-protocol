@@ -742,6 +742,106 @@ def unregister_device(device_id: str, auth: str = Depends(require_auth)):
     return {"status": "unregistered", "device_id": device_id}
 
 
+
+# ── Custom Intent Classes endpoints ──────────────────────────────────────────
+
+BUILT_IN_INTENT_NAMES = {
+    "ensure_safety", "control_access", "monitor_health", "notify_family",
+    "report_status", "set_environment", "save_energy", "remind_chore",
+    "alert_anomaly", "bedtime_routine", "morning_routine", "away_mode",
+    "children_arrived_home",
+}
+
+class CustomIntentClassRequest(BaseModel):
+    name:                  str
+    urgency:               str = "info"
+    resolution_tags:       list[str]
+    resolution_actuators:  list[str] = []
+    description:           str = ""
+    domain:                str = "general"
+
+@app.post("/v1/intent-classes", tags=["Protocol"], summary="Register a custom intent class")
+async def register_intent_class(
+    req: CustomIntentClassRequest,
+    auth: str = Depends(require_auth),
+):
+    # Validate name
+    name = req.name.strip().lower().replace(" ", "_")
+    if not name:
+        raise HTTPException(status_code=400, detail="name cannot be empty")
+    if name in BUILT_IN_INTENT_NAMES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"'{name}' is a built-in intent class and cannot be overridden"
+        )
+    # Validate urgency
+    if req.urgency not in ("emergency", "alert", "info"):
+        raise HTTPException(
+            status_code=400,
+            detail="urgency must be one of: emergency, alert, info"
+        )
+    # Validate tags
+    if not req.resolution_tags:
+        raise HTTPException(status_code=400, detail="resolution_tags cannot be empty")
+
+    hub.db.save_custom_intent_class(
+        name=name,
+        urgency=req.urgency,
+        resolution_tags=req.resolution_tags,
+        resolution_actuators=req.resolution_actuators,
+        description=req.description,
+        domain=req.domain,
+    )
+    return {
+        "status":       "registered",
+        "name":         name,
+        "urgency":      req.urgency,
+        "resolution_tags": req.resolution_tags,
+        "resolution_actuators": req.resolution_actuators,
+        "description":  req.description,
+        "domain":       req.domain,
+    }
+
+
+@app.get("/v1/intent-classes", tags=["Protocol"], summary="List all intent classes")
+async def list_intent_classes(auth: str = Depends(require_auth)):
+    from dosync.hub import INTENT_RESOLUTION_MAP
+    built_in = [
+        {
+            "name":                 k.value,
+            "urgency":              "emergency" if k.value in ("ensure_safety", "alert_anomaly") else "info",
+            "resolution_tags":      v.get("tags", []),
+            "resolution_actuators": v.get("actuators", []),
+            "description":          "",
+            "domain":               "built-in",
+            "type":                 "built-in",
+        }
+        for k, v in INTENT_RESOLUTION_MAP.items()
+    ]
+    custom = [
+        {**c, "type": "custom"}
+        for c in hub.db.list_custom_intent_classes()
+    ]
+    return {
+        "built_in": built_in,
+        "custom":   custom,
+        "total":    len(built_in) + len(custom),
+    }
+
+
+@app.delete("/v1/intent-classes/{name}", tags=["Protocol"], summary="Delete a custom intent class")
+async def delete_intent_class(name: str, auth: str = Depends(require_auth)):
+    if name in BUILT_IN_INTENT_NAMES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"'{name}' is a built-in intent class and cannot be deleted"
+        )
+    deleted = hub.db.delete_custom_intent_class(name)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Custom intent class '{name}' not found")
+    return {"status": "deleted", "name": name}
+
+
 @app.post("/v1/intent", tags=["AI"], include_in_schema=False)
 async def execute_intent_legacy(req: IntentRequest, auth: str = Depends(require_auth)):
     """Deprecated — use POST /v1/intent/async instead."""
