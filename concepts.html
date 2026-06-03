@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DoSync Concepts — The ideas behind the protocol</title>
+<meta name="description" content="A five-part series exploring the architectural ideas behind DoSync — semantic intent, capability abstraction, policies, and why AI agents need a different kind of protocol.">
+<link rel="canonical" href="https://dosync.dev/concepts">
+<meta property="og:title" content="DoSync Concepts">
+<meta property="og:description" content="Five posts on the ideas behind DoSync — semantic intent, capability abstraction, policies, and why AI agents need a different kind of protocol.">
+<meta property="og:url" content="https://dosync.dev/concepts">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{
+  --purple:#534AB7;--purple-light:#1A1830;--purple-mid:#AFA9EC;--purple-dark:#7F77DD;
+  --teal:#1D9E75;--teal-light:#0A2018;
+  --text:#F0EEE8;--text-muted:#888780;--text-faint:#5F5E5A;
+  --border:#2C2C2A;--bg:#0D0D0C;--bg-subtle:#111110;--bg-card:#1A1A18;
+  --font-sans:'DM Sans',sans-serif;--font-mono:'DM Mono',monospace;--font-display:'DM Serif Display',serif;
+  --radius:8px;--radius-lg:12px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:var(--font-sans);color:var(--text);background:var(--bg);font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
+a{color:var(--purple-mid);text-decoration:none}
+a:hover{color:var(--text)}
+code{font-family:var(--font-mono);font-size:13px;background:#1A1A18;border:0.5px solid var(--border);padding:2px 6px;border-radius:4px;color:#AFA9EC}
+pre{background:#111110;border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:20px;overflow-x:auto;margin:24px 0}
+pre code{background:none;border:none;padding:0;font-size:13px;color:#C8C6BB;line-height:1.9}
+
+/* Nav */
+nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 40px;height:60px;background:rgba(13,13,12,0.92);border-bottom:0.5px solid var(--border);backdrop-filter:blur(8px)}
+.nav-logo{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:500;color:var(--text);text-decoration:none}
+.nav-logo svg{width:22px;height:22px}
+.nav-links{display:flex;gap:24px;align-items:center}
+.nav-links a{font-size:14px;color:var(--text-muted)}
+.nav-links a:hover{color:var(--text)}
+
+/* Layout */
+.layout{display:grid;grid-template-columns:240px 1fr;max-width:1100px;margin:0 auto;padding:48px 40px;gap:64px;align-items:start}
+
+/* Sidebar */
+.sidebar{position:sticky;top:80px}
+.sidebar-label{font-size:11px;font-weight:500;color:var(--text-faint);letter-spacing:.08em;text-transform:uppercase;margin-bottom:16px}
+.sidebar-nav{display:flex;flex-direction:column;gap:2px}
+.sidebar-item{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:var(--radius);color:var(--text-muted);font-size:13px;line-height:1.4;text-decoration:none;transition:background .15s,color .15s;border:0.5px solid transparent}
+.sidebar-item:hover{background:var(--bg-card);color:var(--text);border-color:var(--border)}
+.sidebar-item.active{background:var(--purple-light);color:var(--purple-mid);border-color:#534AB7}
+.sidebar-num{font-size:11px;font-weight:500;flex-shrink:0;width:16px;padding-top:1px;color:var(--text-faint)}
+.sidebar-item.active .sidebar-num{color:var(--purple-dark)}
+.sidebar-footer{margin-top:32px;padding-top:20px;border-top:0.5px solid var(--border)}
+.sidebar-footer a{display:block;font-size:12px;color:var(--text-faint);margin-bottom:6px}
+.sidebar-footer a:hover{color:var(--text-muted)}
+
+/* Content */
+.content{min-width:0}
+
+/* Series header */
+.series-header{margin-bottom:56px}
+.series-eyebrow{font-size:12px;font-weight:500;color:var(--purple-dark);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px}
+.series-title{font-family:var(--font-display);font-size:40px;line-height:1.1;margin-bottom:16px;letter-spacing:-.01em}
+.series-sub{font-size:16px;color:var(--text-muted);max-width:520px;line-height:1.65}
+
+/* Article */
+.article{margin-bottom:80px;padding-bottom:80px;border-bottom:0.5px solid var(--border)}
+.article:last-child{border-bottom:none;margin-bottom:0}
+.article-header{margin-bottom:32px}
+.article-meta{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.article-num{font-size:11px;font-weight:500;background:var(--purple-light);color:var(--purple-dark);padding:3px 10px;border-radius:20px;border:0.5px solid #534AB7}
+.article-title{font-family:var(--font-display);font-size:30px;line-height:1.15;letter-spacing:-.01em;margin-bottom:0}
+.article-title em{font-style:italic;color:var(--purple-dark)}
+
+/* Article body */
+.article-body h2{font-family:var(--font-display);font-size:22px;line-height:1.2;margin:40px 0 14px;color:var(--text)}
+.article-body p{margin-bottom:18px;color:var(--text-muted);line-height:1.75}
+.article-body p strong{color:var(--text);font-weight:500}
+.article-body ul,.article-body ol{margin:0 0 18px 20px;color:var(--text-muted)}
+.article-body li{margin-bottom:6px;line-height:1.7}
+.article-body hr{border:none;border-top:0.5px solid var(--border);margin:36px 0}
+.article-body blockquote{border-left:2px solid var(--purple);padding-left:16px;margin:24px 0;color:var(--text-muted);font-style:italic}
+.article-body .callout{background:var(--purple-light);border:0.5px solid #534AB7;border-radius:var(--radius-lg);padding:16px 20px;margin:24px 0}
+.article-body .callout p{color:var(--purple-mid);margin-bottom:0}
+.article-devto{margin-top:40px;display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--purple-mid);border:0.5px solid #534AB7;padding:9px 16px;border-radius:var(--radius);background:var(--purple-light)}
+.article-devto:hover{background:#231E45;color:var(--text)}
+
+/* Responsive */
+@media(max-width:860px){
+  .layout{grid-template-columns:1fr;padding:32px 20px;gap:32px}
+  .sidebar{position:static}
+  nav{padding:0 20px}
+  .series-title{font-size:30px}
+  .article-title{font-size:24px}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">
+    <svg viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="11" cy="11" r="3" fill="#534AB7"/>
+      <circle cx="3" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
+      <circle cx="19" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
+      <circle cx="3" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
+      <circle cx="19" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
+      <line x1="5" y1="6" x2="9" y2="10" stroke="#AFA9EC" stroke-width="1"/>
+      <line x1="17" y1="6" x2="13" y2="10" stroke="#AFA9EC" stroke-width="1"/>
+      <line x1="5" y1="16" x2="9" y2="12" stroke="#AFA9EC" stroke-width="1"/>
+      <line x1="17" y1="16" x2="13" y2="12" stroke="#AFA9EC" stroke-width="1"/>
+    </svg>
+    DoSync
+  </a>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="https://github.com/giulianireg-spec/dosync-protocol">GitHub ↗</a>
+  </div>
+</nav>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <p class="sidebar-label">DoSync Concepts</p>
+    <nav class="sidebar-nav">
+      <a class="sidebar-item active" href="#concept-1">
+        <span class="sidebar-num">1</span>
+        <span>What is semantic intent?</span>
+      </a>
+      <a class="sidebar-item" href="#concept-2">
+        <span class="sidebar-num">2</span>
+        <span>Why hardcoded automations fail</span>
+      </a>
+      <a class="sidebar-item" href="#concept-3">
+        <span class="sidebar-num">3</span>
+        <span>Event vs intent</span>
+      </a>
+      <a class="sidebar-item" href="#concept-4">
+        <span class="sidebar-num">4</span>
+        <span>Policies, not rules</span>
+      </a>
+      <a class="sidebar-item" href="#concept-5">
+        <span class="sidebar-num">5</span>
+        <span>Capability abstraction</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <a href="https://github.com/giulianireg-spec/dosync-protocol">GitHub ↗</a>
+      <a href="https://dosync.dev">dosync.dev ↗</a>
+      <a href="mailto:rgiuliani@dosync.dev">rgiuliani@dosync.dev</a>
+    </div>
+  </aside>
+
+  <!-- Content -->
+  <main class="content">
+
+    <div class="series-header">
+      <p class="series-eyebrow">Five-part series · Apache 2.0</p>
+      <h1 class="series-title">DoSync Concepts</h1>
+      <p class="series-sub">The architectural ideas behind DoSync — why AI agents need a different kind of protocol, and what that protocol looks like at each layer.</p>
+    </div>
+
+    <!-- Article 1 -->
+    <article class="article" id="concept-1">
+      <div class="article-header">
+        <div class="article-meta">
+          <span class="article-num">Part 1 of 5</span>
+        </div>
+        <h2 class="article-title">What is semantic intent? <em>And why it's not the same as a command.</em></h2>
+      </div>
+      <div class="article-body">
+        <p>There's a word that keeps appearing in conversations about AI and the physical world: <em>intent</em>. We say things like "the AI understood my intent" or "I want the system to infer my intent from context." But when you actually sit down to build something — a smart home, a hospital room, a hotel — you quickly discover that most protocols don't have a concept of intent at all.</p>
+        <p>They have commands. And that difference, small as it sounds, is architectural. It changes everything about how you build systems that are supposed to work with AI.</p>
+
+        <h2>The command model</h2>
+        <p>Every smart home protocol in existence today was designed around one assumption: a human decides what to do, an app translates that decision into a specific instruction, and a device executes it.</p>
+<pre><code>Human → App → Command → Device
+lock.unlock()
+light.set_brightness(80)
+thermostat.set_temperature(21)</code></pre>
+        <p>This is the command model. It works beautifully when the human is in the loop. The problem starts when you remove the human.</p>
+
+        <h2>What an AI agent actually produces</h2>
+        <p>When an AI system observes the world — a camera detecting a fall, a sensor registering unusual temperature, a model inferring that nobody is home — it doesn't produce a command. It produces an understanding of a situation.</p>
+        <p>"There is an emergency." "The person who lives here has arrived." "Something is wrong with the refrigerator." These are not commands. They're semantic descriptions of a state of the world. To translate this into device commands, someone has to write that translation — manually, in advance, for every possible situation. Miss one edge case and the system does nothing. Add a new device and you rewrite the rules. This is the command gap.</p>
+
+        <h2>Semantic intent: a different contract</h2>
+        <p>A semantic intent is a structured expression of a goal — what needs to be achieved — without specifying how to achieve it.</p>
+<pre><code>// Command (existing protocols)
+{
+  "device": "lock-frontdoor-01",
+  "command": "unlock",
+  "duration": 300
+}
+
+// Semantic Intent (DoSync)
+{
+  "intent": "ensure_safety",
+  "urgency": "emergency",
+  "context": {
+    "trigger": "fall_detected",
+    "location": "bedroom"
+  }
+}</code></pre>
+        <p>The command says: <em>unlock this specific lock for 5 minutes.</em> The intent says: <em>there is a safety emergency in the bedroom.</em> The difference isn't just syntactic. It's about who holds the knowledge. In the command model, the knowledge of which devices to activate lives in the app or the rules engine — static, unable to adapt. In the intent model, that knowledge lives in the devices themselves, in their Capability Manifests.</p>
+
+        <h2>How DoSync implements this</h2>
+        <p>In DoSync, every device publishes a Capability Manifest when it joins the network:</p>
+<pre><code>{
+  "device_id": "lock-frontdoor-01",
+  "tags": ["door-lock", "entrance", "emergency"],
+  "actuators": [
+    { "type": "unlock", "description": "Unlock for emergency access" },
+    { "type": "lock" }
+  ],
+  "emergency_capable": true
+}</code></pre>
+        <p>When an AI agent fires <code>ensure_safety [emergency]</code>, the resolver reads every registered manifest and builds an action plan automatically — no rules written, no pre-configuration required. Add a new device tomorrow and it participates automatically in every relevant scenario.</p>
+
+        <h2>The deeper shift</h2>
+        <p>In the command model, the AI is a <strong>remote control</strong>. It breaks when a device changes, when a new device appears, or when a scenario wasn't anticipated. In the intent model, the AI is a <strong>coordinator</strong>. It expresses what needs to happen. The devices figure out their role. The system is resilient to change because the knowledge is distributed — each device owns its own context.</p>
+        <p>This is not a small difference. It's the difference between building a system that works today and building a system that can grow.</p>
+      </div>
+      <a class="article-devto" href="https://dev.to/giulianiregspec/what-is-semantic-intent-and-why-its-not-the-same-as-a-command" target="_blank" rel="noopener">Read on dev.to ↗</a>
+    </article>
+
+    <!-- Article 2 -->
+    <article class="article" id="concept-2">
+      <div class="article-header">
+        <div class="article-meta">
+          <span class="article-num">Part 2 of 5</span>
+        </div>
+        <h2 class="article-title">Why hardcoded automations <em>fail AI agents.</em></h2>
+      </div>
+      <div class="article-body">
+        <p>There's a rule every smart home developer has written at least once:</p>
+<pre><code>if motion_detected and time > 22:00:
+    turn_on(hallway_light)</code></pre>
+        <p>It works. It's simple. And it's the foundation of how every major home automation platform thinks about intelligence today. The problem isn't that the rule is wrong. The problem is what happens when you add an AI agent to the system.</p>
+
+        <h2>The rule-writing problem</h2>
+        <p>Rules are commands in disguise. "If X happens, do Y" is just a delayed command — the human still decided what Y should be, they just decided it in advance. That works perfectly when you can anticipate every scenario, your device set never changes, and the AI's job is simply to trigger pre-approved responses. None of those assumptions hold in a real AI-augmented environment.</p>
+        <p>Consider what happens when you add a new device. A smart lock arrives. You register it with your platform. Now you have to go back through every relevant rule and add the lock. Miss one and the system silently does nothing in exactly the scenario where you needed it most. This is the brittleness problem: hardcoded automations only respond to situations that were anticipated when the rule was written.</p>
+
+        <h2>Why AI agents make this worse, not better</h2>
+        <p>The intuitive solution is to write more rules, or smarter rules. But this misses the architectural problem. An AI agent doesn't produce rules. It produces understanding. When a vision model detects a fall, it knows there's an emergency — the translation from understanding to commands still has to be written somewhere, by someone, in advance. The more capable the AI, the more situations it can detect. And every new situation is a new set of rules that needs to be written.</p>
+
+        <h2>What capability-based discovery changes</h2>
+        <p>The alternative is to shift where the knowledge lives. Instead of centralizing the response logic in rules, distribute it to the devices themselves:</p>
+<pre><code>{
+  "device_id": "lock-frontdoor-01",
+  "tags": ["door-lock", "entrance", "emergency"],
+  "actuators": [
+    { "type": "unlock", "emergency_capable": true }
+  ],
+  "emergency_capable": true
+}</code></pre>
+        <p>When the AI fires <code>ensure_safety [emergency]</code>, the resolver reads every manifest and asks: which devices declared themselves relevant to this situation? The response assembles at runtime from what's available. Add the smart lock tomorrow — it participates automatically. The device brought its own knowledge.</p>
+
+        <h2>The difference that matters</h2>
+        <p>Hardcoded automations are fragile because they encode knowledge in a central place that can't keep up with change. Capability-based discovery distributes that knowledge to the edges. For AI agents specifically, this is the difference between a system that only responds to situations you anticipated and a system that responds to situations the AI can detect — whether you anticipated them or not.</p>
+      </div>
+      <a class="article-devto" href="https://dev.to/giulianiregspec/why-hardcoded-automations-fail-ai-agents" target="_blank" rel="noopener">Read on dev.to ↗</a>
+    </article>
+
+    <!-- Article 3 -->
+    <article class="article" id="concept-3">
+      <div class="article-header">
+        <div class="article-meta">
+          <span class="article-num">Part 3 of 5</span>
+        </div>
+        <h2 class="article-title">Event vs intent. <em>The architectural difference that matters.</em></h2>
+      </div>
+      <div class="article-body">
+        <p>There's a distinction that comes up constantly when designing systems that connect AI to physical environments, and it's one that most protocols blur or ignore entirely: the distinction between an <strong>event</strong> and an <strong>intent</strong>. They look similar on the surface — both are messages, both carry information about the world. But they describe fundamentally different things.</p>
+
+        <h2>What an event is</h2>
+        <p>An event is a description of something that happened.</p>
+<pre><code>{
+  "device": "pir-sensor-01",
+  "type": "motion_detected",
+  "timestamp": 1748000000,
+  "location": "entrance"
+}</code></pre>
+        <p>An event is past tense. It's factual. It carries no opinion about what should happen next. The PIR sensor doesn't know whether this motion means "the kids just got home" or "there's an intruder" or "the cat walked by again." It just observed something and reported it — fire and forget. Events are the raw material of a physical system.</p>
+
+        <h2>What an intent is</h2>
+        <p>An intent is a description of something that needs to happen.</p>
+<pre><code>{
+  "intent": "children_arrived_home",
+  "urgency": "info",
+  "context": {
+    "trigger": "motion_detected",
+    "time": "18:45",
+    "day": "monday"
+  }
+}</code></pre>
+        <p>An intent is future tense. It carries meaning. It encodes a goal without specifying how to achieve it. <strong>The leap from event to intent requires reasoning.</strong> Something has to look at the motion event, consider the time, the day, the history, and decide: this event means the kids just arrived. That reasoning is exactly what AI agents are good at.</p>
+
+        <div class="callout"><p>The agent handled the <em>meaning</em>. The protocol handled the <em>coordination</em>. These are two different jobs — and conflating them is where most smart home AI integrations break.</p></div>
+
+        <h2>Why conflating the two breaks systems</h2>
+        <p>Most smart home platforms today are built on a hidden assumption: that the translation from event to action is a simple, static mapping.</p>
+<pre><code>IF motion_detected AND time > 18:00 AND day IN [Mon..Fri]
+THEN turn_on(light_1), turn_on(light_2), send_sms("kids home")</code></pre>
+        <p>This works until it doesn't. Add a new light and the rule doesn't know about it. Change the schedule and you rewrite rules. The rule hardcodes both the reasoning and the execution. Separating events from intents breaks this coupling. The AI agent handles the reasoning layer — event to intent. The protocol handles the execution layer — intent to actions.</p>
+
+        <h2>How DoSync implements this separation</h2>
+        <p>In DoSync, the separation is structural. Events flow in from sensors and adapters — raw, factual, carrying no prescription. Intents flow out from AI agents — meaningful, goal-oriented, carrying no implementation. The hub sits in between: it receives intents, resolves them against every device's Capability Manifest, and builds an action plan at runtime. The resolver never sees the original event. The sensor never sees the resulting actions. The layers are cleanly decoupled — and that decoupling is what makes the system extensible by design.</p>
+      </div>
+      <a class="article-devto" href="https://dev.to/giulianiregspec/event-vs-intent-the-architectural-difference-that-matters" target="_blank" rel="noopener">Read on dev.to ↗</a>
+    </article>
+
+    <!-- Article 4 -->
+    <article class="article" id="concept-4">
+      <div class="article-header">
+        <div class="article-meta">
+          <span class="article-num">Part 4 of 5</span>
+        </div>
+        <h2 class="article-title">Rules aren't enough <em>once an AI is in the loop.</em></h2>
+      </div>
+      <div class="article-body">
+        <p>Picture this: it's 03:00. A camera detects that an elderly person has fallen in the bedroom. The AI agent fires <code>ensure_safety [emergency]</code>. The action plan includes unlocking the front door so emergency services can get in. But someone wrote a rule three months ago: <em>never unlock after midnight.</em> The rule wins. The door stays locked. The paramedics arrive and can't get in.</p>
+        <p>This is not a bug in the AI. It's not a bug in the rule. It's a design problem — and it's the exact problem that appears when you build physical AI systems on top of automation logic that was never designed for an AI to act on.</p>
+
+        <h2>What a rule is</h2>
+        <p>A rule is a static, pre-written instruction that maps a condition to an action. Rules work well when the world is predictable, the device set is stable, and a human is always deciding what to do. They've been the foundation of home automation for fifteen years for exactly this reason. Rules fail not because they're a bad idea, but because they were never designed to compose with an autonomous agent that can fire arbitrary intents at arbitrary times.</p>
+
+        <h2>The difference that matters</h2>
+        <p>A rule answers: <em>what should happen when X occurs?</em> A policy answers: <em>is this action permitted, given who's asking, what they want to do, and when?</em> Consider a front door lock with rules:</p>
+<pre><code># Rule 1: lock at midnight
+if time == 00:00:
+    lock.lock()
+
+# Rule 2: unlock for delivery
+if time > 14:00 and delivery_expected:
+    lock.unlock()</code></pre>
+        <p>These rules handle the scenarios they were written for. But what happens when an AI fires <code>control_access [emergency]</code> at 03:00? What happens when two intents fire simultaneously? Rules don't compose. Each was written in isolation, without knowledge of the others. A policy is different:</p>
+<pre><code>NeverAfterHoursPolicy(
+    actuator="unlock",
+    device_ids=["lock-frontdoor-01"],
+    blocked_hours=range(0, 6),
+    except_urgency="emergency",  # breakable in genuine emergencies
+)</code></pre>
+        <p>This policy applies to every intent that would unlock the front door, regardless of which AI fired it. It's declared once. It evaluates at runtime. And it has an explicit emergency exception — because in a physical system, the rule "never unlock after midnight" has to be breakable in genuine emergencies.</p>
+
+        <h2>What a policy engine actually does</h2>
+        <p>In DoSync, every intent passes through the PolicyEngine before execution. The engine evaluates the action plan against all configured policies and returns one of four verdicts: <code>ALLOW</code>, <code>BLOCK</code>, <code>CONFIRM</code>, or <code>MODIFY</code>. The AI never bypasses this layer. This happens between the resolver (which decides what to do) and the executor (which actually does it).</p>
+
+        <h2>The audit implication</h2>
+        <p>A policy verdict is explicit. Every intent execution in DoSync's audit log records what happened, what the resolver decided, and what the executor did — in a tamper-evident SHA-256 chained record. This matters for post-incident analysis, for regulatory compliance, and for the fundamental accountability question in any AI-augmented physical system: when something goes wrong, can you reconstruct exactly what the system decided and why?</p>
+<pre><code>{
+  "type": "intent_executed",
+  "intent": "save_energy",
+  "urgency": "info",
+  "actions": 9,
+  "success": true,
+  "hash": "a3f7...",
+  "prev_hash": "9c12..."
+}</code></pre>
+
+        <div class="callout"><p>Rules encode <em>what to do</em>. Policies encode <em>what's permitted</em>. In a physical system with an AI in the loop, you need both — but they operate at different layers and must never be conflated.</p></div>
+        <h2>The deeper point</h2>
+        <p>Rules encode <em>what to do</em>. Policies encode <em>what's permitted</em>. When an AI agent is in the loop, the judgment gap between what the rules say and what should actually happen has to be filled by the infrastructure. That's what a policy engine is for — not to constrain the AI arbitrarily, but to make the system's safety model explicit, configurable, and auditable.</p>
+      </div>
+      <a class="article-devto" href="https://dev.to/giulianiregspec/rules-arent-enough-once-an-ai-is-in-the-loop" target="_blank" rel="noopener">Read on dev.to ↗</a>
+    </article>
+
+    <!-- Article 5 -->
+    <article class="article" id="concept-5">
+      <div class="article-header">
+        <div class="article-meta">
+          <span class="article-num">Part 5 of 5</span>
+        </div>
+        <h2 class="article-title">Why your smart home breaks <em>the moment you add an AI agent.</em></h2>
+      </div>
+      <div class="article-body">
+        <p>You add a new smoke detector to your home network. It registers with the hub. Thirty seconds later, when someone fires an <code>ensure_safety</code> intent, the detector is part of the response — no automation written, no rule updated, no developer intervention. How is that possible? The answer is capability abstraction — the design decision that separates systems that work with AI from systems that merely tolerate it.</p>
+
+        <h2>The Capability Manifest — a declaration, not an API</h2>
+        <p>In DoSync, every device publishes a Capability Manifest when it joins the network. Here's a real one from the production deployment — a Philips WiZ bulb running on a Raspberry Pi 5:</p>
+<pre><code>{
+  "device_id": "wiz-living1-01",
+  "device_name": "Living Room — Bulb 1",
+  "manufacturer": "Philips",
+  "model": "WiZ RGBW Tunable",
+  "category": "actuator",
+  "tags": ["light", "climate", "smart-plug", "emergency", "wiz"],
+  "actuators": [
+    { "type": "turn_on",       "description": "Turn on" },
+    { "type": "turn_off",      "description": "Turn off" },
+    { "type": "set_brightness","description": "Set brightness 0-100%" },
+    { "type": "set_color",     "description": "Set RGB color" }
+  ],
+  "emergency_capable": true,
+  "adapter": "wiz",
+  "adapter_config": { "ip": "192.168.1.x" }
+}</code></pre>
+        <p>This isn't an API specification. It's a declaration of identity and relevance. The resolver reads every registered manifest, scores each device for relevance — weighting tag overlap, location context, emergency bonus, and actuator match — and builds the action plan. The bulb is included because of its <code>emergency</code> tag and <code>emergency_capable: true</code> — not because anyone hardcoded it.</p>
+
+        <h2><code>emergency_capable</code> is a contract, not a flag</h2>
+        <p>When a device declares <code>emergency_capable: true</code>, it's making a commitment to the protocol: <em>I will respond to emergency intents without confirmation. I accept being included in the audit trail as a critical actor.</em> The protocol enforces this contract. Emergency-capable devices bypass the normal policy evaluation flow and are always included as candidates in emergency intent resolution.</p>
+<pre><code>Rule-based:  developer writes "if emergency, unlock frontdoor-01"
+             → breaks when frontdoor-01 is replaced
+             → breaks when a second entrance is added
+
+Capability:  device declares emergency_capable: true
+             → protocol enforces the contract
+             → survives device replacement, new entrances, new scenarios
+             → audit trail is automatic</code></pre>
+
+        <h2>Why this is different from OpenAPI, MCP, and service registries</h2>
+        <p>OpenAPI and MCP describe <em>interfaces</em> — the exact shape of inputs and outputs. They're precise but context-free. An OpenAPI schema for a door lock tells you the <code>/unlock</code> endpoint accepts a <code>duration_seconds</code> integer. It doesn't tell you that this lock is at the main entrance, that it's relevant in emergencies, or that it should be included in a safety response but not an energy-saving routine.</p>
+        <p>The Capability Manifest adds <em>semantic context</em> on top of interface description. The <code>tags</code> field isn't a type system — it's a declaration of relevance across scenarios. This distinction exists because AI agents reason at the semantic level, not the API level.</p>
+
+        <div class="callout"><p>A well-designed manifest answers three questions: what can this device do, where does it fit in the physical space, and does it require special handling in safety scenarios?</p></div>
+        <h2>The idea worth keeping</h2>
+        <p>Five posts ago, we started with a simple observation: AI agents express goals, not commands. Every post since then has been an answer to the same question — what does a system have to look like, at each layer, to bridge that gap? Semantic intent replaced commands. Policies replaced rules. Events were separated from intents. And now capability abstraction replaces the developer who used to be the translator between device APIs and AI goals.</p>
+        <p>The translator was always the fragile part. Capability abstraction removes it. The device speaks for itself. The AI listens. The protocol enforces the contracts between them. That's not a smart home feature. That's the infrastructure for any physical environment where AI needs to act reliably.</p>
+      </div>
+      <a class="article-devto" href="https://dev.to/giulianiregspec/why-your-smart-home-breaks-the-moment-you-add-an-ai-agent" target="_blank" rel="noopener">Read on dev.to ↗</a>
+    </article>
+
+    <!-- Series CTA -->
+    <div style="background:var(--purple-light);border:0.5px solid #534AB7;border-radius:var(--radius-lg);padding:32px;margin-top:16px">
+      <p style="font-size:12px;font-weight:500;color:var(--purple-dark);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">Ready to try it?</p>
+      <h3 style="font-family:var(--font-display);font-size:24px;color:var(--purple-mid);margin-bottom:10px;line-height:1.2">DoSync runs on a Raspberry Pi 5 with 41 devices.<br>It takes three commands to run locally.</h3>
+      <p style="font-size:14px;color:var(--purple-dark);margin-bottom:24px;line-height:1.6">No hardware required — the Docker demo starts the hub and registers 8 simulated devices automatically. The full certification suite runs in under 2 minutes.</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <a href="/" style="background:#534AB7;color:#EEEDFE;padding:10px 22px;border-radius:var(--radius);font-size:14px;font-weight:500;text-decoration:none">Try the Docker demo ↗</a>
+        <a href="https://github.com/giulianireg-spec/dosync-protocol/blob/main/spec/DOSYNC-SPEC-v0.1.md" style="background:transparent;color:var(--purple-mid);border:0.5px solid #534AB7;padding:10px 22px;border-radius:var(--radius);font-size:14px;font-weight:500;text-decoration:none" target="_blank" rel="noopener">Read the spec ↗</a>
+      </div>
+    </div>
+
+    <!-- Intent classes table -->
+    <div style="margin-top:48px;padding-top:48px;border-top:0.5px solid var(--border)">
+      <p style="font-size:12px;font-weight:500;color:var(--purple-dark);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px">Reference</p>
+      <h3 style="font-family:var(--font-display);font-size:22px;margin-bottom:8px">All 13 intent classes</h3>
+      <p style="font-size:14px;color:var(--text-muted);margin-bottom:24px">Every intent DoSync understands out of the box. Devices declare which intents they respond to via their Capability Manifest tags.</p>
+      <div style="border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="background:var(--bg-card);border-bottom:0.5px solid var(--border)">
+              <th style="text-align:left;padding:10px 16px;color:var(--text-muted);font-weight:500">Intent class</th>
+              <th style="text-align:left;padding:10px 16px;color:var(--text-muted);font-weight:500">Default urgency</th>
+              <th style="text-align:left;padding:10px 16px;color:var(--text-muted);font-weight:500">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:0.5px solid var(--border)"><td style="padding:9px 16px;font-family:var(--font-mono);color:#AFA9EC;font-size:12px">ensure_safety</td><td style="padding:9px 16px"><span style="background:#1F0808;color:#E24B4A;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500">emergency</span></td><td style="padding:9px 16px;color:var(--text-muted)">Safety emergency — protect people and property</td></tr>
+            <tr style="border-bottom:0.5px solid var(--border);background:var(--bg-subtle)"><td style="padding:9px 16px;font-family:var(--font-mono);color:#AFA9EC;font-size:12px">alert_anomaly</td><td style="padding:9px 16px"><span style="background:#1E1405;color:#EF9F27;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500">alert</span></td><td style="padding:9px 16px;color:var(--text-muted)">Something unexpected detected — investigate</td></tr>
+            <tr style="border-bottom:0.5px solid var(--border)"><td style="padding:9px 16px;font-family:var(--font-mono);color:#AFA9EC;font-size:12px">control_access</td><td style="padding:9px 16px"><span style="background:#1E1405;color:#EF9F27;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500">alert</span></td><td style="padding:9px 16px;color:var(--text-muted)">Manage physical access to a space</td></tr>
+            <tr style="border-bottom:0.5px solid var(--border);background:var(--bg-subtle)"><td style="padding:9px 16px;font-family:var(--font-mono);color:#AFA9EC;font-size:12px">monitor_health</td><td style="padding:9px 16px"><span style="background:#1A1A18;color:#888780;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500">info</span></td><td style="padding:9px 16px;color:var(--text-muted)">Passive observation of a person's state</td></tr>
+            <tr style="border-bottom:0.5px solid var(--border)"><td style="padding:9px 16px;font-family:var(--font-mono);color:#AFA9EC;font-size:12px">notify_family</td><td style="padding:9px 16px"><span style="background:#1A1A18;color:#888780;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500">info</span></td><td style="padding:9px 16px;color:var(--text-muted)">Push information to family members</td></tr>
+            <tr style="border-bottom:0.5px solid var(--border);background:var(--bg-subtle)"><td style="padding:9px 16px;font-family:var(--font-mono);color:#AFA9EC;font-size:12px">report_status</td><td style="padding:9px 16px"><span style="background:#1A1A18;color:#888780;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500">info</span></td><td style="padding:9px 16px;color:var(--text-muted)">Generate a status report of the environment</td></tr>
+            <tr style="border-bottom:0.5px solid var(--border)"><td style="padding:9px 16px;font-family:var(--font-mono);color:#AFA9EC;font-size:12px">set_environment</td><td style="padding:9px 16px"><span style="background:#1A1A18;color:#888780;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500">info</span></td><td style="padding:9px 16px;color:var(--text-muted)">Adjust comfort parameters — temperature, light</td></tr>
+            <tr style="border-bottom:0.5px solid var(--border);background:var(--bg-subtle)"><td style="padding:9px 16px;font-family:var(--font-mono);color:#AFA9EC;font-size:12px">save_energy</td><td style="padding:9px 16px"><span style="background:#1A1A18;color:#888780;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500">info</span></td><td style="padding:9px 16px;color:var(--text-muted)">Reduce power consumption</td></tr>
+            <tr style="border-bottom:0.5px solid var(--border)"><td style="padding:9px 16px;font-family:var(--font-mono);color:#AFA9EC;font-size:12px">remind_chore</td><td style="padding:9px 16px"><span style="background:#1A1A18;color:#888780;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500">info</span></td><td style="padding:9px 16px;color:var(--text-muted)">Remind about a pending household task</td></tr>
+            <tr style="border-bottom:0.5px solid var(--border);background:var(--bg-subtle)"><td style="padding:9px 16px;font-family:var(--font-mono);color:#AFA9EC;font-size:12px">bedtime_routine</td><td style="padding:9px 16px"><span style="background:#1A1A18;color:#888780;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500">info</span></td><td style="padding:9px 16px;color:var(--text-muted)">Prepare the space for sleep</td></tr>
+            <tr style="border-bottom:0.5px solid var(--border)"><td style="padding:9px 16px;font-family:var(--font-mono);color:#AFA9EC;font-size:12px">morning_routine</td><td style="padding:9px 16px"><span style="background:#1A1A18;color:#888780;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500">info</span></td><td style="padding:9px 16px;color:var(--text-muted)">Prepare the space for the day</td></tr>
+            <tr style="border-bottom:0.5px solid var(--border);background:var(--bg-subtle)"><td style="padding:9px 16px;font-family:var(--font-mono);color:#AFA9EC;font-size:12px">away_mode</td><td style="padding:9px 16px"><span style="background:#1A1A18;color:#888780;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500">info</span></td><td style="padding:9px 16px;color:var(--text-muted)">Secure and optimize for an empty space</td></tr>
+            <tr><td style="padding:9px 16px;font-family:var(--font-mono);color:#AFA9EC;font-size:12px">children_arrived_home</td><td style="padding:9px 16px"><span style="background:#1A1A18;color:#888780;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500">info</span></td><td style="padding:9px 16px;color:var(--text-muted)">Children detected at entrance — schedule-aware</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Footer -->
+<footer style="border-top:0.5px solid var(--border);padding:40px;background:var(--bg-subtle);margin-top:0">
+  <div style="max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px">
+    <div style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:500;color:var(--text)">
+      <svg width="18" height="18" viewBox="0 0 22 22" fill="none">
+        <circle cx="11" cy="11" r="3" fill="#534AB7"/>
+        <circle cx="3" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
+        <circle cx="19" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
+        <circle cx="3" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
+        <circle cx="19" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
+        <line x1="5" y1="6" x2="9" y2="10" stroke="#AFA9EC" stroke-width="1"/>
+        <line x1="17" y1="6" x2="13" y2="10" stroke="#AFA9EC" stroke-width="1"/>
+        <line x1="5" y1="16" x2="9" y2="12" stroke="#AFA9EC" stroke-width="1"/>
+        <line x1="17" y1="16" x2="13" y2="12" stroke="#AFA9EC" stroke-width="1"/>
+      </svg>
+      DoSync Protocol
+    </div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap">
+      <a href="https://github.com/giulianireg-spec/dosync-protocol" style="font-size:13px;color:var(--text-muted)">GitHub</a>
+      <a href="https://dev.to/giulianiregspec" style="font-size:13px;color:var(--text-muted)">dev.to</a>
+      <a href="/" style="font-size:13px;color:var(--text-muted)">dosync.dev</a>
+      <a href="mailto:rgiuliani@dosync.dev" style="font-size:13px;color:var(--text-muted)">Contact</a>
+    </div>
+    <p style="font-size:12px;color:var(--text-faint)">Apache 2.0 · © 2026 Rodrigo Giuliani</p>
+  </div>
+</footer>
+
+<script>
+const items=document.querySelectorAll('.sidebar-item');
+const articles=document.querySelectorAll('.article');
+const observer=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      const id=e.target.id;
+      items.forEach(i=>{
+        i.classList.toggle('active',i.getAttribute('href')==='#'+id);
+      });
+    }
+  });
+},{threshold:0.25});
+articles.forEach(a=>observer.observe(a));
+</script>
+</body>
+</html>
