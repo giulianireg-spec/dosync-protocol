@@ -389,7 +389,7 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
           <div><span class="t-device">wiz-living1-02</span> <span class="t-action">turn_on</span> <span style="color:#5F5E5A">brightness=100</span> <span class="t-success">✓</span></div>
           <div><span class="t-device">wiz-living2-01</span> <span class="t-action">turn_on</span> <span style="color:#5F5E5A">brightness=100</span> <span class="t-success">✓</span></div>
           <div><span class="t-device">alarm-test-01</span> <span class="t-action">alarm</span> <span style="color:#5F5E5A">pattern=emergency</span> <span class="t-success">✓</span></div>
-          <div><span class="t-device">notifier-sms-01</span> <span class="t-action">notify</span> <span style="color:#5F5E5A">→ +543513...</span> <span class="t-success">✓</span></div>
+          <div><span class="t-device">notifier-sms-01</span> <span class="t-action">notify</span> <span style="color:#5F5E5A">→ +1555012...</span> <span class="t-success">✓</span></div>
           <div style="margin-top:8px"><span class="t-comment"># 18 actions · 5 devices · 79ms</span></div>
           <div><span class="t-comment"># audit log updated · SHA-256 chain intact</span></div>
         </div>
@@ -412,6 +412,182 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
     </div>
   </div>
 </section>
+
+
+<!-- Semantic Event Timeline -->
+<section style="padding:72px 40px;border-top:0.5px solid var(--border)">
+  <div class="section-inner">
+    <p class="section-eyebrow">How it executes</p>
+    <h2 class="section-title">From intent to action in 79ms.</h2>
+    <p class="section-sub">Press the button and watch every layer of the protocol execute in sequence — resolver, policy engine, adapters, audit log. Real times from the production deployment.</p>
+
+    <div style="margin-top:40px;background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:28px 32px">
+
+      <!-- Header -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px;flex-wrap:wrap">
+        <div style="background:#1A1830;border:0.5px solid #534AB7;border-radius:var(--radius-lg);padding:14px 18px;flex:1;min-width:220px">
+          <div style="font-size:11px;font-weight:500;color:#7F77DD;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Intent fired</div>
+          <div style="font-family:var(--font-mono);font-size:13px;color:#AFA9EC;line-height:1.9">
+            intent: <span style="color:#F0EEE8">"ensure_safety"</span><br>
+            urgency: <span style="color:#F0EEE8">emergency</span><br>
+            source: <span style="color:#F0EEE8">claude_mcp</span>
+          </div>
+        </div>
+        <button id="tl-fire-btn" onclick="tlFire()" style="background:#534AB7;color:#EEEDFE;border:none;padding:11px 24px;border-radius:var(--radius);font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font-sans);align-self:center;white-space:nowrap;transition:opacity .15s">Fire intent →</button>
+      </div>
+
+      <!-- Progress bar -->
+      <div style="height:2px;background:var(--border);border-radius:1px;margin-bottom:24px;overflow:hidden">
+        <div id="tl-prog" style="height:100%;width:0;background:#534AB7;border-radius:1px;transition:width .1s linear"></div>
+      </div>
+
+      <!-- Timeline track -->
+      <div id="tl-track" style="position:relative;padding-left:20px">
+        <div style="position:absolute;left:6px;top:8px;bottom:8px;width:1px;background:var(--border)"></div>
+      </div>
+
+      <!-- Summary -->
+      <div id="tl-summary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:24px;opacity:0;transition:opacity .4s">
+        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:500;color:#F0EEE8;line-height:1.2">79ms</div>
+          <div style="font-size:11px;color:#5F5E5A;margin-top:3px">total latency</div>
+        </div>
+        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:500;color:#F0EEE8;line-height:1.2">8</div>
+          <div style="font-size:11px;color:#5F5E5A;margin-top:3px">devices acted</div>
+        </div>
+        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:500;color:#F0EEE8;line-height:1.2">18</div>
+          <div style="font-size:11px;color:#5F5E5A;margin-top:3px">actions fired</div>
+        </div>
+        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:500;color:#F0EEE8;line-height:1.2">0</div>
+          <div style="font-size:11px;color:#5F5E5A;margin-top:3px">rules written</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function(){
+var TL_STEPS=[
+  {id:'tl-s0',delay:300, dot:'#534AB7', time:'t=0ms',  tag:'Hub',         tagBg:'#1A1830', tagColor:'#AFA9EC', title:'Intent received',           sub:'Token validated · intent_id <b>gen:a3f9c2</b> · queued'},
+  {id:'tl-s1',delay:700, dot:'#1D9E75', time:'t=2ms',  tag:'Resolver',    tagBg:'#0A2018', tagColor:'#5DCAA5', title:'Tag index scan',            sub:'41 devices evaluated · <b>8 candidates</b> · O(tags) lookup'},
+  {id:'tl-s2',delay:1050,dot:'#EF9F27', time:'t=3ms',  tag:'Policy Engine',tagBg:'#1E1405',tagColor:'#EF9F27', title:'Emergency bypass',          sub:'urgency=emergency · <b>confirmation skipped</b> · all policies bypassed'},
+  {id:'tl-s3',delay:1400,dot:'#534AB7', time:'t=4ms',  tag:'Hub',         tagBg:'#1A1830', tagColor:'#AFA9EC', title:'ActionPlan built',          sub:'8 actions · <b>parallel execution</b> · AdapterExecutor dispatched'},
+  {id:'tl-s4',delay:1800,dot:'#7F77DD', time:'t=12–18ms',tag:'WiZ UDP',  tagBg:'#1A1830', tagColor:'#AFA9EC', title:'5 bulbs — full brightness', sub:'', bulbs:true},
+  {id:'tl-s5',delay:2600,dot:'#7F77DD', time:'t=18ms', tag:'Alarm',       tagBg:'#1A1830', tagColor:'#AFA9EC', title:'Emergency pattern activated',sub:'alarm-test-01 · <b>pattern=emergency</b> · ✓'},
+  {id:'tl-s6',delay:3000,dot:'#E24B4A', time:'t=51ms', tag:'SMS',         tagBg:'#1F0808', tagColor:'#E24B4A', title:'Family notified',           sub:'notifier-sms-01 · Twilio → <b>+1555012...</b> · ✓'},
+  {id:'tl-s7',delay:3600,dot:'#888780', time:'t=79ms', tag:'Audit log',   tagBg:'#1A1A18', tagColor:'#888780', title:'SHA-256 chain updated',     sub:'entry #692 · <b>chain intact</b> · tamper-evident'},
+  {id:'tl-s8',delay:3900,dot:'#888780', time:'t=80ms', tag:'WebSocket',   tagBg:'#1A1A18', tagColor:'#888780', title:'Dashboard updated',         sub:'broadcast → <b>all connected clients</b> · real-time feed'},
+];
+var BULBS=[
+  {id:'wiz-living1-01',ms:12},{id:'wiz-living1-02',ms:14},
+  {id:'wiz-living2-01',ms:15},{id:'wiz-comedor-01',ms:16},
+  {id:'wiz-ninos-01',ms:18}
+];
+var TOTAL=4200;
+var tlRunning=false;
+
+function tlBuildSteps(){
+  var track=document.getElementById('tl-track');
+  TL_STEPS.forEach(function(s){
+    var d=document.createElement('div');
+    d.id=s.id;
+    d.style.cssText='display:flex;align-items:flex-start;gap:12px;margin-bottom:6px;opacity:0;transform:translateY(6px);transition:opacity .25s ease,transform .25s ease';
+    var bulbsHtml='';
+    if(s.bulbs){
+      bulbsHtml='<div id="tl-bulbs" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:8px"></div>';
+    }
+    d.innerHTML=
+      '<div style="width:13px;height:13px;border-radius:50%;flex-shrink:0;margin-top:3px;position:relative;z-index:1;background:'+s.dot+';border:2px solid var(--bg-subtle)"></div>'+
+      '<div style="flex:1;min-width:0;padding:8px 12px;border-radius:var(--radius);border:0.5px solid #2C2C2A;background:#111110">'+
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+          '<span style="font-family:var(--font-mono);font-size:11px;color:#5F5E5A;min-width:68px">'+s.time+'</span>'+
+          '<span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px;background:'+s.tagBg+';color:'+s.tagColor+'">'+s.tag+'</span>'+
+          '<span style="font-size:13px;font-weight:500;color:#F0EEE8">'+s.title+'</span>'+
+        '</div>'+
+        (s.sub?'<div style="font-size:12px;color:#888780;margin-top:4px;font-family:var(--font-mono)">'+s.sub+'</div>':'')+
+        bulbsHtml+
+      '</div>';
+    track.appendChild(d);
+  });
+}
+
+function tlBuildBulbs(){
+  var c=document.getElementById('tl-bulbs');
+  if(!c)return;
+  c.innerHTML='';
+  BULBS.forEach(function(b){
+    var d=document.createElement('div');
+    d.id='tlb-'+b.id;
+    d.style.cssText='background:#1A1A18;border:0.5px solid #2C2C2A;border-radius:var(--radius);padding:6px 10px;display:flex;align-items:center;gap:8px;opacity:0;transform:scale(.97);transition:opacity .2s,transform .2s';
+    d.innerHTML='<div style="width:6px;height:6px;border-radius:50%;background:#7F77DD;flex-shrink:0"></div>'+
+      '<span style="font-family:var(--font-mono);font-size:11px;color:#888780;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+b.id+'</span>'+
+      '<span style="font-size:11px;color:#5F5E5A">'+b.ms+'ms</span>'+
+      '<span style="font-size:11px;color:#1D9E75">✓</span>';
+    c.appendChild(d);
+  });
+}
+
+function tlReset(){
+  TL_STEPS.forEach(function(s){
+    var el=document.getElementById(s.id);
+    if(el){el.style.opacity='0';el.style.transform='translateY(6px)';}
+  });
+  BULBS.forEach(function(b){
+    var el=document.getElementById('tlb-'+b.id);
+    if(el){el.style.opacity='0';el.style.transform='scale(.97)';}
+  });
+  document.getElementById('tl-summary').style.opacity='0';
+  document.getElementById('tl-prog').style.width='0';
+}
+
+window.tlFire=function(){
+  if(tlRunning)return;
+  tlRunning=true;
+  var btn=document.getElementById('tl-fire-btn');
+  btn.disabled=true;
+  btn.textContent='Executing...';
+  tlReset();
+  tlBuildBulbs();
+
+  var prog=document.getElementById('tl-prog');
+  var start=performance.now();
+  function tick(){
+    var elapsed=performance.now()-start;
+    prog.style.width=Math.min(elapsed/TOTAL*100,100)+'%';
+    if(elapsed<TOTAL+200)requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  TL_STEPS.forEach(function(s){
+    setTimeout(function(){
+      var el=document.getElementById(s.id);
+      if(el){el.style.opacity='1';el.style.transform='translateY(0)';}
+      if(s.bulbs){
+        BULBS.forEach(function(b,i){
+          setTimeout(function(){
+            var bd=document.getElementById('tlb-'+b.id);
+            if(bd){bd.style.opacity='1';bd.style.transform='scale(1)';}
+          },i*120);
+        });
+      }
+    },s.delay);
+  });
+
+  setTimeout(function(){
+    document.getElementById('tl-summary').style.opacity='1';
+    btn.disabled=false;
+    btn.textContent='Fire again →';
+    tlRunning=false;
+  },TOTAL);
+};
+
+document.addEventListener('DOMContentLoaded',function(){tlBuildSteps();});
+})();
+</script>
 
 <!-- Quick start -->
 <section id="quickstart">
