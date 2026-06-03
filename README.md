@@ -1,17 +1,18 @@
 # DoSync Protocol
 
-> The protocol that acts when it matters most.
+> The semantic protocol for AI agents and physical systems.
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Protocol](https://img.shields.io/badge/protocol-v0.1-green.svg)](spec/DOSYNC-SPEC-v0.1.md)
 [![Certification](https://img.shields.io/badge/certification-Basic%20%7C%20Standard%20%7C%20Emergency-orange.svg)](certify.py)
 [![MCP](https://img.shields.io/badge/MCP-compatible-purple.svg)](dosync/mcp_server.py)
+[![Website](https://img.shields.io/badge/website-dosync.dev-black.svg)](https://dosync.dev)
 
 ---
 
 ## The problem
 
-Today's smart home protocols speak the language of commands. AI speaks the language of goals.
+Today's IoT protocols speak the language of commands. AI speaks the language of goals.
 
 ```python
 # Existing protocols
@@ -122,6 +123,36 @@ python3 certify.py --host localhost --port 47200 --tier emergency
 
 ---
 
+## Getting the most out of DoSync
+
+**The single most important configuration step** after running the demo is tagging your devices correctly. The resolver matches intents to devices using semantic tags — missing or incorrect tags are the most common reason why devices don't respond to intents.
+
+> 📖 **[DEPLOYMENT-TAGS-GUIDE.md](docs/DEPLOYMENT-TAGS-GUIDE.md)** — how to configure tags for production deployments, with examples for every device type and intent class. Read this before connecting real hardware.
+
+**Registering domain-specific intent classes:**
+
+DoSync ships with 5 universal intent classes (`ensure_safety`, `alert_anomaly`, `control_access`, `report_status`, `notify`). For residential, healthcare, industrial, or hospitality deployments, register your own:
+
+```bash
+# Get your API token: python3 manage.py keys list
+# On first run, the hub prints the token automatically
+POST /v1/intent-classes   (Authorization: Bearer <your-token>)
+{
+  "name": "morning_routine",
+  "urgency": "info",
+  "resolution_tags": ["light", "blinds", "climate"],
+  "resolution_actuators": ["set_brightness", "set_position", "set_temperature"],
+  "description": "Prepare the space for the day",
+  "domain": "residential"
+}
+```
+
+> 🔑 **Token:** the hub prints your API token on first run. Retrieve it anytime with `python3 manage.py keys list`.
+
+> 📖 **[INTENT-CLASSES-GUIDE.md](docs/INTENT-CLASSES-GUIDE.md)** — naming conventions, urgency guide, and domain package examples (healthcare, industrial, residential, hospitality).
+
+---
+
 ## What's built today
 
 | Component | Status |
@@ -130,8 +161,8 @@ python3 certify.py --host localhost --port 47200 --tier emergency
 | WebSocket real-time events | ✅ |
 | Web dashboard | ✅ |
 | API key authentication + SHA-256 audit log | ✅ |
-| Semantic resolver (13 intent classes) | ✅ |
-| Certification CLI — 16/16 tests | ✅ |
+| Semantic resolver — open intent classes, runtime registration | ✅ |
+| Certification CLI — 32/32 tests (Basic · Standard · Emergency) | ✅ |
 | Philips WiZ adapter (UDP local) | ✅ |
 | Home Assistant bridge (10 domains) | ✅ |
 | Native MCP server (Claude, ChatGPT, any LLM) | ✅ |
@@ -139,10 +170,10 @@ python3 certify.py --host localhost --port 47200 --tier emergency
 | SMS notifications via Twilio | ✅ |
 | Device discovery (UDP broadcast) | ✅ |
 | SQLite persistence (survives restarts) | ✅ |
-| BaseResolver formal interface (v0.2) | ✅ |
+| Open resolver interface — BaseResolver + StateAwareResolver | ✅ |
 | StateAwareResolver — redundancy elimination | ✅ |
-| Policy engine (6 policies) | ✅ |
-| Resolver benchmark — p99 < 0.11ms @ 38 devices | ✅ |
+| Policy engine (ALLOW · BLOCK · CONFIRM · MODIFY) | ✅ |
+| Resolver benchmark — p99 < 0.11ms resolver · p99 < 9s concurrent load | ✅ |
 
 ---
 
@@ -309,9 +340,11 @@ The protocol is the infrastructure. The domain is up to you.
 
 ## Specification
 
-Full protocol specification: [spec/DOSYNC-SPEC-v0.1.md](spec/DOSYNC-SPEC-v0.1.md)  
-Resolver interface: [spec/RESOLVER-SPEC-v0.2.md](spec/RESOLVER-SPEC-v0.2.md)
-Design principles: [docs/DESIGN-PRINCIPLES.md](docs/DESIGN-PRINCIPLES.md)
+Full protocol specification: [spec/DOSYNC-SPEC-v0.1.md](spec/DOSYNC-SPEC-v0.1.md)
+Design principles: [DESIGN-PRINCIPLES.md](DESIGN-PRINCIPLES.md)
+Intent classes guide: [docs/INTENT-CLASSES-GUIDE.md](docs/INTENT-CLASSES-GUIDE.md)
+Deployment tags guide: [docs/DEPLOYMENT-TAGS-GUIDE.md](docs/DEPLOYMENT-TAGS-GUIDE.md)
+Website: [dosync.dev](https://dosync.dev)
 
 ---
 
@@ -321,4 +354,4 @@ Apache 2.0 — free to implement, free to extend, no royalties.
 
 ---
 
-*DoSync Protocol v0.1 · © 2026 Rodrigo Giuliani · giulianireg@gmail.com*
+*DoSync Protocol v0.4 · © 2026 Rodrigo Giuliani · [rgiuliani@dosync.dev](mailto:rgiuliani@dosync.dev) · [dosync.dev](https://dosync.dev)*
