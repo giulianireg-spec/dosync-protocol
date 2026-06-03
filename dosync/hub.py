@@ -115,65 +115,12 @@ class CapabilityRegistry:
 # ── Semantic Resolver (Layer 4) ───────────────────────────────────────────────
 
 # Maps intent classes to the tags and actuator types we look for
-INTENT_RESOLUTION_MAP: dict[IntentClass, dict] = {
-    # ── Seguridad ────────────────────────────────────────────────────────────
-    IntentClass.ENSURE_SAFETY: {
-        "tags":      ["camera", "emergency", "door-lock", "alarm", "communication", "notification"],
-        "actuators": ["unlock", "call", "alarm", "light", "notify"],
-    },
-    IntentClass.CONTROL_ACCESS: {
-        "tags":      ["door-lock", "gate", "access"],
-        "actuators": ["lock", "unlock"],
-    },
-    IntentClass.MONITOR_HEALTH: {
-        "tags":      ["camera", "motion", "wearable", "sensor"],
-        "actuators": [],
-    },
-    # ── Familia ──────────────────────────────────────────────────────────────
-    IntentClass.NOTIFY_FAMILY: {
-        "tags":      ["communication", "display", "phone"],
-        "actuators": ["notify", "call", "display"],
-    },
-    IntentClass.REPORT_STATUS: {
-        "tags":      [],
-        "actuators": [],
-    },
-    # ── Ambiente ─────────────────────────────────────────────────────────────
-    IntentClass.SET_ENVIRONMENT: {
-        "tags":      ["light", "thermostat", "blinds", "climate"],
-        "actuators": ["set_brightness", "set_temperature", "set_position"],
-    },
-    # ── Energia y eficiencia ─────────────────────────────────────────────────
-    IntentClass.SAVE_ENERGY: {
-        "tags":      ["light", "thermostat", "smart-plug", "climate", "blinds"],
-        "actuators": ["set_brightness", "set_temperature", "turn_off", "set_position"],
-    },
-    IntentClass.REMIND_CHORE: {
-        "tags":      ["display", "phone"],
-        "actuators": ["display"],
-    },
-    IntentClass.ALERT_ANOMALY: {
-        "tags":      ["communication", "phone", "display"],
-        "actuators": ["notify", "call"],
-    },
-    # ── Rutinas ──────────────────────────────────────────────────────────────
-    IntentClass.BEDTIME_ROUTINE: {
-        "tags":      ["light", "blinds", "display", "smart-plug", "climate"],
-        "actuators": ["set_brightness", "set_position", "turn_off", "set_temperature"],
-    },
-    IntentClass.MORNING_ROUTINE: {
-        "tags":      ["light", "blinds", "appliance", "climate", "display"],
-        "actuators": ["set_brightness", "set_position", "turn_on", "set_temperature"],
-    },
-    IntentClass.CHILDREN_ARRIVED: {
-        "tags":      ["children_arrival"],
-        "actuators": ["turn_on", "set_brightness", "notify"],
-    },
-    IntentClass.AWAY_MODE: {
-        "tags":      ["light", "smart-plug", "camera", "alarm", "thermostat"],
-        "actuators": ["turn_off", "set_brightness", "arm", "set_temperature"],
-    },
-}
+# ── Intent class resolution ──────────────────────────────────────────────────
+# DoSync v0.4+: Intent classes are stored in the database, not hardcoded here.
+# The protocol defines the FORMAT of an intent name, not its vocabulary.
+# Resolution tags and actuators are registered via POST /v1/intent-classes.
+# Universal intents (ensure_safety, alert_anomaly, control_access,
+# report_status, notify) are seeded automatically at hub init.
 
 
 
@@ -396,23 +343,23 @@ class CapabilityMatchingResolver(BaseResolver):
         return defaults.get(actuator.type, {})
 
     def _get_resolution(self, intent: Intent) -> dict:
-        """Return resolution tags/actuators — built-in first, then custom DB."""
-        resolution = INTENT_RESOLUTION_MAP.get(intent.intent)
-        if resolution:
-            return resolution
+        """Return resolution tags/actuators from the intent_classes DB table.
+        All intent classes — universal and domain-specific — live in the DB.
+        Falls back to empty resolution if intent class is not registered.
+        """
         try:
             hub = getattr(self, "hub", None)
             db  = getattr(hub, "db", None)
             if db:
-                name = intent.intent if isinstance(intent.intent, str) else intent.intent.value
-                custom = db.get_custom_intent_class(name)
-                if custom:
+                name = str(intent.intent)
+                row = db.get_intent_class(name)
+                if row:
                     return {
-                        "tags":      custom["resolution_tags"],
-                        "actuators": custom["resolution_actuators"],
+                        "tags":      row["resolution_tags"],
+                        "actuators": row["resolution_actuators"],
                     }
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning("_get_resolution: DB lookup failed for '%s': %s", str(intent.intent), e)
         return {"tags": [], "actuators": []}
 
     def resolve(self, intent: Intent) -> ActionPlan:

@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 import json
 import os
+import re
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -745,12 +746,7 @@ def unregister_device(device_id: str, auth: str = Depends(require_auth)):
 
 # ── Custom Intent Classes endpoints ──────────────────────────────────────────
 
-BUILT_IN_INTENT_NAMES = {
-    "ensure_safety", "control_access", "monitor_health", "notify_family",
-    "report_status", "set_environment", "save_energy", "remind_chore",
-    "alert_anomaly", "bedtime_routine", "morning_routine", "away_mode",
-    "children_arrived_home",
-}
+# Intent class names are stored in the DB — no hardcoded list needed
 
 class CustomIntentClassRequest(BaseModel):
     name:                  str
@@ -765,14 +761,24 @@ async def register_intent_class(
     req: CustomIntentClassRequest,
     auth: str = Depends(require_auth),
 ):
-    # Validate name
-    name = req.name.strip().lower().replace(" ", "_")
+    # Validate name format: ^[a-z][a-z0-9_]*$
+    name = req.name.strip().lower().replace(" ", "_").replace("-", "_")
     if not name:
         raise HTTPException(status_code=400, detail="name cannot be empty")
-    if name in BUILT_IN_INTENT_NAMES:
+    if not re.match(r'^[a-z][a-z0-9_]*$', name):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid intent class name '{name}'. "
+                   "Must match ^[a-z][a-z0-9_]*$ "
+                   "(lowercase letters, digits, underscores only — no special characters)"
+        )
+    # Protect universal intents from being overridden
+    existing = hub.db.get_intent_class(name)
+    if existing and existing.get("is_universal"):
         raise HTTPException(
             status_code=409,
-            detail=f"'{name}' is a built-in intent class and cannot be overridden"
+            detail=f"'{name}' is a universal intent class and cannot be overridden. "
+                   "Universal intents are defined by the DoSync protocol."
         )
     # Validate urgency
     if req.urgency not in ("emergency", "alert", "info"):
@@ -784,7 +790,7 @@ async def register_intent_class(
     if not req.resolution_tags:
         raise HTTPException(status_code=400, detail="resolution_tags cannot be empty")
 
-    hub.db.save_custom_intent_class(
+    hub.db.save_intent_class(
         name=name,
         urgency=req.urgency,
         resolution_tags=req.resolution_tags,
@@ -805,38 +811,25 @@ async def register_intent_class(
 
 @app.get("/v1/intent-classes", tags=["Protocol"], summary="List all intent classes")
 async def list_intent_classes(auth: str = Depends(require_auth)):
-    from dosync.hub import INTENT_RESOLUTION_MAP
-    built_in = [
-        {
-            "name":                 k.value,
-            "urgency":              "emergency" if k.value in ("ensure_safety", "alert_anomaly") else "info",
-            "resolution_tags":      v.get("tags", []),
-            "resolution_actuators": v.get("actuators", []),
-            "description":          "",
-            "domain":               "built-in",
-            "type":                 "built-in",
-        }
-        for k, v in INTENT_RESOLUTION_MAP.items()
-    ]
-    custom = [
-        {**c, "type": "custom"}
-        for c in hub.db.list_custom_intent_classes()
-    ]
+    """List all registered intent classes — universal and domain-specific.
+    No distinction between built-in and custom: all live in the DB."""
+    classes = hub.db.list_intent_classes()
     return {
-        "built_in": built_in,
-        "custom":   custom,
-        "total":    len(built_in) + len(custom),
+        "intent_classes": classes,
+        "total":          len(classes),
     }
 
 
 @app.delete("/v1/intent-classes/{name}", tags=["Protocol"], summary="Delete a custom intent class")
 async def delete_intent_class(name: str, auth: str = Depends(require_auth)):
-    if name in BUILT_IN_INTENT_NAMES:
+    row = hub.db.get_intent_class(name)
+    if row and row.get("is_universal"):
         raise HTTPException(
             status_code=409,
-            detail=f"'{name}' is a built-in intent class and cannot be deleted"
+            detail=f"'{name}' is a universal intent class and cannot be deleted. "
+                   "Universal intents are defined by the DoSync protocol."
         )
-    deleted = hub.db.delete_custom_intent_class(name)
+    deleted = hub.db.delete_intent_class(name)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Custom intent class '{name}' not found")
     return {"status": "deleted", "name": name}
@@ -851,17 +844,23 @@ async def execute_intent_legacy(req: IntentRequest, auth: str = Depends(require_
 
 @app.post("/v1/intent/async", tags=["AI"])
 async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_auth)):
+    # Validate format: ^[a-z][a-z0-9_]*$
     try:
         intent_class = IntentClass(req.intent)
-    except ValueError:
-        valid = [i.value for i in IntentClass]
-        raise HTTPException(status_code=422, detail=f"Intent '{req.intent}' not recognized. Valid: {valid}")
-
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    # Validate intent class is registered in DB
+    if not hub.db.get_intent_class(req.intent):
+        registered = [r["name"] for r in hub.db.list_intent_classes()]
+        raise HTTPException(
+            status_code=422,
+            detail=f"Intent '{req.intent}' is not registered. "
+                   f"Register via POST /v1/intent-classes or use one of: {registered}"
+        )
     try:
         urgency = Urgency(req.urgency)
     except ValueError:
-        raise HTTPException(status_code=422, detail=f"Urgency '{req.urgency}' not valid")
-
+        raise HTTPException(status_code=422, detail=f"Urgency '{req.urgency}' not valid. Use: emergency, alert, info")
     intent = Intent(
         intent=intent_class,
         urgency=urgency,

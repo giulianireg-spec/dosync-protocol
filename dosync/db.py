@@ -67,14 +67,15 @@ CREATE TABLE IF NOT EXISTS device_state (
     state_json      TEXT NOT NULL,
     updated_at      REAL NOT NULL
 );
-CREATE TABLE IF NOT EXISTS custom_intent_classes (
-    name            TEXT PRIMARY KEY,
-    urgency         TEXT NOT NULL DEFAULT 'info',
-    resolution_tags TEXT NOT NULL,   -- JSON array
-    resolution_actuators TEXT NOT NULL DEFAULT '[]',  -- JSON array
-    description     TEXT NOT NULL DEFAULT '',
-    domain          TEXT NOT NULL DEFAULT 'general',
-    created_at      REAL NOT NULL
+CREATE TABLE IF NOT EXISTS intent_classes (
+    name                 TEXT PRIMARY KEY,
+    urgency              TEXT NOT NULL DEFAULT 'info',
+    resolution_tags      TEXT NOT NULL DEFAULT '[]',
+    resolution_actuators TEXT NOT NULL DEFAULT '[]',
+    description          TEXT NOT NULL DEFAULT '',
+    domain               TEXT NOT NULL DEFAULT 'general',
+    is_universal         INTEGER NOT NULL DEFAULT 0,
+    created_at           REAL NOT NULL
 );
 """
 
@@ -112,6 +113,31 @@ class DoSyncDB:
         self._conn.executescript(SCHEMA)
         self._conn.commit()
         log.info("Database initialized: %s", self.db_path.resolve())
+        self._seed_universal_intents()
+
+
+    def _seed_universal_intents(self) -> None:
+        """Seed the 5 universal intent classes if not already present.
+        These are the only intents defined at the protocol level — valid in any domain."""
+        import json, time
+        universals = [
+            ("ensure_safety",  "emergency", ["emergency","alarm","communication","notification"], ["alarm","notify","call"],    "Safety emergency — protect people and property",    "universal", 1),
+            ("alert_anomaly",  "alert",     ["communication","notification","sensor"],            ["notify","call"],            "Unexpected condition detected — investigate",        "universal", 1),
+            ("control_access", "alert",     ["door-lock","gate","access"],                        ["lock","unlock"],            "Manage physical access to a space",                 "universal", 1),
+            ("report_status",  "info",      [],                                                   [],                          "Generate a status report of the environment",        "universal", 1),
+            ("notify",         "info",      ["communication","notification","display"],            ["notify","display","call"],  "Push information to any target",                    "universal", 1),
+        ]
+        now = time.time()
+        for name, urgency, tags, actuators, desc, domain, is_univ in universals:
+            exists = self._conn.execute(
+                "SELECT 1 FROM intent_classes WHERE name = ?", (name,)
+            ).fetchone()
+            if not exists:
+                self._conn.execute(
+                    "INSERT INTO intent_classes (name,urgency,resolution_tags,resolution_actuators,description,domain,is_universal,created_at) VALUES (?,?,?,?,?,?,?,?)",
+                    (name, urgency, json.dumps(tags), json.dumps(actuators), desc, domain, is_univ, now)
+                )
+        self._conn.commit()
 
     def close(self) -> None:
         if self._conn:
@@ -551,24 +577,29 @@ class DoSyncDB:
 
     # ── Custom Intent Classes ─────────────────────────────────────────────────
 
-    def save_custom_intent_class(self, name: str, urgency: str,
+    def save_intent_class(self, name: str, urgency: str,
                                   resolution_tags: list, resolution_actuators: list,
                                   description: str, domain: str) -> None:
+        """Insert or update an intent class. Never modifies is_universal flag."""
         import time, json
+        existing = self._conn.execute(
+            "SELECT is_universal FROM intent_classes WHERE name = ?", (name,)
+        ).fetchone()
+        is_universal = existing["is_universal"] if existing else 0
         self._conn.execute("""
-            INSERT OR REPLACE INTO custom_intent_classes
+            INSERT OR REPLACE INTO intent_classes
             (name, urgency, resolution_tags, resolution_actuators,
-             description, domain, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+             description, domain, is_universal, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (name, urgency, json.dumps(resolution_tags),
               json.dumps(resolution_actuators),
-              description, domain, time.time()))
+              description, domain, is_universal, time.time()))
         self._conn.commit()
 
-    def get_custom_intent_class(self, name: str) -> dict | None:
+    def get_intent_class(self, name: str) -> dict | None:
         import json
         row = self._conn.execute(
-            "SELECT * FROM custom_intent_classes WHERE name = ?", (name,)
+            "SELECT * FROM intent_classes WHERE name = ?", (name,)
         ).fetchone()
         if not row:
             return None
@@ -580,26 +611,28 @@ class DoSyncDB:
             "description": row["description"],
             "domain": row["domain"],
             "created_at": row["created_at"],
+            "is_universal":         bool(row["is_universal"]),
         }
 
-    def list_custom_intent_classes(self) -> list[dict]:
+    def list_intent_classes(self) -> list[dict]:
         import json
         rows = self._conn.execute(
-            "SELECT * FROM custom_intent_classes ORDER BY created_at ASC"
+            "SELECT * FROM intent_classes ORDER BY created_at ASC"
         ).fetchall()
         return [{
-            "name": r["name"],
-            "urgency": r["urgency"],
-            "resolution_tags": json.loads(r["resolution_tags"]),
+            "name":                 r["name"],
+            "urgency":              r["urgency"],
+            "resolution_tags":      json.loads(r["resolution_tags"]),
             "resolution_actuators": json.loads(r["resolution_actuators"]),
-            "description": r["description"],
-            "domain": r["domain"],
-            "created_at": r["created_at"],
+            "description":          r["description"],
+            "domain":               r["domain"],
+            "is_universal":         bool(r["is_universal"]),
+            "created_at":           r["created_at"],
         } for r in rows]
 
-    def delete_custom_intent_class(self, name: str) -> bool:
+    def delete_intent_class(self, name: str) -> bool:
         cur = self._conn.execute(
-            "DELETE FROM custom_intent_classes WHERE name = ?", (name,)
+            "DELETE FROM intent_classes WHERE name = ?", (name,)
         )
         self._conn.commit()
         return cur.rowcount > 0

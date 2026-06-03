@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 import time
+import re
 import uuid
 
 
@@ -44,25 +45,57 @@ class FailurePolicy(str, Enum):
     RETRY    = "retry"
 
 
-class IntentClass(str, Enum):
-    # Seguridad
-    ENSURE_SAFETY   = "ensure_safety"
-    CONTROL_ACCESS  = "control_access"
-    MONITOR_HEALTH  = "monitor_health"
-    # Familia
-    NOTIFY_FAMILY   = "notify_family"
-    REPORT_STATUS   = "report_status"
-    # Ambiente
-    SET_ENVIRONMENT = "set_environment"
-    # Energia y eficiencia
-    SAVE_ENERGY     = "save_energy"      # nadie en casa -> modo ahorro
-    REMIND_CHORE    = "remind_chore"     # electrodomestico termino -> recordatorio
-    ALERT_ANOMALY   = "alert_anomaly"    # pico de consumo -> investigar
-    # Rutinas
-    BEDTIME_ROUTINE  = "bedtime_routine"  # hora de dormir de los ninos
-    MORNING_ROUTINE  = "morning_routine"  # buenos dias, primera presencia del dia
-    AWAY_MODE        = "away_mode"        # auto salio / todos salieron
-    CHILDREN_ARRIVED = "children_arrived_home"  # ninos llegaron del colegio
+class IntentClass(str):
+    """
+    Open string type for DoSync intent classes.
+
+    The protocol defines the FORMAT of an intent class name, not its vocabulary.
+    Any string matching ^[a-z][a-z0-9_]*$ is a valid intent class.
+
+    Five universal intents are seeded into every hub at init time.
+    Domain-specific intents (healthcare, retail, industrial, residential)
+    are registered via POST /v1/intent-classes — no code changes required.
+
+    .value returns self (str) for compatibility with Enum-style .value access.
+    """
+
+    _PATTERN = __import__('re').compile(r'^[a-z][a-z0-9_]*$')
+
+    def __new__(cls, value: str) -> 'IntentClass':
+        if not cls._PATTERN.match(str(value)):
+            raise ValueError(
+                f"Invalid intent class name '{value}'. "
+                "Must match ^[a-z][a-z0-9_]*$ "
+                "(lowercase letters, digits, underscores only)"
+            )
+        return super().__new__(cls, value)
+
+    @property
+    def value(self) -> str:
+        """Compatibility with Enum-style .value access."""
+        return str(self)
+
+    def __repr__(self) -> str:
+        return f"IntentClass({str(self)!r})"
+
+    def __eq__(self, other) -> bool:
+        return str(self) == str(other)
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
+
+# ── Universal intent classes — seeded at hub init ─────────────────────────────
+# These five are the only intents defined at the PROTOCOL level.
+# They represent concepts valid in any physical environment regardless of domain.
+# All other intents (residential, healthcare, industrial, etc.) are registered
+# via POST /v1/intent-classes without any code changes.
+
+IntentClass.ENSURE_SAFETY  = IntentClass("ensure_safety")   # Safety emergency
+IntentClass.ALERT_ANOMALY  = IntentClass("alert_anomaly")   # Unexpected condition
+IntentClass.CONTROL_ACCESS = IntentClass("control_access")  # Physical access control
+IntentClass.REPORT_STATUS  = IntentClass("report_status")   # Status report
+IntentClass.NOTIFY         = IntentClass("notify")          # Push information
 
 
 class ContextSignalType(str, Enum):
