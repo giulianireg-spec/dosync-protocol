@@ -272,28 +272,46 @@ When `urgency = "emergency"` and `emergency_override = true` on a device:
 
 ## 7. Layer 5 — Intent Layer
 
-The intent layer is the interface between the AI system (e.g., FamilyOS) and the DoSync protocol. The AI communicates using natural language or structured JSON intents.
+The intent layer is the interface between AI systems and the DoSync protocol. AI agents communicate with the hub using structured JSON intents submitted directly via the REST API or the native MCP server.
 
-### 7.1 Natural language intent (AI-facing)
+**Architecture note:** DoSync does not include an NLP parser. The translation from natural language to structured intents is the responsibility of the AI agent — this is by design. DoSync is protocol infrastructure; the intelligence layer belongs to the AI system using it. Any LLM capable of calling HTTP endpoints or using MCP can act as the intent-generation layer.
 
-The AI passes a free-text goal. The DoSync NLP parser converts it to a structured intent:
+### 7.1 AI agent integration patterns
+
+**Pattern A — MCP server (recommended)**
+
+DoSync ships a native MCP (Model Context Protocol) server. Any LLM with MCP support (Claude, ChatGPT, and others) connects directly and fires intents using natural language:
 
 ```
-Input:  "La abuela se cayó en el dormitorio, nadie está en casa"
-Output: {
-  "intent": "ensure_safety",
-  "subject": "grandmother",
-  "context": { "location": "bedroom", "trigger": "fall_detected" },
-  "urgency": "emergency"
+User: "There's an emergency at home"
+AI agent (via MCP): calls dosync_fire_intent("ensure_safety", "emergency", {})
+Hub: resolves intent → 10 WiZ bulbs at full brightness, SMS sent, alarm activated
+```
+
+MCP configuration:
+```json
+{
+  "mcpServers": {
+    "dosync": {
+      "command": "python3",
+      "args": ["/path/to/dosync/mcp_server.py"],
+      "env": {
+        "DOSYNC_HUB_URL": "http://localhost:47200",
+        "DOSYNC_TOKEN": "<your-token>"
+      }
+    }
+  }
 }
 ```
 
-### 7.2 Structured intent (direct API)
+**Pattern B — Direct REST API**
 
-For programmatic use, the AI can submit structured intents directly to the DoSync Hub REST API:
+For programmatic use, any system can submit structured intents directly to the DoSync Hub REST API:
+
+### 7.2 Structured intent (direct REST API)
 
 ```
-POST /v1/intent
+POST /v1/intent/async
 Authorization: Bearer <hub_token>
 Content-Type: application/json
 
@@ -307,6 +325,8 @@ Content-Type: application/json
   "urgency": "warning"
 }
 ```
+
+> **Note:** `/v1/intent` (without `/async`) is also accepted and redirects via HTTP 308 to `/v1/intent/async`. Clients that do not follow redirects should use `/v1/intent/async` directly.
 
 ### 7.3 Event subscription (device → AI)
 
