@@ -1,11 +1,48 @@
 """
 DoSync Certification CLI — dosync-certify
-Usage: python3 certify.py --host localhost --port 47200 --tier standard
+Verifies protocol conformance across three certification tiers.
+
+Usage:
+  python3 certify.py --host <hub-ip> --port 47200 --tier standard
 
 Tiers:
-  basic     (10 tests) — connects, authenticates, registers, manifest fields
-  standard  (22 tests) — intents, events, health, explainability, presence
+  basic     (10 tests) — connectivity, authentication, device manifest
+  standard  (22 tests) — protocol conformance, events, health, explainability
   emergency (32 tests) — emergency override, policy engine, audit log integrity
+
+Two testing modes:
+
+  Production mode (default):
+    Runs against a live hub with physical adapters.
+    Tests S05+ poll for execution results from real devices.
+    Banner: "Production mode — execution tests run against physical devices"
+
+  Certify mode (DOSYNC_CERTIFY=true on hub):
+    Hub uses SimulatedExecutor — no physical devices required.
+    All intent executions complete in <100ms, deterministic results.
+    Ideal for CI/CD pipelines and third-party hub implementors.
+    Banner: "CERTIFY MODE active — SimulatedExecutor in use"
+
+    Start hub in certify mode:
+      DOSYNC_CERTIFY=true uvicorn server:app --host 0.0.0.0 --port 47200
+
+    Then run certification normally:
+      DOSYNC_TOKEN=<token> python3 certify.py --host localhost --port 47200 --tier emergency
+
+Protocol conformance architecture:
+  fire_intent_conformance(base, body) — verifies protocol ACCEPTANCE only.
+    POSTs to /v1/intent/async and returns immediately (no polling).
+    Checks: HTTP 200 + intent_id + status fields present.
+    Used by S01-S04 — deterministic, <100ms, independent of devices.
+
+  fire_intent(base, body) — verifies intent EXECUTION outcome.
+    POSTs to /v1/intent/async then polls GET /v1/intent/{id} until complete.
+    Timeout: 5s emergency, 7s info/alert (hub_timeout + 2s margin).
+    Used by S05+ — depends on device execution results.
+
+Environment variables:
+  DOSYNC_TOKEN     API token for authenticated requests
+  DOSYNC_CA_CERT   Path to CA certificate for TLS verification
 """
 
 import argparse
@@ -222,6 +259,14 @@ TEST_DEVICE = {
 
 def run_basic(base: str, report: CertReport) -> bool:
     section("── Tier BASIC — Connectivity and registration ──────────")
+
+    # Detect certify mode — shows banner if hub uses SimulatedExecutor
+    _cs, _cb = request("GET", f"{base}/v1/status")
+    if _cs == 200 and _cb.get("certify_mode"):
+        print(f"  {C.WARN}~{C.RESET}  CERTIFY MODE active — SimulatedExecutor in use (no physical devices)")
+        print(f"  {C.WARN}~{C.RESET}  Execution tests return deterministic results — do NOT use in production")
+    else:
+        print(f"  {C.BLUE}·{C.RESET}  Production mode — execution tests run against physical devices")
 
     # B1. Hub reachable
     status, body = request("GET", f"{base}/v1/status")

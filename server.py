@@ -47,27 +47,38 @@ def _store_cleanup():
     for k in expired:
         del _intent_store[k]
 
-# ── Executor con adapters físicos ─────────────────────────────────────────────
-try:
-    from dosync.adapters import AdapterExecutor
-    from dosync.adapters.wiz import WiZAdapter
-    executor = AdapterExecutor(hub, fallback_to_simulated=True)
-    executor.register(WiZAdapter(hub=hub))
-    from dosync.adapters.homeassistant import HABridge
-    _ha_url = os.environ.get("HA_URL", "http://localhost:8123")
-    _ha_token = os.environ.get("HA_TOKEN", "")
-    if _ha_token:
-        ha_bridge = HABridge(ha_url=_ha_url, ha_token=_ha_token, hub=hub)
-        executor.register(ha_bridge)
-        logging.getLogger("dosync.server").info("HABridge registered")
-    logging.getLogger("dosync.server").info(
-        "AdapterExecutor initialized with WiZAdapter"
-    )
-except Exception as _e:
+# ── Executor ──────────────────────────────────────────────────────────────────
+# DOSYNC_CERTIFY=true: use SimulatedExecutor for deterministic certification
+# testing without physical devices. Never set this in production.
+_certify_mode = os.environ.get("DOSYNC_CERTIFY", "").lower() in ("1", "true", "yes")
+
+if _certify_mode:
     logging.getLogger("dosync.server").warning(
-        "AdapterExecutor init failed (%s) — falling back to SimulatedExecutor", _e
+        "DOSYNC_CERTIFY mode active — SimulatedExecutor in use. "
+        "No physical devices will be contacted. Do NOT use in production."
     )
     executor = SimulatedExecutor(failure_rate=0.0)
+else:
+    try:
+        from dosync.adapters import AdapterExecutor
+        from dosync.adapters.wiz import WiZAdapter
+        executor = AdapterExecutor(hub, fallback_to_simulated=True)
+        executor.register(WiZAdapter(hub=hub))
+        from dosync.adapters.homeassistant import HABridge
+        _ha_url = os.environ.get("HA_URL", "http://localhost:8123")
+        _ha_token = os.environ.get("HA_TOKEN", "")
+        if _ha_token:
+            ha_bridge = HABridge(ha_url=_ha_url, ha_token=_ha_token, hub=hub)
+            executor.register(ha_bridge)
+            logging.getLogger("dosync.server").info("HABridge registered")
+        logging.getLogger("dosync.server").info(
+            "AdapterExecutor initialized with WiZAdapter"
+        )
+    except Exception as _e:
+        logging.getLogger("dosync.server").warning(
+            "AdapterExecutor init failed (%s) — falling back to SimulatedExecutor", _e
+        )
+        executor = SimulatedExecutor(failure_rate=0.0)
 
 # ── Policy Engine ────────────────────────────────────────────────────────────
 try:
@@ -1107,6 +1118,7 @@ def get_status():
         "version":         "0.1.0",
         "protocol":        "dosync/0.1",
         "status":          "running",
+        "certify_mode":    _certify_mode,
         "devices":         len(hub.registry.all()),
         "audit_entries":   len(hub.audit_log.entries()),
         "audit_integrity": hub.audit_log.verify(),

@@ -216,6 +216,58 @@ However, domain applicability has limits that must be stated clearly:
 
 ---
 
+## Certification testing mode
+
+DoSync supports a dedicated certification mode that allows protocol conformance testing without physical devices.
+
+When the hub starts with `DOSYNC_CERTIFY=true`, it uses `SimulatedExecutor` for all intent executions instead of the real adapter stack. This means:
+
+- All intent executions complete in <100ms with deterministic `success=True` results
+- No network calls are made to physical devices
+- The protocol interface, audit log, policy engine, and resolver all behave identically to production
+- The hub logs a warning at startup to make the mode visible
+
+```bash
+# Run hub in certify mode
+DOSYNC_CERTIFY=true uvicorn server:app --host 0.0.0.0 --port 47200
+
+# Or with Docker
+DOSYNC_CERTIFY=true docker compose up
+
+# Run certification suite against it
+DOSYNC_TOKEN=<token> python3 certify.py --host localhost --port 47200 --tier emergency
+```
+
+**When to use certify mode:**
+
+| Context | Mode | Reason |
+|---|---|---|
+| CI/CD pipeline | `DOSYNC_CERTIFY=true` | No physical hardware available |
+| Fabricante testing hub implementation | `DOSYNC_CERTIFY=true` | Deterministic results needed |
+| Protocol conformance verification | `DOSYNC_CERTIFY=true` | Tests protocol behavior, not device integration |
+| Production deployment | Never | Real adapters required |
+| Development with hardware | Never | Tests real device integration |
+
+**What certify mode does NOT change:**
+
+- Authentication and authorization remain enforced
+- Audit log SHA-256 chain is produced identically
+- Policy engine evaluates intents normally
+- Resolver scores devices identically
+- Intent class registration and validation work identically
+
+Certify mode only replaces the final execution step — the actual sending of commands to physical devices. Everything above that layer runs in full production mode.
+
+**This is analogous to:**
+
+- Matter's CHIP-tool test harness which simulates all device clusters
+- Thread Group's simulated device environment for conformance testing
+- HTTP test suites that use mock servers for protocol conformance
+
+**Never deploy with `DOSYNC_CERTIFY=true` in production.** The hub logs a warning at startup when this mode is active.
+
+---
+
 ## Summary
 
 | Principle | What it means in practice |
