@@ -891,6 +891,122 @@ class DoSyncHub:
 
     # ── Intent execution ─────────────────────────────────────────────────────
 
+
+    # ── FailurePolicy execution strategies ────────────────────────────────────
+
+    async def _execute_with_policy(self, plan, executor, intent):
+        """Dispatch to the correct execution strategy based on failure_policy.
+        Emergency intents always force CONTINUE — protocol-level guarantee."""
+        from .models import FailurePolicy, Urgency
+        policy = plan.failure_policy or FailurePolicy.CONTINUE
+        if intent.urgency == Urgency.EMERGENCY:
+            if policy == FailurePolicy.ABORT:
+                log.info("FailurePolicy.ABORT overridden to CONTINUE for emergency '%s'", intent.intent)
+            policy = FailurePolicy.CONTINUE
+        if policy == FailurePolicy.ABORT:
+            r, f, a = await self._execute_abort(plan.actions, executor, intent)
+            return r, f, a, "abort"
+        elif policy == FailurePolicy.RETRY:
+            max_r = plan.max_retries if plan.max_retries else 1
+            if intent.urgency == Urgency.EMERGENCY:
+                max_r = 1
+            r, f, a = await self._execute_retry(plan.actions, executor, intent, max_r)
+            return r, f, a, "retry"
+        else:
+            r, f, a = await self._execute_parallel(plan.actions, executor, intent)
+            return r, f, a, "continue"
+
+    async def _execute_parallel(self, actions, executor, intent):
+        """CONTINUE: execute all actions in parallel, failures never stop execution."""
+        import os as _os
+        from .models import ActionResult
+        _t = float(_os.environ.get("DOSYNC_INTENT_TIMEOUT",
+                   "5.0" if intent.urgency.value == "emergency" else "10.0"))
+        tasks = {asyncio.ensure_future(executor.execute(a, intent.urgency)): a for a in actions}
+        results = []
+        if tasks:
+            done, pending = await asyncio.wait(tasks.keys(), timeout=_t)
+            for fut in done:
+                results.append(fut.result())
+            for fut in pending:
+                action = tasks[fut]
+                log.warning("Timeout: %s/%s after %.1fs", action.device_id, action.action, _t)
+                if hasattr(self.resolver, "mark_unreachable"):
+                    self.resolver.mark_unreachable(action.device_id)
+                results.append(ActionResult(device_id=action.device_id, action=action.action,
+                                            success=False, error=f"timeout after {_t}s"))
+                fut.cancel()
+        return results, [r.device_id for r in results if not r.success], []
+
+    async def _execute_abort(self, actions, executor, intent):
+        """ABORT: execute in batches by relevance_score. Cancel remaining if any batch fails."""
+        import os as _os
+        from .models import ActionResult
+        _t = float(_os.environ.get("DOSYNC_INTENT_TIMEOUT",
+                   "5.0" if intent.urgency.value == "emergency" else "10.0"))
+        sorted_actions = sorted(actions, key=lambda a: a.relevance_score, reverse=True)
+        batches = [sorted_actions[i:i+5] for i in range(0, len(sorted_actions), 5)]
+        all_results, aborted = [], []
+        abort_triggered = False
+        for idx, batch in enumerate(batches):
+            if abort_triggered:
+                for a in batch:
+                    aborted.append(a.device_id)
+                    all_results.append(ActionResult(device_id=a.device_id, action=a.action,
+                        success=False, error="aborted — prior batch failed", aborted=True))
+                continue
+            tasks = {asyncio.ensure_future(executor.execute(a, intent.urgency)): a for a in batch}
+            done, pending = await asyncio.wait(tasks.keys(), timeout=_t)
+            batch_results = [fut.result() for fut in done]
+            for fut in pending:
+                a = tasks[fut]
+                if hasattr(self.resolver, "mark_unreachable"):
+                    self.resolver.mark_unreachable(a.device_id)
+                batch_results.append(ActionResult(device_id=a.device_id, action=a.action,
+                    success=False, error=f"timeout after {_t}s"))
+                fut.cancel()
+            all_results.extend(batch_results)
+            if any(not r.success for r in batch_results):
+                log.warning("ABORT triggered after batch %d/%d — failures: %s",
+                    idx+1, len(batches), [r.device_id for r in batch_results if not r.success])
+                abort_triggered = True
+        failed = [r.device_id for r in all_results if not r.success and not r.aborted]
+        return all_results, failed, aborted
+
+    async def _execute_retry(self, actions, executor, intent, max_retries):
+        """RETRY: retry each failed action up to max_retries with exponential backoff."""
+        import os as _os
+        from .models import ActionResult
+        _t = float(_os.environ.get("DOSYNC_INTENT_TIMEOUT",
+                   "5.0" if intent.urgency.value == "emergency" else "10.0"))
+
+        async def _with_retry(action):
+            last = None
+            for attempt in range(max_retries + 1):
+                if attempt > 0:
+                    backoff = 0.5 * (2 ** (attempt - 1))
+                    log.info("RETRY %d/%d for %s (backoff %.1fs)", attempt, max_retries,
+                             action.device_id, backoff)
+                    await asyncio.sleep(backoff)
+                try:
+                    r = await asyncio.wait_for(executor.execute(action, intent.urgency), timeout=_t)
+                    r.retries = attempt
+                    if r.success:
+                        return r
+                    last = r
+                except asyncio.TimeoutError:
+                    if hasattr(self.resolver, "mark_unreachable"):
+                        self.resolver.mark_unreachable(action.device_id)
+                    last = ActionResult(device_id=action.device_id, action=action.action,
+                        success=False, error=f"timeout (attempt {attempt+1}/{max_retries+1})",
+                        retries=attempt)
+            log.warning("RETRY exhausted for %s after %d attempt(s)", action.device_id, max_retries+1)
+            return last or ActionResult(device_id=action.device_id, action=action.action,
+                success=False, error=f"exhausted {max_retries} retries", retries=max_retries)
+
+        results = list(await asyncio.gather(*[_with_retry(a) for a in actions]))
+        return results, [r.device_id for r in results if not r.success], []
+
     async def execute_intent(
         self,
         intent: Intent,
@@ -936,60 +1052,51 @@ class DoSyncHub:
         self._active_intents[intent_value] = get_intent_priority(intent_value)
         self._active_intent_devices[intent_value] = {a.device_id for a in plan.actions}
 
-        # Execute all actions in parallel with global timeout
-        import os as _os
-        _default_timeout = 5.0 if intent.urgency.value == "emergency" else 10.0
-        _intent_timeout = float(_os.environ.get("DOSYNC_INTENT_TIMEOUT", str(_default_timeout)))
-
-        _tasks = {
-            asyncio.ensure_future(executor.execute(action, intent.urgency)): action
-            for action in plan.actions
-        }
-        results: list = []
-        if _tasks:
-            done, pending = await asyncio.wait(
-                _tasks.keys(),
-                timeout=_intent_timeout
+        # Execute with the plan's FailurePolicy
+        results, failed, aborted, policy_applied = [], [], [], "continue"
+        try:
+            results, failed, aborted, policy_applied = await self._execute_with_policy(
+                plan, executor, intent
             )
-            for fut in done:
-                results.append(fut.result())
-            for fut in pending:
-                action = _tasks[fut]
-                log.warning("Intent timeout: %s/%s after %.1fs — marking unreachable",
-                            action.device_id, action.action, _intent_timeout)
-                if hasattr(self.resolver, "mark_unreachable"):
-                    self.resolver.mark_unreachable(action.device_id)
-                results.append(ActionResult(
-                    device_id=action.device_id,
-                    action=action.action,
-                    success=False,
-                    error=f"timeout after {_intent_timeout}s",
-                ))
-                fut.cancel()
+        finally:
+            self._active_intents.pop(intent_value, None)
+            self._active_intent_devices.pop(intent_value, None)
 
-        # Unregister active intent
-        self._active_intents.pop(intent_value, None)
-        self._active_intent_devices.pop(intent_value, None)
-
-        failed = [r.device_id for r in results if not r.success]
-        success = len(failed) == 0
+        success = len(failed) == 0 and len(aborted) == 0
+        if not results:
+            status = "failed"
+        elif aborted:
+            status = "partial_abort"
+        elif failed and len(failed) < len(results):
+            status = "partial"
+        elif failed:
+            status = "failed"
+        elif any(getattr(r, "retries", 0) > 0 and not r.success for r in results):
+            status = "retry_exhausted"
+        else:
+            status = "success"
 
         intent_result = IntentResult(
             intent_id=intent.intent_id,
             success=success,
             results=results,
             failed_devices=failed,
+            aborted_devices=aborted,
+            failure_policy_applied=policy_applied,
+            status=status,
         )
-
         # Audit log
         self.audit_log.append({
-            "type":       "intent_executed",
-            "intent_id":  intent.intent_id,
-            "intent":     intent.intent.value,
-            "urgency":    intent.urgency.value,
-            "actions":    len(plan.actions),
-            "failed":     failed,
-            "success":    success,
+            "type":             "intent_executed",
+            "intent_id":        intent.intent_id,
+            "intent":           intent.intent.value,
+            "urgency":          intent.urgency.value,
+            "actions":          len(plan.actions),
+            "failed":           failed,
+            "aborted":          aborted,
+            "failure_policy":   policy_applied,
+            "status":           status,
+            "success":          success,
         })
 
         return intent_result
@@ -1037,37 +1144,56 @@ class DoSyncHub:
                 i + 1, len(plan.phases), phase.name, len(phase.actions),
             )
 
-            tasks = [
-                executor.execute(
-                    DeviceAction(
-                        device_id=a.device_id,
-                        action=a.action,
-                        params=a.params,
-                    ),
-                    plan.urgency,
-                )
-                for a in phase.actions
-            ]
-            results = await asyncio.gather(*tasks)
-
-            failed = [r.device_id for r in results if not r.success]
+            from .models import ActionPlan as _PhAP, DeviceAction as _PhDA
+            from .models import Intent as _PhI, IntentClass as _PhIC
+            phase_plan = _PhAP(
+                intent_id=f"{plan.intent_id}-phase{i+1}",
+                actions=[_PhDA(device_id=a.device_id, action=a.action, params=a.params)
+                         for a in phase.actions],
+                urgency=plan.urgency,
+                failure_policy=getattr(plan, "failure_policy", None),
+                max_retries=getattr(plan, "max_retries", 1),
+            )
+            phase_intent = _PhI(intent=_PhIC("report_status"), urgency=plan.urgency, context={})
+            p_res, p_fail, p_abort, p_pol = await self._execute_with_policy(
+                phase_plan, executor, phase_intent
+            )
+            p_ok = len(p_fail) == 0 and len(p_abort) == 0
+            p_st = "success" if p_ok else ("partial_abort" if p_abort else "partial")
             phase_result = IntentResult(
                 intent_id=f"{plan.intent_id}-phase{i+1}",
-                success=len(failed) == 0,
-                results=list(results),
-                failed_devices=failed,
+                success=p_ok,
+                results=p_res,
+                failed_devices=p_fail,
+                aborted_devices=p_abort,
+                failure_policy_applied=p_pol,
+                status=p_st,
             )
             all_results.append(phase_result)
-
             self.audit_log.append({
-                "type":       "phase_executed",
-                "intent_id":  plan.intent_id,
-                "phase":      phase.name,
-                "phase_num":  i + 1,
-                "actions":    len(phase.actions),
-                "failed":     failed,
-                "success":    phase_result.success,
+                "type":           "phase_executed",
+                "intent_id":      plan.intent_id,
+                "phase":          phase.name,
+                "phase_num":      i + 1,
+                "actions":        len(phase.actions),
+                "failed":         p_fail,
+                "aborted":        p_abort,
+                "failure_policy": p_pol,
+                "success":        p_ok,
             })
+            # ABORT propagation: cancel remaining phases if this one failed
+            if not p_ok and getattr(plan, "failure_policy", None) and \
+                    getattr(plan.failure_policy, "value", "") == "abort":
+                log.warning("ABORT: phase %d/%d failed — cancelling %d remaining",
+                    i+1, len(plan.phases), len(plan.phases)-i-1)
+                for rp in plan.phases[i+1:]:
+                    all_results.append(IntentResult(
+                        intent_id=f"{plan.intent_id}-phase{plan.phases.index(rp)+1}",
+                        success=False, results=[], failed_devices=[],
+                        aborted_devices=[a.device_id for a in rp.actions],
+                        failure_policy_applied="abort", status="partial_abort",
+                    ))
+                break
 
             if phase.delay_after_ms > 0 and i < len(plan.phases) - 1:
                 log.info("Waiting %dms before next phase...", phase.delay_after_ms)

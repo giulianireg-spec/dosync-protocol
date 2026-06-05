@@ -293,6 +293,8 @@ class ActionResult:
     response: Any                     = None
     error: Optional[str]             = None
     executed_at: float                = field(default_factory=time.time)
+    aborted: bool                     = False  # True if cancelled by ABORT policy
+    retries: int                      = 0      # retries attempted before final result
 
 @dataclass
 class IntentResult:
@@ -300,11 +302,15 @@ class IntentResult:
     success: bool
     results: list[ActionResult]
     failed_devices: list[str]         = field(default_factory=list)
+    aborted_devices: list[str]        = field(default_factory=list)
     completed_at: float               = field(default_factory=time.time)
+    failure_policy_applied: str       = "continue"
     status: str                       = "success"
-    # "success"  — todas las acciones completadas
-    # "partial"  — algunas acciones fallaron pero el intent se ejecutó
-    # "failed"   — todas las acciones fallaron o el intent fue bloqueado
+    # "success"        — all actions completed successfully
+    # "partial"        — some actions failed, rest continued
+    # "partial_abort"  — some actions executed, rest aborted by ABORT policy
+    # "failed"         — all actions failed or intent was blocked
+    # "retry_exhausted"— retries exhausted, result is failure
 
 
 # ── Phased action plan (para secuencias ordenadas como emergencias) ────────────
