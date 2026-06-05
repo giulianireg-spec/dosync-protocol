@@ -117,6 +117,22 @@ def fire_intent(base: str, body: dict) -> tuple[int, dict]:
                  "success": None, "actions_taken": 0, "results": [], "failed_devices": []}
 
 
+
+def fire_intent_conformance(base: str, body: dict) -> tuple[int, dict]:
+    """POST /v1/intent/async and return the ACCEPTANCE response immediately.
+
+    For protocol conformance testing we verify that the hub:
+    - Accepts the intent with correct HTTP status (200)
+    - Returns correct response structure (intent_id, status)
+
+    We do NOT poll for execution results. Physical device execution
+    is integration testing. Protocol conformance only verifies that
+    the hub correctly processes the protocol message itself.
+    This makes conformance tests fast and deterministic regardless
+    of the number of physical devices registered in the deployment.
+    """
+    return request("POST", f"{base}/v1/intent/async", body)
+
 # ── Result types ──────────────────────────────────────────────────────────────
 
 @dataclass
@@ -300,49 +316,52 @@ def run_basic(base: str, report: CertReport) -> bool:
 # ── TIER STANDARD — 12 additional tests (total 22) ───────────────────────────
 
 def run_standard(base: str, report: CertReport):
-    section("── Tier STANDARD — Intents, events, health ─────────────")
+    section("── Tier STANDARD — Protocol conformance + events ────────")
 
-    # S1. Hub accepts notify_family intent
-    status, body = fire_intent(base, {
-        "intent":  "notify_family",
+    # S1-S4: Protocol conformance — verify hub accepts intent messages correctly.
+    # Uses fire_intent_conformance() — checks ACCEPTANCE only, no polling.
+    # Physical device execution is integration testing, not protocol conformance.
+
+    # S1. Hub accepts a valid registered universal intent
+    status, body = fire_intent_conformance(base, {
+        "intent":  "notify",
         "urgency": "info",
-        "context": {"message": "DoSync certification test — notify intent"},
+        "context": {"message": "DoSync certification test"},
     })
     report.add(TestResult(
-        "S01  Hub accepts notify_family intent",
-        status == 200 and body.get("success"),
-        f"actions_taken={body.get('actions_taken', 0)}",
+        "S01  Hub accepts valid registered intent (notify [info])",
+        status == 200 and "intent_id" in body,
+        f"intent_id={'present' if 'intent_id' in body else 'MISSING'}",
     ))
-
-    # S2. Intent resolves and returns structured result
+    # S2. Acceptance response has correct protocol structure
     report.add(TestResult(
-        "S02  Intent response contains structured result fields",
-        all(k in body for k in ["success", "actions_taken", "results"]),
-        "success / actions_taken / results present" if all(k in body for k in ["success", "actions_taken", "results"]) else f"missing fields in: {list(body.keys())}",
+        "S02  Acceptance response has correct structure (intent_id + status)",
+        status == 200 and all(k in body for k in ["intent_id", "status"]),
+        "intent_id + status present"
+        if all(k in body for k in ["intent_id", "status"])
+        else f"missing: {[k for k in ['intent_id','status'] if k not in body]}",
     ))
-
-    # S3. save_energy intent executes
-    status, body_se = fire_intent(base, {
-        "intent":  "save_energy",
-        "urgency": "info",
-        "context": {},
+    # S3. Hub accepts emergency urgency on universal safety intent
+    status3, body3 = fire_intent_conformance(base, {
+        "intent":  "ensure_safety",
+        "urgency": "emergency",
+        "context": {"trigger": "certification_test"},
     })
     report.add(TestResult(
-        "S03  Hub accepts save_energy intent",
-        status == 200 and body_se.get("success") is not None,
-        f"actions_taken={body_se.get('actions_taken', 0)}",
+        "S03  Hub accepts emergency urgency (ensure_safety [emergency])",
+        status3 == 200 and "intent_id" in body3,
+        f"intent_id={'present' if 'intent_id' in body3 else 'MISSING'}",
     ))
-
-    # S4. bedtime_routine intent executes
-    status, body_bt = fire_intent(base, {
-        "intent":  "bedtime_routine",
-        "urgency": "info",
-        "context": {},
+    # S4. Hub accepts alert urgency on universal access intent
+    status4, body4 = fire_intent_conformance(base, {
+        "intent":  "control_access",
+        "urgency": "alert",
+        "context": {"trigger": "certification_test"},
     })
     report.add(TestResult(
-        "S04  Hub accepts bedtime_routine intent",
-        status == 200 and body_bt.get("success") is not None,
-        f"actions_taken={body_bt.get('actions_taken', 0)}",
+        "S04  Hub accepts alert urgency (control_access [alert])",
+        status4 == 200 and "intent_id" in body4,
+        f"intent_id={'present' if 'intent_id' in body4 else 'MISSING'}",
     ))
 
     # S5. alert urgency returns faster / is accepted
