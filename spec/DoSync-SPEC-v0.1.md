@@ -351,7 +351,12 @@ POST /v1/event  (device → Hub → AI)
 
 ## 8. Certification
 
-A device is **DoSync Certified** if it passes the official test suite published at `github.com/dosync/certification`.
+A device or hub implementation is **DoSync Certified** if it passes the official certification CLI (`certify.py`) included in the reference repository.
+
+The certification suite separates two distinct test categories following ISO/IEC 9646-1 conformance testing methodology:
+
+- **Conformance tests** — verify that the implementation correctly processes protocol messages, independent of physical device execution. These tests use `fire_intent_conformance()` which checks acceptance only (HTTP 200 + correct response structure). Fast, deterministic, no physical devices required.
+- **Integration tests** — verify execution outcomes against real or simulated devices. These tests use `fire_intent()` with polling.
 
 ### 8.1 Certification tiers
 
@@ -363,9 +368,31 @@ A device is **DoSync Certified** if it passes the official test suite published 
 
 ### 8.2 Self-certification process
 
-1. Manufacturer downloads the test suite CLI: `npm install -g dosync-certify`
-2. Runs: `dosync-certify --device <ip> --tier standard`
-3. Test suite generates a signed certification report (`dosync-cert.json`)
+**Production mode** — against a live hub with physical devices:
+
+```bash
+# 1. Clone the reference implementation
+git clone https://github.com/giulianireg-spec/dosync-protocol
+
+# 2. Run certification against your hub
+DOSYNC_TOKEN=<token> python3 certify.py --host <hub-ip> --port 47200 --tier emergency
+
+# 3. Output: dosync-cert.json — signed certification report with fingerprint
+```
+
+**Certify mode** — without physical devices (CI/CD, development, third-party implementors):
+
+```bash
+# 1. Start hub with SimulatedExecutor
+DOSYNC_CERTIFY=true uvicorn server:app --host 0.0.0.0 --port 47200
+
+# 2. Run full certification suite — completes in <30 seconds
+DOSYNC_TOKEN=<token> python3 certify.py --host localhost --port 47200 --tier emergency
+```
+
+The hub status endpoint (`GET /v1/status`) exposes `"certify_mode": true` when running in certify mode. The CLI detects this automatically and displays a warning banner.
+
+> **Important:** `DOSYNC_CERTIFY=true` must never be set in production deployments. The hub logs a `WARNING` at startup when this mode is active.
 4. Manufacturer publishes the report alongside their device SDK
 
 No manual approval by the DoSync Initiative is required for Basic and Standard tiers. Emergency tier requires human review.

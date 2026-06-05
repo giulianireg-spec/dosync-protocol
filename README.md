@@ -276,16 +276,43 @@ class MyAdapter(DoSyncAdapter):
 
 Three tiers — self-certifiable with the CLI:
 
-| Tier | Requirements |
-|------|-------------|
-| **Basic** | Connects, authenticates, publishes capability manifest |
-| **Standard** | Responds to intents, sends events |
-| **Emergency** | Emergency override + tamper-evident SHA-256 audit log |
+| Tier | Tests | Requirements |
+|------|-------|-------------|
+| **Basic** | 10 | Connects, authenticates, publishes capability manifest |
+| **Standard** | 22 | Protocol conformance — intents, events, health, explainability |
+| **Emergency** | 32 | Emergency override + tamper-evident SHA-256 audit log |
+
+### Two testing modes
+
+**Production mode** — runs against a live hub with physical devices:
 
 ```bash
-python3 certify.py --host <device-ip> --port 47200 --tier emergency
+DOSYNC_TOKEN=<token> python3 certify.py --host <hub-ip> --port 47200 --tier standard
+```
+
+**Certify mode** — runs against a hub with `SimulatedExecutor` (no physical devices required). Ideal for CI/CD pipelines and third-party hub implementors:
+
+```bash
+# Start hub in certify mode
+DOSYNC_CERTIFY=true uvicorn server:app --host 0.0.0.0 --port 47200
+
+# Run full certification suite — deterministic, completes in <30 seconds
+DOSYNC_TOKEN=<token> python3 certify.py --host localhost --port 47200 --tier emergency
 # Output: dosync-cert.json — signed certification report
 ```
+
+The hub status endpoint exposes `certify_mode: true` when running in certify mode. The CLI detects this automatically and displays a banner.
+
+> ⚠️ Never deploy with `DOSYNC_CERTIFY=true` in production — the hub logs a warning at startup when this mode is active.
+
+### Conformance vs integration testing
+
+`certify.py` separates two distinct test types:
+
+- **Conformance tests** (S01-S04): verify the hub correctly processes protocol messages — instant, no polling, independent of physical devices
+- **Integration tests** (S05+): verify execution outcomes — use `fire_intent()` with polling, depend on device responses
+
+This mirrors how standards like Matter and Thread separate conformance testing from device integration testing.
 
 ---
 
