@@ -185,6 +185,28 @@ The log should be preserved, backed up, and treated as critical infrastructure �
 
 ---
 
+## Physical device deduplication
+
+A physical device should have exactly one logical registration in the DoSync registry. When a device is accessible via multiple adapters (for example, a Philips WiZ bulb that is registered directly via the WiZ UDP adapter AND appears as an HA sensor entity via the Home Assistant bridge), only the more capable registration should be kept.
+
+The Home Assistant bridge applies this principle automatically: when importing HA entities, it filters out read-only sensor sub-entities (power, energy, voltage, current monitoring) for devices that are already registered via a native adapter. Importing the power sensor for a WiZ bulb that is already registered as `wiz-living1-01` would create a logical duplicate — the same physical device appearing twice in the registry under different IDs — with no control capability added.
+
+**Why this matters for the protocol:**
+
+A semantic resolver that scores devices by tags will include both registrations in an intent's action plan, sending redundant commands to the same physical device. The audit log will show two separate action results for what is effectively one action. This degrades the quality of the protocol's data layer.
+
+The correct model: one physical device, one registry entry, via the most capable adapter available.
+
+**The idempotency principle:**
+
+Any device registration operation MUST be idempotent. Running the same import multiple times must produce the same result as running it once. Implementations should:
+- Check if a device_id already exists before registering
+- Update if the manifest changed (name, tags, capabilities)
+- Skip if the manifest is identical
+- Never create duplicate entries
+
+---
+
 ## On AI integration
 
 DoSync ships a native MCP server that allows any LLM with MCP support to query hub state, fire intents, and read the audit log. This is intentional — AI agents are a primary use case for the protocol.

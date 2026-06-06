@@ -270,6 +270,29 @@ class MyAdapter(DoSyncAdapter):
 **Available today:** `wiz` · `homeassistant` · `gpio` · `simulated`  
 **Planned:** `shelly` · `matter` · `ble` · `zigbee2mqtt`
 
+### Home Assistant bridge
+
+Import devices from a running Home Assistant instance:
+
+```bash
+# Import from HA (requires Long-Lived Access Token)
+python3 ha_bridge.py --ha-url http://192.168.1.10:8123 --ha-token <token> --register
+
+# Dry run — preview without saving
+python3 ha_bridge.py --ha-url http://192.168.1.10:8123 --ha-token <token>
+
+# Simulated mode — test without HA
+python3 ha_bridge.py --simulated --register
+```
+
+The bridge is **idempotent** — safe to run multiple times. Re-runs update changed devices and skip unchanged ones. The output reports what actually changed:
+
+```
+✓ 3 new · 2 updated · 25 unchanged — saved to dosync.db
+```
+
+**Physical device deduplication:** The bridge automatically filters out HA power monitoring sensors for devices already registered via a native adapter (e.g., WiZ power sensors when WiZ bulbs are registered via the WiZ UDP adapter). This prevents the same physical device from appearing twice in the registry under different logical IDs.
+
 ---
 
 ## Certification
