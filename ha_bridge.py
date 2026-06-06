@@ -81,6 +81,15 @@ Examples:
     from dosync.adapters import AdapterExecutor
     from dosync.adapters.homeassistant import HABridge
 
+    # Safety check: warn when writing simulated data to a real DB
+    if args.simulated and args.register and args.db == "dosync.db":
+        print()
+        print("  ⚠️  WARNING: --simulated --register writes simulated (fake) devices")
+        print(f"  ⚠️  to the production database '{args.db}'.")
+        print("  ⚠️  Run without --register for a dry run, or use --db :memory: to")
+        print("  ⚠️  isolate test data from production. Proceeding in 3 seconds...")
+        import time as _t; _t.sleep(3)
+
     hub      = DoSyncHub(db_path=args.db if args.register else ":memory:")
     executor = AdapterExecutor(hub, fallback_to_simulated=True)
 

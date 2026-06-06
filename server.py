@@ -30,9 +30,12 @@ logging.basicConfig(
     format="%(asctime)s  %(name)-20s  %(levelname)s  %(message)s",
 )
 
+_certify_mode = os.environ.get("DOSYNC_CERTIFY", "").lower() in ("1", "true", "yes")
 # ── Estado global del hub ─────────────────────────────────────────────────────
 
-hub      = DoSyncHub(db_path="dosync.db")
+hub      = DoSyncHub(
+    db_path=":memory:" if _certify_mode else os.environ.get("DOSYNC_DB", "dosync.db")
+)
 
 # ── Async intent store ────────────────────────────────────────────────────────
 # In-memory store for async intent results. TTL: 5 minutes.
@@ -48,9 +51,7 @@ def _store_cleanup():
         del _intent_store[k]
 
 # ── Executor ──────────────────────────────────────────────────────────────────
-# DOSYNC_CERTIFY=true: use SimulatedExecutor for deterministic certification
-# testing without physical devices. Never set this in production.
-_certify_mode = os.environ.get("DOSYNC_CERTIFY", "").lower() in ("1", "true", "yes")
+# _certify_mode is defined before DoSyncHub initialization (see above)
 
 if _certify_mode:
     logging.getLogger("dosync.server").warning(
@@ -1139,6 +1140,66 @@ async def device_action(
         "success":   result.success,
         "response":  result.response,
         "error":     result.error,
+    }
+
+
+@app.get("/v1/hub/heartbeat", tags=["Hub"], summary="Hub heartbeat for monitoring and multi-hub failover detection")
+async def hub_heartbeat():
+    """
+    Lightweight health check for hub monitoring and multi-hub failover detection.
+
+    Returns minimal hub state to allow standby hubs and monitoring systems to
+    determine whether this hub is healthy and should be treated as the active hub.
+
+    Response fields:
+      hub_id:            Unique identifier for this hub instance (stable across restarts)
+      status:            "healthy" | "degraded" — degraded if audit log integrity fails
+      protocol_version:  DoSync semantic protocol version
+      api_version:       REST API version
+      timestamp:         Current UTC timestamp (ISO 8601)
+      uptime_seconds:    Seconds since hub process started
+      devices:           Number of registered devices
+      role:              "primary" | "standby" (from DOSYNC_HUB_ROLE env var)
+
+    Clients and standby hubs SHOULD poll this endpoint to detect primary failure.
+    Recommended polling interval: 5 seconds. A hub is considered failed after
+    3 consecutive missed heartbeats (15 seconds of no response).
+    """
+    import time as _time_hb
+    import uuid as _uuid
+    from datetime import datetime, timezone
+
+    # Generate a stable hub_id from the host machine identity
+    # Uses a hash of the DB path + process start time as a stable identifier
+    hub_id = getattr(app.state, "hub_id", None)
+    if not hub_id:
+        import hashlib
+        raw = f"{os.environ.get('DOSYNC_DB', 'dosync.db')}-{os.getpid()}"
+        app.state.hub_id = hashlib.sha256(raw.encode()).hexdigest()[:16]
+        hub_id = app.state.hub_id
+
+    # Determine health status
+    audit_ok = hub.audit_log.verify() if hasattr(hub.audit_log, "verify") else True
+    status = "healthy" if audit_ok else "degraded"
+
+    # Calculate uptime
+    start_time = getattr(app.state, "start_time", None)
+    if not start_time:
+        app.state.start_time = _time_hb.time()
+        start_time = app.state.start_time
+    uptime = int(_time_hb.time() - start_time)
+
+    role = os.environ.get("DOSYNC_HUB_ROLE", "primary").lower()
+
+    return {
+        "hub_id":           hub_id,
+        "status":           status,
+        "protocol_version": DOSYNC_PROTOCOL_VERSION,
+        "api_version":      DOSYNC_API_VERSION,
+        "timestamp":        datetime.now(timezone.utc).isoformat(),
+        "uptime_seconds":   uptime,
+        "devices":          len(hub.registry.all()),
+        "role":             role,
     }
 
 

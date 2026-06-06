@@ -299,6 +299,7 @@ Examples:
 
     p_clean = db_sub.add_parser("clean", help="Remove all data (keeps API keys)")
     p_clean.add_argument("--yes", action="store_true", help="Skip confirmation")
+    db_sub.add_parser("audit-reset", help="Reset broken audit log chain (creates backup first)")
 
     args = parser.parse_args()
 
@@ -316,13 +317,97 @@ Examples:
         else: keys_parser.print_help()
 
     elif args.group == "db":
-        if args.command == "stats":    db_stats(args)
-        elif args.command == "devices": db_devices(args)
-        elif args.command == "clean":   db_clean(args)
+        if args.command == "stats":         db_stats(args)
+        elif args.command == "devices":     db_devices(args)
+        elif args.command == "clean":       db_clean(args)
+        elif args.command == "audit-reset": db_audit_reset(args)
         else: db_parser.print_help()
 
     else:
         parser.print_help()
+
+
+def db_audit_reset(args):
+    """
+    Reset the audit log chain after detecting integrity violations.
+
+    This command:
+    1. Exports the current (broken) audit log to a JSON backup file
+    2. Clears the audit_log table
+    3. Creates a new first entry that documents the reset event,
+       preserving accountability for the reset operation itself
+
+    IMPORTANT: This operation is itself auditable. The reset entry records
+    the reason, the number of previous entries, and the timestamp.
+    The backup file preserves all previous entries for external review.
+
+    Use this ONLY when the audit chain was broken by an external cause
+    (e.g., a test hub writing to the production DB). Never use it to
+    conceal legitimate audit entries.
+    """
+    import json
+    import hashlib
+
+    db_path = args.db
+    if not Path(db_path).exists():
+        print(f"  Error: database not found: {db_path}")
+        sys.exit(1)
+
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    # Count existing entries
+    cur.execute("SELECT COUNT(*) FROM audit_log")
+    count = cur.fetchone()[0]
+
+    # Export to backup
+    backup_path = f"audit_log_backup_{int(time.time())}.json"
+    cur.execute("SELECT entry_json, hash, timestamp FROM audit_log ORDER BY rowid")
+    rows = cur.fetchall()
+    backup = [{"entry": json.loads(r[0]), "hash": r[1], "timestamp": r[2]} for r in rows]
+    with open(backup_path, "w") as f:
+        json.dump(backup, f, indent=2)
+    print(f"  Backed up {count} entries to {backup_path}")
+
+    # Confirm
+    print(f"  This will clear {count} audit log entries and start a new chain.")
+    confirm = input("  Type YES to confirm: ").strip()
+    if confirm != "YES":
+        print("  Aborted.")
+        conn.close()
+        return
+
+    # Clear audit log
+    cur.execute("DELETE FROM audit_log")
+
+    # Create reset entry — must match AuditLog.append() format:
+    # entry_json includes prev_hash and hash INSIDE the JSON dict
+    now = time.time()
+    genesis_hash = hashlib.sha256(b"dosync-audit-genesis").hexdigest()
+    reset_entry = {
+        "type":             "audit_log_reset",
+        "reason":           "Chain integrity violation — see DESIGN-PRINCIPLES.md",
+        "previous_entries": count,
+        "backup_file":      backup_path,
+        "timestamp":        now,
+        "prev_hash":        genesis_hash,
+    }
+    # Hash is calculated over the entry WITHOUT the hash field (same as AuditLog.append)
+    raw = json.dumps(reset_entry, sort_keys=True)
+    new_hash = hashlib.sha256(f"{genesis_hash}{raw}".encode()).hexdigest()
+    reset_entry["hash"] = new_hash
+    entry_json = json.dumps(reset_entry, sort_keys=True)
+
+    cur.execute(
+        "INSERT INTO audit_log (entry_json, hash, timestamp) VALUES (?, ?, ?)",
+        (entry_json, new_hash, now)
+    )
+    conn.commit()
+    conn.close()
+
+    print(f"  {C.GREEN}Audit log reset.{C.RESET} New chain started with 1 entry.")
+    print(f"  Previous entries backed up to: {backup_path}")
+    print(f"  Restart the hub to pick up the new chain.")
 
 
 if __name__ == "__main__":
