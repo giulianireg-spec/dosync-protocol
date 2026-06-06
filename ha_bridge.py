@@ -1,22 +1,37 @@
 """
 DoSync — Home Assistant Bridge CLI
-Importa dispositivos de HA al hub DoSync.
+Imports devices from a Home Assistant instance into the DoSync hub registry.
 
-Uso con HA real:
+Usage:
+    # Import from a running HA instance (requires Long-Lived Access Token)
     PYTHONPATH=. python3 ha_bridge.py \
         --ha-url http://homeassistant.local:8123 \
         --ha-token <token> \
         --register
 
-Uso en modo simulado (sin HA instalado):
+    # Dry run — preview what would be imported without saving
+    PYTHONPATH=. python3 ha_bridge.py \
+        --ha-url http://homeassistant.local:8123 \
+        --ha-token <token>
+
+    # Simulated mode — test without a running HA instance
     PYTHONPATH=. python3 ha_bridge.py --simulated --register
 
-Cómo obtener el token de HA:
-    1. Abrí HA en el navegador
-    2. Click en tu perfil (abajo izquierda)
-    3. Scrolleá hasta "Long-Lived Access Tokens"
-    4. Click en "Create Token"
-    5. Copiá el token generado
+Output (with --register):
+    ✓ 3 new · 2 updated · 25 unchanged — saved to dosync.db
+
+Idempotency:
+    Safe to run multiple times. Re-runs update changed devices and skip
+    unchanged ones. The same physical device is never registered twice —
+    HA power monitoring sensors for devices already registered via a native
+    adapter (e.g., WiZ bulbs via WiZ UDP) are automatically filtered out.
+
+How to get the HA token:
+    1. Open HA in your browser
+    2. Click your profile (bottom left)
+    3. Scroll to "Long-Lived Access Tokens"
+    4. Click "Create Token"
+    5. Copy the generated token
 """
 
 import argparse
