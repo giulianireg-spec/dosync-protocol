@@ -368,6 +368,38 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ── API versioning ─────────────────────────────────────────────────────────────
+# Protocol version: the DoSync semantic protocol version (intent format, manifest schema)
+# API version:      the REST API version (URL prefix /v1/)
+# These are exposed as response headers on every request so clients can detect
+# the version without parsing the URL or the response body.
+DOSYNC_PROTOCOL_VERSION = "0.1"
+DOSYNC_API_VERSION = "1"
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+
+class VersionHeaderMiddleware(BaseHTTPMiddleware):
+    """
+    Adds DoSync version headers to every HTTP response.
+
+    Headers:
+      X-DoSync-Protocol-Version  The semantic protocol version (e.g. 0.1)
+      X-DoSync-API-Version       The REST API version (e.g. 1, matching /v1/)
+
+    Clients SHOULD read these headers to detect protocol version without
+    parsing the URL. Future breaking API changes will increment the API version
+    and introduce a new URL prefix (/v2/) while keeping /v1/ active during
+    the deprecation window.
+    """
+    async def dispatch(self, request: StarletteRequest, call_next):
+        response = await call_next(request)
+        response.headers["X-DoSync-Protocol-Version"] = DOSYNC_PROTOCOL_VERSION
+        response.headers["X-DoSync-API-Version"] = DOSYNC_API_VERSION
+        return response
+
+app.add_middleware(VersionHeaderMiddleware)
+
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -1120,6 +1152,8 @@ def get_status():
         "protocol":        "dosync/0.1",
         "status":          "running",
         "certify_mode":    _certify_mode,
+        "protocol_version": DOSYNC_PROTOCOL_VERSION,
+        "api_version":      DOSYNC_API_VERSION,
         "devices":         len(hub.registry.all()),
         "audit_entries":   len(hub.audit_log.entries()),
         "audit_integrity": hub.audit_log.verify(),
