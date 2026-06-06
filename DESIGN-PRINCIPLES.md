@@ -268,6 +268,46 @@ Certify mode only replaces the final execution step — the actual sending of co
 
 ---
 
+## Intent frequency limits
+
+Every DoSync-compliant deployment MUST implement intent frequency limits. An AI agent, a malfunctioning automation, or a compromised MCP client can fire thousands of intents per second. Without frequency limits, this can overwhelm the hub, exhaust device adapters, and degrade audit log integrity.
+
+The `IntentRateLimitPolicy` is the reference implementation. It uses a sliding window counter per `(source, urgency)` pair:
+
+- **Source** is the origin of the intent (`api`, `mcp`, `gpio`, `scheduler`, or `unknown`). Each source gets its own independent counter.
+- **Urgency** levels are limited independently. Emergency intents are **never** rate limited — this is a protocol-level guarantee equivalent to the emergency bypass in other policies.
+
+**Protocol-defined minimum default limits:**
+
+| Urgency | Default limit | Rationale |
+|---|---|---|
+| `info` | 60 / minute | Routine operations; generous limit for normal use |
+| `warning` | 60 / minute | Same as info; warning intents are still non-urgent |
+| `alert` | 20 / minute | Elevated urgency; limited to prevent alert flooding |
+| `emergency` | **Unlimited** | Must never be blocked; human safety depends on it |
+
+These are **minimum** required limits. A deployment may configure stricter limits. A deployment must not raise the emergency limit — there is no emergency rate limit by design.
+
+**Why this belongs in the Policy Engine, not in middleware:**
+
+Rate limiting could be implemented at the HTTP layer (FastAPI middleware) or at the MCP layer. Both approaches have the same problem: they protect only one entry point. An intent fired via GPIO, the scheduler, or a direct hub API call would bypass them.
+
+The Policy Engine evaluates every intent regardless of origin. This is the only layer that can guarantee universal enforcement. The same principle applies to all DoSync policies: they are not transport-specific filters; they are semantic constraints on the protocol's behavior.
+
+**Priority 0 — first line of defense:**
+
+`IntentRateLimitPolicy` has priority `0`, which means it runs before all other policies. This ensures:
+
+1. Every intent is counted before other policies can block it
+2. A source flooding the hub with intents that happen to be blocked by ConflictResolutionPolicy still counts against the rate limit
+3. The rate limit provides DoS protection independent of semantic policy logic
+
+**BLOCK response follows HTTP 429 semantics:**
+
+When a rate limit is exceeded, the policy returns `BLOCK` with a reason that includes the current count, the limit, and a `Retry-After` value in seconds. Every blocked intent is logged in the tamper-evident audit trail with `policy: "intent_rate_limit"`.
+
+---
+
 ## Summary
 
 | Principle | What it means in practice |
@@ -282,6 +322,8 @@ Certify mode only replaces the final execution step — the actual sending of co
 | Open intent vocabulary | The protocol defines format, not meaning. Domain vocabularies are deployment-specific. |
 | Five universal intents | ensure_safety, alert_anomaly, control_access, report_status, notify — valid in any domain. |
 | Four urgency levels | emergency > alert > warning > info. Only emergency bypasses policy constraints. |
+| Intent frequency limits | Every compliant hub MUST enforce rate limits per source. Emergency is always unlimited. |
+| FailurePolicy | CONTINUE (default) · ABORT (cancel remaining on first failure) · RETRY (exponential backoff). Emergency always forces CONTINUE. |
 
 ---
 

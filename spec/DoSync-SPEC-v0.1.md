@@ -270,6 +270,53 @@ When `urgency = "emergency"` and `emergency_override = true` on a device:
 
 ---
 
+### 6.6 Policy Engine
+
+The Policy Engine evaluates every intent before execution, regardless of origin. Policies are evaluated in priority order (lowest number first). The first `BLOCK` or `CONFIRM` result stops evaluation. `MODIFY` results are accumulated — multiple `MODIFY` policies can apply to the same intent.
+
+Emergency intents (`urgency = "emergency"`) bypass all policy evaluation.
+
+```
+PolicyEngine.evaluate(intent, action_plan) → PolicyResult
+  decision: ALLOW | BLOCK | CONFIRM | MODIFY
+  reason:   human-readable explanation
+  policy_name: which policy produced this result
+```
+
+Built-in policies (all configurable):
+
+| Policy | Priority | Behavior |
+|---|---|---|
+| `IntentRateLimitPolicy` | 0 | Limits intent frequency per source. **Required** in all compliant deployments. |
+| `ConflictResolutionPolicy` | 1 | Blocks lower-priority intents when a higher-priority intent is active. |
+| `ContextualWeightingPolicy` | 2 | Adjusts device scoring based on time-of-day and context signals. |
+| `NeverAfterHoursPolicy` | 10 | Blocks specific actuator types outside defined time windows. |
+| `RequireConfirmationPolicy` | 20 | Requires explicit confirmation before executing specified actuators. |
+
+### 6.7 Intent frequency limits
+
+Every DoSync-compliant hub implementation MUST enforce intent frequency limits. This is a required protocol component.
+
+**Default minimum limits (per source, per 60-second window):**
+
+| Urgency | Minimum limit | Emergency override |
+|---|---|---|
+| `info` | 60 / minute | N/A |
+| `warning` | 60 / minute | N/A |
+| `alert` | 20 / minute | N/A |
+| `emergency` | **Unlimited** | Always executes |
+
+A compliant implementation MUST:
+- Apply limits independently per source (MCP client, REST API, GPIO, scheduler)
+- Never rate-limit `urgency = "emergency"` intents
+- Return a `BLOCK` decision with `policy_name = "intent_rate_limit"` when a limit is exceeded
+- Include a `Retry-After` value (in seconds) in the block reason
+- Log every blocked intent in the audit trail
+
+A compliant implementation MAY configure stricter per-deployment limits. It MUST NOT raise the `emergency` limit.
+
+---
+
 ## 7. Layer 5 — Intent Layer
 
 The intent layer is the interface between AI systems and the DoSync protocol. AI agents communicate with the hub using structured JSON intents submitted directly via the REST API or the native MCP server.
