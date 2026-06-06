@@ -642,7 +642,7 @@ async def get_single_device_health(
 def list_devices(auth: str = Depends(require_auth)):
     return {
         "count": len(hub.registry.all()),
-        "devices": [d.to_dict() for d in hub.registry.all()],
+        "devices": [d.to_public_dict() for d in hub.registry.all()],
     }
 
 
@@ -651,7 +651,7 @@ def get_device(device_id: str, auth: str = Depends(require_auth)):
     device = hub.registry.get(device_id)
     if not device:
         raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
-    return device.to_dict()
+    return device.to_public_dict()
 
 
 @app.post("/v1/devices/provision", tags=["Devices"])

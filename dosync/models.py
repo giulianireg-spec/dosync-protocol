@@ -190,6 +190,22 @@ class CapabilityManifest:
             d["adapter_config"] = self.adapter_config
         return d
 
+    def to_public_dict(self) -> dict:
+        """
+        Serialize manifest for public API responses.
+
+        Identical to to_dict() but excludes adapter_config, which contains
+        sensitive internal routing information (IP addresses, ports, tokens).
+        Clients interact with the hub via the semantic intent layer and never
+        need to know the physical address of a device.
+
+        Use to_dict() for internal operations (DB persistence, adapter routing).
+        Use to_public_dict() for all GET /v1/devices/* API responses.
+        """
+        d = self.to_dict()
+        d.pop("adapter_config", None)
+        return d
+
 
 # ── Context model (inferencia de ocupacion y rutinas) ─────────────────────────
 
