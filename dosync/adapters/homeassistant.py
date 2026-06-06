@@ -284,13 +284,21 @@ class HABridge(DoSyncAdapter):
 
     # ── Import devices from HA ────────────────────────────────────────────────
 
-    async def import_devices(self) -> int:
+    async def import_devices(self) -> dict:
         """
-        Lee todos los estados de HA y registra los dispositivos en el hub.
-        Retorna el número de dispositivos importados.
+        Reads all HA states and registers devices in the hub.
+
+        Returns {"new": N, "updated": M, "skipped": K, "total": N+M+K}
+        - new:     device_id not previously in registry
+        - updated: device_id existed but manifest changed
+        - skipped: device_id existed with identical manifest (no-op)
+
+        Idempotent: safe to run multiple times. Re-runs update changed
+        devices and skip unchanged ones. Never creates duplicates.
         """
         if self._simulated:
-            return self._import_simulated()
+            count = self._import_simulated()
+            return {"new": count, "updated": 0, "skipped": 0, "total": count}
 
         try:
             session = await self._get_session()
@@ -304,15 +312,44 @@ class HABridge(DoSyncAdapter):
             log.error("Failed to connect to HA at %s: %s", self._url, e)
             raise
 
-        count = 0
+        new_count = 0
+        updated_count = 0
+        skipped_count = 0
+
         for state in states:
             manifest = self._state_to_manifest(state)
-            if manifest:
-                self._hub.register_device(manifest)
-                count += 1
+            if not manifest:
+                continue
 
-        log.info("HA bridge: imported %d device(s) from %s", count, self._url)
-        return count
+            existing = self._hub.registry.get(manifest.device_id)
+            if existing is None:
+                self._hub.register_device(manifest)
+                new_count += 1
+                log.debug("HA bridge: new device %s", manifest.device_id)
+            else:
+                # Compare relevant fields — skip if nothing changed
+                e, n = existing.to_dict(), manifest.to_dict()
+                changed = (
+                    e.get("device_name") != n.get("device_name")
+                    or e.get("tags") != n.get("tags")
+                    or e.get("actuators") != n.get("actuators")
+                    or e.get("sensors") != n.get("sensors")
+                    or e.get("emergency_capable") != n.get("emergency_capable")
+                )
+                if changed:
+                    self._hub.register_device(manifest)
+                    updated_count += 1
+                    log.debug("HA bridge: updated device %s", manifest.device_id)
+                else:
+                    skipped_count += 1
+                    log.debug("HA bridge: unchanged %s (skipped)", manifest.device_id)
+
+        total = new_count + updated_count + skipped_count
+        log.info(
+            "HA bridge: %d new, %d updated, %d unchanged — %d device(s) from %s",
+            new_count, updated_count, skipped_count, total, self._url,
+        )
+        return {"new": new_count, "updated": updated_count, "skipped": skipped_count, "total": total}
 
     def _state_to_manifest(self, state: dict) -> Optional[CapabilityManifest]:
         """Convierte un estado de HA en un CapabilityManifest DoSync."""
@@ -324,6 +361,15 @@ class HABridge(DoSyncAdapter):
         if domain in HA_IGNORED_DOMAINS:
             return None
         if domain not in HA_DOMAIN_MAP:
+            return None
+
+        # Skip WiZ power monitoring sensors — these are read-only sub-entities
+        # that HA auto-creates for WiZ bulbs. DoSync registers WiZ bulbs directly
+        # via WiZAdapter, so importing these creates logical duplicates.
+        if (domain == "sensor"
+                and "wiz" in entity_id.lower()
+                and entity_id.rsplit("_", 1)[-1] in {"power", "energy", "voltage", "current"}):
+            log.debug("Skipping WiZ sub-sensor (already registered via WiZAdapter): %s", entity_id)
             return None
 
         mapping = HA_DOMAIN_MAP[domain]

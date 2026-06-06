@@ -84,18 +84,20 @@ Examples:
     print()
 
     try:
-        count = await bridge.import_devices()
+        result = await bridge.import_devices()
     except Exception as e:
         print(f"  ✗ Error: {e}")
         print()
         return
 
-    print(f"  Found {count} device(s):\n")
+    # result is {"new": N, "updated": M, "skipped": K, "total": T}
+    total = result.get("total", 0) if isinstance(result, dict) else result
+    print(f"  Found {total} device(s):\n")
 
     for d in hub.registry.all():
-        adapter = getattr(d, 'adapter', 'simulated') or 'simulated'
-        config  = getattr(d, 'adapter_config', {}) or {}
-        entity  = config.get('entity_id', '')
+        adapter = getattr(d, "adapter", "simulated") or "simulated"
+        config  = getattr(d, "adapter_config", {}) or {}
+        entity  = config.get("entity_id", "")
         emerg   = "🚨" if d.emergency_capable else "  "
         tags    = ", ".join(d.tags[:4])
         print(f"  {emerg} {d.device_name:<35} [{entity}]")
@@ -103,11 +105,16 @@ Examples:
         print()
 
     if args.register:
-        print(f"  ✓ {count} device(s) registered in {args.db}")
-        print(f"  Restart the hub to see them in the dashboard.")
+        if isinstance(result, dict):
+            new = result.get("new", 0)
+            updated = result.get("updated", 0)
+            skipped = result.get("skipped", 0)
+            print(f"  ✓ {new} new · {updated} updated · {skipped} unchanged — saved to {args.db}")
+        else:
+            print(f"  ✓ {result} device(s) registered in {args.db}")
+        print(f"  Restart the hub (or reload via API) to apply changes.")
     else:
         print(f"  (dry run — use --register to save to DB)")
-    print()
 
     await bridge.close()
 
