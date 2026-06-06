@@ -526,6 +526,101 @@ The transition from `v0.x` to `v1.0` marks the protocol's stability milestone �
 
 ---
 
+## 11. Multi-Hub Architecture
+
+### 11.1 Problem statement
+
+A single DoSync hub is a single point of failure. If the hub process crashes or the host machine fails, all connected devices lose their semantic coordinator. For safety-critical deployments (hospitals, industrial facilities, buildings with emergency systems), this is unacceptable.
+
+### 11.2 Scope and constraints
+
+This section defines the **requirements and constraints** for a compliant multi-hub implementation. It does not prescribe a specific consensus algorithm or synchronization protocol. Implementations are free to choose the appropriate mechanism (Raft, CRDTs, primary-standby replication, etc.) provided they satisfy the requirements below.
+
+### 11.3 Hub discovery
+
+The DoSync hub announces its presence via the existing UDP broadcast mechanism (Layer 1 — Transport). In a multi-hub deployment, each hub announces its own endpoint. Devices and clients MUST be configurable with multiple hub URLs as fallback targets.
+
+The heartbeat endpoint (`GET /v1/hub/heartbeat`) MUST be used by standby hubs and monitoring systems to determine whether the primary hub is available. The endpoint returns:
+
+```json
+{
+  "hub_id":           "8f16f011beab295a",
+  "status":           "healthy",
+  "protocol_version": "0.1",
+  "api_version":      "1",
+  "timestamp":        "2026-06-06T15:02:22.556184+00:00",
+  "uptime_seconds":   1842,
+  "devices":          32,
+  "role":             "primary"
+}
+```
+
+**Recommended polling interval:** 5 seconds. A hub SHOULD be considered unavailable after 3 consecutive missed heartbeats (15 seconds).
+
+### 11.4 Required guarantees
+
+A multi-hub implementation MUST satisfy the following:
+
+**1. Intent execution consistency**
+No intent MAY be executed by two hubs simultaneously for the same device. Concurrent execution creates conflicting device states and produces duplicate audit log entries that undermine the accountability model.
+
+**2. Audit log integrity**
+The SHA-256 tamper-evident audit log chain MUST remain consistent across hub instances. If two hubs write to the same audit log independently, the chain will diverge and `verify()` will return False. Implementations MUST choose one of:
+- Only one hub writes to the audit log at any time (primary-standby)
+- Audit logs are merged with conflict resolution before verification
+- A distributed log with total ordering (e.g., consensus-based append)
+
+**3. Device registry consistency**
+The capability manifest registry MUST be eventually consistent across hubs. A device registered with hub A MUST be discoverable by hub B within a configurable convergence window.
+
+**4. Emergency bypass must not degrade**
+`urgency=emergency` intents MUST never be blocked by hub coordination overhead. If a hub cannot reach its peers (network partition), it MUST still execute emergency intents immediately and reconcile state after the partition heals.
+
+**5. No split-brain silent corruption**
+If two hubs cannot determine which is authoritative (split-brain scenario), they MUST NOT both execute non-emergency intents silently. Acceptable behaviors: one hub blocks non-emergency execution, or clients are returned a `503 Hub Unavailable` until consensus is restored.
+
+### 11.5 Hub roles
+
+The `DOSYNC_HUB_ROLE` environment variable declares the hub's intended role. Valid values:
+
+| Value | Meaning |
+|---|---|
+| `primary` (default) | Hub serves all requests normally |
+| `standby` | Hub monitors the primary and activates only on primary failure |
+
+The `role` field is returned in `GET /v1/hub/heartbeat`. Clients MAY use this field to implement failover logic.
+
+### 11.6 Known failure modes
+
+Implementors MUST be aware of the following distributed systems failure modes and mitigate them explicitly:
+
+**Split-brain**: Both primary and standby believe they are the active hub. Mitigation: fencing tokens, STONITH (Shoot The Other Node In The Head), or quorum-based election.
+
+**False failover**: The standby promotes itself due to a network partition, while the primary is still healthy. Mitigation: require quorum acknowledgment before promotion.
+
+**State divergence**: Devices registered with the primary are not yet replicated to the standby at failover time. Mitigation: synchronous replication for registry mutations, or accept a reconciliation window.
+
+**Audit log corruption**: Two hubs write to the same SQLite file simultaneously. Mitigation: never share a SQLite file between hub processes. Use `manage.py db audit-reset` to recover from chain integrity violations.
+
+### 11.7 Implementation guidance
+
+For home and small office deployments, the simplest compliant implementation is **active-passive with a shared external database**:
+
+1. Primary hub writes to a network-accessible database (PostgreSQL, SQLite WAL on NFS with proper locking)
+2. Standby hub polls `GET /v1/hub/heartbeat` every 5 seconds
+3. On 3 consecutive failures, standby promotes itself and begins serving requests
+4. On primary recovery, manual operator action is required to demote the standby
+
+For enterprise deployments, a Raft-based consensus approach (etcd, Consul) is recommended to eliminate split-brain scenarios.
+
+### 11.8 Certification
+
+Multi-hub support is **optional** for Basic and Standard tier certification. A hub that supports multi-hub SHOULD declare it in `GET /v1/hub/heartbeat` via an additional `multi_hub_capable: true` field.
+
+Emergency tier certification requires that the hub maintains emergency intent execution even during hub failover scenarios.
+
+---
+
 ## Appendix A — Example scenarios
 
 ### A.1 Fall detection emergency
