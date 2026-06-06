@@ -458,7 +458,71 @@ No manual approval by the DoSync Initiative is required for Basic and Standard t
 
 ## 10. Versioning and Compatibility
 
-DoSync uses semantic versioning (`MAJOR.MINOR.PATCH`). Devices must declare the maximum protocol version they support. The Hub negotiates the highest mutually supported version on each connection.
+DoSync maintains two independent versioned surfaces:
+
+| Surface | Current | Exposed as |
+|---|---|---|
+| **Protocol version** | `0.1` | `dosync/0.1` in `protocol` field of `/v1/status`; `X-DoSync-Protocol-Version` response header |
+| **REST API version** | `1` | `/v1/` URL prefix; `X-DoSync-API-Version` response header |
+
+Every HTTP response from the hub includes both headers:
+
+```
+X-DoSync-Protocol-Version: 0.1
+X-DoSync-API-Version: 1
+```
+
+Clients SHOULD read these headers to detect the version in use rather than parsing the URL.
+
+### 10.1 Version semantics
+
+**Protocol version** tracks changes to the semantic protocol — the intent format, the CapabilityManifest schema, urgency level semantics, and the core data model. A change to the protocol version signals that clients may need to update their understanding of what the hub communicates, not just how to call it.
+
+**API version** tracks changes to the HTTP interface — endpoints, request/response shapes, authentication. A new API version introduces a new URL prefix (`/v2/`) while the previous version remains active during the deprecation window.
+
+### 10.2 Backward compatibility commitment
+
+A compliant hub implementation MUST NOT introduce breaking changes within the same API version. The following are **non-breaking** and may be deployed at any time without incrementing the API version:
+
+- Adding new optional fields to response bodies
+- Adding new optional query parameters
+- Adding new endpoints
+- Adding new optional intent classes via `POST /v1/intent-classes`
+- Adding new urgency levels (if they do not change the semantics of existing ones)
+- Changing default values for optional parameters (with documented notice)
+
+The following are **breaking changes** and require incrementing the API version:
+
+- Removing fields from request or response bodies
+- Changing the type of an existing field
+- Removing endpoints
+- Adding required fields to request bodies
+- Changing the semantics of existing fields
+- Removing or renaming urgency levels
+
+### 10.3 Deprecation policy
+
+When a feature is deprecated, the hub MUST:
+
+1. Add the `Deprecation` header (RFC 8594) to responses from the deprecated endpoint, with the deprecation date as the value
+2. Add the `Sunset` header (RFC 8594) with the planned removal date
+3. Document the replacement in the API documentation
+
+```
+Deprecation: Sat, 01 Jan 2028 00:00:00 GMT
+Sunset: Sat, 01 Jul 2028 00:00:00 GMT
+```
+
+Deprecated features remain operational for a minimum of **6 months** after the deprecation notice before removal. The hub MUST continue serving the previous API version (`/v1/`) for at least 6 months after `/v2/` is available.
+
+### 10.4 Protocol versioning
+
+Protocol versions follow `MAJOR.MINOR` semantics:
+
+- **MINOR** increment (e.g. `0.1` → `0.2`): additive changes. New optional fields, new intent classes in the universal set, new urgency levels. Backward compatible.
+- **MAJOR** increment (e.g. `0.x` → `1.0`): breaking changes to the core data model, the intent format, or the CapabilityManifest schema. Clients may require updates.
+
+The transition from `v0.x` to `v1.0` marks the protocol's stability milestone — after `v1.0`, breaking changes require a MAJOR increment.
 
 ---
 

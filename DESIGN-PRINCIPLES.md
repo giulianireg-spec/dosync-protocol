@@ -346,6 +346,8 @@ When a rate limit is exceeded, the policy returns `BLOCK` with a reason that inc
 | Four urgency levels | emergency > alert > warning > info. Only emergency bypasses policy constraints. |
 | Intent frequency limits | Every compliant hub MUST enforce rate limits per source. Emergency is always unlimited. |
 | FailurePolicy | CONTINUE (default) · ABORT (cancel remaining on first failure) · RETRY (exponential backoff). Emergency always forces CONTINUE. |
+| API versioning | Two surfaces: protocol version (semantic format) + API version (HTTP interface). Non-breaking changes require no version bump. Breaking changes require a new URL prefix. |
+| Physical device deduplication | One physical device, one registry entry. HA sub-sensors for directly-registered devices are filtered at import. |
 
 ---
 
