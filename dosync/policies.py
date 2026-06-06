@@ -32,6 +32,9 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+import threading
+from collections import deque
+import time
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -307,6 +310,129 @@ class DeviceExclusionPolicy(BasePolicy):
 
 # ── Policy Engine ─────────────────────────────────────────────────────────────
 
+class IntentRateLimitPolicy(BasePolicy):
+    """
+    Limits intent execution frequency per source using a sliding window counter.
+
+    This policy is a REQUIRED component of any DoSync-compliant deployment.
+    It protects the hub against runaway AI agents, malfunctioning automations,
+    and denial-of-service conditions.
+
+    Emergency intents are NEVER rate limited — this is a protocol-level guarantee.
+    All other urgency levels are limited independently per source.
+
+    Default limits (configurable):
+        info:    60 intents / minute per source
+        warning: 60 intents / minute per source
+        alert:   20 intents / minute per source
+
+    Usage:
+        policy_engine.add(IntentRateLimitPolicy())
+
+        # Custom limits
+        policy_engine.add(IntentRateLimitPolicy(
+            limits_per_minute={"info": 30, "warning": 30, "alert": 10}
+        ))
+
+    The response follows HTTP 429 semantics: BLOCK with reason including
+    the current count, the limit, and the seconds until the window resets.
+    Every blocked intent is logged in the tamper-evident audit trail.
+    """
+
+    # Protocol-defined minimum default limits.
+    # A compliant hub MUST enforce at least these limits.
+    DEFAULT_LIMITS: dict[str, int] = {
+        "info":    60,
+        "warning": 60,
+        "alert":   20,
+        # "emergency" is intentionally absent — always bypassed
+    }
+
+    def __init__(
+        self,
+        limits_per_minute: dict[str, int] | None = None,
+        window_seconds: int = 60,
+    ):
+        self._limits = limits_per_minute if limits_per_minute is not None else self.DEFAULT_LIMITS
+        self._window = window_seconds
+        # Sliding window: {source: {urgency_value: deque of timestamps}}
+        self._windows: dict[str, dict[str, deque]] = {}
+        self._lock = threading.Lock()
+
+    @property
+    def name(self) -> str:
+        return "intent_rate_limit"
+
+    @property
+    def priority(self) -> int:
+        return 0  # FIRST line of defense — runs before all other policies
+
+    def evaluate(self, intent: "Intent", plan: "ActionPlan") -> PolicyResult | None:
+        from .models import Urgency
+
+        # Emergency intents are NEVER rate limited — protocol guarantee
+        if intent.urgency == Urgency.EMERGENCY:
+            return None
+
+        urgency_value = str(intent.urgency.value)
+        limit = self._limits.get(urgency_value)
+        if limit is None:
+            return None  # no limit configured for this urgency level
+
+        source = getattr(intent, "source", None) or "unknown"
+        now = time.time()
+        cutoff = now - self._window
+
+        with self._lock:
+            # Initialize per-source, per-urgency sliding window
+            if source not in self._windows:
+                self._windows[source] = {}
+            if urgency_value not in self._windows[source]:
+                self._windows[source][urgency_value] = deque()
+
+            window = self._windows[source][urgency_value]
+
+            # Evict timestamps outside the sliding window
+            while window and window[0] < cutoff:
+                window.popleft()
+
+            current_count = len(window)
+
+            if current_count >= limit:
+                # Calculate retry-after: seconds until oldest entry leaves the window
+                retry_after = max(1, int(self._window - (now - window[0])) + 1)
+                return PolicyResult.block(
+                    self.name,
+                    f"Rate limit exceeded for source '{source}': "
+                    f"{current_count}/{limit} {urgency_value} intents "
+                    f"in the last {self._window}s. "
+                    f"Retry after {retry_after}s."
+                )
+
+            # Record this intent execution
+            window.append(now)
+            return None  # within limit — allow
+
+    def get_stats(self) -> dict:
+        """Return current rate limit counters for all sources. Useful for monitoring."""
+        now = time.time()
+        cutoff = now - self._window
+        stats = {}
+        with self._lock:
+            for source, urgency_windows in self._windows.items():
+                stats[source] = {}
+                for urgency, window in urgency_windows.items():
+                    # Count active entries
+                    active = sum(1 for t in window if t >= cutoff)
+                    limit = self._limits.get(urgency, 0)
+                    stats[source][urgency] = {
+                        "count": active,
+                        "limit": limit,
+                        "remaining": max(0, limit - active),
+                    }
+        return stats
+
+
 class PolicyEngine:
     """
     Evaluates all registered policies against an intent and action plan.
@@ -551,7 +677,6 @@ class ContextualWeightingPolicy(BasePolicy):
         return 2  # evaluated very early, before conflict resolution
 
     def _compute_weight(self, intent: "Intent") -> float:
-        from datetime import datetime
         now = datetime.now()
         hour = now.hour
         weekday = now.weekday()  # 0=Monday, 6=Sunday

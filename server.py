@@ -82,9 +82,10 @@ else:
 
 # ── Policy Engine ────────────────────────────────────────────────────────────
 try:
-    from dosync.policies import PolicyEngine, NeverAfterHoursPolicy, RequireConfirmationPolicy, DeviceExclusionPolicy
+    from dosync.policies import PolicyEngine, NeverAfterHoursPolicy, RequireConfirmationPolicy, DeviceExclusionPolicy, IntentRateLimitPolicy
     policy_engine = PolicyEngine()
     from dosync.policies import ConflictResolutionPolicy, ContextualWeightingPolicy
+    policy_engine.add(IntentRateLimitPolicy())
     policy_engine.add(ContextualWeightingPolicy())
     policy_engine.add(ConflictResolutionPolicy(hub))
     policy_engine.add(NeverAfterHoursPolicy(
