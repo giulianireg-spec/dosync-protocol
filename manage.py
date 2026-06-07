@@ -460,7 +460,7 @@ def certs_status(args):
     if ca:
         expiry = f"{ca.days_until_expiry}d remaining" if not ca.is_expired else "EXPIRED"
         flag = C.RED if ca.is_expired else (C.YELLOW if ca.is_expiring_soon else C.GREEN)
-        ok(f"CA cert      valid until {ca.not_after.date()}  ({flag}{expiry}{C.RESET})")
+        ok(f"CA cert      expires {ca.not_after}  ({flag}{expiry}{C.RESET})")
     else:
         warn("CA cert found but could not read details")
 
@@ -468,14 +468,14 @@ def certs_status(args):
     if hub:
         expiry = f"{hub.days_until_expiry}d remaining" if not hub.is_expired else "EXPIRED"
         flag = C.RED if hub.is_expired else (C.YELLOW if hub.is_expiring_soon else C.GREEN)
-        ok(f"Hub cert     valid until {hub.not_after.date()}  ({flag}{expiry}{C.RESET})")
+        ok(f"Hub cert     expires {hub.not_after}  ({flag}{expiry}{C.RESET})")
     else:
         warn("Hub cert not found")
 
     for adapter in status.adapter_certs:
         expiry = f"{adapter.days_until_expiry}d remaining" if not adapter.is_expired else "EXPIRED"
         flag = C.RED if adapter.is_expired else (C.YELLOW if adapter.is_expiring_soon else C.GREEN)
-        ok(f"Adapter [{adapter.common_name:<12}] valid until {adapter.not_after.date()}  ({flag}{expiry}{C.RESET})")
+        ok(f"Adapter [{adapter.common_name:<12}] expires {adapter.not_after}  ({flag}{expiry}{C.RESET})")
 
     if status.errors:
         print()
