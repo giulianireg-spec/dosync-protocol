@@ -664,6 +664,112 @@ Emergency tier certification requires that the hub maintains emergency intent ex
 
 ---
 
+
+---
+
+## 12. Error Behaviors and Operational Boundaries
+
+This section defines the required behavior of a conforming hub in error conditions, and the operational boundaries within which the protocol has been validated.
+
+### 12.1 Error behaviors
+
+#### Intent timeout
+
+If intent execution does not complete within `DOSYNC_INTENT_TIMEOUT` milliseconds (default: 5000ms for emergency, 10000ms for other urgencies), the hub MUST:
+
+1. Cancel all pending adapter calls for the intent
+2. Return an `IntentResult` with `status: "partial"` or `status: "failed"` reflecting which actions completed before timeout
+3. Log the timeout event in the tamper-evident audit log with `type: "intent_timeout"`
+4. Mark devices that timed out as unreachable for `DOSYNC_UNREACHABLE_TTL` seconds (default: 1800s)
+
+The client receives a response immediately — the intent executes asynchronously via `POST /v1/intent/async`. Timeout is enforced server-side.
+
+#### Policy block
+
+When the policy engine blocks an intent, the hub MUST:
+
+1. Return HTTP 429 (rate limit) or HTTP 403 (policy block) with a machine-readable reason
+2. Log the block in the audit log with `type: "intent_blocked"` and `policy: "<policy_name>"`
+3. NOT execute any device actions
+
+The client MUST NOT retry a blocked intent without addressing the block condition.
+
+#### Device registration failure
+
+If `POST /v1/devices/register` fails validation, the hub MUST return HTTP 422 with a structured error body. The hub MUST NOT partially register the device. Registration is atomic.
+
+If a device re-registers with changed capabilities (see §5.3), the hub classifies the change and emits the appropriate audit entry. Registration always succeeds — anomaly detection is an audit concern, not a registration failure.
+
+#### Resolver empty plan
+
+If the capability-based resolver finds no devices relevant to an intent, the hub MUST return an `IntentResult` with `status: "failed"`, `actions: 0`, and `success: false`. This is not an error condition — it indicates the registry has no devices capable of responding to the intent. The hub MUST NOT raise an exception.
+
+#### Device unreachable
+
+When an adapter returns a timeout or connection failure for a device, the hub MUST:
+
+1. Mark the device as unreachable in the `StateAwareResolver` cache
+2. Exclude the device from subsequent action plans for `DOSYNC_UNREACHABLE_TTL` seconds
+3. Log the failure in the `IntentResult.results` array with `success: false` and the error message
+4. Continue executing remaining actions in the plan (unless `failure_policy: "abort"` is set)
+
+Unreachable devices automatically re-enter the resolver's consideration after the TTL expires. No operator action is required.
+
+#### Audit log integrity failure
+
+If `GET /v1/hub/heartbeat` returns `status: "degraded"`, the audit log chain is broken. The hub MUST continue operating but MUST report degraded status on every heartbeat until the chain is repaired. See `manage.py db audit-reset` for recovery.
+
+---
+
+### 12.2 Operational boundaries
+
+These are the validated operational limits of the reference implementation. Conforming implementations SHOULD document their own limits.
+
+| Parameter | Home deployment | Industrial (guideline) | Notes |
+|---|---|---|---|
+| Devices per hub | ≤200 | ≤1000 | Benchmark validated to 5000 within 500ms |
+| Intents per minute (total) | ≤50 recommended | ≤200 | `IntentRateLimitPolicy` default: 60/min/source |
+| Commands per device per minute | ≤20 | ≤60 | `DeviceActuatorRateLimitPolicy` default |
+| Resolver latency (p99) | <0.5ms | <0.5ms | Reference impl: 0.11ms at 38 real devices |
+| Concurrent WebSocket clients | ≤10 | — | Tested in reference deployment |
+| SQLite DB practical limit | ~1GB | — | Performance degrades above this |
+
+The resolver scales to 5000+ devices within the 500ms intent timeout at p99. Beyond 5000 devices, tag-based indexing (`O(1)` lookup) is recommended over linear scan.
+
+---
+
+### 12.3 Safety-critical deployment constraints
+
+DoSync is NOT certified for safety-critical applications under IEC 61508, IEC 62304, or equivalent functional safety standards. Deployments in environments where failure could result in injury, death, or significant property damage MUST NOT rely on DoSync as the sole safety mechanism.
+
+**Prohibited uses (without additional safety layers):**
+- Primary control of medical devices or life support systems
+- Single point of control for fire suppression or emergency egress
+- Industrial machinery with SIL (Safety Integrity Level) requirements
+
+**Appropriate uses:**
+- Coordination of non-critical peripherals in medical environments (lighting, access, comfort)
+- Secondary notification layer alongside certified safety systems
+- Home environments where failure results in inconvenience, not injury
+
+The `emergency` urgency level bypasses policy constraints for speed — it does not imply the hub meets any safety certification standard. Emergency intents are logged with full audit trail; they are not validated against external safety standards.
+
+See `DESIGN-PRINCIPLES.md` for the full reasoning behind these constraints.
+
+---
+
+### 12.4 Relationship to existing IoT standards
+
+DoSync does not replace Matter, Zigbee, Z-Wave, or Home Assistant. It operates at a different layer of the stack.
+
+**The positioning:** existing protocols solve *device interoperability* — ensuring that a lock from Brand A can be controlled by an app from Brand B. DoSync solves *agent-to-environment coordination* — ensuring that an AI system can express a goal and the environment responds, regardless of which protocol the individual devices use.
+
+DoSync's Layer 1 (HAL) explicitly abstracts over Matter, Zigbee, Z-Wave, Thread, and Ethernet. A DoSync hub can sit on top of a Matter fabric and translate semantic intents into Matter commands — the protocols are complementary, not competitive.
+
+**"Will Matter eventually add semantic intent?"** Matter's design priority is cross-brand device interoperability at the command level, backed by major consumer electronics manufacturers. Adding a semantic layer to Matter would require consensus across Apple, Google, Amazon, Samsung, and 280+ members — a standards process measured in years. DoSync's open, self-certifiable model allows deployments today without waiting for that consensus.
+
+---
+
 ## Appendix A — Example scenarios
 
 ### A.1 Fall detection emergency
