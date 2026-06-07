@@ -299,7 +299,25 @@ Examples:
 
     p_clean = db_sub.add_parser("clean", help="Remove all data (keeps API keys)")
     p_clean.add_argument("--yes", action="store_true", help="Skip confirmation")
+
     db_sub.add_parser("audit-reset", help="Reset broken audit log chain (creates backup first)")
+
+    # ── certs subcommand ───────────────────────────────────────────────────────
+    certs_parser = sub.add_parser("certs", help="TLS certificate management")
+    certs_sub    = certs_parser.add_subparsers(dest="command")
+
+    certs_sub.add_parser("status", help="Show TLS certificate status and expiry dates")
+
+    p_rotate = certs_sub.add_parser("rotate", help="Renew hub TLS certificate (CA unchanged)")
+    p_rotate.add_argument("--ip", default=None, help="Hub IP address (auto-detected if omitted)")
+    p_rotate.add_argument("--force", action="store_true", help="Rotate even if cert is not near expiry")
+    p_rotate.add_argument("--restart", action="store_true", default=True,
+                          help="Restart hub service after rotation (default: true)")
+    p_rotate.add_argument("--no-restart", dest="restart", action="store_false")
+
+    p_rotate_adapter = certs_sub.add_parser("rotate-adapter", help="Renew an adapter TLS certificate")
+    p_rotate_adapter.add_argument("name", help="Adapter name (e.g. gpio, wiz)")
+    p_rotate_adapter.add_argument("--ip", default="127.0.0.1", help="Adapter IP address")
 
     args = parser.parse_args()
 
@@ -321,7 +339,12 @@ Examples:
         elif args.command == "devices":     db_devices(args)
         elif args.command == "clean":       db_clean(args)
         elif args.command == "audit-reset": db_audit_reset(args)
-        else: db_parser.print_help()
+
+    elif args.group == "certs":
+        if   args.command == "status":         certs_status(args)
+        elif args.command == "rotate":         certs_rotate(args)
+        elif args.command == "rotate-adapter": certs_rotate_adapter(args)
+        else: certs_parser.print_help()
 
     else:
         parser.print_help()
@@ -365,9 +388,12 @@ def db_audit_reset(args):
     cur.execute("SELECT entry_json, hash, timestamp FROM audit_log ORDER BY rowid")
     rows = cur.fetchall()
     backup = [{"entry": json.loads(r[0]), "hash": r[1], "timestamp": r[2]} for r in rows]
+    backup_json = json.dumps(backup, indent=2, sort_keys=True)
     with open(backup_path, "w") as f:
-        json.dump(backup, f, indent=2)
+        f.write(backup_json)
+    backup_sha256 = hashlib.sha256(backup_json.encode()).hexdigest()
     print(f"  Backed up {count} entries to {backup_path}")
+    print(f"  Backup SHA-256: {backup_sha256}")
 
     # Confirm
     print(f"  This will clear {count} audit log entries and start a new chain.")
@@ -389,6 +415,7 @@ def db_audit_reset(args):
         "reason":           "Chain integrity violation — see DESIGN-PRINCIPLES.md",
         "previous_entries": count,
         "backup_file":      backup_path,
+        "backup_sha256":    backup_sha256,
         "timestamp":        now,
         "prev_hash":        genesis_hash,
     }
@@ -408,6 +435,127 @@ def db_audit_reset(args):
     print(f"  {C.GREEN}Audit log reset.{C.RESET} New chain started with 1 entry.")
     print(f"  Previous entries backed up to: {backup_path}")
     print(f"  Restart the hub to pick up the new chain.")
+
+
+
+
+# ── Certs commands ─────────────────────────────────────────────────────────────
+
+def certs_status(args):
+    """Show TLS certificate status and expiry for CA, hub, and all adapters."""
+    try:
+        from dosync.security import get_status
+    except ImportError as e:
+        err(f"Could not import dosync.security: {e}")
+        sys.exit(1)
+
+    header("TLS Certificate Status")
+    status = get_status()
+
+    if not status.ca_exists:
+        err("CA certificate not found — run: python3 -m dosync.security setup")
+        return
+
+    ca = status.ca_info
+    if ca:
+        expiry = f"{ca.days_until_expiry}d remaining" if not ca.is_expired else "EXPIRED"
+        flag = C.RED if ca.is_expired else (C.YELLOW if ca.is_expiring_soon else C.GREEN)
+        ok(f"CA cert      valid until {ca.not_after.date()}  ({flag}{expiry}{C.RESET})")
+    else:
+        warn("CA cert found but could not read details")
+
+    hub = status.hub_info
+    if hub:
+        expiry = f"{hub.days_until_expiry}d remaining" if not hub.is_expired else "EXPIRED"
+        flag = C.RED if hub.is_expired else (C.YELLOW if hub.is_expiring_soon else C.GREEN)
+        ok(f"Hub cert     valid until {hub.not_after.date()}  ({flag}{expiry}{C.RESET})")
+    else:
+        warn("Hub cert not found")
+
+    for adapter in status.adapter_certs:
+        expiry = f"{adapter.days_until_expiry}d remaining" if not adapter.is_expired else "EXPIRED"
+        flag = C.RED if adapter.is_expired else (C.YELLOW if adapter.is_expiring_soon else C.GREEN)
+        ok(f"Adapter [{adapter.common_name:<12}] valid until {adapter.not_after.date()}  ({flag}{expiry}{C.RESET})")
+
+    if status.errors:
+        print()
+        for e in status.errors:
+            err(e)
+    elif status.is_ready:
+        print()
+        ok("All certificates are valid.")
+
+
+def certs_rotate(args):
+    """Renew the hub TLS certificate. The CA is not changed."""
+    try:
+        from dosync.security import renew_hub_cert, detect_hub_ip, get_status
+    except ImportError as e:
+        err(f"Could not import dosync.security: {e}")
+        sys.exit(1)
+
+    header("Hub Certificate Rotation")
+
+    status = get_status()
+    hub = status.hub_info
+    if hub and not hub.is_expiring_soon and not hub.is_expired and not args.force:
+        ok(f"Hub cert is valid for {hub.days_until_expiry} more days — rotation not needed.")
+        info("Use --force to rotate anyway.")
+        return
+
+    ip = args.ip or detect_hub_ip()
+    info(f"Hub IP: {ip}")
+    info("Renewing hub certificate (CA unchanged)...")
+
+    try:
+        renew_hub_cert(hub_ip=ip)
+        ok("Hub certificate renewed.")
+    except Exception as e:
+        err(f"Rotation failed: {e}")
+        sys.exit(1)
+
+    if args.restart:
+        info("Restarting hub service...")
+        import subprocess
+        result = subprocess.run(
+            ["sudo", "systemctl", "restart", "dosync"],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            ok("Hub service restarted.")
+        else:
+            warn(f"Could not restart service automatically: {result.stderr.strip()}")
+            info("Run manually: sudo systemctl restart dosync")
+    else:
+        warn("Restart skipped. Run: sudo systemctl restart dosync")
+
+    print()
+    ok("Rotation complete. Clients that trust the CA cert do not need updating.")
+    info("The CA cert has not changed — no client redistribution required.")
+
+
+def certs_rotate_adapter(args):
+    """Renew a specific adapter TLS certificate."""
+    try:
+        from dosync.security import renew_adapter_cert
+    except ImportError as e:
+        err(f"Could not import dosync.security: {e}")
+        sys.exit(1)
+
+    header(f"Adapter Certificate Rotation — {args.name}")
+    info(f"Adapter: {args.name}  IP: {args.ip}")
+
+    try:
+        cert_path, key_path = renew_adapter_cert(name=args.name, adapter_ip=args.ip)
+        ok(f"Adapter cert renewed: {cert_path}")
+        ok(f"Adapter key:          {key_path}")
+    except Exception as e:
+        err(f"Rotation failed: {e}")
+        sys.exit(1)
+
+    print()
+    ok("Adapter cert rotation complete.")
+    info("Restart the adapter process to apply the new certificate.")
 
 
 if __name__ == "__main__":
