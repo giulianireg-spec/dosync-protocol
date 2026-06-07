@@ -876,13 +876,122 @@ class DoSyncHub:
     # ── Device management ────────────────────────────────────────────────────
 
     def register_device(self, manifest: CapabilityManifest) -> None:
+        """
+        Register or update a device in the hub registry.
+
+        On re-registration, classifies the change using firmware + capability diff
+        (per DoSync spec §14) and emits the appropriate audit entry and events:
+
+        - No change:              silent reconnect, no extra audit entry
+        - firmware changed only:  device_firmware_updated audit entry
+        - caps changed (fw too):  device_updated audit entry with diff
+        - caps changed (same fw): device_capability_anomaly + alert_anomaly intent
+        """
+        existing = self.registry.get(manifest.device_id)
+
+        # First-time registration
+        if existing is None:
+            self.registry.register(manifest)
+            self.db.save_device(manifest.device_id, manifest.to_dict())
+            self.audit_log.append({
+                "type":        "device_registered",
+                "device_id":   manifest.device_id,
+                "device_name": manifest.device_name,
+            })
+            return
+
+        # ── Re-registration: compute diff ────────────────────────────────────
+        fw_changed   = existing.firmware != manifest.firmware
+        ec_changed   = existing.emergency_capable != manifest.emergency_capable
+        tags_changed = set(existing.tags) != set(manifest.tags)
+        act_changed  = (
+            sorted(a.type for a in existing.actuators) !=
+            sorted(a.type for a in manifest.actuators)
+        )
+        caps_changed = ec_changed or tags_changed or act_changed
+
+        # Silent reconnect — nothing changed
+        if not fw_changed and not caps_changed:
+            self.registry.register(manifest)
+            self.db.save_device(manifest.device_id, manifest.to_dict())
+            return
+
+        # Build diff for audit
+        diff = {}
+        if fw_changed:
+            diff["firmware"] = {"from": existing.firmware, "to": manifest.firmware}
+        if ec_changed:
+            diff["emergency_capable"] = {
+                "from": existing.emergency_capable,
+                "to":   manifest.emergency_capable,
+            }
+        if tags_changed:
+            diff["tags"] = {
+                "added":   list(set(manifest.tags) - set(existing.tags)),
+                "removed": list(set(existing.tags) - set(manifest.tags)),
+            }
+        if act_changed:
+            old_act = set(a.type for a in existing.actuators)
+            new_act = set(a.type for a in manifest.actuators)
+            diff["actuators"] = {
+                "added":   list(new_act - old_act),
+                "removed": list(old_act - new_act),
+            }
+
+        # ── Dr. Esteves classification ────────────────────────────────────────
+        # firmware changed + caps changed  → expected firmware update
+        # firmware changed + caps stable   → minor firmware upgrade
+        # firmware stable  + caps changed  → ANOMALY — alert
+        if fw_changed and caps_changed:
+            change_type = "firmware_update"
+        elif fw_changed and not caps_changed:
+            change_type = "firmware_upgrade_minor"
+        else:  # not fw_changed and caps_changed
+            change_type = "capability_anomaly"
+
+        # Update registry and DB
         self.registry.register(manifest)
         self.db.save_device(manifest.device_id, manifest.to_dict())
-        self.audit_log.append({
-            "type": "device_registered",
-            "device_id": manifest.device_id,
-            "device_name": manifest.device_name,
-        })
+
+        # Emit audit entry
+        if change_type == "capability_anomaly":
+            self.audit_log.append({
+                "type":        "device_capability_anomaly",
+                "device_id":   manifest.device_id,
+                "device_name": manifest.device_name,
+                "diff":        diff,
+                "note":        "Capabilities changed without firmware version change — may indicate compromise",
+            })
+            # Fire alert_anomaly intent for security-relevant changes
+            import asyncio
+            from dosync.models import Intent, IntentClass, Urgency
+            alert_intent = Intent(
+                intent=IntentClass("alert_anomaly"),
+                urgency=Urgency.ALERT,
+                context={
+                    "trigger":     "device_capability_anomaly",
+                    "device_id":   manifest.device_id,
+                    "device_name": manifest.device_name,
+                    "diff":        diff,
+                },
+                source="hub",
+            )
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.ensure_future(self.execute_intent(alert_intent))
+                else:
+                    loop.run_until_complete(self.execute_intent(alert_intent))
+            except Exception:
+                pass  # Intent fire is best-effort — never block registration
+        else:
+            self.audit_log.append({
+                "type":        "device_updated" if caps_changed else "device_firmware_updated",
+                "device_id":   manifest.device_id,
+                "device_name": manifest.device_name,
+                "change_type": change_type,
+                "diff":        diff,
+            })
 
     def unregister_device(self, device_id: str) -> None:
         self.registry.unregister(device_id)
