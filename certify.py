@@ -7,8 +7,8 @@ Usage:
 
 Tiers:
   basic     (10 tests) — connectivity, authentication, device manifest
-  standard  (22 tests) — protocol conformance, events, health, explainability
-  emergency (32 tests) — emergency override, policy engine, audit log integrity
+  standard  (32 tests) — protocol conformance, events, health, explainability, version headers, intent lifecycle
+  emergency (35 tests) — emergency override, policy engine, audit log integrity, firmware re-registration
 
 Two testing modes:
 
@@ -114,6 +114,40 @@ def request(
     except Exception as e:
         return 0, {"error": str(e)}
 
+
+
+def get_response_headers(method: str, url: str, body: Optional[dict] = None) -> tuple[int, dict, dict]:
+    """Like request() but also returns response headers. Used for version header tests."""
+    data = json.dumps(body).encode() if body else None
+    token = os.environ.get("DOSYNC_TOKEN", "")
+    ca_cert = os.environ.get("DOSYNC_CA_CERT", "")
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    ctx = ssl.create_default_context()
+    if ca_cert and os.path.exists(os.path.expanduser(ca_cert)):
+        ctx.load_verify_locations(os.path.expanduser(ca_cert))
+    else:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+    import re
+    is_local = bool(re.search(r'localhost|127\.0\.0\.1', url))
+    final_url = url if is_local else url.replace("http://", "https://", 1)
+    req = urllib.request.Request(final_url, data=data, headers=headers, method=method)
+    ctx_arg = None if is_local else ctx
+    try:
+        with urllib.request.urlopen(req, timeout=60, context=ctx_arg) as resp:
+            resp_headers = dict(resp.getheaders())
+            return resp.status, json.loads(resp.read()), resp_headers
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read()), {}
+        except Exception:
+            return e.code, {"error": str(e)}, {}
+    except Exception as e:
+        return 0, {"error": str(e)}, {}
 
 # ── Async intent helper ──────────────────────────────────────────────────────
 
@@ -358,7 +392,7 @@ def run_basic(base: str, report: CertReport) -> bool:
     return True
 
 
-# ── TIER STANDARD — 12 additional tests (total 22) ───────────────────────────
+# ── TIER STANDARD — 22 additional tests (total 32) ───────────────────────────
 
 def run_standard(base: str, report: CertReport):
     section("── Tier STANDARD — Protocol conformance + events ────────")
@@ -499,7 +533,135 @@ def run_standard(base: str, report: CertReport):
     ))
 
 
-# ── TIER EMERGENCY — 10 additional tests (total 32) ──────────────────────────
+
+    # S13. Version headers present in every response
+    s_status, _, s_headers = get_response_headers("GET", f"{base}/v1/status")
+    has_proto  = "X-Dosync-Protocol-Version" in s_headers or "x-dosync-protocol-version" in {k.lower(): v for k, v in s_headers.items()}
+    has_api    = "X-Dosync-Api-Version" in s_headers or "x-dosync-api-version" in {k.lower(): v for k, v in s_headers.items()}
+    # Normalize header lookup
+    lower_h = {k.lower(): v for k, v in s_headers.items()}
+    has_proto = "x-dosync-protocol-version" in lower_h
+    has_api   = "x-dosync-api-version" in lower_h
+    report.add(TestResult(
+        "S13  Version headers present (X-DoSync-Protocol-Version, X-DoSync-API-Version)",
+        has_proto and has_api,
+        f"X-DoSync-Protocol-Version={'present' if has_proto else 'MISSING'}  "
+        f"X-DoSync-API-Version={'present' if has_api else 'MISSING'}",
+    ))
+
+    # S14. Async intent polling lifecycle — fire → poll → result
+    s14_status, s14_fire = request("POST", f"{base}/v1/intent/async", {
+        "intent": "report_status", "urgency": "info", "source": "certify"
+    })
+    s14_id = s14_fire.get("intent_id") if s14_status == 200 else None
+    if s14_id:
+        time.sleep(2)
+        s14_poll_status, s14_result = request("GET", f"{base}/v1/intent/{s14_id}")
+        s14_has_fields = all(
+            k in s14_result for k in ("intent_id", "success", "status", "results")
+        )
+        report.add(TestResult(
+            "S14  Async intent polling — fire, poll, result has required fields",
+            s14_poll_status == 200 and s14_has_fields,
+            f"poll_status={s14_poll_status} status={s14_result.get('status')} "
+            f"fields={'ok' if s14_has_fields else 'MISSING'}",
+        ))
+    else:
+        report.add(TestResult("S14  Async intent polling lifecycle", False,
+                              f"fire failed: status={s14_status}"))
+
+    # S15. Hub heartbeat endpoint returns required fields
+    s15_status, s15_body = request("GET", f"{base}/v1/hub/heartbeat")
+    s15_required = {"hub_id", "status", "protocol_version", "devices", "role"}
+    s15_present  = s15_required.issubset(set(s15_body.keys())) if s15_status == 200 else False
+    report.add(TestResult(
+        "S15  Hub heartbeat endpoint — hub_id, status, protocol_version, devices, role",
+        s15_status == 200 and s15_present,
+        f"status={s15_status} missing={s15_required - set(s15_body.keys())}",
+    ))
+
+    # S16. Intent classes endpoint lists the five universal intents
+    s16_status, s16_body = request("GET", f"{base}/v1/intent-classes")
+    UNIVERSAL = {"ensure_safety", "alert_anomaly", "control_access", "report_status", "notify"}
+    if s16_status == 200:
+        registered = {ic["name"] for ic in s16_body.get("intent_classes", [])}
+        missing = UNIVERSAL - registered
+        report.add(TestResult(
+            "S16  Intent classes endpoint — five universal intents present",
+            len(missing) == 0,
+            f"registered={len(registered)} missing={missing if missing else 'none'}",
+        ))
+    else:
+        report.add(TestResult("S16  Intent classes endpoint", False, f"status={s16_status}"))
+
+    # S17. Capability manifest redacts adapter_config (privacy — G11)
+    s17_status, s17_body = request("GET",
+        f"{base}/v1/devices/{TEST_DEVICE['device_id']}")
+    s17_no_config = "adapter_config" not in s17_body
+    report.add(TestResult(
+        "S17  Manifest privacy — adapter_config absent from public API response",
+        s17_status == 200 and s17_no_config,
+        f"status={s17_status} adapter_config={'absent ✓' if s17_no_config else 'EXPOSED ✗'}",
+    ))
+
+    # S18. Invalid urgency value is rejected with 422
+    s18_status, _ = request("POST", f"{base}/v1/intent/async", {
+        "intent": "ensure_safety", "urgency": "superurgent"
+    })
+    report.add(TestResult(
+        "S18  Invalid urgency value rejected with 422",
+        s18_status == 422,
+        f"status={s18_status} (expected 422)",
+    ))
+
+    # S19. Status endpoint exposes protocol_version and api_version fields
+    s19_status, s19_body = request("GET", f"{base}/v1/status")
+    s19_has_proto = "protocol_version" in s19_body
+    s19_has_api   = "api_version" in s19_body
+    report.add(TestResult(
+        "S19  /v1/status body includes protocol_version and api_version",
+        s19_status == 200 and s19_has_proto and s19_has_api,
+        f"protocol_version={s19_body.get('protocol_version','MISSING')}  "
+        f"api_version={s19_body.get('api_version','MISSING')}",
+    ))
+
+    # S20. Intent result contains source field (tracks origin — G14 fix)
+    if s14_id and s14_poll_status == 200:
+        s20_has_source = "source" in s14_result or True  # source is in audit, result has intent_id
+        # Actually, IntentResult doesn't carry source — audit does. Test that audit has source.
+        s20_audit_status, s20_audit = request("GET", f"{base}/v1/audit")
+        s20_entries = s20_audit.get("entries", [])
+        s20_intent_entries = [e for e in s20_entries if e.get("type") == "intent_executed"]
+        s20_has_source = any("source" in e for e in s20_intent_entries)
+        report.add(TestResult(
+            "S20  Audit log intent_executed entries include source field",
+            s20_audit_status == 200 and s20_has_source,
+            f"intent_executed entries={len(s20_intent_entries)} "
+            f"source_field={'present' if s20_has_source else 'MISSING'}",
+        ))
+    else:
+        report.add(TestResult("S20  Audit source field", False, "skipped — S14 fire failed"))
+
+    # S21. Device unregistration — DELETE removes device from registry
+    s21_del_status, _   = request("DELETE",
+        f"{base}/v1/devices/{TEST_DEVICE['device_id']}")
+    s21_get_status, _   = request("GET",
+        f"{base}/v1/devices/{TEST_DEVICE['device_id']}")
+    report.add(TestResult(
+        "S21  Device unregistration — DELETE /v1/devices/{id} removes device",
+        s21_del_status in (200, 204) and s21_get_status == 404,
+        f"delete_status={s21_del_status} get_after_delete={s21_get_status} (expected 404)",
+    ))
+
+    # S22. Re-register test device (cleanup so Emergency tests can use it)
+    s22_status, _ = request("POST", f"{base}/v1/devices/register", TEST_DEVICE)
+    report.add(TestResult(
+        "S22  Test device re-registration after unregistration succeeds",
+        s22_status == 200,
+        f"status={s22_status}",
+    ))
+
+# ── TIER EMERGENCY — 13 additional tests (total 35) ─────────────────────────
 
 def run_emergency(base: str, report: CertReport):
     section("── Tier EMERGENCY — Override, policies, audit log ───────")
@@ -621,11 +783,48 @@ def run_emergency(base: str, report: CertReport):
     ))
 
 
+    # E11. Firmware re-registration — register same device with different firmware
+    import copy
+    e11_manifest = copy.deepcopy(TEST_DEVICE)
+    e11_manifest["firmware"] = "9.9.9-certify-test"   # different firmware
+    e11_status, e11_body = request("POST", f"{base}/v1/devices/register", e11_manifest)
+    # Also verify the device is still accessible after re-registration
+    e11_get_status, e11_device = request("GET", f"{base}/v1/devices/{TEST_DEVICE['device_id']}")
+    report.add(TestResult(
+        "E11  Firmware re-registration — hub accepts and updates without error",
+        e11_status == 200 and e11_get_status == 200,
+        f"re-register_status={e11_status} device_accessible={e11_get_status}",
+    ))
+    # Restore original firmware
+    request("POST", f"{base}/v1/devices/register", TEST_DEVICE)
+
+    # E12. Heartbeat status is healthy (not degraded)
+    e12_status, e12_body = request("GET", f"{base}/v1/hub/heartbeat")
+    e12_healthy = e12_body.get("status") == "healthy"
+    e12_role    = e12_body.get("role") in ("primary", "standby")
+    report.add(TestResult(
+        "E12  Hub heartbeat reports healthy status and valid role after emergency intent",
+        e12_status == 200 and e12_healthy and e12_role,
+        f"status={e12_body.get('status')} role={e12_body.get('role')}",
+    ))
+
+    # E13. Audit log contains source field in intent_executed entries
+    e13_audit_status, e13_audit = request("GET", f"{base}/v1/audit")
+    e13_entries = e13_audit.get("entries", [])
+    e13_intent_entries = [e for e in e13_entries if e.get("type") == "intent_executed"]
+    e13_with_source = [e for e in e13_intent_entries if "source" in e]
+    report.add(TestResult(
+        "E13  Audit log intent_executed entries include source field",
+        e13_audit_status == 200 and len(e13_with_source) > 0,
+        f"intent_executed={len(e13_intent_entries)} with_source={len(e13_with_source)}",
+    ))
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(
-        description="DoSync Certification CLI v0.2 — protocol conformance testing",
+        description="DoSync Certification CLI v0.3 — protocol conformance testing",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -640,8 +839,8 @@ Environment variables:
 
 Tier test counts:
   basic      10 tests  — connectivity, auth, registration, manifest
-  standard   22 tests  — + intents, events, health, explainability
-  emergency  32 tests  — + emergency override, audit log integrity
+  standard   32 tests  — + intents, events, health, explainability, version headers, intent lifecycle
+  emergency  35 tests  — + emergency override, audit log integrity, firmware re-registration
         """,
     )
     parser.add_argument("--host",   default="localhost",  help="Hub IP or hostname")
@@ -656,7 +855,7 @@ Tier test counts:
     base   = f"http://{args.host}:{args.port}"
     report = CertReport(host=args.host, port=args.port, tier=args.tier)
 
-    tier_counts = {"basic": 10, "standard": 22, "emergency": 32}
+    tier_counts = {"basic": 10, "standard": 32, "emergency": 35}
     print(f"\n{C.BOLD}DoSync Certification CLI v0.2{C.RESET}")
     print(f"  Hub:   {base}")
     print(f"  Tier:  {C.BOLD}{args.tier.upper()}{C.RESET} ({tier_counts[args.tier]} tests)")
