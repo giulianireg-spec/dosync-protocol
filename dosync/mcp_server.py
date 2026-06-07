@@ -377,22 +377,47 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
                 result = poll
                 break
 
+        # Polling timeout — make one final aggressive attempt before giving up
         if result is None:
-            text  = f"⚠️ Intent '{intent}' [{urgency}] en ejecución (timeout de polling {poll_timeout:.0f}s)\n"
-            text += f"  El hub sigue ejecutando — consultá el audit log para el resultado final.\n"
+            for _ in range(3):
+                await asyncio.sleep(1.5)
+                final_poll = await hub_request("GET", f"/v1/intent/{intent_id}")
+                if not final_poll.get("error") and final_poll.get("status") != "pending":
+                    result = final_poll
+                    break
+
+        # Still no result — hub is taking unusually long
+        if result is None:
+            text  = f"⚠️ Intent '{intent}' [{urgency}] accepted and executing\n"
+            text += f"  The hub is still processing (>{poll_timeout + 4.5:.0f}s elapsed).\n"
+            text += f"  This usually means many devices timed out waiting for a response.\n"
+            text += f"  Intent ID: {intent_id} — check GET /v1/intent/{{id}} or the audit log for final result.\n"
             return [types.TextContent(type="text", text=text)]
 
         actions      = result.get("actions_taken", 0)
         failed       = result.get("failed_devices", [])
+        aborted      = result.get("aborted_devices", [])
         results_list = result.get("results", [])
-        core_success = actions > 0
-        icon = "✅" if core_success else "⚠️"
+        intent_status = result.get("status", "unknown")
+
+        # Determine display icon based on what actually happened:
+        # - success / partial with some actions → ✅
+        # - partial with 0 actions (all unreachable) → ⚠️ with clear explanation
+        # - failed / blocked → ❌
+        if intent_status == "success" or (intent_status in ("partial", "partial_abort") and actions > 0):
+            icon = "✅"
+        elif intent_status in ("partial", "partial_abort", "failed") and failed:
+            icon = "⚠️"  # devices unreachable — protocol worked, hardware was off
+        else:
+            icon = "❌"
 
         text  = f"{icon} Intent '{intent}' [{urgency}] ejecutado\n"
         text += f"  Acciones completadas: {actions}\n"
 
         if failed:
             text += f"  Sin respuesta ({len(failed)} dispositivos físicamente apagados) — excluidos automáticamente por ~30 min\n"
+        if aborted:
+            text += f"  Cancelados por FailurePolicy: {len(aborted)} dispositivos\n"
 
         critical = [r for r in results_list
                    if r.get("success") and r.get("action") in
@@ -401,8 +426,8 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             text += "\nAcciones críticas ejecutadas:\n"
             for r in critical[:8]:
                 resp = r.get("response", {})
-                status = resp.get("status","ok") if isinstance(resp, dict) else "ok"
-                text += f"  ✓ [{r['device_id']}] {r['action']} → {status}\n"
+                status_val = resp.get("status","ok") if isinstance(resp, dict) else "ok"
+                text += f"  ✓ [{r['device_id']}] {r['action']} → {status_val}\n"
 
         return [types.TextContent(type="text", text=text)]
     elif name == "dosync_list_devices":
