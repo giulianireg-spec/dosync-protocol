@@ -261,6 +261,7 @@ class IntentRequest(BaseModel):
     intent: str
     urgency: str = "info"
     subject: Optional[str] = None
+    source: str = "api"
     context: dict[str, Any] = {}
 
 class EventRequest(BaseModel):
@@ -316,8 +317,8 @@ async def lifespan(app: FastAPI):
                             intent=IntentClass(snap['intent_class']),
                             intent_id=f"recovery-{uuid.uuid4().hex[:8]}",
                             urgency=Urgency(snap['urgency']),
+                            source="recovery",
                             context={**snap['context'], "recovery": True, "original_intent_id": snap['intent_id']},
-                            timestamp=_time.time()
                         )
                         hub.fire_intent(recovery_intent)
                         hub.db.resolve_emergency_snapshot(snap['intent_id'])
@@ -910,6 +911,7 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
         intent=intent_class,
         urgency=urgency,
         subject=req.subject,
+        source=req.source,
         context=req.context,
     )
 

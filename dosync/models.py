@@ -25,7 +25,7 @@ class DeviceCategory(str, Enum):
     HYBRID        = "hybrid"
     COMMUNICATION = "communication"
     EMERGENCY     = "emergency"
-    CONTEXT       = "context"      # contribuye a inferencias de alto nivel
+    CONTEXT       = "context"      # contributes to high-level occupancy inference
 
 class CertTier(str, Enum):
     BASIC     = "basic"      # Layers 1-3
@@ -99,13 +99,13 @@ IntentClass.NOTIFY         = IntentClass("notify")          # Push information
 
 
 class ContextSignalType(str, Enum):
-    """Tipo de inferencia a la que contribuye un context provider."""
-    PRESENCE   = "presence"    # si hay alguien en casa
-    LOCATION   = "location"    # ubicacion GPS de un miembro
-    SLEEP      = "sleep"       # estado de sueno
-    HEALTH     = "health"      # signos vitales, actividad fisica
-    ROUTINE    = "routine"     # patron de rutina diaria
-    VEHICLE    = "vehicle"     # estado del auto / garage
+    """Type of inference contributed by a context provider."""
+    PRESENCE   = "presence"    # whether someone is home
+    LOCATION   = "location"    # GPS location of a household member
+    SLEEP      = "sleep"       # sleep state
+    HEALTH     = "health"      # vital signs, physical activity
+    ROUTINE    = "routine"     # daily routine pattern
+    VEHICLE    = "vehicle"     # vehicle / garage state
 
 
 # ── Capability manifest (Layer 3) ─────────────────────────────────────────────
@@ -140,8 +140,8 @@ class ContextSignal:
     """
     type: ContextSignalType
     description: str = ""
-    confidence_weight: float = 1.0    # peso relativo en la inferencia (0.0-1.0)
-                                      # GPS del celular pesa mas que un PIR para presencia
+    confidence_weight: float = 1.0    # relative weight in occupancy inference (0.0-1.0)
+                                      # phone GPS weighs more than a PIR for presence
 
 @dataclass
 class CapabilityManifest:
@@ -207,19 +207,19 @@ class CapabilityManifest:
         return d
 
 
-# ── Context model (inferencia de ocupacion y rutinas) ─────────────────────────
+# ── Context model (occupancy inference and routines) ────────────────────────────
 
 @dataclass
 class PresenceSignal:
     """
-    Una señal individual de presencia emitida por un context provider.
-    El hub las agrega para inferir el estado de ocupacion del hogar.
+    A single presence signal emitted by a context provider.
+    The hub aggregates them to infer home occupancy state.
     """
     device_id: str
     signal_type: ContextSignalType
-    present: bool                          # True = detecta presencia
+    present: bool                          # True = presence detected
     confidence: float                      # 0.0-1.0
-    member_id: Optional[str] = None        # a que miembro de la familia corresponde
+    member_id: Optional[str] = None        # which household member this signal belongs to
     timestamp: float = field(default_factory=time.time)
 
 @dataclass
@@ -230,8 +230,8 @@ class OccupancyState:
     """
     occupied: bool
     confidence: float                      # 0.0-1.0
-    members_home: list[str]               # IDs de miembros detectados en casa
-    signals_used: int                      # cuantas señales contribuyeron
+    members_home: list[str]               # IDs of household members currently detected home
+    signals_used: int                      # how many signals contributed to this state
     last_updated: float = field(default_factory=time.time)
 
 
@@ -243,6 +243,7 @@ class Intent:
     context: dict[str, Any]
     urgency: Urgency                   = Urgency.INFO
     subject: Optional[str]            = None
+    source: str                        = "api"    # who fired this intent: "api" | "mcp" | "hub" | "scheduler" | "gpio" | "recovery"
     constraints: dict[str, Any]       = field(default_factory=lambda: {
         "timeout_ms": 10_000,
         "require_confirmation": False,
@@ -250,6 +251,7 @@ class Intent:
     intent_id: str                     = field(
         default_factory=lambda: f"int-{int(time.time())}-{uuid.uuid4().hex[:6]}"
     )
+    timestamp: float                   = field(default_factory=time.time)
 
     def to_dict(self) -> dict:
         return {
@@ -257,8 +259,10 @@ class Intent:
             "intent":      self.intent.value,
             "subject":     self.subject,
             "urgency":     self.urgency.value,
+            "source":      self.source,
             "context":     self.context,
             "constraints": self.constraints,
+            "timestamp":   self.timestamp,
         }
 
 
@@ -329,11 +333,11 @@ class IntentResult:
     # "retry_exhausted"— retries exhausted, result is failure
 
 
-# ── Phased action plan (para secuencias ordenadas como emergencias) ────────────
+# ── Phased action plan (for ordered sequences like multi-phase emergencies) ─────
 
 @dataclass
 class PhaseAction:
-    """Una accion dentro de una fase del plan."""
+    """A single action within a plan phase."""
     device_id: str
     action: str
     params: dict[str, Any] = field(default_factory=dict)
@@ -341,12 +345,12 @@ class PhaseAction:
 @dataclass
 class Phase:
     """
-    Un grupo de acciones que se ejecutan en paralelo.
-    Las fases se ejecutan en orden secuencial con delay entre ellas.
+    A group of actions executed in parallel.
+    Phases execute sequentially with a configurable delay between them.
     """
     name: str
     actions: list[PhaseAction]
-    delay_after_ms: int = 0    # esperar X ms antes de ejecutar la siguiente fase
+    delay_after_ms: int = 0    # wait X ms before executing the next phase
 
 @dataclass
 class PhasedActionPlan:
@@ -356,37 +360,36 @@ class PhasedActionPlan:
     created_at: float = field(default_factory=time.time)
 
 
-# ── Family profile (rutinas configurables por familia) ────────────────────────
+# ── Family profile (per-family configurable routines) ───────────────────────────
 
 @dataclass
 class RoutineAction:
-    """Una accion dentro de una rutina familiar."""
-    tag: str                           # tag del dispositivo que debe ejecutarla
-    action_type: str                   # tipo de actuador
+    """A single action within a family routine."""
+    tag: str                           # device tag that should execute this action
+    action_type: str                   # actuator type
     params: dict[str, Any] = field(default_factory=dict)
     description: str = ""
 
 @dataclass
 class FamilyProfile:
     """
-    Perfil de rutinas de una familia.
-    Define que acciones ejecutar para cada rutina y a que hora.
-    Cada familia configura el suyo — no hay valores impuestos.
+    Per-family routine profile.
+    Defines which actions to execute for each routine and at what time.
+    Each family configures their own — no values are imposed.
     """
     family_name: str
 
-    # Rutina de la manana — disparada por primer movimiento del dia
+    # Morning routine — triggered by the first motion detection of the day
     routine_morning: list[RoutineAction] = field(default_factory=list)
 
-    # Rutina de hora de dormir — disparada por scheduler
+    # Bedtime routine — triggered by the scheduler
     routine_bedtime: list[RoutineAction] = field(default_factory=list)
     bedtime_hour:   int = 21
     bedtime_minute: int = 30
 
-    # Modo ausente — disparado por sensor de garage o presencia
+    # Away mode — triggered by garage sensor or presence signal
     routine_away: list[RoutineAction] = field(default_factory=list)
 
-    # Metadata
     timezone: str = "America/Argentina/Cordoba"
     created_at: float = field(default_factory=time.time)
 

@@ -113,6 +113,7 @@ class DoSyncScheduler:
         intent = Intent(
             intent=IntentClass.MORNING_ROUTINE,
             urgency=Urgency.INFO,
+            source="scheduler",
             context={
                 "trigger": trigger,
                 "family":  profile.family_name,
@@ -140,6 +141,7 @@ class DoSyncScheduler:
         intent = Intent(
             intent=IntentClass.AWAY_MODE,
             urgency=Urgency.INFO,
+            source="scheduler",
             context={
                 "trigger": trigger,
                 "family":  profile.family_name,
@@ -147,7 +149,7 @@ class DoSyncScheduler:
                     {"tag": a.tag, "action_type": a.action_type, "params": a.params}
                     for a in profile.routine_away
                 ],
-                "message": "Modo ausente activado.",
+                "message": "Away mode activated.",
             },
         )
         log.info("Firing away mode for '%s'", profile.family_name)
@@ -198,6 +200,7 @@ class DoSyncScheduler:
                     intent = Intent(
                         intent=trigger.intent_class,
                         urgency=trigger.urgency,
+                        source="scheduler",
                         context=context,
                     )
                     log.info(

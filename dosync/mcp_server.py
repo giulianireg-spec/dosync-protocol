@@ -340,6 +340,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             "intent":  intent,
             "urgency": urgency,
             "subject": subject,
+            "source":  "mcp",
             "context": {
                 "message":          message,
                 "location":         location,
