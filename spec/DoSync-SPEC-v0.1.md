@@ -184,6 +184,25 @@ Every DoSync device broadcasts a **Capability Manifest** upon joining the networ
 
 ---
 
+### 5.3 Device re-registration and firmware updates
+
+A device may re-register with the hub at any time — after a firmware update, a reboot, or a network reconnect. The hub MUST classify the re-registration using the following deterministic rule based on the diff between the incoming manifest and the previously registered manifest:
+
+| Condition | Classification | Hub action |
+|---|---|---|
+| No fields changed | `reconnect` | Silent upsert — no audit entry |
+| `firmware` changed; capabilities stable | `firmware_upgrade_minor` | `device_firmware_updated` audit entry |
+| `firmware` changed; capabilities also changed | `firmware_update` | `device_updated` audit entry with full diff |
+| `firmware` unchanged; capabilities changed | `capability_anomaly` | `device_capability_anomaly` audit entry + `alert_anomaly [urgency=alert]` |
+
+**Capability fields tracked:** `emergency_capable`, `tags`, actuator types.
+
+**Design rationale:** The `firmware` field is the authoritative signal of intentional change. A capability change with a firmware version change is expected and trusted. A capability change without a firmware version change is anomalous — the same firmware produced different capabilities, which may indicate device compromise or hardware failure.
+
+**On capability anomaly:** The hub MUST fire `alert_anomaly [urgency=alert]` with context `{trigger: "device_capability_anomaly", device_id, diff}`. This alert is non-blocking — registration completes regardless.
+
+---
+
 ## 6. Layer 4 — Semantic Layer
 
 The semantic layer is the core differentiator of DoSync. It maps high-level AI intents to concrete device actions by matching intent requirements against registered device capabilities.

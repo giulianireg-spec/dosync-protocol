@@ -348,6 +348,7 @@ When a rate limit is exceeded, the policy returns `BLOCK` with a reason that inc
 | FailurePolicy | CONTINUE (default) · ABORT (cancel remaining on first failure) · RETRY (exponential backoff). Emergency always forces CONTINUE. |
 | API versioning | Two surfaces: protocol version (semantic format) + API version (HTTP interface). Non-breaking changes require no version bump. Breaking changes require a new URL prefix. |
 | Physical device deduplication | One physical device, one registry entry. HA sub-sensors for directly-registered devices are filtered at import. |
+| Firmware re-registration | Re-registration classified by firmware+capability diff. Capability change without firmware change fires alert_anomaly — possible compromise. |
 
 ---
 
