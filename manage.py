@@ -475,7 +475,7 @@ def certs_status(args):
     for adapter in status.adapter_certs:
         expiry = f"{adapter.days_until_expiry}d remaining" if not adapter.is_expired else "EXPIRED"
         flag = C.RED if adapter.is_expired else (C.YELLOW if adapter.is_expiring_soon else C.GREEN)
-        ok(f"Adapter [{adapter.common_name:<12}] expires {adapter.not_after}  ({flag}{expiry}{C.RESET})")
+        ok(f"Adapter [{adapter.subject:<20}] expires {adapter.not_after}  ({flag}{expiry}{C.RESET})")
 
     if status.errors:
         print()

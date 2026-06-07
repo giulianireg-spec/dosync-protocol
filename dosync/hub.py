@@ -1200,6 +1200,7 @@ class DoSyncHub:
             "intent_id":        intent.intent_id,
             "intent":           intent.intent.value,
             "urgency":          intent.urgency.value,
+            "source":           getattr(intent, "source", "api"),
             "actions":          len(plan.actions),
             "failed":           failed,
             "aborted":          aborted,
