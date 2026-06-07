@@ -238,7 +238,7 @@ The index is most effective for safety-critical intents with specific tags. Comf
 
 ## On adapter-side fallback ("local fallback without hub")
 
-A recurring question in protocol design is whether adapters should be able to operate independently when the hub is unavailable — executing actions directly on physical devices without going through the semantic resolution layer.
+A recurring question in protocol design is whether adapters should be able to operate independently when the hub is unavailable — executing actions directly on physical devices without going through the capability resolution layer.
 
 **DoSync deliberately does not implement this.** The reasoning:
 
