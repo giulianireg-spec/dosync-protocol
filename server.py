@@ -83,10 +83,14 @@ else:
 
 # ── Policy Engine ────────────────────────────────────────────────────────────
 try:
-    from dosync.policies import PolicyEngine, NeverAfterHoursPolicy, RequireConfirmationPolicy, DeviceExclusionPolicy, IntentRateLimitPolicy
+    from dosync.policies import (
+        PolicyEngine, NeverAfterHoursPolicy, RequireConfirmationPolicy,
+        DeviceExclusionPolicy, IntentRateLimitPolicy, DeviceActuatorRateLimitPolicy,
+    )
     policy_engine = PolicyEngine()
     from dosync.policies import ConflictResolutionPolicy, ContextualWeightingPolicy
-    policy_engine.add(IntentRateLimitPolicy())
+    policy_engine.add(IntentRateLimitPolicy())          # priority 0 — source rate limit
+    policy_engine.add(DeviceActuatorRateLimitPolicy())  # priority 5 — per-device rate limit
     policy_engine.add(ContextualWeightingPolicy())
     policy_engine.add(ConflictResolutionPolicy(hub))
     policy_engine.add(NeverAfterHoursPolicy(

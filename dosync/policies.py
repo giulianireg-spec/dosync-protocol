@@ -308,6 +308,127 @@ class DeviceExclusionPolicy(BasePolicy):
         return result
 
 
+
+# ── Device actuator rate limit policy ─────────────────────────────────────────
+
+class DeviceActuatorRateLimitPolicy(BasePolicy):
+    """
+    Limits how many times a specific device can be targeted per minute.
+
+    Complements IntentRateLimitPolicy (which limits by intent source).
+    This policy limits by target device, preventing a single device
+    from being flooded with commands regardless of how many agents
+    or intents trigger it.
+
+    When the limit is exceeded for a device, that device's action is
+    removed from the ActionPlan (MODIFY). Other devices in the plan
+    are not affected.
+
+    Emergency intents are NEVER rate limited — protocol guarantee.
+
+    Default limit: 20 actions per minute per device.
+
+    Usage:
+        policy_engine.add(DeviceActuatorRateLimitPolicy())
+
+        # Custom limit
+        policy_engine.add(DeviceActuatorRateLimitPolicy(limit_per_minute=10))
+    """
+
+    DEFAULT_LIMIT = 20  # actions per minute per device
+
+    def __init__(
+        self,
+        limit_per_minute: int | None = None,
+        window_seconds: int = 60,
+    ):
+        self._limit  = limit_per_minute if limit_per_minute is not None else self.DEFAULT_LIMIT
+        self._window = window_seconds
+        # Sliding window: {device_id: deque of timestamps}
+        self._windows: dict[str, deque] = {}
+        self._lock = threading.Lock()
+
+    @property
+    def name(self) -> str:
+        return "device_actuator_rate_limit"
+
+    @property
+    def priority(self) -> int:
+        return 5  # runs after IntentRateLimitPolicy (0) but before other policies
+
+    def evaluate(self, intent: "Intent", plan: "ActionPlan") -> PolicyResult | None:
+        from .models import Urgency
+
+        # Emergency intents are NEVER rate limited — protocol guarantee
+        if intent.urgency == Urgency.EMERGENCY:
+            return None
+
+        if not plan.actions:
+            return None
+
+        now    = time.time()
+        cutoff = now - self._window
+        throttled: list[str] = []
+        allowed_actions = []
+
+        with self._lock:
+            for action in plan.actions:
+                device_id = action.device_id
+
+                if device_id not in self._windows:
+                    self._windows[device_id] = deque()
+                window = self._windows[device_id]
+
+                # Evict expired timestamps
+                while window and window[0] < cutoff:
+                    window.popleft()
+
+                if len(window) >= self._limit:
+                    throttled.append(device_id)
+                else:
+                    window.append(now)
+                    allowed_actions.append(action)
+
+        if not throttled:
+            return None  # all devices within limit
+
+        log.info(
+            "DeviceActuatorRateLimitPolicy: throttled %d device(s): %s",
+            len(throttled), throttled,
+        )
+
+        if not allowed_actions:
+            # Every device in the plan is throttled — block the entire intent
+            return PolicyResult.block(
+                self.name,
+                f"All {len(throttled)} device(s) in plan are rate limited "
+                f"({self._limit} actions/{self._window}s).",
+            )
+
+        # Partial throttle — remove over-limit devices, execute the rest
+        return PolicyResult(
+            decision=PolicyDecision.MODIFY,
+            policy_name=self.name,
+            reason=f"Throttled {len(throttled)} device(s): {throttled}",
+            modified_actions=allowed_actions,
+        )
+
+    def get_stats(self) -> dict:
+        """Return current action counts per device for monitoring."""
+        now    = time.time()
+        cutoff = now - self._window
+        stats  = {}
+        with self._lock:
+            for device_id, window in self._windows.items():
+                active = sum(1 for t in window if t >= cutoff)
+                stats[device_id] = {
+                    "count":     active,
+                    "limit":     self._limit,
+                    "remaining": max(0, self._limit - active),
+                }
+        return stats
+
+
 # ── Policy Engine ─────────────────────────────────────────────────────────────
 
 class IntentRateLimitPolicy(BasePolicy):
