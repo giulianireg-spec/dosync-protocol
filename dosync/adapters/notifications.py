@@ -46,7 +46,7 @@ WARNING_INTENTS   = {"report_status", "remind_chore"}
 
 class NotificationAdapter:
     adapter_name = "notifications"
-    """Envía SMS via Twilio para intents críticos de DoSync."""
+    """Sends SMS via Twilio for critical DoSync intents."""
 
     def __init__(self):
         self._available = bool(TWILIO_SID and TWILIO_TOKEN and TWILIO_FROM)
@@ -64,7 +64,7 @@ class NotificationAdapter:
             return None
 
     def _build_message(self, intent: str, urgency: str, context: dict) -> str:
-        """Construye el mensaje SMS según el intent."""
+        """Build the SMS message body for the given intent."""
         location = context.get("location", "")
         trigger  = context.get("trigger", "")
         temp     = context.get("temperature")
@@ -118,7 +118,7 @@ class NotificationAdapter:
 
     async def notify(self, intent: str, urgency: str, context: dict,
                      to: str = None) -> bool:
-        """Envía un SMS. Retorna True si fue exitoso."""
+        """Send an SMS. Returns True on success."""
         if not self._available:
             log.warning("SMS not sent — Twilio not configured")
             return False

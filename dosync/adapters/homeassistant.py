@@ -400,7 +400,7 @@ class HABridge(DoSyncAdapter):
         return manifest
 
     def _infer_tags(self, friendly_name: str, entity_id: str) -> list[str]:
-        """Infiere tags de ubicación y tipo desde el nombre del dispositivo."""
+        """Infer location and type tags from the device name."""
         tags  = []
         name  = (friendly_name + " " + entity_id).lower()
         rooms = [
@@ -464,7 +464,7 @@ class HABridge(DoSyncAdapter):
     # ── Execute action ────────────────────────────────────────────────────────
 
     async def execute(self, action: DeviceAction, urgency: Urgency) -> ActionResult:
-        """Traduce una acción DoSync a un servicio de HA y lo ejecuta."""
+        """Translate a DoSync action into a Home Assistant service call and execute it."""
         device = self._hub.registry.get(action.device_id)
         if not device or not device.adapter_config:
             return ActionResult(
@@ -579,7 +579,7 @@ class HABridge(DoSyncAdapter):
             return None
 
     async def close(self) -> None:
-        """Cierra la sesión HTTP."""
+        """Close the HTTP session."""
         if self._session:
             await self._session.close()
             self._session = None

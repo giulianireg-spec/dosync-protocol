@@ -38,8 +38,8 @@ from ..models import ActionResult, DeviceAction, Urgency
 
 log = logging.getLogger("dosync.adapters.wiz")
 
-# Importación opcional — si pywizlight no está instalado, el adapter
-# funciona en modo simulado con una advertencia
+# Optional import — if pywizlight is not installed, the adapter
+# operates in simulated mode with a warning
 try:
     from pywizlight import wizlight, PilotBuilder
     WIZ_AVAILABLE = True
@@ -122,10 +122,10 @@ def wiz_manifest(
 
 class WiZAdapter(DoSyncAdapter):
     """
-    Adapter DoSync para lamparitas Philips WiZ.
+    DoSync adapter for Philips WiZ smart bulbs.
 
-    Todas las comunicaciones son UDP directas en la red local.
-    No se requiere cuenta WiZ ni conexión a internet.
+    All communication is direct UDP on the local network.
+    No WiZ account or internet connection required.
     """
 
     @property
@@ -134,8 +134,8 @@ class WiZAdapter(DoSyncAdapter):
 
     def _get_ip(self, action: DeviceAction) -> Optional[str]:
         """Obtiene la IP del dispositivo desde el registry del hub."""
-        # La IP está en adapter_config del manifest
-        from .. import models   # evitar import circular
+        # The device IP is stored in adapter_config of the manifest
+        from .. import models   # avoid circular import
         return None  # se resuelve en execute via action.params o manifest
 
     def __init__(self, hub=None):
@@ -147,9 +147,9 @@ class WiZAdapter(DoSyncAdapter):
         self._hub = hub
 
     async def execute(self, action: DeviceAction, urgency: Urgency) -> ActionResult:
-        """Traduce una acción DoSync a un comando WiZ UDP."""
+        """Translate a DoSync action into a WiZ UDP command."""
 
-        # Prioridad: params de la acción > adapter_config del manifest
+        # Priority: action params override adapter_config from the manifest
         ip = action.params.get("ip")
 
         if not ip and self._hub:
@@ -265,10 +265,10 @@ class WiZAdapter(DoSyncAdapter):
             return None
 
     async def _build_pilot(self, action: DeviceAction, urgency: Urgency) -> "PilotBuilder":
-        """Construye el PilotBuilder de pywizlight según la acción DoSync."""
+        """Build a pywizlight PilotBuilder for the given DoSync action."""
         params = action.params
 
-        # Emergencia: siempre máximo brillo blanco frío
+        # Emergency: always maximum brightness, cool white
         if urgency == Urgency.EMERGENCY:
             return PilotBuilder(brightness=255, colortemp=6500)
 

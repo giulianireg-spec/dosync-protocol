@@ -214,7 +214,7 @@ class CapabilityMatchingResolver(BaseResolver):
             device_tags      = set(device.tags)
             device_actuators = {a.type for a in device.actuators}
 
-            # Calcular breakdown del score
+            # Build score breakdown for explanation
             tag_overlap_tags = target_tags & device_tags
             tag_overlap      = len(tag_overlap_tags) * 10.0
             location_bonus   = 15.0 if (location and location in device_tags) else 0.0
@@ -223,7 +223,7 @@ class CapabilityMatchingResolver(BaseResolver):
             actuator_bonus   = len(actuator_matched) * 12.0
             score            = tag_overlap + location_bonus + emergency_bonus + actuator_bonus
 
-            # Razón de exclusión si score == 0
+            # Exclusion reason when score == 0
             if score == 0:
                 if specific_tags and not (specific_tags & device_tags):
                     reason = f"required specific tags {specific_tags} not in device tags {device_tags}"
@@ -256,7 +256,7 @@ class CapabilityMatchingResolver(BaseResolver):
                     "included": True,
                 })
 
-        # Ordenar incluidos por score descendente
+        # Sort included devices by descending relevance score
         included.sort(key=lambda x: x["score"], reverse=True)
 
         return {
@@ -288,8 +288,8 @@ class CapabilityMatchingResolver(BaseResolver):
         if not profile_actions:
             return None
         for pa in profile_actions:
-            # Matchea si el tag del dispositivo coincide con el tag de la accion
-            # y el tipo de actuador coincide
+            # Match: device tag matches the action tag
+            # and actuator type matches
             if (pa.get("action_type") == actuator_type and
                     pa.get("tag") in device.tags):
                 return pa.get("params", {})
@@ -306,7 +306,7 @@ class CapabilityMatchingResolver(BaseResolver):
 
         for actuator in device.actuators:
             if not target_actuators or actuator.type in target_actuators:
-                # Preferir params del FamilyProfile si existen
+                # Prefer FamilyProfile params when available
                 profile_p = self._profile_params(device, actuator.type, intent)
                 params = profile_p if profile_p is not None                     else self._default_params(actuator, intent)
                 actions.append(DeviceAction(
@@ -508,7 +508,7 @@ class StateAwareResolver(CapabilityMatchingResolver):
         if device_id not in self._state_cache:
             self._state_cache[device_id] = {}
         self._state_cache[device_id].update(state)
-        # Persistir en SQLite para sobrevivir reinicios
+        # Persist to SQLite to survive hub restarts
         try:
             db = getattr(self._hub, 'db', None)
             if db:
@@ -594,7 +594,7 @@ class StateAwareResolver(CapabilityMatchingResolver):
                       refreshed, skipped)
 
     def _load_state_from_db(self) -> None:
-        """Carga el state cache desde SQLite al arrancar. Silencioso si no hay datos."""
+        """Load state cache from SQLite on startup. Silent if no data exists."""
         try:
             db = getattr(self._hub, 'db', None)
             if db:
@@ -723,7 +723,7 @@ class DoSyncHub:
         self._event_handlers: list[Callable] = []
         self.db             = DoSyncDB(db_path)
         self.db.init()
-        # Cargar estado persistido ahora que db esta lista
+        # Load persisted state now that db is ready
         if hasattr(self, "resolver"):
             self.resolver._load_state_from_db()
         self.audit_log._persist_cb = self.db.append_audit
@@ -743,10 +743,10 @@ class DoSyncHub:
             ContextSignalType, DeviceCategory, EventSpec, SensorSpec,
         )
 
-        # Restaurar dispositivos
+        # Restore devices
         for manifest_dict in self.db.load_devices():
             try:
-                # Reconstruir el CapabilityManifest desde el dict guardado
+                # Rebuild CapabilityManifest from persisted dict
                 caps = manifest_dict.get("capabilities", {})
 
                 sensors = [
@@ -806,12 +806,12 @@ class DoSyncHub:
                 log.warning("Could not restore device %s: %s",
                             manifest_dict.get("device_id", "?"), e)
 
-        # Restaurar audit log
+        # Restore audit log
         for entry in self.db.load_audit_log():
             self.audit_log._entries.append(entry)
             self.audit_log._prev_hash = entry.get("hash", "0" * 64)
 
-        # Restaurar senales de presencia
+        # Restore presence signals
         from .models import PresenceSignal
         for signal_dict in self.db.load_presence_signals():
             try:
@@ -834,7 +834,7 @@ class DoSyncHub:
         )
 
     def set_family_profile(self, profile: FamilyProfile) -> None:
-        """Carga el perfil familiar en el hub y lo persiste."""
+        """Load the family profile into the hub and persist it."""
         self.family_profile = profile
         self.db.save_family_profile(profile.to_dict())
         self.audit_log.append({
@@ -847,7 +847,7 @@ class DoSyncHub:
     # ── Occupancy / presence ─────────────────────────────────────────────────
 
     def update_presence(self, signal: PresenceSignal) -> OccupancyState:
-        """Un context provider actualiza su señal de presencia."""
+        """A context provider updates its presence signal."""
         self.occupancy.update(signal)
         self.db.save_presence_signal(signal.device_id, {
             "device_id":   signal.device_id,
@@ -870,7 +870,7 @@ class DoSyncHub:
         return state
 
     def get_occupancy(self) -> OccupancyState:
-        """Estado de ocupacion inferido actual."""
+        """Current inferred occupancy state."""
         return self.occupancy.get_occupancy()
 
     # ── Device management ────────────────────────────────────────────────────
@@ -1315,24 +1315,24 @@ class DoSyncHub:
 
 class OccupancyEngine:
     """
-    Infiere el estado de ocupacion del hogar agregando señales de multiples
-    context providers. Nunca usa una sola fuente — combina y pondera.
+    Infers home occupancy state by aggregating signals from multiple
+    context providers. Never relies on a single source — combines and weights them.
 
-    Señales soportadas y su peso por defecto:
-      GPS del celular fuera del perimetro  → ausencia con peso 0.9
-      WiFi del celular desconectado        → ausencia con peso 0.7
-      Sin movimiento PIR por 30+ min       → ausencia con peso 0.4
-      Smartwatch GPS fuera del perimetro   → ausencia con peso 0.8
-      Smart TV apagado                     → ausencia con peso 0.2
+    Supported signals and their default weights:
+      Phone GPS outside perimeter     → absence, weight 0.9
+      Phone WiFi disconnected         → absence, weight 0.7
+      No PIR motion for 30+ min       → absence, weight 0.4
+      Smartwatch GPS outside perimeter → absence, weight 0.8
+      Smart TV off                    → absence, weight 0.2
     """
 
     def __init__(self):
         self._signals: list[PresenceSignal] = []
-        self._signal_ttl_seconds = 300      # señales expiran en 5 minutos
+        self._signal_ttl_seconds = 300      # signals expire after 5 minutes
 
     def update(self, signal: PresenceSignal) -> None:
-        """Registra o actualiza una señal de presencia."""
-        # Reemplazar señal anterior del mismo dispositivo
+        """Register or update a presence signal."""
+        # Replace any previous signal from the same device
         self._signals = [
             s for s in self._signals
             if not (s.device_id == signal.device_id and
@@ -1346,7 +1346,7 @@ class OccupancyEngine:
         )
 
     def _active_signals(self) -> list[PresenceSignal]:
-        """Filtra señales expiradas."""
+        """Filter out expired signals."""
         cutoff = time.time() - self._signal_ttl_seconds
         return [s for s in self._signals if s.timestamp >= cutoff]
 
@@ -1357,7 +1357,7 @@ class OccupancyEngine:
         """
         signals = self._active_signals()
         if not signals:
-            # Sin señales = estado desconocido, asumimos ocupado por seguridad
+            # No signals = unknown state; default to occupied for safety
             return OccupancyState(
                 occupied=True,
                 confidence=0.0,
@@ -1365,7 +1365,7 @@ class OccupancyEngine:
                 signals_used=0,
             )
 
-        # Calcular confianza ponderada de presencia
+        # Calculate weighted presence confidence
         total_weight = sum(s.confidence for s in signals)
         presence_weight = sum(
             s.confidence for s in signals if s.present

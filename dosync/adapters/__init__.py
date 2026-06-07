@@ -49,7 +49,7 @@ class DoSyncAdapter(ABC):
                 )
 
             async def connect(self, config):
-                # inicializar conexión con el dispositivo
+                # initialize connection with the device
                 pass
 
             async def disconnect(self):
@@ -62,15 +62,15 @@ class DoSyncAdapter(ABC):
 
     @abstractmethod
     async def execute(self, action: DeviceAction, urgency: Urgency) -> ActionResult:
-        """Ejecuta una acción en el dispositivo físico."""
+        """Execute an action on the physical device."""
         ...
 
     async def connect(self, config: dict) -> None:
-        """Inicializa la conexión con el dispositivo. Opcional."""
+        """Initialize the connection to the device. Optional."""
         pass
 
     async def disconnect(self) -> None:
-        """Cierra la conexión. Opcional."""
+        """Close the connection. Optional."""
         pass
 
     async def get_state(self, device_id: str) -> dict | None:
@@ -92,7 +92,7 @@ class DoSyncAdapter(ABC):
     @property
     @abstractmethod
     def adapter_name(self) -> str:
-        """Nombre único del adapter. Debe coincidir con el campo 'adapter' del manifest."""
+        """Unique adapter name. Must match the 'adapter' field in the device manifest."""
         ...
 
 
