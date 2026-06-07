@@ -46,87 +46,6 @@ Layer 3 — Decision (human operator)
 
 ---
 
-## Urgency levels — protocol-controlled values
-
-The urgency level is one of only two values the protocol controls directly (the other being the intent class name format). It has direct safety implications across the stack.
-
-| Level | Value | Behavior |
-|---|---|---|
-| `emergency` | Bypasses all policy constraints. Executes immediately. Emergency-capable devices always included. |
-| `alert` | High priority. Confirmation policies may apply. |
-| `warning` | Elevated priority. Warrants attention but no immediate action. All policies apply. |
-| `info` | Normal priority. All policies apply. Default for routine operations. |
-
-Only `emergency` triggers the emergency override path. The three remaining levels go through full policy evaluation. The distinction between `alert` and `warning` is intentional: `alert` implies a condition that may require the system to act; `warning` implies a condition that should be logged and monitored but not acted upon automatically.
-
-**When to use `warning`:** anomalies that are notable but not urgent — a high temperature reading, an unusual sensor pattern, a device behaving unexpectedly. The gpio_adapter uses `warning` for DHT22 temperature thresholds above 35°C: the reading is significant enough to log and notify, but not significant enough to bypass policies or trigger emergency-capable devices.
-
----
-
-## Open intent class vocabulary — the protocol defines format, not meaning
-
-DoSync v0.4 introduces a fundamental architectural change: intent classes are no longer hardcoded in the protocol. The protocol defines the *format* of an intent class name, not its *vocabulary*.
-
-**The reasoning:**
-
-A protocol that hardcodes domain-specific intent classes (`bedtime_routine`, `children_arrived_home`) is not infrastructure — it is an opinionated application framework for a specific domain. A hospital deploying DoSync should not have to work around `bedtime_routine`. A factory should not inherit vocabulary that has no meaning in its context.
-
-The correct model is the same one used by every successful open protocol:
-
-- **HTTP** defines methods (`GET`, `POST`, `DELETE`). It does not know about REST, GraphQL, or webhooks.
-- **MQTT** defines topics and QoS levels. It does not know about temperature, presence, or emergencies.
-- **MIME types** define a namespace (`type/subtype`). The registry is open — anyone can register new types.
-
-DoSync follows this pattern. The protocol defines:
-
-1. **The format constraint** — intent class names must match `^[a-z][a-z0-9_]*$` (lowercase, digits, underscores)
-2. **The urgency taxonomy** — `emergency | alert | info` (these have safety implications and are protocol-controlled)
-3. **Five universal intent classes** — seeded into every hub at initialization, valid in any physical environment regardless of domain
-
-```
-ensure_safety   emergency   Safety emergency — protect people and property
-alert_anomaly   alert       Unexpected condition detected — investigate
-control_access  alert       Manage physical access to a space
-report_status   info        Generate a status report of the environment
-notify          info        Push information to any target
-```
-
-**Why exactly five?** These are the only intents that are genuinely domain-agnostic. Every physical environment has emergencies, anomalies, access control, status reporting, and notifications. No other intents meet this bar — `bedtime_routine` is residential, `prepare_operating_room` is healthcare, `line_emergency_stop` is industrial. Those belong to domain packages, not the protocol core.
-
-**Domain vocabularies are registered at the hub level:**
-
-```bash
-# Healthcare deployment
-POST /v1/intent-classes
-{
-  "name": "prepare_operating_room",
-  "urgency": "alert",
-  "resolution_tags": ["medical", "lighting", "access"],
-  "resolution_actuators": ["turn_on", "unlock", "notify"],
-  "description": "Prepare an operating room for a procedure",
-  "domain": "healthcare"
-}
-
-# Industrial deployment
-POST /v1/intent-classes
-{
-  "name": "line_emergency_stop",
-  "urgency": "emergency",
-  "resolution_tags": ["industrial", "safety", "alarm"],
-  "resolution_actuators": ["stop", "notify", "alarm"],
-  "description": "Emergency production line shutdown",
-  "domain": "industrial"
-}
-```
-
-No code changes. No hub restart. No coordination with the protocol maintainers. The deploying organization owns its vocabulary.
-
-**What cannot be changed:** the five universal intents are protected at the API level — they cannot be overridden or deleted. They are the invariant core of the protocol that every compliant implementation must support. Everything else is deployment-specific configuration.
-
-**The implication for interoperability:** two DoSync hubs in different domains will always share the five universal intents. Domain-specific intents are scoped to the deployment. A hub migration guide or a multi-domain deployment should document which domain packages are active — but the protocol itself remains the common ground.
-
----
-
 ## Why DoSync does not learn autonomously
 
 A natural evolution of the resolver would be to update device scores based on execution history — penalizing devices that fail frequently, rewarding devices that consistently succeed. This appears useful and has been deliberately rejected for the default resolver.
@@ -157,6 +76,10 @@ The design decision here is deliberate and worth explaining.
 
 **Why not learn from failure patterns?** The TTL is a blunt instrument by design. It does not penalize devices that fail often more than devices that fail once. It does not track failure history. Once the TTL expires, the device is treated exactly as it was before the failure. This is consistent with the broader principle that DoSync does not modify its behavior based on historical patterns — the same input always produces the same output.
 
+**The failure pattern this addresses.** Production data from the reference deployment revealed a concrete scenario: `save_energy` executed at night sent UDP commands to WiZ bulbs that were physically off and in low-power state. The adapter timed out, the intent resolved as `partial`, and the audit log recorded 0% success for those devices. With TTL-based exclusion active, after the first timeout the bulbs are excluded for the configured window — subsequent `save_energy` intents resolve faster and without unnecessary UDP traffic to sleeping devices.
+
+**Configuring the TTL.** The default of 1800 seconds (30 minutes) suits home deployments where transient failures are typically short-lived. Industrial or hospital deployments with stricter availability requirements may lower this value to reduce re-inclusion latency. Deployments where devices frequently enter low-power states may raise it to avoid constant re-exclusion cycles.
+
 ```bash
 # Environment variable — set in .env or systemd service file
 DOSYNC_UNREACHABLE_TTL=1800   # 30 minutes (default)
@@ -165,6 +88,75 @@ DOSYNC_UNREACHABLE_TTL=3600   # 1 hour — for low-power device-heavy deployment
 ```
 
 The TTL is not a health metric. It is an execution optimization. The Device Health Monitor is the correct tool for tracking device reliability over time — the TTL only determines how long the resolver waits before retrying a device that recently failed.
+
+---
+
+## PKI rotation policy
+
+DoSync's local PKI has two components with different rotation schedules:
+
+```
+certs/
+├── ca.crt / ca.key    — CA root. Valid 10 years. Rotated manually and rarely.
+└── hub.crt / hub.key  — Hub certificate. Valid 1 year. Rotated annually.
+```
+
+**The CA is not rotated annually.** The CA is the root of trust for every client that connects to the hub — the Mac, `certify.py`, Claude Desktop, any adapter. Rotating the CA means every client loses trust and must receive the new CA cert before reconnecting. This is a significant operational event that should happen deliberately, not on a schedule.
+
+**The hub certificate is rotated annually.** It is signed by the CA and can be replaced without touching the CA or redistributing anything to clients. The CA cert on the Mac remains valid after a hub cert rotation.
+
+### Checking certificate status
+
+```bash
+# On the Pi — verify PKI health and days remaining
+python3 -m dosync.security verify
+
+# Or with the rotation script in check-only mode
+bash rotate_pki.sh --check
+```
+
+### Annual rotation procedure
+
+The `rotate_pki.sh` script automates the rotation:
+
+```bash
+# On the Pi
+cd ~/dosync-protocol
+
+# Check state first
+bash rotate_pki.sh --check
+
+# Rotate when hub cert is within 30 days of expiry (or use --force)
+bash rotate_pki.sh
+
+# The script:
+#   1. Backs up current hub.crt and hub.key to certs/backup/<timestamp>/
+#   2. Calls: python3 -m dosync.security renew hub
+#   3. Verifies the new cert chains correctly to the CA
+#   4. Restarts the dosync systemd service
+#   5. Confirms the hub came back up
+#   6. Prints manual steps for the Mac
+```
+
+After running the script, no Mac-side action is required unless the CA itself changed (it doesn't in a normal annual rotation). The Mac trusts the CA, and the new hub cert is signed by the same CA.
+
+### When the CA must be rotated
+
+CA rotation is rare and must be planned. It is necessary only if:
+
+- The CA private key (`ca.key`) is compromised or suspected compromised
+- The CA is approaching its 10-year expiry
+- A deliberate security policy requires shorter CA lifetimes
+
+When the CA is rotated, every client that has the old `ca.crt` in its trust store must receive the new one. For the reference deployment this means:
+
+1. Generate new CA: `python3 -m dosync.security setup --force`
+2. Copy new CA to Mac: `scp rgiuliani@<pi-ip>:~/dosync-protocol/certs/ca.crt ~/Desktop/dosync-ca.crt`
+3. Update Claude Desktop config with the new CA cert path
+4. Reissue all adapter certs: `python3 -m dosync.security renew gpio`
+5. Restart the hub
+
+CA rotation is a deliberate operational event, not an automated one.
 
 ---
 
@@ -182,28 +174,6 @@ This design serves several purposes:
 - **Human accountability** — the log makes it possible to answer "what happened, when, and why" with precision
 
 The log should be preserved, backed up, and treated as critical infrastructure — not as debug output to be rotated and discarded.
-
----
-
-## Physical device deduplication
-
-A physical device should have exactly one logical registration in the DoSync registry. When a device is accessible via multiple adapters (for example, a Philips WiZ bulb that is registered directly via the WiZ UDP adapter AND appears as an HA sensor entity via the Home Assistant bridge), only the more capable registration should be kept.
-
-The Home Assistant bridge applies this principle automatically: when importing HA entities, it filters out read-only sensor sub-entities (power, energy, voltage, current monitoring) for devices that are already registered via a native adapter. Importing the power sensor for a WiZ bulb that is already registered as `wiz-living1-01` would create a logical duplicate — the same physical device appearing twice in the registry under different IDs — with no control capability added.
-
-**Why this matters for the protocol:**
-
-A semantic resolver that scores devices by tags will include both registrations in an intent's action plan, sending redundant commands to the same physical device. The audit log will show two separate action results for what is effectively one action. This degrades the quality of the protocol's data layer.
-
-The correct model: one physical device, one registry entry, via the most capable adapter available.
-
-**The idempotency principle:**
-
-Any device registration operation MUST be idempotent. Running the same import multiple times must produce the same result as running it once. Implementations should:
-- Check if a device_id already exists before registering
-- Update if the manifest changed (name, tags, capabilities)
-- Skip if the manifest is identical
-- Never create duplicate entries
 
 ---
 
@@ -238,95 +208,58 @@ However, domain applicability has limits that must be stated clearly:
 
 ---
 
-## Certification testing mode
+## On the tag index and candidate selection strategy
 
-DoSync supports a dedicated certification mode that allows protocol conformance testing without physical devices.
+As of v0.3, `CapabilityRegistry` maintains an inverted tag index — a dictionary mapping each tag to the set of device IDs that declare it. This index is updated incrementally on every `register()` and `unregister()` call.
 
-When the hub starts with `DOSYNC_CERTIFY=true`, it uses `SimulatedExecutor` for all intent executions instead of the real adapter stack. This means:
+**Why an inverted index?** The original resolver iterated all registered devices on every intent resolution — O(n). With the index, candidate selection is O(|tags| + |candidates|): instead of scanning all devices, the resolver takes the union of the index sets for the intent's resolution tags, then scores only that subset.
 
-- All intent executions complete in <100ms with deterministic `success=True` results
-- No network calls are made to physical devices
-- The protocol interface, audit log, policy engine, and resolver all behave identically to production
-- The hub logs a warning at startup to make the mode visible
+**Why union, not intersection?** Two candidate selection strategies were considered:
 
-```bash
-# Run hub in certify mode
-DOSYNC_CERTIFY=true uvicorn server:app --host 0.0.0.0 --port 47200
+- **Intersection** (`find_by_required_tags`): returns devices that have ALL of the queried tags. Useful for queries like "thermostats in the living room" — requires `thermostat` AND `living_room` simultaneously.
+- **Union** (`find_by_tags`): returns devices that have ANY of the queried tags. Correct for semantic intent resolution — `ensure_safety` wants devices relevant to `emergency` OR `alarm` OR `door-lock`, not devices that are simultaneously all three.
 
-# Or with Docker
-DOSYNC_CERTIFY=true docker compose up
+The intersection method exists in `CapabilityRegistry` as a utility for external queries but is deliberately not used in `resolve()`. Applying intersection in `resolve()` caused safety-critical devices (lights with `emergency_capable=True` but no `alarm` tag) to be excluded from emergency action plans — a direct safety regression.
 
-# Run certification suite against it
-DOSYNC_TOKEN=<token> python3 certify.py --host localhost --port 47200 --tier emergency
-```
+**Emergency-capable devices are always candidates on emergency intents.** Regardless of tag overlap, any device with `emergency_capable=True` is included in the candidate set when `urgency == EMERGENCY`. This is a hard safety guarantee: the tag filter must never silently exclude a device that was explicitly configured to respond to emergencies.
 
-**When to use certify mode:**
+**Candidate reduction in practice** (1000-device deployment, realistic tag distribution):
 
-| Context | Mode | Reason |
+| Intent | Candidates with index | Without index |
 |---|---|---|
-| CI/CD pipeline | `DOSYNC_CERTIFY=true` | No physical hardware available |
-| Fabricante testing hub implementation | `DOSYNC_CERTIFY=true` | Deterministic results needed |
-| Protocol conformance verification | `DOSYNC_CERTIFY=true` | Tests protocol behavior, not device integration |
-| Production deployment | Never | Real adapters required |
-| Development with hardware | Never | Tests real device integration |
+| `ensure_safety` | 94 | 1000 |
+| `children_arrived_home` | 25 | 1000 |
+| `control_access` | 0 | 1000 |
+| `save_energy` | 527 | 1000 |
 
-**What certify mode does NOT change:**
-
-- Authentication and authorization remain enforced
-- Audit log SHA-256 chain is produced identically
-- Policy engine evaluates intents normally
-- Resolver scores devices identically
-- Intent class registration and validation work identically
-
-Certify mode only replaces the final execution step — the actual sending of commands to physical devices. Everything above that layer runs in full production mode.
-
-**This is analogous to:**
-
-- Matter's CHIP-tool test harness which simulates all device clusters
-- Thread Group's simulated device environment for conformance testing
-- HTTP test suites that use mock servers for protocol conformance
-
-**Never deploy with `DOSYNC_CERTIFY=true` in production.** The hub logs a warning at startup when this mode is active.
+The index is most effective for safety-critical intents with specific tags. Comfort and efficiency intents with common tags (`light`, `smart-plug`) show lower but still meaningful reduction.
 
 ---
 
-## Intent frequency limits
+## On adapter-side fallback ("local fallback without hub")
 
-Every DoSync-compliant deployment MUST implement intent frequency limits. An AI agent, a malfunctioning automation, or a compromised MCP client can fire thousands of intents per second. Without frequency limits, this can overwhelm the hub, exhaust device adapters, and degrade audit log integrity.
+A recurring question in protocol design is whether adapters should be able to operate independently when the hub is unavailable — executing actions directly on physical devices without going through the capability resolution layer.
 
-The `IntentRateLimitPolicy` is the reference implementation. It uses a sliding window counter per `(source, urgency)` pair:
+**DoSync deliberately does not implement this.** The reasoning:
 
-- **Source** is the origin of the intent (`api`, `mcp`, `gpio`, `scheduler`, or `unknown`). Each source gets its own independent counter.
-- **Urgency** levels are limited independently. Emergency intents are **never** rate limited — this is a protocol-level guarantee equivalent to the emergency bypass in other policies.
+A protocol cannot have a "mode without the protocol." If the hub is unavailable, the protocol is unavailable — this is correct and expected behavior, not a failure to be worked around. HTTP does not function without servers. Matter does not function without a fabric controller. DoSync does not function without a hub.
 
-**Protocol-defined minimum default limits:**
+Bypass mechanisms that allow adapters to act without the hub would:
 
-| Urgency | Default limit | Rationale |
-|---|---|---|
-| `info` | 60 / minute | Routine operations; generous limit for normal use |
-| `warning` | 60 / minute | Same as info; warning intents are still non-urgent |
-| `alert` | 20 / minute | Elevated urgency; limited to prevent alert flooding |
-| `emergency` | **Unlimited** | Must never be blocked; human safety depends on it |
+- Break the audit chain — actions executed without the hub produce no SHA-256 chained log entries
+- Break the policy engine — safety constraints are not evaluated
+- Break the semantic model — actions become commands again, which is exactly what DoSync was designed to avoid
 
-These are **minimum** required limits. A deployment may configure stricter limits. A deployment must not raise the emergency limit — there is no emergency rate limit by design.
+**The correct resilience model for DoSync is hub availability, not adapter autonomy:**
 
-**Why this belongs in the Policy Engine, not in middleware:**
+- `FailurePolicy.RETRY` handles transient adapter failures
+- Emergency snapshots (v0.2) re-fire critical intents on hub restart
+- The `StateAwareResolver` TTL handles temporary device unavailability
+- Hub deployment on reliable hardware (systemd service with `Restart=always`) handles hub restarts
 
-Rate limiting could be implemented at the HTTP layer (FastAPI middleware) or at the MCP layer. Both approaches have the same problem: they protect only one entry point. An intent fired via GPIO, the scheduler, or a direct hub API call would bypass them.
+These mechanisms collectively ensure that the hub recovers quickly from failures and that critical intents are not permanently lost. They do not attempt to replicate hub intelligence in the adapters — which would defeat the purpose of having a hub.
 
-The Policy Engine evaluates every intent regardless of origin. This is the only layer that can guarantee universal enforcement. The same principle applies to all DoSync policies: they are not transport-specific filters; they are semantic constraints on the protocol's behavior.
-
-**Priority 0 — first line of defense:**
-
-`IntentRateLimitPolicy` has priority `0`, which means it runs before all other policies. This ensures:
-
-1. Every intent is counted before other policies can block it
-2. A source flooding the hub with intents that happen to be blocked by ConflictResolutionPolicy still counts against the rate limit
-3. The rate limit provides DoS protection independent of semantic policy logic
-
-**BLOCK response follows HTTP 429 semantics:**
-
-When a rate limit is exceeded, the policy returns `BLOCK` with a reason that includes the current count, the limit, and a `Retry-After` value in seconds. Every blocked intent is logged in the tamper-evident audit trail with `policy: "intent_rate_limit"`.
+---
 
 ---
 
@@ -341,14 +274,7 @@ When a rate limit is exceeded, the policy returns `BLOCK` with a reason that inc
 | Domain agnosticism | The protocol works anywhere. Safety configuration is deployment-specific. |
 | AI as observer and actor | AI can use DoSync. It cannot override its safety model. |
 | Unreachable device TTL | Transient failures are excluded temporarily, not permanently. Recovery is automatic. |
-| Open intent vocabulary | The protocol defines format, not meaning. Domain vocabularies are deployment-specific. |
-| Five universal intents | ensure_safety, alert_anomaly, control_access, report_status, notify — valid in any domain. |
-| Four urgency levels | emergency > alert > warning > info. Only emergency bypasses policy constraints. |
-| Intent frequency limits | Every compliant hub MUST enforce rate limits per source. Emergency is always unlimited. |
-| FailurePolicy | CONTINUE (default) · ABORT (cancel remaining on first failure) · RETRY (exponential backoff). Emergency always forces CONTINUE. |
-| API versioning | Two surfaces: protocol version (semantic format) + API version (HTTP interface). Non-breaking changes require no version bump. Breaking changes require a new URL prefix. |
-| Physical device deduplication | One physical device, one registry entry. HA sub-sensors for directly-registered devices are filtered at import. |
-| Firmware re-registration | Re-registration classified by firmware+capability diff. Capability change without firmware change fires alert_anomaly — possible compromise. |
+| PKI rotation policy | Hub cert rotates annually. CA rotates only on compromise or expiry. Never automated. |
 
 ---
 

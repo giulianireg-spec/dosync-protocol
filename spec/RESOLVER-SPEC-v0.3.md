@@ -9,7 +9,7 @@
 
 ## Overview
 
-The DoSync Semantic Resolver is the component responsible for translating an `Intent` into an `ActionPlan`. It is the intelligence layer of the protocol — the part that decides *which devices should act* and *how* in response to a semantic goal.
+The DoSync Capability-based Resolver is the component responsible for translating an `Intent` into an `ActionPlan`. It maps a high-level goal to concrete device actions by matching the intent's requirements against declared device capabilities.
 
 The resolver interface is formally decoupled from the rest of the protocol. This means:
 
@@ -26,7 +26,7 @@ This document defines the formal contract that all resolvers must fulfill.
 ```python
 class BaseResolver:
     """
-    Formal interface for DoSync semantic resolvers.
+    Formal interface for DoSync resolvers.
 
     The protocol defines WHAT a resolver must do, not HOW.
     Third-party implementations can be dropped in by subclassing this

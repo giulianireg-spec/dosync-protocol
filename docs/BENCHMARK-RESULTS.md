@@ -65,7 +65,7 @@ All scale points remain within the 500ms spec limit defined in `RESOLVER-SPEC-v0
 | | Mean latency |
 |---|---|
 | Direct command (dict lookup + ActionPlan construction) | 0.0014ms |
-| Semantic resolver (full resolution over 38 devices) | 0.0811ms |
+| Capability-based resolver (full resolution over 38 devices) | 0.0811ms |
 | Overhead (absolute) | **0.0798ms** |
 | Overhead (relative) | 60x |
 
@@ -73,7 +73,7 @@ The 60x multiplier is misleading in isolation. In real deployment context:
 
 | Operation | Typical latency |
 |---|---|
-| Semantic resolution (38 devices) | ~0.08ms |
+| Capability-based resolution (38 devices) | ~0.08ms |
 | WiFi → WiZ bulb (UDP) | ~5–15ms |
 | WiFi → Home Assistant (HTTP) | ~20–80ms |
 | **Semantic layer as % of total** | **< 1%** |

@@ -10,7 +10,7 @@
 
 ### v0.1 — Foundation
 - 5-layer protocol architecture (Intent → Semantic → Registry → Security → Transport)
-- `CapabilityMatchingResolver` — tag-based semantic resolution
+- `CapabilityMatchingResolver` — tag-based capability resolution
 - `CapabilityRegistry` — device self-registration with manifests
 - REST API (12+ endpoints) + WebSocket real-time events
 - Web dashboard

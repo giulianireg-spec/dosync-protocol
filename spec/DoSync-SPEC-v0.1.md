@@ -9,9 +9,31 @@
 
 ## Abstract
 
-DoSync is an open communication protocol that enables AI systems to interact with physical devices (gadgets) in a home environment using semantic intent rather than direct commands. Unlike existing smart home protocols (Matter, Zigbee, Z-Wave), DoSync introduces a semantic layer that allows an AI to express *what it wants to achieve*, while each device resolves its own contribution to that goal.
+DoSync is an open communication protocol that enables AI systems to interact with physical devices in any physical environment using semantic intent rather than direct commands. Unlike existing IoT protocols (Matter, Zigbee, Z-Wave), DoSync introduces a semantic layer that allows an AI to express *what it wants to achieve*, while each device resolves its own contribution to that goal.
 
 DoSync is transport-agnostic: the same protocol operates over WiFi, Bluetooth LE, Zigbee, Z-Wave, Thread, and Ethernet through a Hardware Abstraction Layer (HAL).
+
+---
+
+## Protocol scope and reference implementation
+
+This document defines the **DoSync protocol**: the wire format, data model, and behavioral contract that any conforming implementation must satisfy. The protocol is language-independent — a conforming hub may be implemented in any language.
+
+**What this specification defines (the protocol):**
+- The JSON wire format for Intent, CapabilityManifest, ActionPlan, and IntentResult (see `spec/schemas/`)
+- The REST API surface that a conforming hub must expose
+- The behavioral requirements for each layer (capability registry, policy engine, resolver interface, audit log, security)
+- The certification model (Basic / Standard / Emergency tiers)
+
+**What this specification does not define (implementation details):**
+- How the hub stores device state internally
+- Which programming language or runtime is used
+- Which database engine backs the audit log
+- How the capability-based resolver scores devices internally, beyond the interface contract
+
+**Reference implementation:** The Python hub at `github.com/giulianireg-spec/dosync-protocol` is the canonical reference implementation. It demonstrates one correct implementation of this specification. A second independent implementation in Node.js lives at `implementations/dosync-node/`. Neither is normative — the JSON schemas and behavioral requirements in this document are.
+
+A third-party implementation is conforming if it passes the certification CLI at the declared tier. The certification tests are transport-agnostic and test the protocol surface, not the implementation internals.
 
 ---
 
@@ -207,6 +229,8 @@ A device may re-register with the hub at any time — after a firmware update, a
 
 The semantic layer is the core differentiator of DoSync. It maps high-level AI intents to concrete device actions by matching intent requirements against registered device capabilities.
 
+Formal JSON Schemas for all wire format objects are in `spec/schemas/`. The schemas are the normative definition of each object's structure. The examples below are illustrative.
+
 ### 6.1 Intent object
 
 ```json
@@ -228,7 +252,7 @@ The semantic layer is the core differentiator of DoSync. It maps high-level AI i
 
 ### 6.2 Intent resolution
 
-The semantic resolver follows this algorithm:
+The capability-based resolver follows this algorithm:
 
 ```
 1. Parse intent → extract (action_class, subject, context, urgency)
@@ -647,7 +671,7 @@ Emergency tier certification requires that the hub maintains emergency intent ex
 ```
 [Camera detects fall] → event: ensure_safety / emergency
 [Hub receives event]
-[Semantic resolver activates]:
+[Capability-based resolver activates]:
   → Phone: call emergency services (911 / local equivalent)
   → Front door lock: unlock
   → All lights: maximum brightness
@@ -662,7 +686,7 @@ Emergency tier certification requires that the hub maintains emergency intent ex
 [Fridge sensor: temp > 8°C for 30 min, compressor off]
 → event: malfunction / warning
 [Hub receives event]
-[Semantic resolver activates]:
+[Capability-based resolver activates]:
   → Family phones: push notification
     "Your refrigerator has stopped cooling (18.5°C, 45 min).
      Consider moving perishables. Technician contact: [saved contact]"

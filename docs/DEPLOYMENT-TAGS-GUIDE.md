@@ -1,12 +1,12 @@
 # DoSync — Deployment Tags Guide
 
-This document explains how to configure the `tags` field in a device's Capability Manifest to maximize semantic resolution accuracy. Getting tags right is the single most effective way to improve recall for comfort and efficiency intents.
+This document explains how to configure the `tags` field in a device's Capability Manifest to maximize capability resolution accuracy. Getting tags right is the single most effective way to improve recall for comfort and efficiency intents.
 
 ---
 
 ## Why tags matter
 
-The semantic resolver matches an intent against every registered device by computing a relevance score. The primary signal is **tag overlap**: how many of the device's declared tags appear in the intent's resolution tag set.
+The capability-based resolver matches an intent against every registered device by computing a relevance score. The primary signal is **tag overlap**: how many of the device's declared tags appear in the intent's resolution tag set.
 
 A device with correct tags participates automatically in every relevant scenario. A device with missing or wrong tags is invisible to the resolver — it will never be included in `bedtime_routine`, `save_energy`, or `away_mode` action plans, regardless of what it can physically do.
 
