@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dosync.dev/spec/schemas/capability-manifest.schema.json",
+  "title": "DoSync CapabilityManifest",
+  "description": "Self-declaration of a physical device's capabilities. Sent to POST /v1/devices/register when the device joins the network. The hub uses it to determine device participation in intent resolution.",
+  "type": "object",
+  "required": ["device_id", "device_name", "manufacturer", "model", "firmware", "category", "tags"],
+  "properties": {
+    "device_id": {
+      "type": "string",
+      "description": "Globally unique device identifier within a hub. Stable across restarts and firmware updates.",
+      "pattern": "^[a-z0-9][a-z0-9_\\-]*$",
+      "examples": ["wiz-living1-01", "rpi-pir-01", "ha-light-tv_ambilight"]
+    },
+    "device_name": {
+      "type": "string",
+      "description": "Human-readable device name.",
+      "examples": ["Living Room Light 1", "Front Door PIR", "Philips Ambilight TV"]
+    },
+    "manufacturer": {
+      "type": "string",
+      "description": "Device manufacturer name.",
+      "examples": ["Philips", "Raspberry Pi Foundation", "Samsung"]
+    },
+    "model": {
+      "type": "string",
+      "description": "Device model identifier.",
+      "examples": ["WiZ A60 RGBW", "HC-SR501", "QN75Q7FA"]
+    },
+    "firmware": {
+      "type": "string",
+      "description": "Firmware version string. Used to detect firmware updates on re-registration.",
+      "examples": ["1.0.0", "22.0.7", "dosync-gpio/1.3"]
+    },
+    "category": {
+      "type": "string",
+      "enum": ["sensor", "actuator", "hybrid", "communication", "emergency", "context"],
+      "description": "Primary device category. 'hybrid' devices both sense and actuate."
+    },
+    "tags": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1,
+      "description": "Semantic tags used by the resolver to match intents. Tags declare what the device is and where it is. See DEPLOYMENT-TAGS-GUIDE.md for the full tag vocabulary.",
+      "examples": [
+        ["light", "living-room", "emergency"],
+        ["sensor", "motion", "entrance"],
+        ["notification", "sms", "emergency"]
+      ]
+    },
+    "sensors": {
+      "type": "array",
+      "description": "Sensors this device can report. Each sensor is a named capability.",
+      "items": {"$ref": "#/$defs/SensorSpec"},
+      "default": []
+    },
+    "actuators": {
+      "type": "array",
+      "description": "Actions this device can execute. Each actuator is a named, typed capability.",
+      "items": {"$ref": "#/$defs/ActuatorSpec"},
+      "default": []
+    },
+    "events": {
+      "type": "array",
+      "description": "Events this device can emit spontaneously (e.g. motion_detected, malfunction).",
+      "items": {"$ref": "#/$defs/EventSpec"},
+      "default": []
+    },
+    "emergency_capable": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this device participates in emergency intents with urgency='emergency'. Emergency-capable devices receive a scoring bonus and MUST execute immediately when an emergency intent is resolved."
+    },
+    "cert_tier": {
+      "type": ["string", "null"],
+      "enum": ["basic", "standard", "emergency", null],
+      "description": "Highest certification tier this device has passed. Null means not yet certified."
+    },
+    "dosync_version": {
+      "type": "string",
+      "description": "Protocol version this manifest was built against.",
+      "default": "0.1",
+      "examples": ["0.1"]
+    },
+    "adapter": {
+      "type": ["string", "null"],
+      "description": "Adapter type used to communicate with this device. Matches the adapter_name field of the DoSyncAdapter implementation.",
+      "examples": ["wiz", "homeassistant", "gpio", "simulated", "notifications"]
+    },
+    "adapter_config": {
+      "type": "object",
+      "description": "Adapter-specific connection parameters. Redacted from public API responses (GET /v1/devices). Not part of the protocol wire format — for hub-internal use only.",
+      "examples": [
+        {"ip": "192.168.1.42"},
+        {"entity_id": "light.living_room_1", "ha_url": "http://homeassistant.local:8123"}
+      ]
+    }
+  },
+  "$defs": {
+    "SensorSpec": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": {"type": "string", "description": "Unique sensor identifier within this device."},
+        "type": {"type": "string", "description": "Sensor type. Examples: temperature, motion, humidity, door_contact, smoke."},
+        "description": {"type": "string", "default": ""},
+        "unit": {"type": ["string", "null"], "description": "Measurement unit (e.g. celsius, percent, boolean)."},
+        "range": {
+          "type": ["array", "null"],
+          "items": {"type": "number"},
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[min, max] valid measurement range."
+        },
+        "poll_interval_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "How often the sensor is polled in milliseconds. 0 means event-driven."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ActuatorSpec": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": {"type": "string", "description": "Unique actuator identifier within this device."},
+        "type": {"type": "string", "description": "Actuator type. Examples: turn_on, turn_off, unlock, lock, notify, alarm, set_temperature."},
+        "description": {"type": "string", "default": ""},
+        "params_schema": {
+          "type": "object",
+          "description": "JSON Schema fragment describing valid params for this actuator.",
+          "default": {}
+        }
+      },
+      "additionalProperties": false
+    },
+    "EventSpec": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {"type": "string", "description": "Event identifier (e.g. motion_detected, malfunction, fall_detected)."},
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warning", "alert", "emergency"],
+          "default": "info"
+        },
+        "description": {"type": "string", "default": ""}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "device_id": "wiz-living1-01",
+      "device_name": "Living Room Light 1",
+      "manufacturer": "Philips",
+      "model": "WiZ A60 RGBW",
+      "firmware": "1.0.0",
+      "category": "actuator",
+      "tags": ["light", "living-room", "emergency"],
+      "actuators": [
+        {"id": "turn_on",  "type": "turn_on",  "description": "Turn on at specified brightness and color"},
+        {"id": "turn_off", "type": "turn_off", "description": "Turn off"}
+      ],
+      "emergency_capable": true,
+      "cert_tier": "emergency",
+      "dosync_version": "0.1",
+      "adapter": "wiz"
+    },
+    {
+      "device_id": "rpi-pir-01",
+      "device_name": "Entrance PIR Sensor",
+      "manufacturer": "Generic",
+      "model": "HC-SR501",
+      "firmware": "dosync-gpio/1.3",
+      "category": "sensor",
+      "tags": ["sensor", "motion", "entrance", "emergency"],
+      "sensors": [
+        {"id": "motion", "type": "motion", "description": "Passive infrared motion detection"}
+      ],
+      "events": [
+        {"id": "motion_detected", "severity": "alert", "description": "Motion detected in monitored zone"}
+      ],
+      "emergency_capable": true,
+      "dosync_version": "0.1",
+      "adapter": "gpio"
+    }
+  ]
+}

@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dosync.dev/spec/schemas/intent-result.schema.json",
+  "title": "DoSync IntentResult",
+  "description": "The outcome of executing an ActionPlan. Returned by GET /v1/intent/{intent_id} after async execution completes. Written to the tamper-evident audit log.",
+  "type": "object",
+  "required": ["intent_id", "success", "results", "status"],
+  "properties": {
+    "intent_id": {
+      "type": "string",
+      "description": "Links this result back to the originating Intent."
+    },
+    "success": {
+      "type": "boolean",
+      "description": "True if all actions completed successfully. False if any action failed."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "partial", "partial_abort", "failed", "retry_exhausted"],
+      "description": "Execution outcome summary. 'success': all actions completed. 'partial': some actions failed, rest continued (failure_policy=continue). 'partial_abort': some executed, rest cancelled (failure_policy=abort). 'failed': all actions failed or intent was blocked by a policy. 'retry_exhausted': retries exhausted on at least one action (failure_policy=retry)."
+    },
+    "results": {
+      "type": "array",
+      "description": "Per-device execution outcomes.",
+      "items": {"$ref": "#/$defs/ActionResult"}
+    },
+    "failed_devices": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "device_ids of devices whose action failed.",
+      "default": []
+    },
+    "aborted_devices": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "device_ids of devices whose action was cancelled due to failure_policy=abort.",
+      "default": []
+    },
+    "failure_policy_applied": {
+      "type": "string",
+      "enum": ["continue", "abort", "retry"],
+      "default": "continue",
+      "description": "The failure_policy that was active during execution."
+    },
+    "completed_at": {
+      "type": "number",
+      "description": "Unix timestamp when execution completed."
+    }
+  },
+  "$defs": {
+    "ActionResult": {
+      "title": "DoSync ActionResult",
+      "description": "Outcome of a single DeviceAction execution.",
+      "type": "object",
+      "required": ["device_id", "action", "success"],
+      "properties": {
+        "device_id": {"type": "string"},
+        "action": {"type": "string"},
+        "success": {"type": "boolean"},
+        "response": {
+          "description": "Adapter-specific response data. Structure varies by device type.",
+          "default": null
+        },
+        "error": {
+          "type": ["string", "null"],
+          "description": "Error message if success is false.",
+          "default": null
+        },
+        "aborted": {
+          "type": "boolean",
+          "default": false,
+          "description": "True if this action was cancelled by failure_policy=abort before it could execute."
+        },
+        "retries": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Number of retry attempts before this final result."
+        },
+        "executed_at": {
+          "type": "number",
+          "description": "Unix timestamp when this action was executed."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "intent_id": "int-1717171717-a3f2c1",
+      "success": true,
+      "status": "success",
+      "failure_policy_applied": "continue",
+      "results": [
+        {"device_id": "wiz-living1-01", "action": "turn_on", "success": true, "retries": 0},
+        {"device_id": "notifier-sms-01", "action": "notify", "success": true, "retries": 0}
+      ],
+      "failed_devices": [],
+      "aborted_devices": []
+    },
+    {
+      "intent_id": "int-1717171800-b2e1a4",
+      "success": false,
+      "status": "partial",
+      "failure_policy_applied": "continue",
+      "results": [
+        {"device_id": "wiz-living1-01", "action": "turn_on", "success": true, "retries": 0},
+        {"device_id": "wiz-living1-02", "action": "turn_on", "success": false, "error": "UDP timeout", "retries": 0}
+      ],
+      "failed_devices": ["wiz-living1-02"],
+      "aborted_devices": []
+    }
+  ]
+}

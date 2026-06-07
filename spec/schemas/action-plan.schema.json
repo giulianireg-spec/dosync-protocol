@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dosync.dev/spec/schemas/action-plan.schema.json",
+  "title": "DoSync ActionPlan",
+  "description": "The output of the capability-based resolver. Describes which devices should act, what action to execute, and with what parameters. Passed to the PolicyEngine before execution.",
+  "type": "object",
+  "required": ["intent_id", "actions", "urgency"],
+  "properties": {
+    "intent_id": {
+      "type": "string",
+      "description": "Links this plan back to the originating Intent."
+    },
+    "actions": {
+      "type": "array",
+      "description": "Ordered list of device actions to execute. Executed in parallel by the AdapterExecutor unless a PhasedActionPlan is used.",
+      "items": {"$ref": "#/$defs/DeviceAction"}
+    },
+    "urgency": {
+      "type": "string",
+      "enum": ["info", "warning", "alert", "emergency"],
+      "description": "Inherited from the originating Intent. Passed to each adapter during execution."
+    },
+    "created_at": {
+      "type": "number",
+      "description": "Unix timestamp when this plan was created."
+    },
+    "failure_policy": {
+      "type": ["string", "null"],
+      "enum": ["continue", "abort", "retry", null],
+      "default": "continue",
+      "description": "What to do when a DeviceAction fails. 'continue': execute remaining actions. 'abort': cancel all pending actions. 'retry': retry the failed action up to max_retries times. Emergency intents always use 'continue' regardless of this field."
+    },
+    "max_retries": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 1,
+      "description": "Maximum retry attempts per action when failure_policy is 'retry'."
+    }
+  },
+  "$defs": {
+    "DeviceAction": {
+      "title": "DoSync DeviceAction",
+      "description": "A single action to execute on a specific device.",
+      "type": "object",
+      "required": ["device_id", "action"],
+      "properties": {
+        "device_id": {
+          "type": "string",
+          "description": "Target device. Must match a device_id in the hub's capability registry."
+        },
+        "action": {
+          "type": "string",
+          "description": "Actuator type to invoke. Must match an actuator type declared in the device's CapabilityManifest.",
+          "examples": ["turn_on", "turn_off", "unlock", "lock", "notify", "alarm", "set_temperature"]
+        },
+        "params": {
+          "type": "object",
+          "description": "Action parameters. Passed directly to the device adapter. Schema is device-specific (see ActuatorSpec.params_schema in the device's CapabilityManifest).",
+          "default": {},
+          "examples": [
+            {"brightness": 255, "color_temp": 6500},
+            {"message": "Motion detected at entrance"},
+            {"temperature": 21.0}
+          ]
+        },
+        "relevance_score": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 100.0,
+          "description": "Resolver's confidence score for including this device in the plan. Higher = more relevant. Informational only — does not affect execution order."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "intent_id": "int-1717171717-a3f2c1",
+      "urgency": "emergency",
+      "failure_policy": "continue",
+      "actions": [
+        {
+          "device_id": "wiz-living1-01",
+          "action": "turn_on",
+          "params": {"brightness": 255, "color_temp": 6500},
+          "relevance_score": 37.0
+        },
+        {
+          "device_id": "notifier-sms-01",
+          "action": "notify",
+          "params": {"message": "Emergency detected at entrance"},
+          "relevance_score": 34.0
+        }
+      ]
+    }
+  ]
+}
