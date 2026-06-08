@@ -577,7 +577,7 @@ def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth
                      for s in req.sensors],
             actuators=[ActuatorSpec(a.id, a.type, a.description)
                        for a in req.actuators],
-            events=[EventSpec(e.id, Urgency(e.severity), e.description)
+            events=[EventSpec(e.id, Severity(e.severity), e.description)
                     for e in req.events],
             emergency_capable=req.emergency_capable,
             cert_tier=CertTier(req.cert_tier),
@@ -1045,9 +1045,9 @@ async def receive_event(req: EventRequest, auth: str = Depends(require_auth)):
         )
 
     try:
-        severity = Urgency(req.severity)
+        severity = Severity(req.severity)
     except ValueError:
-        raise HTTPException(status_code=422, detail=f"Severity '{req.severity}' not valid")
+        raise HTTPException(status_code=422, detail=f"Severity '{req.severity}' not valid. Use: info, warning, alert, emergency")
 
     event = DeviceEvent(
         device_id=req.device_id,

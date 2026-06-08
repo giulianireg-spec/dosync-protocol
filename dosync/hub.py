@@ -202,7 +202,30 @@ class ExternalResolver(BaseResolver):
         log.info("ExternalResolver configured: %s (fallback: CapabilityMatchingResolver)", self._url)
 
     def resolve(self, intent: Intent) -> ActionPlan:
-        import json, urllib.request, urllib.error
+        """Resolve intent via external HTTP service.
+
+        Runs the blocking HTTP call in a ThreadPoolExecutor so it never
+        blocks the asyncio event loop, regardless of whether resolve() is
+        called from sync or async context.
+
+        Supports HTTPS: set DOSYNC_RESOLVER_URL=https://... and optionally
+        DOSYNC_RESOLVER_CA_CERT=/path/to/ca.crt for self-signed certificates.
+        """
+        import concurrent.futures
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(self._http_resolve, intent)
+                return future.result(timeout=self.TIMEOUT_S + 1.0)
+        except concurrent.futures.TimeoutError:
+            log.warning("ExternalResolver timeout after %.1fs — falling back", self.TIMEOUT_S)
+            return self._fallback.resolve(intent)
+        except Exception as exc:
+            log.warning("ExternalResolver error (%s) — falling back", exc)
+            return self._fallback.resolve(intent)
+
+    def _http_resolve(self, intent: Intent) -> ActionPlan:
+        """Synchronous HTTP call — runs in thread pool, never in event loop."""
+        import json, ssl, urllib.request, urllib.error, os
 
         payload = {
             "intent":   intent.to_dict(),
@@ -210,22 +233,42 @@ class ExternalResolver(BaseResolver):
             "hub_id":   self._hub_id,
         }
         data = json.dumps(payload).encode()
-        req  = urllib.request.Request(
+
+        # TLS context — use CA cert if provided, or system trust store
+        ctx = None
+        if self._url.startswith("https://"):
+            ctx = ssl.create_default_context()
+            ca_cert = os.environ.get("DOSYNC_RESOLVER_CA_CERT", "")
+            if ca_cert and os.path.exists(ca_cert):
+                ctx.load_verify_locations(ca_cert)
+
+        req = urllib.request.Request(
             self._url,
             data=data,
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-
         try:
-            with urllib.request.urlopen(req, timeout=self.TIMEOUT_S) as resp:
+            with urllib.request.urlopen(req, timeout=self.TIMEOUT_S, context=ctx) as resp:
                 body = json.loads(resp.read())
-        except urllib.error.URLError as e:
-            log.warning("ExternalResolver unreachable (%s) — falling back to CapabilityMatchingResolver", e)
-            return self._fallback.resolve(intent)
-        except Exception as e:
-            log.warning("ExternalResolver error (%s) — falling back to CapabilityMatchingResolver", e)
-            return self._fallback.resolve(intent)
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"URLError: {exc}") from exc
+
+        # Parse response → ActionPlan
+        actions = [
+            DeviceAction(
+                device_id=a["device_id"],
+                action=a["action"],
+                params=a.get("params", {}),
+                relevance_score=float(a.get("relevance_score", 0.0)),
+            )
+            for a in body.get("actions", [])
+        ]
+        return ActionPlan(
+            intent_id=intent.intent_id,
+            actions=actions,
+            urgency=intent.urgency,
+        )
 
         # Parse the response into an ActionPlan
         try:
@@ -865,7 +908,7 @@ class DoSyncHub:
                 events = [
                     EventSpec(
                         id=e["id"],
-                        severity=Urgency(e.get("severity", "info")),
+                        severity=Severity(e.get("severity", "info")),
                         description=e.get("description", ""),
                     )
                     for e in caps.get("events", [])

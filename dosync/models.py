@@ -14,6 +14,19 @@ import uuid
 # ── Enumerations ─────────────────────────────────────────────────────────────
 
 class Urgency(str, Enum):
+    """Execution priority of an Intent. Determines policy bypass behaviour."""
+    INFO      = "info"
+    WARNING   = "warning"
+    ALERT     = "alert"
+    EMERGENCY = "emergency"
+
+
+class Severity(str, Enum):
+    """Observable severity of a DeviceEvent or EventSpec condition.
+    Intentionally separate from Urgency: a temperature anomaly may have
+    severity=warning (the condition is notable) while the resulting intent
+    carries urgency=emergency (act immediately). Conflating the two
+    prevents expressing "low-severity emergency" or "high-severity routine"."""
     INFO      = "info"
     WARNING   = "warning"
     ALERT     = "alert"
@@ -128,8 +141,9 @@ class ActuatorSpec:
 
 @dataclass
 class EventSpec:
+    """Severity of a device event condition (separate from Intent urgency)."""
     id: str
-    severity: Urgency
+    severity: Severity
     description: str = ""
 
 @dataclass
@@ -272,7 +286,7 @@ class Intent:
 class DeviceEvent:
     device_id: str
     event_id: str
-    severity: Urgency
+    severity: Severity
     data: dict[str, Any]              = field(default_factory=dict)
     timestamp: float                  = field(default_factory=time.time)
 
