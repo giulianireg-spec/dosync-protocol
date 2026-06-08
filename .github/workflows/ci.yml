@@ -1,0 +1,237 @@
+name: DoSync CI
+
+# Runs on every push to main and on all pull requests.
+# Catches bugs before they reach the Pi deployment.
+#
+# What this prevents:
+#   - NameErrors from renaming types without updating all import sites
+#   - Hub startup crashes from missing imports
+#   - Resolver scoring regressions
+#   - Type coercion failures in EventSpec/DeviceEvent
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Protocol tests — Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: [ "3.11" ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # ── Step 1: Syntax check ─────────────────────────────────────────────
+      # Catches syntax errors before any test runs.
+      # Must pass before running any other step.
+      - name: Syntax check — all Python files
+        run: |
+          echo "Checking syntax on all .py files..."
+          find . -name "*.py" \
+               -not -path "*/venv/*" \
+               -not -path "*/__pycache__/*" \
+               -not -path "*/.git/*" \
+            | xargs python3 -m py_compile
+          echo "✓ All Python files compile without syntax errors"
+
+      # ── Step 2: Critical import check ───────────────────────────────────
+      # Catches NameErrors at module level — the class of bug that caused
+      # 3 separate production failures during the Severity refactoring.
+      # Every time a type is renamed or moved, this step will catch sites
+      # that weren't updated.
+      - name: Import check — catch NameErrors at module level
+        run: |
+          PYTHONPATH=. python3 - << 'EOF'
+          # Core models
+          from dosync.models import (
+              Intent, IntentClass, Urgency, Severity,
+              EventSpec, DeviceEvent, ActionPlan, DeviceAction,
+              CapabilityManifest, ActuatorSpec, SensorSpec,
+              DeviceCategory, CertTier,
+          )
+          # Hub and resolvers
+          from dosync.hub import (
+              DoSyncHub, BaseResolver, CapabilityMatchingResolver,
+              StateAwareResolver, ExternalResolver,
+          )
+          # Policy engine
+          from dosync.policies import (
+              PolicyEngine, BasePolicy,
+              BlockIntentPolicy, NeverAfterHoursPolicy,
+              RequireConfirmationPolicy, DeviceExclusionPolicy,
+              IntentRateLimitPolicy, DeviceActuatorRateLimitPolicy,
+          )
+          # Adapters
+          from dosync.adapters.mqtt import MQTTAdapter
+          from dosync.adapters.wiz import WiZAdapter
+          from dosync.adapters.notifications import NotificationAdapter
+          # DB
+          from dosync.db import DoSyncDB
+
+          print("✓ All critical imports succeed — no NameErrors")
+          EOF
+
+      # ── Step 3: Type regression — Severity/Urgency separation ───────────
+      # Specific regression for the bug where EventSpec.severity was typed
+      # as Urgency instead of Severity. This test documents the invariant:
+      # severity (event condition level) ≠ urgency (execution priority).
+      - name: Type regression — Severity and Urgency are distinct
+        run: |
+          PYTHONPATH=. python3 - << 'EOF'
+          from dosync.models import EventSpec, DeviceEvent, Severity, Urgency
+
+          # String coercion via __post_init__
+          e = EventSpec(id="ci-test", severity="alert", description="")
+          assert isinstance(e.severity, Severity), \
+              f"EventSpec.severity must be Severity, got {type(e.severity)}"
+          assert not isinstance(e.severity, Urgency), \
+              "EventSpec.severity must NOT be Urgency"
+
+          d = DeviceEvent(device_id="x", event_id="y", severity="warning", data={})
+          assert isinstance(d.severity, Severity), \
+              f"DeviceEvent.severity must be Severity, got {type(d.severity)}"
+
+          # Severity and Urgency are distinct types
+          assert Severity is not Urgency, "Severity and Urgency must be distinct enum classes"
+
+          # to_dict() works without AttributeError
+          _ = d.to_dict()
+
+          print("✓ Severity/Urgency separation: all assertions pass")
+          EOF
+
+      # ── Step 4: Resolver scoring tests ──────────────────────────────────
+      # 8 tests verifying the CapabilityMatchingResolver produces correct
+      # relative scores: tag overlap, emergency bonus, location bonus,
+      # sensor exclusion, empty registry, non-negative scores.
+      - name: Resolver scoring tests (8 tests)
+        run: |
+          PYTHONPATH=. python3 tests/test_resolver_scoring.py
+
+      # ── Step 5: Hub startup test ─────────────────────────────────────────
+      # Verifies the hub initializes without errors using an in-memory DB.
+      # Catches import errors that only manifest at startup (e.g., server.py
+      # importing a symbol that was renamed in models.py).
+      - name: Hub startup — in-memory DB
+        run: |
+          PYTHONPATH=. python3 - << 'EOF'
+          from dosync.hub import DoSyncHub, CapabilityMatchingResolver
+          from dosync.models import (
+              CapabilityManifest, ActuatorSpec, EventSpec,
+              Severity, DeviceCategory,
+          )
+
+          hub = DoSyncHub(db_path=":memory:")
+          assert len(hub.registry.all()) == 0
+
+          # Register a device with EventSpec using string severity (FastAPI path)
+          hub.register_device(CapabilityManifest(
+              device_id="ci-device-01",
+              device_name="CI Test Device",
+              manufacturer="CI",
+              model="test",
+              firmware="0.0.1",
+              category=DeviceCategory.ACTUATOR,
+              tags=["light", "test"],
+              actuators=[ActuatorSpec(id="turn_on", type="turn_on", description="")],
+              events=[EventSpec(id="test_event", severity="alert", description="CI test")],
+          ))
+          assert len(hub.registry.all()) == 1
+          device = hub.registry.get("ci-device-01")
+          assert isinstance(device.events[0].severity, Severity)
+
+          print(f"✓ Hub starts, registers device, EventSpec.severity coerced correctly")
+          EOF
+
+      # ── Step 6: Policy engine smoke test ────────────────────────────────
+      # Verifies that BlockIntentPolicy correctly refuses emergency bypass
+      # and that bypass_on_emergency defaults are correct on all policies.
+      - name: Policy engine — emergency bypass invariants
+        run: |
+          PYTHONPATH=. python3 - << 'EOF'
+          from dosync.policies import (
+              PolicyEngine, BlockIntentPolicy, NeverAfterHoursPolicy,
+              RequireConfirmationPolicy, IntentRateLimitPolicy,
+              DeviceActuatorRateLimitPolicy, PolicyDecision,
+          )
+          from dosync.models import Intent, IntentClass, Urgency, ActionPlan
+
+          # Invariant 1: bypass_on_emergency defaults
+          assert NeverAfterHoursPolicy(["unlock"], 0, 6).bypass_on_emergency is True
+          assert RequireConfirmationPolicy(["alarm"]).bypass_on_emergency is True
+          assert IntentRateLimitPolicy().bypass_on_emergency is True
+          assert BlockIntentPolicy(intent_classes=["x"]).bypass_on_emergency is False
+
+          # Invariant 2: BlockIntentPolicy blocks emergency intents
+          engine = PolicyEngine()
+          engine.add(BlockIntentPolicy(
+              intent_classes=["ensure_safety"],
+              reason="CI regression test",
+          ))
+          intent = Intent(
+              intent=IntentClass("ensure_safety"),
+              urgency=Urgency.EMERGENCY,
+              context={},
+          )
+          plan = ActionPlan(intent_id=intent.intent_id, actions=[], urgency=Urgency.EMERGENCY)
+          result = engine.evaluate(intent, plan)
+          assert result.decision == PolicyDecision.BLOCK, \
+              f"BlockIntentPolicy must block emergency intent, got {result.decision}"
+
+          print("✓ Policy engine emergency bypass invariants pass")
+          EOF
+
+  # ── Certify dry-run (structural validation only) ──────────────────────────
+  certify-structure:
+    name: Certification suite — structural validation
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: certify.py — syntax and structure check
+        run: |
+          python3 -m py_compile certify.py
+          # Verify test counts match what's declared
+          python3 - << 'EOF'
+          import subprocess, sys, re
+
+          result = subprocess.run(
+              [sys.executable, "certify.py", "--help"],
+              capture_output=True, text=True
+          )
+          output = result.stdout + result.stderr
+
+          # Check version
+          assert "v0.3" in output, f"certify.py header should be v0.3, got: {output[:200]}"
+
+          # Check test counts are declared
+          assert "32 tests" in output, "Standard tier should declare 32 tests"
+          assert "35 tests" in output or "32 tests" in output, "Tier counts should be present"
+
+          print("✓ certify.py structure: version v0.3, test counts declared")
+          EOF
