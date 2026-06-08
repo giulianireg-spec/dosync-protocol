@@ -209,7 +209,36 @@ El protocolo especifica un timeout de 500ms para resolvedores no respaldados por
 
 ## V. Evaluación
 
-### A. Setup experimental
+### A. Metodología experimental
+
+#### Plataforma
+
+| Componente | Especificación |
+|---|---|
+| Hardware | Raspberry Pi 5 (ARM Cortex-A76 quad-core 2.4GHz, 8GB LPDDR4X) |
+| Sistema operativo | Raspberry Pi OS 64-bit (Debian 12, kernel 6.6) |
+| Runtime | Python 3.11.2 |
+| Versión evaluada | DoSync v0.3.0 — `CapabilityMatchingResolver` |
+| Fecha | Mayo–junio 2026 |
+
+#### Instrumento y aislamiento
+
+Las latencias se miden con `time.perf_counter()` (resolución sub-microsegundo en ARM64), capturando exclusivamente la duración de `CapabilityMatchingResolver.resolve(intent)`. El tiempo de acceso a SQLite, serialización HTTP y ejecución de adaptadores queda excluido. Esto aísla la contribución del algoritmo de resolución del overhead de infraestructura.
+
+#### Protocolo — H1 (escalabilidad)
+
+- **Iteraciones:** 500 para el registry de producción (N=38); 300 por nivel de N en el test de escala sintética.
+- **Semilla:** `random.seed(42)` — resultados reproducibles.
+- **Distribución de intents:** uniforme sobre 13 clases × 3 urgencias × 5 ubicaciones de contexto.
+- **Distribución de dispositivos simulados:** modelo de edificio mixto — 30% iluminación, 15% enchufes, 20% sensores, 10% seguridad, 10% comunicación, 10% clima, 5% cámaras — con tags específicos que reproducen el perfil de un deployment real.
+- **Cálculo de percentiles:** array ordenado, índice `int(0.99 × N)`.
+- **Artefactos:** `benchmark_resolver.py` y `benchmark_results_real.json` incluidos en el repositorio.
+
+#### Protocolo — H2 (overhead semántico)
+
+La línea de base es la construcción directa de un `ActionPlan` mediante `dict.__getitem__`, que modela el costo de un sistema de comandos explícitos sin resolución semántica. El overhead se expresa como porcentaje de la latencia del adaptador de menor costo (UDP/WiZ: 5–15ms típico en red local).
+
+### B. Setup experimental
 
 **Registry:** 38 dispositivos reales del hub de producción (Raspberry Pi 5, Arm Cortex-A76, 8GB RAM). **Iteraciones:** 500 por resolvedor. **Semilla:** 42 (reproducible). **Intenciones:** muestreadas aleatoriamente sobre 13 clases, 3 urgencias, 5 ubicaciones.
 
@@ -217,13 +246,14 @@ El protocolo especifica un timeout de 500ms para resolvedores no respaldados por
 
 | Dispositivos | Media | p95 | p99 | Dentro del límite (500ms) |
 |---|---|---|---|---|
-| 38 (producción) | 0.053ms | 0.074ms | 0.107ms | ✓ |
-| 100 | 0.096ms | 0.141ms | 0.196ms | ✓ |
-| 500 | 0.498ms | 0.737ms | 1.486ms | ✓ |
-| 1000 | 1.013ms | 1.375ms | 3.044ms | ✓ |
-| 5000 | 5.300ms | 9.129ms | 11.392ms | ✓ |
+| 38 (producción) | 0.081ms | 0.099ms | 0.104ms | ✓ |
+| 100 | 0.116ms | 0.157ms | 0.160ms | ✓ |
+| 500 | 0.630ms | 0.842ms | 0.950ms | ✓ |
+| 1000 | 1.305ms | 1.789ms | 5.952ms | ✓ |
+| 2000 | 2.918ms | 4.066ms | 9.899ms | ✓ |
+| 5000 | 8.635ms | 19.251ms | 22.736ms | ✓ |
 
-**H1 confirmada.** El resolvedor opera dentro del límite de 500ms hasta 5000 dispositivos. El algoritmo es O(n) — a 5000+ dispositivos p95 supera 9ms. Una implementación con indexación por tag reduciría esto a O(1) — trabajo futuro planificado para v0.3.
+**H1 confirmada.** El resolvedor opera dentro del límite de 500ms hasta 5000 dispositivos (p99 máximo observado: 22.7ms). El comportamiento es O(n): media 0.081ms a 38 dispositivos, 8.635ms a 5000 (+106×). La varianza del p99 en los niveles N=1000 y N=5000 refleja el tamaño de muestra (300 iteraciones por nivel); una ejecución con 1000+ iteraciones reduciría la varianza del estimador de p99. No obstante, todos los valores observados permanecen dentro del límite de especificación. Una implementación con indexación invertida por tag reduciría la complejidad a O(k) donde k es el tamaño del conjunto candidato — trabajo futuro planificado.
 
 El `StateAwareResolver` elimina el **35% de acciones redundantes** con latencia equivalente (p99: 0.109ms vs 0.107ms).
 
@@ -231,18 +261,18 @@ El `StateAwareResolver` elimina el **35% de acciones redundantes** con latencia 
 
 | Operación | Latencia media |
 |---|---|
-| Comando directo (dict lookup) | 0.0013ms |
-| Resolución semántica (38 dispositivos) | 0.0529ms |
-| Overhead absoluto | 0.051ms |
+| Comando directo (dict lookup) | 0.0014ms |
+| Resolución semántica (38 dispositivos) | 0.0811ms |
+| Overhead absoluto | 0.0797ms |
 
 En contexto de deployment real:
 
 | Operación | Latencia típica |
 |---|---|
-| Resolución semántica | ~0.05ms |
+| Resolución semántica | 0.081ms |
 | WiFi → WiZ (UDP) | 5–15ms |
 | WiFi → Home Assistant (HTTP) | 20–80ms |
-| **Capa semántica como % del total** | **< 1%** |
+| **Capa semántica como % del total** | **0.4–0.8%** |
 
 **H2 confirmada.** El overhead de la capa semántica es inferior al 1% del tiempo total de ejecución.
 

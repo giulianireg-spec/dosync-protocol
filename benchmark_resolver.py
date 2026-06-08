@@ -410,7 +410,7 @@ def main():
     scale = {}
     for n in [10, 50, 100, 500, 1000, 2000, 5000]:
         reg = gen_devices(n)
-        r = run_benchmark(reg, CapabilityMatchingResolver, 300)
+        r = run_benchmark(reg, CapabilityMatchingResolver, 1000)
         ok = "✓" if r["p99"] < 500 else "✗"
         print(f"  {n:>7}  {fmt(r['mean']):>10}  {fmt(r['p95']):>10}  {fmt(r['p99']):>10}  {ok:>12}")
         scale[str(n)] = {"mean": r["mean"], "p95": r["p95"], "p99": r["p99"]}
