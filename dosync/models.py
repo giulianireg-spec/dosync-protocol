@@ -146,6 +146,11 @@ class EventSpec:
     severity: Severity
     description: str = ""
 
+    def __post_init__(self):
+        # Auto-coerce string → Severity enum (FastAPI parses dataclass fields as raw strings)
+        if isinstance(self.severity, str):
+            self.severity = Severity(self.severity)
+
 @dataclass
 class ContextSignal:
     """
@@ -189,7 +194,7 @@ class CapabilityManifest:
             "capabilities": {
                 "sensors":   [s.__dict__ for s in self.sensors],
                 "actuators": [a.__dict__ for a in self.actuators],
-                "events":    [{**e.__dict__, "severity": e.severity.value}
+                "events":    [{**e.__dict__, "severity": e.severity.value if hasattr(e.severity, "value") else e.severity}
                               for e in self.events],
                 "context_signals": [
                     {**c.__dict__, "type": c.type.value}
@@ -290,11 +295,15 @@ class DeviceEvent:
     data: dict[str, Any]              = field(default_factory=dict)
     timestamp: float                  = field(default_factory=time.time)
 
+    def __post_init__(self):
+        if isinstance(self.severity, str):
+            self.severity = Severity(self.severity)
+
     def to_dict(self) -> dict:
         return {
             "device_id": self.device_id,
             "event_id":  self.event_id,
-            "severity":  self.severity.value,
+            "severity":  self.severity.value if hasattr(self.severity, "value") else self.severity,
             "data":      self.data,
             "timestamp": self.timestamp,
         }
