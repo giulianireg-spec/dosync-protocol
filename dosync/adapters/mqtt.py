@@ -235,7 +235,7 @@ class MQTTAdapter(DoSyncAdapter):
             import dataclasses
             from ..models import (
                 CapabilityManifest, SensorSpec, ActuatorSpec, EventSpec,
-                DeviceCategory, CertTier, Urgency,
+                DeviceCategory, CertTier, Urgency, Severity,
             )
 
             d = dict(data)
