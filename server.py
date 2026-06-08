@@ -22,7 +22,7 @@ from dosync.auth import AuthManager, require_auth, set_auth_manager, DeviceAuthM
 from dosync.security import get_status as get_pki_status
 from dosync.models import (
     ActuatorSpec, CapabilityManifest, CertTier, DeviceCategory,
-    DeviceEvent, EventSpec, Intent, IntentClass, SensorSpec, Urgency,
+    DeviceEvent, EventSpec, Intent, IntentClass, SensorSpec, Urgency, Severity,
 )
 
 logging.basicConfig(
