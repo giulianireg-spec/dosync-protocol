@@ -128,6 +128,9 @@ class MQTTAdapter(DoSyncAdapter):
             retain=True,
         )
 
+        # Exponential backoff on reconnect: 1s → 120s with jitter (paho built-in)
+        self._client.reconnect_delay_set(min_delay=1, max_delay=120)
+
         self._client.on_connect    = self._on_connect
         self._client.on_message    = self._on_message
         self._client.on_disconnect = self._on_disconnect

@@ -393,6 +393,14 @@ async def lifespan(app: FastAPI):
     except Exception as _refresh_e:
         log.warning("Failed to start background state refresher: %s", _refresh_e)
 
+    # Purge expired rate limit events from DB (prevents unbounded table growth)
+    try:
+        purged = hub.db.purge_rate_limit_events(window_seconds=60)
+        if purged > 0:
+            log.info("Startup: purged %d expired rate limit event(s) from DB", purged)
+    except Exception as _pe:
+        log.warning("Could not purge rate limit events: %s", _pe)
+
     # MQTT adapter startup (async connect, after event loop is running)
     if _mqtt_adapter is not None:
         try:
@@ -426,7 +434,7 @@ app = FastAPI(
         "El hub central que conecta la IA con los gadgets del hogar.\n"
         "Protocolo abierto · Apache 2.0 · github.com/dosync/protocol"
     ),
-    version="0.1.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
@@ -1265,6 +1273,13 @@ async def hub_heartbeat():
         "uptime_seconds":   uptime,
         "devices":          len(hub.registry.all()),
         "role":             role,
+        "transports": {
+            "mqtt": {
+                "enabled":   _mqtt_adapter is not None,
+                "connected": _mqtt_adapter.is_connected if _mqtt_adapter else False,
+                "broker":    _mqtt_adapter.broker      if _mqtt_adapter else None,
+            }
+        },
     }
 
 
@@ -1274,7 +1289,7 @@ def get_status():
     occupancy = hub.get_occupancy()
     return {
         "name":            "DoSync Hub",
-        "version":         "0.1.0",
+        "version":         "0.3.0",
         "protocol":        "dosync/0.1",
         "status":          "running",
         "certify_mode":    _certify_mode,
