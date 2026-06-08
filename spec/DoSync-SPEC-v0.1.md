@@ -317,7 +317,7 @@ When `urgency = "emergency"` and `emergency_override = true` on a device:
 
 The Policy Engine evaluates every intent before execution, regardless of origin. Policies are evaluated in priority order (lowest number first). The first `BLOCK` or `CONFIRM` result stops evaluation. `MODIFY` results are accumulated — multiple `MODIFY` policies can apply to the same intent.
 
-Emergency intents (`urgency = "emergency"`) bypass all policy evaluation.
+Emergency intents (`urgency = "emergency"`) bypass policy evaluation by default. Each policy declares whether it participates in this bypass via a `bypass_on_emergency` flag (default: `true`). Policies that represent absolute operator constraints set `bypass_on_emergency = false` and are evaluated even for emergency intents. The built-in `BlockIntentPolicy` uses this mechanism: an operator-blocked intent class cannot be executed regardless of urgency. All other built-in policies (`NeverAfterHoursPolicy`, `RequireConfirmationPolicy`, etc.) default to `bypass_on_emergency = true` and are bypassed on emergency urgency.
 
 ```
 PolicyEngine.evaluate(intent, action_plan) → PolicyResult
