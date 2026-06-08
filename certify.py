@@ -7,7 +7,7 @@ Usage:
 
 Tiers:
   basic     (10 tests) — connectivity, authentication, device manifest
-  standard  (32 tests) — protocol conformance, events, health, explainability, version headers, intent lifecycle
+  standard  (32 tests) — protocol conformance, events, health, version headers, manifest privacy, intent lifecycle
   emergency (35 tests) — emergency override, policy engine, audit log integrity, firmware re-registration
 
 Two testing modes:
@@ -856,7 +856,7 @@ Tier test counts:
     report = CertReport(host=args.host, port=args.port, tier=args.tier)
 
     tier_counts = {"basic": 10, "standard": 32, "emergency": 35}
-    print(f"\n{C.BOLD}DoSync Certification CLI v0.2{C.RESET}")
+    print(f"\n{C.BOLD}DoSync Certification CLI v0.3{C.RESET}")
     print(f"  Hub:   {base}")
     print(f"  Tier:  {C.BOLD}{args.tier.upper()}{C.RESET} ({tier_counts[args.tier]} tests)")
     print(f"  Date:  {report.timestamp}")
