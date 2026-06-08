@@ -1271,14 +1271,31 @@ class DoSyncHub:
             from .models import ActionPlan as _AP
             policy_result = self.policy_engine.evaluate(intent, plan)
             if policy_result.decision == PolicyDecision.BLOCK:
-                log.warning("Intent BLOCKED by policy '%s': %s",
-                            policy_result.policy_name, policy_result.reason)
+                # Determine if this is an emergency intent blocked by a non-bypassable policy
+                # This is a security-notable event: operator explicitly overrides emergency bypass
+                is_emergency_block = (
+                    intent.urgency == Urgency.EMERGENCY
+                    and not getattr(
+                        next((p for p in self.policy_engine._policies
+                              if p.name == policy_result.policy_name), None),
+                        "bypass_on_emergency", True
+                    )
+                )
+                audit_type = "emergency_intent_blocked_by_policy" if is_emergency_block else "intent_blocked"
+                log.warning(
+                    "Intent %s BLOCKED by policy '%s' (urgency=%s, emergency_override=%s): %s",
+                    intent.intent.value, policy_result.policy_name,
+                    intent.urgency.value, is_emergency_block, policy_result.reason,
+                )
                 self.audit_log.append({
-                    "type": "intent_blocked",
-                    "intent_id": intent.intent_id,
-                    "intent": intent.intent.value,
-                    "policy": policy_result.policy_name,
-                    "reason": policy_result.reason,
+                    "type":              audit_type,
+                    "intent_id":         intent.intent_id,
+                    "intent":            intent.intent.value,
+                    "urgency":           intent.urgency.value,
+                    "source":            getattr(intent, "source", "api"),
+                    "policy":            policy_result.policy_name,
+                    "reason":            policy_result.reason,
+                    "emergency_override": is_emergency_block,
                 })
                 return IntentResult(intent_id=intent.intent_id, success=False, results=[], failed_devices=[])
             elif policy_result.decision == PolicyDecision.CONFIRM:
