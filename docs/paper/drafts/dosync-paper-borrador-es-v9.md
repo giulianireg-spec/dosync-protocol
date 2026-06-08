@@ -227,7 +227,7 @@ Las latencias se miden con `time.perf_counter()` (resolución sub-microsegundo e
 
 #### Protocolo — H1 (escalabilidad)
 
-- **Iteraciones:** 500 para el registry de producción (N=38); 300 por nivel de N en el test de escala sintética.
+- **Iteraciones:** 500 para el registry de producción (N=38); 1000 por nivel de N en el test de escala sintética.
 - **Semilla:** `random.seed(42)` — resultados reproducibles.
 - **Distribución de intents:** uniforme sobre 13 clases × 3 urgencias × 5 ubicaciones de contexto.
 - **Distribución de dispositivos simulados:** modelo de edificio mixto — 30% iluminación, 15% enchufes, 20% sensores, 10% seguridad, 10% comunicación, 10% clima, 5% cámaras — con tags específicos que reproducen el perfil de un deployment real.
@@ -246,14 +246,16 @@ La línea de base es la construcción directa de un `ActionPlan` mediante `dict.
 
 | Dispositivos | Media | p95 | p99 | Dentro del límite (500ms) |
 |---|---|---|---|---|
-| 38 (producción) | 0.081ms | 0.099ms | 0.104ms | ✓ |
+| 38 (producción) | 0.076ms | 0.093ms | 0.097ms | ✓ |
 | 100 | 0.116ms | 0.157ms | 0.160ms | ✓ |
-| 500 | 0.630ms | 0.842ms | 0.950ms | ✓ |
-| 1000 | 1.305ms | 1.789ms | 5.952ms | ✓ |
-| 2000 | 2.918ms | 4.066ms | 9.899ms | ✓ |
-| 5000 | 8.635ms | 19.251ms | 22.736ms | ✓ |
+| 500 | 0.636ms | 0.856ms | 0.937ms | ✓ |
+| 1000 | 1.336ms | 1.844ms | 5.690ms | ✓ |
+| 2000 | 3.061ms | 4.342ms | 10.379ms | ✓ |
+| 5000 | 9.163ms | 21.927ms | 24.541ms | ✓ |
 
-**H1 confirmada.** El resolvedor opera dentro del límite de 500ms hasta 5000 dispositivos (p99 máximo observado: 22.7ms). El comportamiento es O(n): media 0.081ms a 38 dispositivos, 8.635ms a 5000 (+106×). La varianza del p99 en los niveles N=1000 y N=5000 refleja el tamaño de muestra (300 iteraciones por nivel); una ejecución con 1000+ iteraciones reduciría la varianza del estimador de p99. No obstante, todos los valores observados permanecen dentro del límite de especificación. Una implementación con indexación invertida por tag reduciría la complejidad a O(k) donde k es el tamaño del conjunto candidato — trabajo futuro planificado.
+**H1 confirmada.** El resolvedor opera dentro del límite de 500ms hasta 5000 dispositivos (p99 máximo observado: 24.5ms — 20× por debajo del límite). El comportamiento es aproximadamente O(n): media 0.076ms a 38 dispositivos, 9.163ms a 5000 (+120×). El margen de 500ms/24.5ms = 20× confirma robustez ante variabilidad de hardware en deployments reales. Una implementación con indexación invertida por tag reduciría la complejidad a O(k) donde k = |candidatos por intent| — trabajo futuro planificado.
+
+El `StateAwareResolver` elimina el **36% de acciones redundantes** (media 52.3 → 33.7 acciones/intent en producción) con penalidad de latencia marginal (p99: 0.097ms vs 0.119ms).
 
 El `StateAwareResolver` elimina el **35% de acciones redundantes** con latencia equivalente (p99: 0.109ms vs 0.107ms).
 
@@ -262,14 +264,14 @@ El `StateAwareResolver` elimina el **35% de acciones redundantes** con latencia 
 | Operación | Latencia media |
 |---|---|
 | Comando directo (dict lookup) | 0.0014ms |
-| Resolución semántica (38 dispositivos) | 0.0811ms |
-| Overhead absoluto | 0.0797ms |
+| Resolución semántica (38 dispositivos) | 0.0760ms |
+| Overhead absoluto | 0.0747ms |
 
 En contexto de deployment real:
 
 | Operación | Latencia típica |
 |---|---|
-| Resolución semántica | 0.081ms |
+| Resolución semántica | 0.076ms |
 | WiFi → WiZ (UDP) | 5–15ms |
 | WiFi → Home Assistant (HTTP) | 20–80ms |
 | **Capa semántica como % del total** | **0.4–0.8%** |
