@@ -99,6 +99,22 @@ class BasePolicy(ABC):
         """Lower number = evaluated first. Default 100."""
         return 100
 
+    @property
+    def bypass_on_emergency(self) -> bool:
+        """Whether EMERGENCY urgency bypasses this policy.
+
+        Default: True — most safety policies should be bypassed for emergencies
+        (time restrictions, confirmation requirements, device exclusions).
+
+        Set to False for policies that represent absolute operator constraints
+        that must be honored even in emergencies (e.g. BlockIntentPolicy when
+        an operator has explicitly prohibited an intent class).
+
+        Note: IntentRateLimitPolicy and DeviceActuatorRateLimitPolicy handle
+        emergency bypass internally and do not rely on this flag.
+        """
+        return True
+
     @abstractmethod
     def evaluate(self, intent: "Intent", plan: "ActionPlan") -> PolicyResult | None:
         """
@@ -215,6 +231,10 @@ class BlockIntentPolicy(BasePolicy):
     """
     Unconditionally blocks specific intents.
 
+    bypass_on_emergency=False: operator blocks are absolute — not bypassed
+    even by EMERGENCY urgency. If an operator has explicitly prohibited
+    an intent class, that prohibition is honored regardless of urgency.
+
     Example: children cannot trigger away_mode.
 
     BlockIntentPolicy(
@@ -223,6 +243,10 @@ class BlockIntentPolicy(BasePolicy):
         reason="Children cannot arm away mode"
     )
     """
+
+    @property
+    def bypass_on_emergency(self) -> bool:
+        return False  # Operator blocks are absolute
 
     def __init__(
         self,
@@ -595,9 +619,28 @@ class PolicyEngine:
         """
         from .models import Urgency
 
-        # Emergency intents bypass all non-emergency policies
+        # Emergency intents bypass policies that declare bypass_on_emergency=True.
+        # Policies with bypass_on_emergency=False are still evaluated
+        # (e.g. BlockIntentPolicy — operator blocks are absolute).
         if intent.urgency == Urgency.EMERGENCY:
-            log.info("PolicyEngine: EMERGENCY intent — all policies bypassed")
+            non_bypassable = [p for p in self._policies if not p.bypass_on_emergency]
+            if non_bypassable:
+                for policy in non_bypassable:
+                    try:
+                        result = policy.evaluate(intent, plan)
+                    except Exception as e:
+                        log.error("Policy '%s' raised an exception: %s", policy.name, e)
+                        continue
+                    if result is not None and result.decision == PolicyDecision.BLOCK:
+                        log.info(
+                            "PolicyEngine: EMERGENCY intent blocked by non-bypassable policy '%s': %s",
+                            policy.name, result.reason,
+                        )
+                        return result
+            log.info(
+                "PolicyEngine: EMERGENCY intent — %d/%d policies bypassed",
+                len(self._policies) - len(non_bypassable), len(self._policies),
+            )
             return PolicyResult.allow("emergency_bypass")
 
         current_plan = plan
