@@ -59,6 +59,11 @@ USER     = os.environ.get("DOSYNC_MQTT_USER",      "")
 PASSWORD = os.environ.get("DOSYNC_MQTT_PASSWORD",  "")
 PREFIX   = os.environ.get("DOSYNC_MQTT_PREFIX",    "dosync")
 QOS      = int(os.environ.get("DOSYNC_MQTT_QOS",   "1"))
+# Shared secret for device registration authorization.
+# If set, devices MUST include {"dosync_secret": "<value>"} in their register payload.
+# Devices that do not present the correct secret are silently rejected.
+# Set this to a random string and configure all devices with the same value.
+MQTT_SECRET = os.environ.get("DOSYNC_MQTT_SECRET", "")
 
 # ── Optional import ───────────────────────────────────────────────────────────
 
@@ -213,6 +218,16 @@ class MQTTAdapter(DoSyncAdapter):
         Converts all dict items to their proper dataclass types before constructing
         the CapabilityManifest.
         """
+        # Validate shared secret before accepting any registration
+        if MQTT_SECRET:
+            presented = data.get("dosync_secret", "")
+            if presented != MQTT_SECRET:
+                log.warning(
+                    "MQTTAdapter: rejected registration from '%s' — invalid or missing secret. "
+                    "Set DOSYNC_MQTT_SECRET on both hub and device.", device_id
+                )
+                return
+
         if self._hub is None:
             log.warning("MQTTAdapter: received registration from %s but hub is not set", device_id)
             return
@@ -241,7 +256,7 @@ class MQTTAdapter(DoSyncAdapter):
             d["events"]   = [
                 EventSpec(
                     id=e["id"],
-                    severity=Urgency(e.get("severity", "info")),
+                    severity=Severity(e.get("severity", "info")),
                     description=e.get("description", ""),
                 ) if isinstance(e, dict) else e
                 for e in d["events"]

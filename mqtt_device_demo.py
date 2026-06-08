@@ -42,10 +42,11 @@ except ImportError:
     print("Error: paho-mqtt not installed. Run: pip install paho-mqtt")
     sys.exit(1)
 
-BROKER  = os.environ.get("DOSYNC_MQTT_BROKER", "localhost")
-PORT    = int(os.environ.get("DOSYNC_MQTT_PORT", "1883"))
-PREFIX  = os.environ.get("DOSYNC_MQTT_PREFIX", "dosync")
-DEVICE  = os.environ.get("DOSYNC_DEMO_DEVICE_ID", "mqtt-demo-01")
+BROKER        = os.environ.get("DOSYNC_MQTT_BROKER",    "localhost")
+PORT          = int(os.environ.get("DOSYNC_MQTT_PORT", "1883"))
+PREFIX        = os.environ.get("DOSYNC_MQTT_PREFIX",   "dosync")
+DEVICE        = os.environ.get("DOSYNC_DEMO_DEVICE_ID","mqtt-demo-01")
+MQTT_SECRET   = os.environ.get("DOSYNC_MQTT_SECRET",   "")  # must match hub if set
 
 MANIFEST = {
     "device_id":   DEVICE,
@@ -73,6 +74,7 @@ MANIFEST = {
     },
     "emergency_capable": False,
     "dosync_version": "0.1",
+    # dosync_secret is added at runtime if DOSYNC_MQTT_SECRET is set
 }
 
 _running   = True
@@ -88,13 +90,17 @@ def on_connect(client, userdata, flags, reason_code, properties=None):
         client.subscribe(f"{PREFIX}/devices/{DEVICE}/ack")
         client.subscribe(f"{PREFIX}/hub/status")
         # Publish registration (retained — hub picks it up on reconnect too)
+        # Inject secret into manifest at runtime if configured
+        manifest = dict(MANIFEST)
+        if MQTT_SECRET:
+            manifest["dosync_secret"] = MQTT_SECRET
         client.publish(
             f"{PREFIX}/devices/{DEVICE}/register",
-            json.dumps(MANIFEST),
+            json.dumps(manifest),
             qos=1,
             retain=True,
         )
-        print(f"[{DEVICE}] Registration sent")
+        print(f"[{DEVICE}] Registration sent{'  (with secret)' if MQTT_SECRET else '  (no secret)'}")
     else:
         print(f"[{DEVICE}] Connection refused: {reason_code}")
 
