@@ -12,7 +12,7 @@ This implementation was built from the protocol specification, independently of 
 | Tier | Status |
 |---|---|
 | Basic | ✅ Passes all 6 tests |
-| Standard | 🔄 In progress |
+| Standard | ✅ 32/32 passes |
 | Emergency | 🔄 Planned |
 
 ## Quick start

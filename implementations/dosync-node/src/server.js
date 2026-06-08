@@ -1,6 +1,6 @@
 /**
- * DoSync Protocol — Node.js Reference Implementation v0.2
- * Certification tier: EMERGENCY (32/32 tests)
+ * DoSync Protocol — Node.js Reference Implementation v0.3
+ * Certification tier: STANDARD (32/32 tests)
  *
  * Independent implementation of the DoSync protocol spec.
  * No shared code with the Python reference hub.
@@ -20,8 +20,10 @@ import { randomUUID, createHash } from 'crypto'
 
 const PORT     = parseInt(process.env.PORT || '47201')
 const HOST     = process.env.HOST || '0.0.0.0'
-const PROTOCOL = 'dosync/0.1'
-const VERSION  = '0.2.0'
+const PROTOCOL               = 'dosync/0.1'
+const VERSION                = '0.3.0'
+const DOSYNC_PROTOCOL_VERSION = '0.1'
+const DOSYNC_API_VERSION      = '1'
 
 // ── In-memory storage ─────────────────────────────────────────────────────────
 
@@ -58,7 +60,7 @@ function checkAuth(req, reply) {
 
 const VALID_INTENTS = new Set([
   'ensure_safety', 'alert_anomaly', 'control_access', 'monitor_health',
-  'notify_family', 'report_status', 'set_environment', 'save_energy',
+  'notify_family', 'notify', 'report_status', 'set_environment', 'save_energy',
   'remind_chore', 'bedtime_routine', 'morning_routine', 'away_mode',
   'children_arrived_home',
 ])
@@ -134,6 +136,20 @@ function resolve(intent, urgency, context = {}) {
 
 const app = Fastify({ logger: false })
 
+// Inject version headers on every response (S13 certification requirement)
+app.addHook('onSend', async (req, reply) => {
+  reply.header('X-DoSync-Protocol-Version', DOSYNC_PROTOCOL_VERSION)
+  reply.header('X-DoSync-API-Version',       DOSYNC_API_VERSION)
+})
+
+// Allow empty body with Content-Type: application/json (e.g., DELETE requests)
+app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, done) => {
+  if (!body || body.length === 0) { done(null, {}); return }
+  try   { done(null, JSON.parse(body.toString())) }
+  catch (e) { done(e) }
+})
+
+
 // ── Status ────────────────────────────────────────────────────────────────────
 
 // GET /
@@ -153,14 +169,16 @@ app.get('/', async () => ({
 app.get('/v1/status', async (req, reply) => {
   if (!checkAuth(req, reply)) return
   return {
-    name:            'DoSync Hub',
-    version:         VERSION,
-    protocol:        PROTOCOL,
-    status:          'running',
-    devices:         registry.size,
-    audit_entries:   auditLog.length,
-    audit_integrity: verifyAuditIntegrity(),
-    ws_connections:  0,
+    name:             'DoSync Hub',
+    version:          VERSION,
+    protocol:         PROTOCOL,
+    protocol_version: DOSYNC_PROTOCOL_VERSION,
+    api_version:      DOSYNC_API_VERSION,
+    status:           'running',
+    devices:          registry.size,
+    audit_entries:    auditLog.length,
+    audit_integrity:  verifyAuditIntegrity(),
+    ws_connections:   0,
   }
 })
 
@@ -204,8 +222,10 @@ app.get('/v1/devices/:device_id', async (req, reply) => {
   if (!manifest)
     return reply.status(404).send({ detail: `Device '${req.params.device_id}' not found` })
 
+  // Exclude adapter_config from public API (S17 — manifest privacy)
+  const { adapter_config: _ac, ...rest } = manifest
   return {
-    ...manifest,
+    ...rest,
     capabilities: {
       actuators: manifest.actuators || [],
       sensors:   manifest.sensors   || [],
@@ -249,7 +269,7 @@ app.post('/v1/intent', { schema: { hide: true } }, async (req, reply) => {
 // POST /v1/intent/async — fire intent, return intent_id immediately
 app.post('/v1/intent/async', async (req, reply) => {
   if (!checkAuth(req, reply)) return
-  const { intent, urgency = 'info', context = {} } = req.body || {}
+  const { intent, urgency = 'info', context = {}, source = 'api' } = req.body || {}
 
   if (!intent)
     return reply.status(422).send({ detail: 'intent is required' })
@@ -294,6 +314,7 @@ app.post('/v1/intent/async', async (req, reply) => {
       intent_id: intentId,
       intent,
       urgency,
+      source:    source,
       actions:   results.length,
       failed:    [],
       success:   true,
@@ -435,6 +456,41 @@ app.get('/v1/audit', async (req, reply) => {
     integrity: verifyAuditIntegrity(),
     entries,
   }
+})
+
+// ── GET /v1/hub/heartbeat — S15 ──────────────────────────────────────────────
+
+app.get('/v1/hub/heartbeat', async (req, reply) => {
+  if (!checkAuth(req, reply)) return
+  return {
+    hub_id:           'dosync-node-' + PORT,
+    status:           'healthy',
+    protocol_version: DOSYNC_PROTOCOL_VERSION,
+    api_version:      DOSYNC_API_VERSION,
+    devices:          registry.size,
+    role:             'primary',
+    timestamp:        new Date().toISOString(),
+    uptime_seconds:   Math.floor(process.uptime()),
+    transports:       { mqtt: { enabled: false, connected: false, broker: null } },
+  }
+})
+
+// ── GET /v1/intent-classes — S16 ─────────────────────────────────────────────
+
+const UNIVERSAL_INTENT_CLASSES = [
+  { name: 'ensure_safety',   description: 'Safety emergency',          urgency_default: 'emergency' },
+  { name: 'alert_anomaly',   description: 'Anomaly detected',          urgency_default: 'alert'     },
+  { name: 'control_access',  description: 'Manage physical access',    urgency_default: 'alert'     },
+  { name: 'report_status',   description: 'Generate status report',    urgency_default: 'info'      },
+  { name: 'notify',          description: 'Push information',          urgency_default: 'info'      },
+  { name: 'set_environment', description: 'Adjust comfort parameters', urgency_default: 'info'      },
+  { name: 'save_energy',     description: 'Reduce power consumption',  urgency_default: 'info'      },
+  { name: 'away_mode',       description: 'Secure empty space',        urgency_default: 'info'      },
+]
+
+app.get('/v1/intent-classes', async (req, reply) => {
+  if (!checkAuth(req, reply)) return
+  return { count: UNIVERSAL_INTENT_CLASSES.length, intent_classes: UNIVERSAL_INTENT_CLASSES }
 })
 
 // ── Start ─────────────────────────────────────────────────────────────────────

@@ -19,27 +19,32 @@ This document formally declares which protocol features dosync-node implements, 
 
 ## Certification Results
 
-dosync-node passes the full DoSync Emergency certification tier — the highest available tier:
+dosync-node v0.3.0 passes the DoSync STANDARD certification tier (32/32 tests):
 
 ```
-$ python3 certify.py --host <hub-ip> --port 47200 --tier emergency
+$ DOSYNC_TOKEN=<token> python3 certify.py --host localhost --port 47201 --tier standard
 
-DoSync Certification Suite — Emergency Tier
-============================================
-Basic tier     (8/8)   ✓
-Standard tier  (16/16) ✓
-Emergency tier (32/32) ✓
+DoSync Certification CLI v0.3
+  Hub:   http://localhost:47201
+  Tier:  STANDARD (32 tests)
 
-Overall: 32/32 PASS
-Tier achieved: EMERGENCY CERTIFIED
+── Tier BASIC — Connectivity and registration ──────────
+  ✓  B01–B10  (10/10)
 
-Output: dosync-cert.json
+── Tier STANDARD — Protocol conformance + events ────────
+  ✓  S01–S22  (22/22)
+
+── Result ────────────────────────────────────────────────
+  Passed: 32 / 32
+  Failed: 0 / 32
+
+  ✓ CERTIFIED — DoSync STANDARD (32/32)
+  Fingerprint: [see dosync-cert-standard-*.json]
 ```
 
 **Certification environment:**
-- Hub: DoSync Python reference implementation v0.3 on Raspberry Pi 5
-- Device: dosync-node v0.3
-- Network: Local WiFi (192.168.100.x)
+- Runtime: Node.js v22.22.2, dosync-node v0.3.0
+- certify.py: DoSync Certification CLI v0.3
 - Date: June 2026
 
 ---
