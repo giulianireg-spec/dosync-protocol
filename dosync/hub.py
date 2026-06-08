@@ -880,7 +880,7 @@ class DoSyncHub:
         """
         from .models import (
             ActuatorSpec, CapabilityManifest, CertTier, ContextSignal,
-            ContextSignalType, DeviceCategory, EventSpec, SensorSpec,
+            ContextSignalType, DeviceCategory, EventSpec, SensorSpec, Severity,
         )
 
         # Restore devices
@@ -935,7 +935,7 @@ class DoSyncHub:
                     events=events,
                     context_signals=context_signals,
                     emergency_capable=manifest_dict.get("emergency_capable", False),
-                    cert_tier=CertTier(manifest_dict.get("cert_tier", "basic")),
+                    cert_tier=CertTier(manifest_dict["cert_tier"]) if manifest_dict.get("cert_tier") else None,
                 )
                 # Restore adapter fields — critical for physical device control
                 if manifest_dict.get("adapter"):
