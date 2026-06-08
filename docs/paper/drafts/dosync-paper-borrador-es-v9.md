@@ -74,7 +74,23 @@ El Context Toolkit de Dey y Abowd [16] establece las bases de la computación se
 
 Las plataformas de automatización basadas en reglas como IFTTT [17] y Zapier demuestran que los usuarios no quieren escribir código para conectar sistemas.
 
-El W3C Web of Things (WoT) [18] define una capa de abstracción semántica sobre dispositivos IoT mediante Thing Descriptions — documentos JSON-LD que declaran propiedades, acciones y eventos de cada dispositivo. WoT y DoSync comparten el objetivo de separar la descripción de capacidades de su ejecución. La diferencia arquitectónica clave: WoT describe *qué puede hacer* un dispositivo para que una aplicación lo orqueste explícitamente; DoSync describe *qué puede hacer* un dispositivo para que el hub lo coordine automáticamente en respuesta a intenciones de alto nivel. WoT es orientado al consumidor de la descripción (la aplicación decide); DoSync es orientado a la resolución automática (el hub decide). Adicionalmente, DoSync incorpora semántica de urgencia, bypass de emergencia y log de auditoría resistente a manipulación — requisitos de entornos críticos no abordados por WoT. Sin embargo, su modelo `trigger → action` presenta las mismas limitaciones que los protocolos IoT tradicionales: las reglas son estáticas, deben anticipar cada escenario, y fallan silenciosamente cuando aparecen dispositivos nuevos. DoSync aborda el mismo problema de usabilidad con un enfoque diferente: en lugar de simplificar la escritura de reglas, elimina la necesidad de reglas al hacer que los dispositivos declaren sus capacidades y el hub ensamble la respuesta en tiempo de ejecución.
+El W3C Web of Things (WoT) [18] define una capa de abstracción semántica sobre dispositivos IoT mediante Thing Descriptions (TD) — documentos JSON-LD que declaran propiedades, acciones y eventos de cada dispositivo. WoT y DoSync comparten el objetivo de separar la descripción de capacidades de su ejecución. La diferencia arquitectónica clave: WoT describe *qué puede hacer* un dispositivo para que una aplicación lo orqueste explícitamente; DoSync describe *qué puede hacer* un dispositivo para que el hub lo coordine automáticamente en respuesta a intenciones de alto nivel. WoT es orientado al consumidor de la descripción (la aplicación decide); DoSync es orientado a la resolución automática (el hub decide).
+
+La Tabla I resume las diferencias estructurales entre DoSync y los trabajos más directamente comparables.
+
+**Tabla I. Comparación estructural: DoSync vs trabajos relacionados**
+
+| Dimensión | W3C WoT [18] | IFTTT/Zapier [17] | CASIT [11] | **DoSync** |
+|---|---|---|---|---|
+| Descripción de dispositivos | Thing Description (JSON-LD + RDF) — expresividad formal alta | Triggers/actions predefinidos por la plataforma | Perfil de agente LLM | Capability Manifest (JSON plano) — adopción sin dependencias |
+| Mecanismo de orquestación | Consumidor lee TD y llama acciones explícitamente | Regla estática `si X → entonces Y` pre-escrita | LLM razona sobre estado y coordina agentes | Hub resuelve automáticamente desde intent semántico |
+| Coordinación multi-dispositivo | A cargo de la aplicación consumidora | Una regla → una acción | Parcial (coordinación entre agentes) | Nativa — hub coordina todos los dispositivos relevantes en paralelo |
+| Soporte de urgencia / emergencia | No especificado | No | No | Primera clase: urgencia + `emergency_capable` + bypass de políticas |
+| Motor de políticas | No especificado | No (las reglas son las políticas) | No | Nativo: `BlockIntent`, `NeverAfterHours`, `RequireConfirmation`, bypass |
+| Auditoría resistente a manipulación | No especificado | No | No | SHA-256 tamper-evident, obligatorio por diseño |
+| Adición de dispositivos sin código | Requiere nueva TD y actualización de la app | Requiere nuevas reglas | Requiere reentrenamiento o prompt engineering | Automático — el dispositivo declara capabilities al registrarse |
+
+De la Tabla I se extraen tres diferencias estructurales que motivan el diseño de DoSync. Primero, todos los sistemas relacionados requieren conocimiento previo de los dispositivos para orquestarlos — WoT requiere que la aplicación lea la TD, IFTTT requiere que el operador escriba la regla, CASIT requiere que el LLM haya modelado el dispositivo. DoSync no: cualquier dispositivo que publique un Capability Manifest puede participar automáticamente en todos los escenarios futuros. Segundo, ningún sistema relacionado aborda la urgencia como concepto de primera clase — la respuesta a emergencias queda en manos de la aplicación consumidora. Tercero, la auditoría resistente a manipulación no está especificada en ninguno de los sistemas relacionados, lo que los hace inadecuados para entornos regulados donde la trazabilidad de acciones sobre sistemas físicos es un requisito.
 
 ---
 
