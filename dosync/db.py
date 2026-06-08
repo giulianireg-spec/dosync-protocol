@@ -77,6 +77,11 @@ CREATE TABLE IF NOT EXISTS intent_classes (
     is_universal         INTEGER NOT NULL DEFAULT 0,
     created_at           REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS rate_limit_log (
+    device_id   TEXT    NOT NULL,
+    ts          REAL    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_rate_limit_device_ts ON rate_limit_log (device_id, ts);
 """
 
 
@@ -248,6 +253,38 @@ class DoSyncDB:
         with self._cursor() as cur:
             cur.execute("SELECT COUNT(*) as n FROM audit_log")
             return cur.fetchone()["n"]
+
+    # ── Rate limit persistence ────────────────────────────────────────────────
+
+    def append_rate_limit_event(self, device_id: str, ts: float) -> None:
+        """Record an actuator action for rate limit tracking."""
+        self._conn.execute(
+            "INSERT INTO rate_limit_log (device_id, ts) VALUES (?, ?)",
+            (device_id, ts),
+        )
+        self._conn.commit()
+
+    def load_rate_limit_events(self, window_seconds: float) -> dict[str, list[float]]:
+        """Load all rate limit events within the current window on startup."""
+        cutoff = __import__("time").time() - window_seconds
+        rows = self._conn.execute(
+            "SELECT device_id, ts FROM rate_limit_log WHERE ts >= ? ORDER BY ts",
+            (cutoff,),
+        ).fetchall()
+        result: dict[str, list[float]] = {}
+        for device_id, ts in rows:
+            result.setdefault(device_id, []).append(ts)
+        return result
+
+    def purge_rate_limit_events(self, window_seconds: float) -> int:
+        """Delete expired rate limit events. Call periodically to keep table small."""
+        cutoff = __import__("time").time() - window_seconds
+        cur = self._conn.execute(
+            "DELETE FROM rate_limit_log WHERE ts < ?", (cutoff,)
+        )
+        self._conn.commit()
+        return cur.rowcount
+
 
     # ── Presence signals ──────────────────────────────────────────────────────
 

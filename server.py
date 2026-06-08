@@ -90,7 +90,9 @@ try:
     policy_engine = PolicyEngine()
     from dosync.policies import ConflictResolutionPolicy, ContextualWeightingPolicy
     policy_engine.add(IntentRateLimitPolicy())          # priority 0 — source rate limit
-    policy_engine.add(DeviceActuatorRateLimitPolicy())  # priority 5 — per-device rate limit
+    _device_rate_policy = DeviceActuatorRateLimitPolicy()
+    _device_rate_policy.set_db(hub.db)                  # wire DB for restart-safe persistence
+    policy_engine.add(_device_rate_policy)              # priority 5 — per-device rate limit
     policy_engine.add(ContextualWeightingPolicy())
     policy_engine.add(ConflictResolutionPolicy(hub))
     policy_engine.add(NeverAfterHoursPolicy(
@@ -844,6 +846,9 @@ def unregister_device(device_id: str, auth: str = Depends(require_auth)):
     if not hub.registry.get(device_id):
         raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
     hub.unregister_device(device_id)
+    # Clear retained MQTT registration message so the device cannot auto-reconnect
+    if _mqtt_adapter is not None and _mqtt_adapter.is_connected:
+        _mqtt_adapter.clear_device_registration(device_id)
     return {"status": "unregistered", "device_id": device_id}
 
 

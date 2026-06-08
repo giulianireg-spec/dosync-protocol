@@ -365,12 +365,36 @@ class DeviceActuatorRateLimitPolicy(BasePolicy):
         self,
         limit_per_minute: int | None = None,
         window_seconds: int = 60,
+        db=None,
     ):
         self._limit  = limit_per_minute if limit_per_minute is not None else self.DEFAULT_LIMIT
         self._window = window_seconds
+        self._db     = db          # DoSyncDB instance — if set, events are persisted
         # Sliding window: {device_id: deque of timestamps}
         self._windows: dict[str, deque] = {}
         self._lock = threading.Lock()
+        # Restore windows from DB on startup if DB is available
+        if self._db is not None:
+            self._restore_from_db()
+
+    def set_db(self, db) -> None:
+        """Wire DB after construction (called from hub startup)."""
+        self._db = db
+        self._restore_from_db()
+
+    def _restore_from_db(self) -> None:
+        """Load rate limit events from DB on startup. Only loads events within current window."""
+        try:
+            events = self._db.load_rate_limit_events(self._window)
+            with self._lock:
+                for device_id, timestamps in events.items():
+                    self._windows[device_id] = deque(sorted(timestamps))
+            log.info(
+                "DeviceActuatorRateLimitPolicy: restored %d device windows from DB",
+                len(events),
+            )
+        except Exception as exc:
+            log.warning("DeviceActuatorRateLimitPolicy: could not restore from DB: %s", exc)
 
     @property
     def name(self) -> str:
@@ -412,6 +436,12 @@ class DeviceActuatorRateLimitPolicy(BasePolicy):
                 else:
                     window.append(now)
                     allowed_actions.append(action)
+                    # Persist to DB (best-effort — never block execution)
+                    if self._db is not None:
+                        try:
+                            self._db.append_rate_limit_event(device_id, now)
+                        except Exception:
+                            pass
 
         if not throttled:
             return None  # all devices within limit
