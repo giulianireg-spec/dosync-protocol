@@ -123,6 +123,26 @@ _auth_enabled = os.environ.get("DOSYNC_AUTH", "true").lower() != "false"
 _auth_manager = AuthManager(hub.db, enabled=_auth_enabled)
 set_auth_manager(_auth_manager)
 
+# ── MQTT Adapter (optional) ──────────────────────────────────────────────────
+# Activated via DOSYNC_MQTT_BROKER env var. Requires: pip install paho-mqtt
+# and a running MQTT broker (Mosquitto recommended).
+_mqtt_broker = os.environ.get("DOSYNC_MQTT_BROKER", "")
+if _mqtt_broker:
+    try:
+        from dosync.adapters.mqtt import MQTTAdapter
+        _mqtt_adapter = MQTTAdapter(hub=hub)
+        executor.register(_mqtt_adapter)
+        # connect() is async — deferred to lifespan startup
+        logging.getLogger("dosync.server").info(
+            "MQTTAdapter registered — will connect to %s on startup", _mqtt_broker
+        )
+    except Exception as _mqtt_e:
+        logging.getLogger("dosync.server").warning(
+            "MQTTAdapter init failed (%s) — MQTT transport disabled", _mqtt_e
+        )
+else:
+    _mqtt_adapter = None
+
 # ── External Resolver (optional) ─────────────────────────────────────────────
 # If DOSYNC_RESOLVER_URL is set, the hub delegates intent resolution to an
 # external HTTP service implementing the DoSync External Resolver Protocol.
@@ -371,6 +391,13 @@ async def lifespan(app: FastAPI):
     except Exception as _refresh_e:
         log.warning("Failed to start background state refresher: %s", _refresh_e)
 
+    # MQTT adapter startup (async connect, after event loop is running)
+    if _mqtt_adapter is not None:
+        try:
+            await _mqtt_adapter.connect()
+        except Exception as _mc:
+            log.warning("MQTTAdapter startup connect failed: %s", _mc)
+
     yield
 
     # Cancel background refresher on shutdown
@@ -380,6 +407,14 @@ async def lifespan(app: FastAPI):
             await _refresh_task
         except asyncio.CancelledError:
             pass
+
+    # MQTT adapter shutdown
+    if _mqtt_adapter is not None:
+        try:
+            await _mqtt_adapter.disconnect()
+        except Exception:
+            pass
+
     log.info("DoSync Hub shutting down")
 
 app = FastAPI(
