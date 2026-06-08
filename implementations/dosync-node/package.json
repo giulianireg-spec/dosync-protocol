@@ -1,7 +1,7 @@
 {
   "name": "dosync-node",
-  "version": "0.1.0",
-  "description": "DoSync Protocol — Node.js reference implementation (Tier Basic)",
+  "version": "0.3.0",
+  "description": "Node.js implementation of the DoSync Protocol \u2014 Standard 32/32 certified",
   "main": "src/server.js",
   "type": "module",
   "scripts": {
@@ -14,5 +14,18 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "author": "Rodrigo Giuliani <giulianireg@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/giulianireg-spec/dosync-node"
+  },
+  "homepage": "https://dosync.dev",
+  "keywords": [
+    "dosync",
+    "iot",
+    "protocol",
+    "semantic",
+    "smart-home"
+  ]
 }
