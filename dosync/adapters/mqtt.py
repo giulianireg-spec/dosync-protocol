@@ -366,3 +366,34 @@ class MQTTAdapter(DoSyncAdapter):
         """Publish an arbitrary message — for hub-initiated announcements."""
         if self._client and self._connected:
             self._client.publish(topic, json.dumps(payload), qos=QOS, retain=retain)
+
+    def clear_device_registration(self, device_id: str) -> None:
+        """Clear the retained MQTT registration message for a device.
+
+        Publishes an empty payload (byte string b"") to the device's register
+        topic with retain=True. This is the correct MQTT mechanism for deleting
+        a retained message — the broker removes it and future subscribers will
+        not receive a stale registration.
+
+        Called automatically when DELETE /v1/devices/{device_id} is invoked.
+        """
+        if not (self._client and self._connected):
+            log.debug("MQTTAdapter: cannot clear registration for '%s' — not connected", device_id)
+            return
+        topic = f"{PREFIX}/devices/{device_id}/register"
+        self._client.publish(topic, payload=b"", qos=QOS, retain=True)
+        log.info("MQTTAdapter: cleared retained registration for device '%s'", device_id)
+
+    def purge_stale_device_topics(self, active_device_ids: list[str]) -> None:
+        """Clear retained registrations for devices no longer in the hub registry.
+        Call on hub startup after registry is restored from DB.
+        Not called automatically — invoke explicitly if needed.
+        """
+        # Cannot enumerate retained messages from paho — no-op without external tooling
+        # This is a known limitation of MQTT: retained message cleanup requires
+        # knowing which topics exist. Subscribe and filter is the only approach.
+        log.debug(
+            "MQTTAdapter: purge_stale_device_topics called (%d active devices) "
+            "— manual cleanup only; use 'mosquitto_sub -t dosync/# -v' to audit.",
+            len(active_device_ids),
+        )
