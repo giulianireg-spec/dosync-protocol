@@ -205,17 +205,64 @@ class MQTTAdapter(DoSyncAdapter):
         elif msg_type == "status":   self._handle_status(device_id, data)
 
     async def _handle_registration(self, device_id: str, data: dict) -> None:
-        """Auto-register a device that published its manifest to the register topic."""
+        """Auto-register a device that published its manifest to the register topic.
+
+        Handles both payload formats:
+          - Flat:   sensors/actuators/events as top-level lists
+          - Nested: capabilities: {sensors, actuators, events, context_signals}
+        Converts all dict items to their proper dataclass types before constructing
+        the CapabilityManifest.
+        """
         if self._hub is None:
             log.warning("MQTTAdapter: received registration from %s but hub is not set", device_id)
             return
         try:
-            from ..models import CapabilityManifest, DeviceCategory, CertTier
-            manifest_data = {**data, "adapter": "mqtt", "device_id": device_id}
-            manifest_data.setdefault("dosync_version", "0.1")
-            manifest = CapabilityManifest(**manifest_data)
+            import dataclasses
+            from ..models import (
+                CapabilityManifest, SensorSpec, ActuatorSpec, EventSpec,
+                DeviceCategory, CertTier, Urgency,
+            )
+
+            d = dict(data)
+            d["adapter"]   = "mqtt"
+            d["device_id"] = device_id
+            d.setdefault("dosync_version", "0.1")
+
+            # Flatten nested capabilities → top-level lists (public API format)
+            caps = d.pop("capabilities", {})
+            d.setdefault("sensors",          caps.get("sensors",          []))
+            d.setdefault("actuators",        caps.get("actuators",        []))
+            d.setdefault("events",           caps.get("events",           []))
+            d.setdefault("context_signals",  caps.get("context_signals",  []))
+
+            # Convert list items from dicts to typed dataclasses
+            d["sensors"]  = [SensorSpec(**s)  if isinstance(s, dict) else s for s in d["sensors"]]
+            d["actuators"] = [ActuatorSpec(**a) if isinstance(a, dict) else a for a in d["actuators"]]
+            d["events"]   = [
+                EventSpec(
+                    id=e["id"],
+                    severity=Urgency(e.get("severity", "info")),
+                    description=e.get("description", ""),
+                ) if isinstance(e, dict) else e
+                for e in d["events"]
+            ]
+
+            # Handle enum fields
+            if isinstance(d.get("category"), str):
+                try:    d["category"] = DeviceCategory(d["category"])
+                except ValueError: d["category"] = DeviceCategory.HYBRID
+            if isinstance(d.get("cert_tier"), str):
+                try:    d["cert_tier"] = CertTier(d["cert_tier"])
+                except ValueError: d.pop("cert_tier", None)
+
+            # Remove any fields unknown to CapabilityManifest
+            valid = {f.name for f in dataclasses.fields(CapabilityManifest)}
+            d = {k: v for k, v in d.items() if k in valid}
+
+            manifest = CapabilityManifest(**d)
             self._hub.register_device(manifest)
             log.info("MQTTAdapter: auto-registered device '%s'", device_id)
+
             # Acknowledge registration
             if self._client and self._connected:
                 self._client.publish(
