@@ -54,3 +54,52 @@ No shared code with the Python implementation. Same protocol, different language
 ---
 
 *DoSync Protocol v0.1 · Apache 2.0*
+
+## MQTT transport security
+
+DoSync ships an MQTT transport adapter (`dosync/adapters/mqtt.py`) for devices that communicate via MQTT instead of HTTP. Activating it requires a running Mosquitto broker and proper authentication configuration.
+
+### Quick setup (Raspberry Pi / Linux)
+
+```bash
+# 1. Install Mosquitto
+sudo apt-get install -y mosquitto mosquitto-clients
+
+# 2. Create credentials (replace passwords with your own)
+sudo mosquitto_passwd -c /etc/mosquitto/passwd dosync-hub
+sudo mosquitto_passwd    /etc/mosquitto/passwd dosync-device
+
+# 3. Apply secure configuration
+sudo cp config/mosquitto-secure.conf /etc/mosquitto/conf.d/dosync.conf
+sudo systemctl restart mosquitto
+
+# 4. Configure the hub service
+sudo mkdir -p /etc/systemd/system/dosync.service.d
+sudo tee /etc/systemd/system/dosync.service.d/mqtt.conf << EOF
+[Service]
+Environment="DOSYNC_MQTT_BROKER=localhost"
+Environment="DOSYNC_MQTT_USER=dosync-hub"
+Environment="DOSYNC_MQTT_PASSWORD=<your-password>"
+Environment="DOSYNC_MQTT_SECRET=<your-registration-secret>"
+EOF
+
+# 5. Restrict file permissions (prevents credential exposure)
+sudo chmod 600 /etc/systemd/system/dosync.service.d/mqtt.conf
+
+# 6. Reload and restart
+sudo systemctl daemon-reload && sudo systemctl restart dosync
+```
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `DOSYNC_MQTT_BROKER` | — | Broker hostname. Set to enable MQTT transport. |
+| `DOSYNC_MQTT_PORT` | 1883 | Broker port (8883 for TLS) |
+| `DOSYNC_MQTT_USER` | — | Broker username |
+| `DOSYNC_MQTT_PASSWORD` | — | Broker password |
+| `DOSYNC_MQTT_SECRET` | — | Registration secret. Devices must include `{"dosync_secret": "<value>"}` in their register payload. |
+| `DOSYNC_MQTT_PREFIX` | dosync | Topic prefix |
+
+See `config/mosquitto-secure.conf` for a fully annotated broker configuration including optional TLS and per-device topic ACLs.
+
