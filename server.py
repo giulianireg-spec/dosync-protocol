@@ -123,6 +123,25 @@ _auth_enabled = os.environ.get("DOSYNC_AUTH", "true").lower() != "false"
 _auth_manager = AuthManager(hub.db, enabled=_auth_enabled)
 set_auth_manager(_auth_manager)
 
+# ── External Resolver (optional) ─────────────────────────────────────────────
+# If DOSYNC_RESOLVER_URL is set, the hub delegates intent resolution to an
+# external HTTP service implementing the DoSync External Resolver Protocol.
+# See spec/RESOLVER-SPEC-v0.3.md §5 and docs/ADAPTER-GUIDE.md for the contract.
+# Falls back to CapabilityMatchingResolver if the external service is unreachable.
+_resolver_url = os.environ.get("DOSYNC_RESOLVER_URL", "")
+if _resolver_url:
+    try:
+        from dosync.hub import ExternalResolver
+        _hub_id = getattr(app.state, "hub_id", "")
+        hub.resolver = ExternalResolver(hub.registry, _resolver_url, hub_id=_hub_id)
+        logging.getLogger("dosync.server").info(
+            "ExternalResolver configured: %s", _resolver_url
+        )
+    except Exception as _ext_e:
+        logging.getLogger("dosync.server").warning(
+            "ExternalResolver init failed (%s) — using CapabilityMatchingResolver", _ext_e
+        )
+
 # Device authentication manager
 hub.db.init_device_tokens_table()
 hub.db.init_emergency_snapshots_table()

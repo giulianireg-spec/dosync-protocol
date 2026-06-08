@@ -361,6 +361,127 @@ class LLMResolver(BaseResolver):
 
 ---
 
+## 5. External Resolver Protocol
+
+An external resolver is a standalone HTTP service that the hub calls to resolve an `Intent` into an `ActionPlan`. This enables:
+
+- Resolvers implemented in any language (Go, Node.js, Rust, Java)
+- LLM-backed resolvers without modifying the hub
+- Shared resolvers serving multiple hub instances
+
+### 5.1 Configuration
+
+```bash
+DOSYNC_RESOLVER_URL=http://my-resolver:8080
+```
+
+When set, the hub routes all intent resolution requests to the external service. If the service is unreachable or times out, the hub falls back to `CapabilityMatchingResolver` automatically and logs a warning.
+
+### 5.2 Request format
+
+The hub sends a `POST` request to `{DOSYNC_RESOLVER_URL}/resolve`:
+
+```json
+{
+  "intent": {
+    "intent_id":   "int-1717171717-a3f2c1",
+    "intent":      "ensure_safety",
+    "urgency":     "emergency",
+    "source":      "mcp",
+    "context":     {"trigger": "motion_detected", "location": "entrance"},
+    "constraints": {"timeout_ms": 5000, "require_confirmation": false},
+    "timestamp":   1717171717.432
+  },
+  "registry": [
+    {
+      "device_id":         "wiz-living1-01",
+      "device_name":       "Living Room Light 1",
+      "tags":              ["light", "living-room", "emergency"],
+      "capabilities":      {"actuators": [{"id": "turn_on", "type": "turn_on"}], ...},
+      "emergency_capable": true,
+      "adapter":           "wiz"
+    }
+  ],
+  "hub_id": "8f16f011beab295a"
+}
+```
+
+The `registry` array contains `CapabilityManifest.to_dict()` for every registered device. `adapter_config` is included (the external resolver runs trusted server-side). The external resolver MUST treat registry data as read-only.
+
+### 5.3 Response format
+
+The service MUST respond with HTTP 200 and a JSON body matching `spec/schemas/action-plan.schema.json`:
+
+```json
+{
+  "intent_id": "int-1717171717-a3f2c1",
+  "urgency":   "emergency",
+  "actions": [
+    {
+      "device_id":       "wiz-living1-01",
+      "action":          "turn_on",
+      "params":          {"brightness": 255, "color_temp": 6500},
+      "relevance_score": 42.0
+    }
+  ]
+}
+```
+
+An empty `actions` array is a valid response — it means no devices are relevant to this intent.
+
+### 5.4 Timing requirements
+
+A conforming external resolver MUST respond within **500ms** for non-LLM resolvers. For LLM-backed resolvers, the hub respects `DOSYNC_INTENT_TIMEOUT` (default: 10s for `info`/`alert`, 5s for `emergency`).
+
+If the external resolver does not respond within the timeout, the hub falls back to `CapabilityMatchingResolver` and logs:
+```
+ExternalResolver unreachable (<reason>) — falling back to CapabilityMatchingResolver
+```
+
+### 5.5 Minimal implementation example (Node.js)
+
+```javascript
+import Fastify from 'fastify'
+
+const app = Fastify()
+
+app.post('/resolve', async (req) => {
+  const { intent, registry } = req.body
+
+  // Score devices — your logic here
+  const actions = registry
+    .filter(device => device.tags.includes('emergency') && intent.urgency === 'emergency')
+    .flatMap(device =>
+      (device.capabilities?.actuators ?? []).map(act => ({
+        device_id:       device.device_id,
+        action:          act.type,
+        params:          {},
+        relevance_score: 30.0,
+      }))
+    )
+
+  return {
+    intent_id: intent.intent_id,
+    urgency:   intent.urgency,
+    actions,
+  }
+})
+
+app.listen({ port: 8080 })
+```
+
+### 5.6 Versioning
+
+| Version | Field | Notes |
+|---|---|---|
+| v0.3+ | `intent`, `registry`, `hub_id` | Current request fields |
+| v0.3+ | `intent_id`, `urgency`, `actions` | Current response fields |
+
+New optional fields may be added in minor versions. Implementations SHOULD ignore unknown fields.
+
+
+---
+
 ## Versioning
 
 | Version | Changes |
@@ -393,4 +514,5 @@ class LLMResolver(BaseResolver):
 ---
 
 *DoSync Protocol v0.3 — Resolver Interface Specification*  
+*External Resolver Protocol: §5 — language-independent HTTP wire format*  
 *Apache 2.0 — github.com/giulianireg-spec/dosync-protocol*

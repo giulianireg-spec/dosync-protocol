@@ -151,6 +151,103 @@ class BaseResolver:
             'Subclasses must implement resolve(intent) -> ActionPlan'
         )
 
+
+class ExternalResolver(BaseResolver):
+    """
+    HTTP-based external resolver. Delegates intent resolution to an external
+    service implementing the DoSync External Resolver Protocol.
+
+    The external service receives an Intent + the full CapabilityRegistry and
+    returns an ActionPlan. This enables resolvers implemented in any language
+    (Go, Node.js, Rust, etc.) or backed by a local LLM.
+
+    Configuration:
+        DOSYNC_RESOLVER_URL=http://my-resolver:8080
+
+    Wire format (POST /resolve):
+        Request body:
+            {
+              "intent":   <Intent.to_dict()>,
+              "registry": [<CapabilityManifest.to_dict()>, ...],
+              "hub_id":   "<hub identifier>"
+            }
+        Response body:
+            {
+              "intent_id": "<same intent_id from request>",
+              "urgency":   "info" | "warning" | "alert" | "emergency",
+              "actions":   [
+                {
+                  "device_id":       "<str>",
+                  "action":          "<str>",
+                  "params":          {},
+                  "relevance_score": 0.0
+                }
+              ]
+            }
+        Timeout: 500ms (spec §6 requirement for non-LLM resolvers)
+
+    If the external resolver is unreachable or times out, falls back to
+    the CapabilityMatchingResolver automatically. Fallback is logged.
+
+    Full protocol definition: spec/RESOLVER-SPEC-v0.3.md §5 External Resolver
+    """
+
+    TIMEOUT_S = 0.5  # 500ms — spec requirement for non-LLM resolvers
+
+    def __init__(self, registry: 'CapabilityRegistry', url: str, hub_id: str = ""):
+        super().__init__(registry)
+        self._url     = url.rstrip("/") + "/resolve"
+        self._hub_id  = hub_id
+        self._fallback = CapabilityMatchingResolver(registry)
+        log.info("ExternalResolver configured: %s (fallback: CapabilityMatchingResolver)", self._url)
+
+    def resolve(self, intent: Intent) -> ActionPlan:
+        import json, urllib.request, urllib.error
+
+        payload = {
+            "intent":   intent.to_dict(),
+            "registry": [m.to_dict() for m in self.registry.all()],
+            "hub_id":   self._hub_id,
+        }
+        data = json.dumps(payload).encode()
+        req  = urllib.request.Request(
+            self._url,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=self.TIMEOUT_S) as resp:
+                body = json.loads(resp.read())
+        except urllib.error.URLError as e:
+            log.warning("ExternalResolver unreachable (%s) — falling back to CapabilityMatchingResolver", e)
+            return self._fallback.resolve(intent)
+        except Exception as e:
+            log.warning("ExternalResolver error (%s) — falling back to CapabilityMatchingResolver", e)
+            return self._fallback.resolve(intent)
+
+        # Parse the response into an ActionPlan
+        try:
+            actions = [
+                DeviceAction(
+                    device_id=a["device_id"],
+                    action=a["action"],
+                    params=a.get("params", {}),
+                    relevance_score=float(a.get("relevance_score", 0.0)),
+                )
+                for a in body.get("actions", [])
+            ]
+            return ActionPlan(
+                intent_id=intent.intent_id,
+                actions=actions,
+                urgency=intent.urgency,
+            )
+        except (KeyError, TypeError, ValueError) as e:
+            log.warning("ExternalResolver returned invalid ActionPlan (%s) — falling back", e)
+            return self._fallback.resolve(intent)
+
+
 class CapabilityMatchingResolver(BaseResolver):
     """
     Layer 4: resolves an Intent into an ActionPlan by matching
