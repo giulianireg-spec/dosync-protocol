@@ -174,7 +174,7 @@ python3 certify.py --host <hub-ip> --port 47200 --tier standard
 | Language | Location | Certification |
 |---|---|---|
 | Python (reference) | `server.py` | 32/32 Standard ✅ |
-| Node.js | `implementations/dosync-node/` | Basic ✅ |
+| Node.js | [giulianireg-spec/dosync-node](https://github.com/giulianireg-spec/dosync-node) | Standard 32/32 ✅ |
 
 ---
 
