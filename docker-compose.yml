@@ -8,10 +8,12 @@ services:
     volumes:
       - dosync-data:/data
     environment:
-      - DOSYNC_AUTH=false
+      - DOSYNC_AUTH=true
       - DOSYNC_DB_PATH=/data/dosync.db
+      # Demo token — change before any non-local deployment
+      - DOSYNC_DEMO_TOKEN=dosync-demo-token
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:47200/v1/status')"]
+      test: ["CMD", "python3", "-c", "import urllib.request, os; req=urllib.request.Request('http://localhost:47200/v1/status', headers={'Authorization':'Bearer '+os.environ.get('DOSYNC_DEMO_TOKEN','dosync-demo-token')}); urllib.request.urlopen(req)"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -25,7 +27,8 @@ services:
         condition: service_healthy
     environment:
       - PYTHONPATH=/app
-    command: python3 demo_seed.py --hub http://dosync-hub:47200
+      - DOSYNC_DEMO_TOKEN=dosync-demo-token
+    command: python3 demo_seed.py --hub http://dosync-hub:47200 --token dosync-demo-token
     volumes:
       - ./demo_seed.py:/app/demo_seed.py
     restart: "no"

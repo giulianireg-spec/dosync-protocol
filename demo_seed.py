@@ -195,17 +195,16 @@ DEVICES = [
 ]
 
 
-def register_device(hub_url: str, device: dict) -> bool:
+def register_device(hub_url: str, device: dict, token: str = "") -> bool:
     url = f"{hub_url}/v1/devices/register"
     data = json.dumps(device).encode()
-    req = urllib.request.Request(
-        url, data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST"
-    )
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
-            result = json.loads(resp.read())
+            json.loads(resp.read())
             print(f"  ✓ {device['device_id']} — {device['device_name']}")
             return True
     except urllib.error.HTTPError as e:
@@ -218,9 +217,11 @@ def register_device(hub_url: str, device: dict) -> bool:
 
 
 def main():
+    import os
     parser = argparse.ArgumentParser(description="DoSync Demo Seed")
-    parser.add_argument("--hub", default="http://localhost:47200", help="Hub URL")
-    parser.add_argument("--wait", type=int, default=0, help="Seconds to wait before registering")
+    parser.add_argument("--hub",   default="http://localhost:47200", help="Hub URL")
+    parser.add_argument("--token", default=os.environ.get("DOSYNC_DEMO_TOKEN", ""), help="API token")
+    parser.add_argument("--wait",  type=int, default=0, help="Seconds to wait before registering")
     args = parser.parse_args()
 
     if args.wait:
@@ -232,7 +233,7 @@ def main():
 
     ok = 0
     for device in DEVICES:
-        if register_device(args.hub, device):
+        if register_device(args.hub, device, args.token):
             ok += 1
 
     print(f"\n{ok}/{len(DEVICES)} devices registered.")

@@ -90,10 +90,20 @@ class AuthManager:
         Si no hay ninguna key, genera una y la retorna para mostrarla.
         Si ya hay keys, retorna None (no genera otra).
         Llamar al iniciar el hub.
+
+        Si DOSYNC_DEMO_TOKEN está definido en el entorno, usa ese valor
+        como token inicial en lugar de generar uno aleatorio. Útil para
+        despliegues Docker donde el token debe ser conocido de antemano.
         """
         if not self.enabled:
             return None
         if not self.db.has_any_key():
+            demo_token = os.environ.get("DOSYNC_DEMO_TOKEN")
+            if demo_token:
+                key_hash = hash_token(demo_token)
+                self.db.save_api_key(key_hash, "demo")
+                log.info("Demo token registered from DOSYNC_DEMO_TOKEN env var")
+                return demo_token
             token = self.generate_key("default")
             return token
         return None
