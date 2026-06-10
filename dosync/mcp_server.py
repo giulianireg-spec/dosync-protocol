@@ -152,7 +152,7 @@ async def list_tools() -> list[types.Tool]:
                             "ensure_safety", "notify_family", "report_status",
                             "set_environment", "control_access", "monitor_health",
                             "save_energy", "remind_chore", "alert_anomaly",
-                            "bedtime_routine", "morning_routine", "away_mode", "children_arrived_home",
+                            "bedtime_routine", "morning_routine", "away_mode",
                         ],
                     },
                     "urgency": {
@@ -567,7 +567,7 @@ ENERGÍA:
 RUTINAS:
   morning_routine  — Buenos días: persianas, cafetera, clima.
   bedtime_routine  — Hora de dormir: atenuar luces, bajar persianas.
-  children_arrived_home — Niños llegaron del colegio (lun-vie 18:30-19:00): luces sala + hab niños, aire calor.
+  # Domain-specific intents (e.g. children arrival, shift change) can be registered via POST /v1/intent-classes
 
 AMBIENTE:
   set_environment  — Ajustar luces, temperatura, persianas.

@@ -26,7 +26,7 @@ class IntentClass(str, Enum):
     bedtime_routine       = "bedtime_routine"
     morning_routine       = "morning_routine"
     away_mode             = "away_mode"
-    children_arrived_home = "children_arrived_home"
+    notify_family = "notify_family"
 
 class Urgency(str, Enum):
     emergency = "emergency"
@@ -72,15 +72,15 @@ class ActionPlan:
 
 REAL_REGISTRY = [
     CapabilityManifest("wiz-habitacion-ninos-01",   "Habitación niños — Luz",
-        ["wiz","light","climate","children_arrival"],
+        ["wiz","light","climate","notification"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
     CapabilityManifest("wiz-living2-01",            "Living 2 — Luz 1",
-        ["wiz","light","climate","children_arrival"],
+        ["wiz","light","climate","notification"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
     CapabilityManifest("wiz-living2-02",            "Living 2 — Luz 2",
-        ["wiz","light","climate","children_arrival"],
+        ["wiz","light","climate","notification"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
     CapabilityManifest("wiz-comedor-01",            "Comedor — Luz 1",
@@ -100,11 +100,11 @@ REAL_REGISTRY = [
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
     CapabilityManifest("wiz-living1-01",            "Living 1 — Luz 1",
-        ["wiz","light","climate","children_arrival"],
+        ["wiz","light","climate","notification"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
     CapabilityManifest("wiz-living1-02",            "Living 1 — Luz 2",
-        ["wiz","light","climate","children_arrival"],
+        ["wiz","light","climate","notification"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
     CapabilityManifest("wiz-cocina-02",             "Cocina — Luz 2",
@@ -128,7 +128,7 @@ REAL_REGISTRY = [
         [ActuatorSpec(a) for a in ["turn_on","turn_off"]],
         emergency_capable=False, adapter="homeassistant"),
     CapabilityManifest("notifier-sms-01",           "SMS — Notificaciones familia",
-        ["communication","notification","children_arrival"],
+        ["communication","notification","notification"],
         [ActuatorSpec("notify")],
         emergency_capable=False, adapter="notifications"),
     CapabilityManifest("ha-sensor-sun_next_dawn",   "Sun Next dawn",
@@ -198,7 +198,7 @@ INTENT_RESOLUTION_TAGS = {
     IntentClass.bedtime_routine:       {"light","climate","security"},
     IntentClass.morning_routine:       {"light","climate","appliance"},
     IntentClass.away_mode:             {"light","security","alarm","climate"},
-    IntentClass.children_arrived_home: {"children_arrival","notification","communication","light"},
+    IntentClass.notify_family: {"notification","communication","display","speaker"},
 }
 
 # ── Resolvers ─────────────────────────────────────────────────────────────────
@@ -345,7 +345,7 @@ DEVICE_TYPE_POOLS = [
     (3,  ["door-lock", "access", "emergency"],               ["lock","unlock"], True),
     (2,  ["alarm", "security", "emergency"],                 ["alarm","arm"], True),
     (5,  ["communication", "notification", "phone"],         ["notify","call"], False),
-    (3,  ["communication", "notification", "children_arrival"], ["notify"], False),
+    (3,  ["communication", "notification", "notification"], ["notify"], False),
     (2,  ["communication", "notification", "emergency"],     ["notify","call"], True),
     (5,  ["thermostat", "climate"],                          ["set_temperature"], False),
     (3,  ["blinds", "climate"],                              ["set_position"], False),

@@ -228,7 +228,7 @@ The intersection method exists in `CapabilityRegistry` as a utility for external
 | Intent | Candidates with index | Without index |
 |---|---|---|
 | `ensure_safety` | 94 | 1000 |
-| `children_arrived_home` | 25 | 1000 |
+| `notify_family` | 18 | 1000 |
 | `control_access` | 0 | 1000 |
 | `save_energy` | 527 | 1000 |
 

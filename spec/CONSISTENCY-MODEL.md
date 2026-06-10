@@ -32,7 +32,7 @@ All intents carry an implicit priority derived from their `intent` class and `ur
 Priority (ascending):
   save_energy / away_mode           → 5 (lowest)
   set_environment / routines        → 4
-  notify_family / children_arrived  → 3
+  notify_family                    → 3
   control_access                    → 2
   alert_anomaly                     → 1
   ensure_safety [emergency]         → 0 (highest)
