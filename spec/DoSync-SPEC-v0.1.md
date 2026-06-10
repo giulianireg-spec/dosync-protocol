@@ -278,7 +278,7 @@ Every intent carries an urgency level that controls execution behavior across th
 | `warning` | `"warning"` | Elevated priority. A condition that warrants attention but does not require immediate action. All policies apply. Used for anomalies that are notable but not urgent (e.g. high temperature, unusual sensor reading). |
 | `info` | `"info"` | Normal priority. All policies apply. Default for routine operations, status updates, and scheduled events. |
 
-**The urgency hierarchy:** `emergency > alert > warning > info`
+**The urgency hierarchy:** `emergency > alert > info`
 
 Only `emergency` triggers the emergency override path — bypassing policy constraints and confirmation requirements. The other three levels are subject to full policy evaluation.
 
@@ -288,16 +288,19 @@ Only `emergency` triggers the emergency override path — bypassing policy const
 - Use `warning` for anomalies that should be logged and monitored but not acted upon immediately
 - Use `info` for all routine operations
 
-### 6.4 Built-in intent classes (v0.1)
+### 6.4 Universal intent classes
 
-| Intent class | Description | Typical devices triggered |
+Five intent classes are defined at the protocol level and seeded into every DoSync hub at initialization. They are valid in any physical environment regardless of domain:
+
+| Intent class | Urgency | Description |
 |---|---|---|
-| `ensure_safety` | Emergency response | Camera, door-lock, alarm, phone |
-| `notify_family` | Send alert to family members | Phone, intercom, display |
-| `report_status` | Read and report device state | Any sensor |
-| `set_environment` | Adjust ambient conditions | Lights, thermostat, blinds |
-| `control_access` | Lock/unlock entry points | Door locks, gates |
-| `monitor_health` | Ongoing observation | Camera, motion sensor, wearable |
+| `ensure_safety` | `emergency` | Safety emergency — protect people and property |
+| `alert_anomaly` | `alert` | Unexpected condition detected — investigate |
+| `control_access` | `alert` | Manage physical access to a space |
+| `report_status` | `info` | Generate a status report of the environment |
+| `notify` | `info` | Push information to any target |
+
+These five are protected — they cannot be deleted or overridden. Any additional intent classes (e.g. `morning_routine`, `away_mode`, `prepare_operating_room`) are registered per deployment. See `docs/INTENT-CLASSES-GUIDE.md` for the full two-layer model and domain package examples.
 
 ### 6.5 Emergency escalation
 
@@ -307,7 +310,7 @@ When `urgency = "emergency"` and `emergency_override = true` on a device:
 1. Skip normal permission checks
 2. Execute immediately (no confirmation required)
 3. Log all actions with tamper-evident timestamp
-4. Notify all family members simultaneously
+4. Notify all registered contacts simultaneously
 5. Allow external communication (call emergency services)
 ```
 
@@ -406,13 +409,13 @@ Authorization: Bearer <hub_token>
 Content-Type: application/json
 
 {
-  "intent": "notify_family",
+  "intent": "notify",
   "context": {
     "trigger": "fridge_malfunction",
     "device_id": "fridge-kitchen-01",
     "message": "The refrigerator has detected a malfunction. Food may be at risk."
   },
-  "urgency": "warning"
+  "urgency": "alert"
 }
 ```
 
