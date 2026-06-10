@@ -154,7 +154,7 @@ _resolver_url = os.environ.get("DOSYNC_RESOLVER_URL", "")
 if _resolver_url:
     try:
         from dosync.hub import ExternalResolver
-        _hub_id = getattr(app.state, "hub_id", "")
+        _hub_id = getattr(hub, "hub_id", "")  # app.state not available at module level
         hub.resolver = ExternalResolver(hub.registry, _resolver_url, hub_id=_hub_id)
         logging.getLogger("dosync.server").info(
             "ExternalResolver configured: %s", _resolver_url
