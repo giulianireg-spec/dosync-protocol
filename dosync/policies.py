@@ -722,9 +722,9 @@ INTENT_PRIORITY: dict[str, int] = {
     "alert_anomaly":         1,
     # Priority 2 — Security
     "control_access":        2,
-    # Priority 3 — Presence
-    "children_arrived_home": 3,
-    "notify_family":         3,
+    # Priority 3 — Notification
+    "notify":                3,
+    # Domain-specific intents (e.g. children_arrived_home) fall through to default 99
     # Priority 4 — Comfort
     "set_environment":       4,
     "morning_routine":       4,

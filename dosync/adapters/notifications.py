@@ -40,7 +40,7 @@ TWILIO_FROM    = os.environ.get("TWILIO_FROM", "")
 EMERGENCY_TO   = os.environ.get("DOSYNC_EMERGENCY_CONTACT", "")
 
 # Intents que disparan notificaciones
-EMERGENCY_INTENTS = {"ensure_safety", "alert_anomaly", "notify_family", "children_arrived_home", "notify"}
+EMERGENCY_INTENTS = {"ensure_safety", "alert_anomaly", "notify"}
 WARNING_INTENTS   = {"report_status", "remind_chore"}
 
 
@@ -89,15 +89,12 @@ class NotificationAdapter:
                 f"Temperatura anormal: {temp}C\n"
                 f"Verificar el hogar."
             )
-        elif intent == "notify_family":
-            msg = context.get("message", "Novedad en el hogar")
-            return f"DOSYNC AVISO\n{msg}"
         elif intent == "report_status" and trigger == "motion_detected":
             loc = f" en {location}" if location else ""
             return f"DOSYNC INFO\nMovimiento detectado{loc}."
-        elif intent in ("children_arrived_home", "notify"):
-            return ("DoSync — Los ninos llegaron a casa.\n"
-                    "El sensor los detecto automaticamente.")
+        elif intent == "notify":
+            msg = context.get("message", "Notification from DoSync")
+            return f"DOSYNC\n{msg}"
         else:
             return f"DOSYNC {urgency.upper()}\nIntent: {intent}"
 

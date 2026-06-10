@@ -149,7 +149,7 @@ async def list_tools() -> list[types.Tool]:
                         "type": "string",
                         "description": "Clase de intención",
                         "enum": [
-                            "ensure_safety", "notify_family", "report_status",
+                            "ensure_safety", "notify", "report_status",
                             "set_environment", "control_access", "monitor_health",
                             "save_energy", "remind_chore", "alert_anomaly",
                             "bedtime_routine", "morning_routine", "away_mode",
@@ -556,7 +556,7 @@ EMERGENCIAS (urgency=emergency):
   (+ send_event)   — Enviar evento smoke_detected para emergencia de incendio (3 fases).
 
 NOTIFICACIONES (urgency=warning/info):
-  notify_family    — Alertar a la familia sobre algo importante.
+  notify           — Push information to any target (people, displays, channels).
   alert_anomaly    — Consumo eléctrico anormal, algo inesperado detectado.
   remind_chore     — Recordar una tarea doméstica (lavarropas terminó, etc.).
 
