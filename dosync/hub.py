@@ -290,6 +290,21 @@ class ExternalResolver(BaseResolver):
             log.warning("ExternalResolver returned invalid ActionPlan (%s) — falling back", e)
             return self._fallback.resolve(intent)
 
+    def explain(self, intent: Intent) -> dict:
+        """
+        ExternalResolver delegates scoring to the external service.
+        Local explain() is not available — returns a summary instead.
+        """
+        return {
+            "resolver":  "ExternalResolver",
+            "url":       self._url,
+            "note":      "Scoring is delegated to the external resolver service. "
+                         "Local explain() is not available for ExternalResolver.",
+            "evaluated": len(self.registry.all()),
+            "included":  0,
+            "devices":   [],
+        }
+
 
 class CapabilityMatchingResolver(BaseResolver):
     """
