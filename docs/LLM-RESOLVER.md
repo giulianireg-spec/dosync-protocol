@@ -58,6 +58,19 @@ DOSYNC_RESOLVER_URL=http://localhost:8080 uvicorn server:app --host 0.0.0.0 --po
 | `RESOLVER_PORT` | `--port` | `8080` | Port to listen on |
 | `RESOLVER_HOST` | `--host` | `0.0.0.0` | Bind address |
 
+## Hardware requirements and performance
+
+The LLM resolver performance depends entirely on the inference backend:
+
+| Hardware | Model | Approx. response time |
+|---|---|---|
+| Raspberry Pi 5 (CPU only) | llama3.2:1b | ~40–60s |
+| Raspberry Pi 5 (CPU only) | llama3.2:3b | >60s (timeout) |
+| Modern laptop with GPU | llama3.2:3b | ~3–8s |
+| Cloud API (OpenAI, Mistral) | gpt-4o-mini / mistral-small | ~1–3s |
+
+For real-time use on Pi CPU, point to a cloud provider or a more powerful machine on the local network. The fallback to `CapabilityMatchingResolver` ensures the hub always responds even when the LLM is too slow.
+
 ## Note on emergency intents
 
 LLM inference takes 2–10 seconds. For `emergency` urgency, the hub's 5-second

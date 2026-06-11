@@ -157,7 +157,7 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "urgency": {
                         "type": "string",
-                        "description": "Urgency level: info=routine, warning=notable anomaly (attention needed), alert=high-priority (action likely), emergency=bypass all policies (immediate execution)",
+                        "description": "Urgency level: info=routine, alert=high-priority (action likely), emergency=bypass all policies (immediate execution)",
                         "enum": ["info", "warning", "alert", "emergency"],
                         "default": "info",
                     },
