@@ -759,7 +759,7 @@ class ConflictResolutionPolicy(BasePolicy):
         5 = Efficiency
 
     Example:
-        children_arrived_home (priority 3) fires at the same time as
+        notify (priority 3) fires at the same time as
         save_energy (priority 5) — save_energy loses on shared devices.
     """
 
