@@ -198,7 +198,6 @@ async def query_llm(prompt: str, timeout_s: float = 10.0) -> Optional[str]:
         "temperature": 0.1,   # low for deterministic structured output
         "max_tokens":  4096,  # generous budget — some servers count input+output
         "stream":      False,
-        "stop":        ["\n\n\n", "```"],  # prevent post-JSON prose
     }
 
     url = f"{LLM_BASE_URL.rstrip('/')}/chat/completions"
