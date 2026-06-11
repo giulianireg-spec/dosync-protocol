@@ -292,18 +292,18 @@ class ExternalResolver(BaseResolver):
 
     def explain(self, intent: Intent) -> dict:
         """
-        ExternalResolver delegates scoring to the external service.
-        Local explain() is not available — returns a summary instead.
+        ExternalResolver delegates resolution to the external service.
+        For explain(), falls back to CapabilityMatchingResolver so the
+        scoring breakdown reflects the local tag-matching algorithm.
         """
-        return {
-            "resolver":  "ExternalResolver",
-            "url":       self._url,
-            "note":      "Scoring is delegated to the external resolver service. "
-                         "Local explain() is not available for ExternalResolver.",
-            "evaluated": len(self.registry.all()),
-            "included":  0,
-            "devices":   [],
-        }
+        result = self._fallback.explain(intent)
+        result["resolver"] = "ExternalResolver"
+        result["external_url"] = self._url
+        result["note"] = (
+            "Scoring shown is from local CapabilityMatchingResolver (fallback). "
+            "Actual resolution is delegated to the external service."
+        )
+        return result
 
 
 class CapabilityMatchingResolver(BaseResolver):
