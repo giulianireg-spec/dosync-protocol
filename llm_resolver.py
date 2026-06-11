@@ -333,6 +333,7 @@ async def handle_resolve(request: web.Request) -> web.Response:
             status=503,
         )
 
+    log.debug("Raw LLM response (%d chars): %.800s", len(raw_response), raw_response)
     action_plan = parse_action_plan(raw_response, intent_id, urgency, valid_ids)
 
     t_ms = (time.monotonic() - t_start) * 1000
