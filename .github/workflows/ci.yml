@@ -153,6 +153,35 @@ jobs:
         run: |
           PYTHONPATH=. python3 tests/test_models.py
 
+      # ── Step 4e: Auth + security tests ──────────────────────────────────
+      # 20 tests covering auth.py and security.py: token hashing (never
+      # stored plaintext), AuthManager API-key lifecycle incl. dev-bypass and
+      # demo-token paths, DeviceAuthManager permissive/strict modes with the
+      # critical "provisioned device + wrong token always rejected" rule,
+      # CertInfo/PKIStatus expiry logic, and the framework-agnostic core guard.
+      - name: Auth + security tests (20 tests)
+        run: |
+          PYTHONPATH=. python3 tests/test_auth.py
+
+      # ── Step 4f: Framework-agnostic core import ─────────────────────────
+      # Regression guard for the auth core/glue split: the core modules must
+      # import without any web framework installed. Catches re-introduction of
+      # a FastAPI import into framework-agnostic core modules. Runs in a venv
+      # that deliberately has NO fastapi installed.
+      - name: Core imports without web framework
+        run: |
+          python3 -m venv /tmp/minenv
+          PYTHONPATH=. /tmp/minenv/bin/python -c "
+          from dosync.auth import hash_token, AuthManager, DeviceAuthManager
+          assert len(hash_token('x')) == 64
+          try:
+              import fastapi
+              raise SystemExit('FAIL: fastapi unexpectedly present in min env')
+          except ImportError:
+              pass
+          print('OK: auth core imports without FastAPI')
+          "
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py

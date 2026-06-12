@@ -14,9 +14,9 @@ Flujo:
     3. Hub hashea el token y busca en la DB
     4. Si no coincide → 401 Unauthorized
 
-Uso en FastAPI:
-    from dosync.auth import require_auth
-    
+Uso en FastAPI (las dependencias viven en dosync.auth_fastapi):
+    from dosync.auth_fastapi import require_auth
+
     @app.get("/v1/devices")
     async def list_devices(auth=Depends(require_auth)):
         ...
@@ -31,15 +31,14 @@ from typing import Optional
 
 log = logging.getLogger("dosync.auth")
 
-# FastAPI imports son lazy — solo se cargan cuando se usa como servidor
-try:
-    from fastapi import Depends, HTTPException, Security
-    from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-    _bearer = HTTPBearer(auto_error=False)
-    _FASTAPI_AVAILABLE = True
-except ImportError:
-    _FASTAPI_AVAILABLE = False
-    _bearer = None
+# NOTE: This module is the framework-agnostic core of DoSync auth.
+# It deliberately does NOT import FastAPI (or any web framework). The
+# FastAPI request dependencies (require_auth / optional_auth) live in
+# dosync/auth_fastapi.py, which is only loaded by the server. Keeping the
+# core free of framework imports means hash_token, AuthManager, and
+# DeviceAuthManager can be imported and tested in isolation — and a prior
+# bug (require_auth failing to import when FastAPI was absent) cannot recur.
+# Do not add `from fastapi import ...` here.
 
 
 # ── Hashing ───────────────────────────────────────────────────────────────────
@@ -126,61 +125,6 @@ def set_auth_manager(manager: AuthManager) -> None:
 
 def get_auth_manager() -> AuthManager:
     return _auth_manager
-
-
-async def require_auth(
-    credentials: Optional[HTTPAuthorizationCredentials] = Security(_bearer),
-) -> str:
-    """
-    FastAPI dependency que verifica la API key.
-    
-    Uso:
-        @app.get("/v1/devices")
-        async def list_devices(auth=Depends(require_auth)):
-            ...
-    
-    Si auth está deshabilitado (desarrollo), deja pasar todo.
-    """
-    manager = get_auth_manager()
-
-    # Auth deshabilitado
-    if manager is None or not manager.enabled:
-        return "dev"
-
-    # Sin token
-    if not credentials:
-        raise HTTPException(
-            status_code=401,
-            detail="Missing Authorization header. Use: Authorization: Bearer <token>",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Token inválido
-    if not manager.verify(credentials.credentials):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired API key.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return credentials.credentials
-
-
-async def optional_auth(
-    credentials: Optional[HTTPAuthorizationCredentials] = Security(_bearer),
-) -> Optional[str]:
-    """
-    Como require_auth pero no falla si no hay token.
-    Útil para endpoints que son públicos pero muestran más info si estás autenticado.
-    """
-    manager = get_auth_manager()
-    if manager is None or not manager.enabled:
-        return "dev"
-    if not credentials:
-        return None
-    if manager.verify(credentials.credentials):
-        return credentials.credentials
-    return None
 
 
 # ── Device token manager ──────────────────────────────────────────────────────

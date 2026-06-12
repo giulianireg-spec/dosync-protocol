@@ -18,7 +18,8 @@ from pydantic import BaseModel
 
 from dosync.hub import DoSyncHub
 from dosync.executor import SimulatedExecutor
-from dosync.auth import AuthManager, require_auth, set_auth_manager, DeviceAuthManager, set_device_auth_manager
+from dosync.auth import AuthManager, set_auth_manager, DeviceAuthManager, set_device_auth_manager
+from dosync.auth_fastapi import require_auth
 from dosync.security import get_status as get_pki_status
 from dosync.models import (
     ActuatorSpec, CapabilityManifest, CertTier, DeviceCategory,
