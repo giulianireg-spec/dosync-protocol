@@ -135,6 +135,15 @@ jobs:
         run: |
           PYTHONPATH=. python3 tests/test_policies.py
 
+      # ── Step 4c: Persistence + audit chain tests ────────────────────────
+      # 22 tests covering the DoSyncDB persistence layer and the AuditLog
+      # tamper-evident chain: device registry, intent classes (is_universal
+      # preservation), API keys, rate-limit events, and SHA-256 chain
+      # integrity (valid chain, tampered payload detected, broken link detected).
+      - name: Persistence + audit chain tests (22 tests)
+        run: |
+          PYTHONPATH=. python3 tests/test_db.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py
