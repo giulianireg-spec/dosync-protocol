@@ -132,6 +132,8 @@ PYTHONPATH=. uvicorn server:app --host 0.0.0.0 --port 47200 --reload
 | GPIO adapter — Raspberry Pi 5 (PIR + DHT22) | ✅ |
 | SMS notifications via Twilio | ✅ |
 | MQTT transport adapter (Mosquitto) | ✅ |
+| Shelly adapter (HTTP local, Gen1 + Gen2) | ✅ code, not hardware-tested |
+| Matter adapter (via HA bridge / python-matter-server) | ✅ code, not hardware-tested |
 | External Resolver Protocol (HTTP wire format) | ✅ |
 | SQLite persistence (survives restarts) | ✅ |
 | CI pipeline (GitHub Actions) | ✅ |
