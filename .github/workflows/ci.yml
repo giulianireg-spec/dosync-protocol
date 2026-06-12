@@ -126,6 +126,15 @@ jobs:
         run: |
           PYTHONPATH=. python3 tests/test_resolver_scoring.py
 
+      # ── Step 4b: Policy engine tests ────────────────────────────────────
+      # 37 tests covering all 9 built-in policies + the PolicyEngine:
+      # time restrictions, confirmation, intent blocking, device exclusion,
+      # conflict resolution, contextual weighting, rate limiting, and the
+      # emergency-bypass / absolute-block guarantees.
+      - name: Policy engine tests (37 tests)
+        run: |
+          PYTHONPATH=. python3 tests/test_policies.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py
