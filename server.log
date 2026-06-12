@@ -41,3 +41,8 @@ INFO:     Waiting for application startup.
 2026-05-23 10:54:18,396  dosync.server         WARNING  === TLS/PKI: NOT CONFIGURED === Hub running on plain HTTP. Run: bash setup_pki.sh
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:47200 (Press CTRL+C to quit)
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-06-12 15:57:56,456  dosync.server         INFO  DoSync Hub shutting down
+INFO:     Application shutdown complete.
+INFO:     Finished server process [91557]

@@ -182,6 +182,26 @@ jobs:
           print('OK: auth core imports without FastAPI')
           "
 
+      # ── Step 4g: Adapter logic tests ────────────────────────────────────
+      # 11 tests covering hardware-agnostic adapter logic: manifest tag
+      # vocabulary compliance (wiz/shelly/matter helpers no longer emit
+      # deprecated vendor/imprecise tags) and pure conversions (_pct_to_wiz).
+      # The execute() network I/O is deliberately NOT mocked — the cert suite
+      # validates it against real devices.
+      - name: Adapter logic tests (11 tests)
+        run: |
+          PYTHONPATH=. python3 tests/test_adapters.py
+
+      # ── Step 4h: Server HTTP-layer tests ────────────────────────────────
+      # 7 tests via FastAPI TestClient (in-memory, no Pi): response-contract
+      # fields, Pydantic input validation (422), and auth enforcement (401).
+      # Scoped to what the cert does NOT cover — error paths and shift-left
+      # validation, not the happy paths the cert already owns.
+      - name: Server HTTP-layer tests (7 tests)
+        run: |
+          pip install 'httpx>=0.27'
+          DOSYNC_AUTH=false PYTHONPATH=. python3 tests/test_server.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py

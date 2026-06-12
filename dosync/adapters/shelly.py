@@ -75,14 +75,16 @@ def shelly_manifest(
         EventSpec, SensorSpec, Urgency,
     )
 
-    base_tags = ["shelly", "smart-plug"]
+    # Tag vocabulary: no vendor name ("shelly"), canonical "plug" not
+    # "smart-plug", no imprecise "climate". Per TAG-VOCABULARY.md.
+    base_tags = []
 
     # Tags según tipo de dispositivo
     type_tags = {
         "relay":  ["light", "appliance"],
-        "dimmer": ["light", "climate"],
-        "plug":   ["smart-plug", "appliance"],
-        "rgbw":   ["light", "climate"],
+        "dimmer": ["light"],
+        "plug":   ["plug", "appliance"],
+        "rgbw":   ["light"],
     }
     base_tags.extend(type_tags.get(device_type, []))
     if tags:

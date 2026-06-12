@@ -75,7 +75,10 @@ def wiz_manifest(
         EventSpec, SensorSpec, Urgency,
     )
 
-    base_tags = ["light", "wiz", "climate"]
+    # Tag vocabulary: only canonical role tags here. Vendor names ("wiz") and
+    # imprecise tags ("climate") are non-portable and were removed per
+    # TAG-VOCABULARY.md. The caller adds emergency/energy/location via `tags`.
+    base_tags = ["light"]
     if tags:
         base_tags.extend(tags)
     if room:

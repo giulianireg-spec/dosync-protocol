@@ -71,13 +71,15 @@ def matter_manifest(
         SensorSpec, Urgency,
     )
 
-    base_tags = ["matter"]
+    # Tag vocabulary: no vendor name ("matter"), canonical "plug" not
+    # "smart-plug", no imprecise "climate"/"door". Per TAG-VOCABULARY.md.
+    base_tags = []
     type_tags = {
-        "light":   ["light", "climate"],
-        "switch":  ["appliance", "smart-plug"],
-        "cover":   ["blinds", "climate"],
-        "lock":    ["lock", "door", "security", "emergency"],
-        "climate": ["climate", "thermostat"],
+        "light":   ["light"],
+        "switch":  ["appliance", "plug"],
+        "cover":   ["blinds"],
+        "lock":    ["lock", "security", "emergency"],
+        "climate": ["thermostat"],
     }
     base_tags.extend(type_tags.get(device_type, ["appliance"]))
     if tags:
