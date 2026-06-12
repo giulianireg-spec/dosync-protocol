@@ -20,7 +20,6 @@ Publicación de adapters de terceros:
 from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Optional
 
 from ..models import ActionResult, DeviceAction, Urgency
 
