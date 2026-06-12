@@ -278,7 +278,7 @@ Every intent carries an urgency level that controls execution behavior across th
 | `warning` | `"warning"` | Elevated priority. A condition that warrants attention but does not require immediate action. All policies apply. Used for anomalies that are notable but not urgent (e.g. high temperature, unusual sensor reading). |
 | `info` | `"info"` | Normal priority. All policies apply. Default for routine operations, status updates, and scheduled events. |
 
-**The urgency hierarchy:** `emergency > alert > info`
+**The urgency hierarchy:** `emergency > alert > warning > info`
 
 Only `emergency` triggers the emergency override path — bypassing policy constraints and confirmation requirements. The other three levels are subject to full policy evaluation.
 

@@ -1,9 +1,13 @@
 # DoSync Resolver Interface — v0.2 Specification
 
-**Status:** Draft  
+> **⚠️ SUPERSEDED.** This version has been superseded by
+> [RESOLVER-SPEC-v0.3.md](RESOLVER-SPEC-v0.3.md). It is kept for historical
+> reference only. New implementations should target v0.3.
+
+**Status:** Superseded by v0.3  
 **Date:** May 2026  
 **Author:** Rodrigo Giuliani  
-**Contact:** giulianireg@gmail.com
+**Contact:** rgiuliani@dosync.dev
 
 ---
 

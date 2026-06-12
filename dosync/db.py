@@ -128,7 +128,7 @@ class DoSyncDB:
         universals = [
             ("ensure_safety",  "emergency", ["emergency","alarm","communication","notification"], ["alarm","notify","call"],    "Safety emergency — protect people and property",    "universal", 1),
             ("alert_anomaly",  "alert",     ["communication","notification","sensor"],            ["notify","call"],            "Unexpected condition detected — investigate",        "universal", 1),
-            ("control_access", "alert",     ["door-lock","gate","access"],                        ["lock","unlock"],            "Manage physical access to a space",                 "universal", 1),
+            ("control_access", "alert",     ["lock"],                                             ["lock","unlock"],            "Manage physical access to a space",                 "universal", 1),
             ("report_status",  "info",      [],                                                   [],                          "Generate a status report of the environment",        "universal", 1),
             ("notify",         "info",      ["communication","notification","display"],            ["notify","display","call"],  "Push information to any target",                    "universal", 1),
         ]

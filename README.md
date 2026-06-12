@@ -206,4 +206,4 @@ Apache 2.0 — free to implement, free to extend, no royalties.
 
 ---
 
-*DoSync Protocol v0.3.0 · © 2026 Rodrigo Giuliani · giulianireg@gmail.com*
+*DoSync Protocol v0.3.0 · © 2026 Rodrigo Giuliani · rgiuliani@dosync.dev*

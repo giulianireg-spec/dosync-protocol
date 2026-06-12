@@ -2,7 +2,7 @@
 
 **Status:** Active  
 **Version:** 0.1  
-**Maintainer:** Rodrigo Giuliani (giulianireg@gmail.com)
+**Maintainer:** Rodrigo Giuliani (rgiuliani@dosync.dev)
 
 ---
 
@@ -128,7 +128,7 @@ To propose a new standard tag:
 
 ## Security vulnerabilities
 
-Security issues should be reported privately to giulianireg@gmail.com before public disclosure. The maintainer will respond within 72 hours and coordinate a fix before any public announcement.
+Security issues should be reported privately to rgiuliani@dosync.dev before public disclosure. The maintainer will respond within 72 hours and coordinate a fix before any public announcement.
 
 ---
 

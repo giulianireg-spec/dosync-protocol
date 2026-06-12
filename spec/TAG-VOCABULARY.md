@@ -12,7 +12,7 @@ Tags are the primary mechanism for semantic device discovery in DoSync. When a h
 
 This document defines the standard vocabulary. Implementors **SHOULD** use these tags when applicable to ensure interoperability between hubs and devices from different vendors.
 
-**Naming convention:** lowercase, hyphenated. Example: `door-lock`, not `doorLock` or `DOOR_LOCK`.
+**Naming convention:** lowercase, hyphenated. Example: `door-sensor`, not `doorSensor` or `DOOR_SENSOR`.
 
 ---
 

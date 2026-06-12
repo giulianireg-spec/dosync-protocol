@@ -54,7 +54,7 @@ The table below shows candidate reduction at 1000 devices with a realistic tag d
 | 2000 | 2.918ms | 4.066ms | 9.899ms | ✓ |
 | 5000 | 8.635ms | 19.251ms | 22.736ms | ✓ |
 
-All scale points remain within the 500ms spec limit defined in `RESOLVER-SPEC-v0.2.md`.
+All scale points remain within the 500ms spec limit defined in `RESOLVER-SPEC-v0.3.md`.
 
 **Natural scaling limit:** at 5000+ devices, p95 exceeds 19ms. The dominant cost at this scale is `_build_actions_for_device` iterating actuators per candidate — not tag lookup. A pre-computed action cache per (device, intent_class) pair would address this for v0.4.
 

@@ -175,7 +175,7 @@ Feedback, contributions, and adapter implementations are welcome. The RFC proces
 
 **GitHub:** github.com/giulianireg-spec/dosync-protocol
 **License:** Apache 2.0
-**Contact:** giulianireg@gmail.com
+**Contact:** rgiuliani@dosync.dev
 
 ---
 

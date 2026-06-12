@@ -3,7 +3,7 @@
 **Rodrigo Giuliani**  
 Investigador independiente  
 Córdoba, Argentina  
-giulianireg@gmail.com
+rgiuliani@dosync.dev
 
 ---
 

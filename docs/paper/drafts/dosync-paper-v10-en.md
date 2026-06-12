@@ -1,6 +1,6 @@
 # DoSync: A Semantic Layer for IoT Device Orchestration by AI Agents
 
-**Rodrigo Giuliani** — Independent Researcher, Córdoba, Argentina — giulianireg@gmail.com
+**Rodrigo Giuliani** — Independent Researcher, Córdoba, Argentina — rgiuliani@dosync.dev
 
 ---
 
