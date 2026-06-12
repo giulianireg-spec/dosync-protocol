@@ -169,12 +169,19 @@ python3 certify.py --host <hub-ip> --port 47200 --tier standard
 
 ---
 
-## Independent implementations
+## Implementations
 
-| Language | Location | Certification |
-|---|---|---|
-| Python (reference) | `server.py` | 32/32 Standard ✅ |
-| Node.js | [giulianireg-spec/dosync-node](https://github.com/giulianireg-spec/dosync-node) | Standard 32/32 ✅ |
+| Language | Location | Author | Certification |
+|---|---|---|---|
+| Python (reference) | `server.py` | this project | 32/32 Standard ✅ |
+| Node.js (companion) | [giulianireg-spec/dosync-node](https://github.com/giulianireg-spec/dosync-node) | this project | 32/32 Standard ✅ |
+
+The Node.js implementation is a **companion** port that validates the protocol
+is implementable in a second language against the same certification suite —
+both share the same author. A genuinely **independent** implementation
+(different author or organization) is a tracked milestone for v1.0: a protocol
+needs multiple independent implementations to become a standard. See the
+[roadmap](ROADMAP.md).
 
 ---
 
