@@ -144,6 +144,15 @@ jobs:
         run: |
           PYTHONPATH=. python3 tests/test_db.py
 
+      # ── Step 4d: Core model tests ───────────────────────────────────────
+      # 19 tests covering the type system: Urgency/Severity separation,
+      # IntentClass format validation and equality, string→enum coercion in
+      # __post_init__, and manifest serialization including the to_public_dict
+      # privacy guarantee (adapter_config never leaks to public API responses).
+      - name: Core model tests (19 tests)
+        run: |
+          PYTHONPATH=. python3 tests/test_models.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py
