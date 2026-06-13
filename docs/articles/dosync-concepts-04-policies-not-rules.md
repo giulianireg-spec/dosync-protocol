@@ -144,7 +144,7 @@ The rule/policy distinction becomes critical at scale and in regulated environme
 
 In a **hotel**, a rule that says "turn off lights when nobody is in the room" works until a guest leaves their laptop charging and the system decides the room is empty. A policy that says "never cut power to outlet circuits in occupied rooms regardless of occupancy inference" handles the edge case — without needing a rule for every possible device state.
 
-In a **hospital**, a rule that says "lock all doors at 22:00" breaks the moment a crash cart needs to move between floors. A policy that says "door locks revert to unlocked state on emergency_capable override, regardless of schedule" is robust to the scenario that matters most — the one nobody wanted to think about at configuration time.
+In an **office building**, a rule that says "lock all doors at 22:00" breaks the moment first responders need to move between floors during an alarm. A policy that says "door locks revert to unlocked state on emergency_capable override, regardless of schedule" is robust to the scenario that matters most — the one nobody wanted to think about at configuration time.
 
 In a **factory**, a rule that says "shut down line B if temperature exceeds threshold" doesn't compose with the rule that says "never shut down line B during a shift change handover." A ConflictResolutionPolicy that assigns priorities to intents and resolves contention explicitly is the right abstraction — not an ever-growing set of conditional rules that interact in unpredictable ways.
 

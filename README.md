@@ -41,6 +41,22 @@ When the hub receives `"ensure_safety / emergency"`, every registered device fig
 
 ---
 
+## Scope and safety boundaries
+
+DoSync coordinates **non-safety-critical systems** — lighting, access, climate, notifications, logging — and produces a tamper-evident record of every action. It is infrastructure for coordination and auditability, not a certified safety system.
+
+DoSync is **not** certified to IEC 61508 / IEC 62304 / ISO 13849 and must not be the sole or primary mechanism for:
+
+- Primary control of medical devices or life-support systems
+- Fire suppression, gas detection, or emergency shutdown of SIL-rated machinery
+- Any function where a failure could cause injury or loss of life
+
+In regulated or industrial environments, DoSync **complements** the certified safety systems already in place — coordinating the peripherals around them and recording what happened — but never replaces them. The certified safety system remains in charge of safety.
+
+See [Protocol Specification §12.3](spec/DoSync-SPEC-v0.1.md) for the full operational boundaries.
+
+---
+
 ## Demo
 
 [![DoSync Demo](https://img.shields.io/badge/▶_Watch_Demo-YouTube-red?style=for-the-badge)](https://youtu.be/2czAqoIrd08)

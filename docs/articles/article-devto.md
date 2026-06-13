@@ -48,7 +48,7 @@ These are **goal-oriented** events, not command-oriented ones. And every existin
 
 This problem isn't limited to the home. Consider a manufacturing line: a temperature sensor detects an abnormal reading on a critical component. The AI system knows there's an anomaly — but it doesn't know whether to stop the line, alert the supervisor, activate cooling, trigger a maintenance request, or all of the above. With existing protocols, an engineer had to anticipate this scenario and write that rule in advance. Miss one edge case and the system does nothing. With a semantic protocol, each device declares its capabilities and the resolver determines the appropriate response based on urgency and context — without any pre-written rules for that specific failure mode.
 
-The same architectural gap exists in hospitals, hotels, smart buildings, and anywhere an AI needs to coordinate physical systems in response to real-world events.
+The same architectural gap exists in hotels, smart buildings, factories, and anywhere an AI needs to coordinate physical systems in response to real-world events.
 
 ---
 

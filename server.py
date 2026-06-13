@@ -518,7 +518,7 @@ async def websocket_endpoint(ws: WebSocket):
             "data": {
                 "devices":    len(hub.registry.all()),
                 "hub_version": "0.1.0",
-                "protocol":   "dosync/0.1",
+                "protocol":   f"dosync/{DOSYNC_PROTOCOL_VERSION}",
             }
         }))
         import asyncio
@@ -552,7 +552,7 @@ def root():
     return {
         "name": "DoSync Hub",
         "version": "0.1.0",
-        "protocol": "dosync/0.1",
+        "protocol": f"dosync/{DOSYNC_PROTOCOL_VERSION}",
         "status": "running",
         "devices_registered": len(hub.registry.all()),
     }
@@ -1355,7 +1355,7 @@ def get_status():
     return {
         "name":            "DoSync Hub",
         "version":         "0.3.0",
-        "protocol":        "dosync/0.1",
+        "protocol":        f"dosync/{DOSYNC_PROTOCOL_VERSION}",
         "status":          "running",
         "certify_mode":    _certify_mode,
         "protocol_version": DOSYNC_PROTOCOL_VERSION,

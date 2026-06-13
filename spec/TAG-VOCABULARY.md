@@ -130,7 +130,7 @@ This table shows the default resolution tags configured at hub initialization. O
 | `morning_routine` | `light`, `blinds` | `thermostat`, `bedroom` |
 | `away_mode` | `energy`, `security`, `lock` | `light`, `plug`, `switch`, `entrance` |
 
-> **Domain-specific intents:** The intent classes above cover universal scenarios applicable across home, hotel, hospital, and industrial deployments. Domain-specific scenarios (e.g., a children arrival notification, a specific medical routine, a factory shift change) should be implemented as custom intent classes configured per deployment — not added to this standard vocabulary.
+> **Domain-specific intents:** The intent classes above cover universal scenarios applicable across home, hotel, commercial, and industrial deployments. Domain-specific scenarios (e.g., a children arrival notification, a specific maintenance routine, a factory shift change) should be implemented as custom intent classes configured per deployment — not added to this standard vocabulary.
 
 ---
 

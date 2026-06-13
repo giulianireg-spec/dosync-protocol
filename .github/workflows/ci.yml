@@ -197,7 +197,7 @@ jobs:
       # fields, Pydantic input validation (422), and auth enforcement (401).
       # Scoped to what the cert does NOT cover — error paths and shift-left
       # validation, not the happy paths the cert already owns.
-      - name: Server HTTP-layer tests (7 tests)
+      - name: Server HTTP-layer tests (8 tests)
         run: |
           pip install 'httpx>=0.27'
           DOSYNC_AUTH=false PYTHONPATH=. python3 tests/test_server.py

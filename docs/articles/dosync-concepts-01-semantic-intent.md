@@ -6,7 +6,7 @@
 
 There's a word that keeps appearing in conversations about AI and the physical world: *intent*.
 
-We say things like "the AI understood my intent" or "I want the system to infer my intent from context." But when you actually sit down to build something — a smart home, a hospital room, a hotel — you quickly discover that most protocols don't have a concept of intent at all.
+We say things like "the AI understood my intent" or "I want the system to infer my intent from context." But when you actually sit down to build something — a smart home, a hotel, a factory floor — you quickly discover that most protocols don't have a concept of intent at all.
 
 They have commands.
 
@@ -129,9 +129,7 @@ Add a new device tomorrow — a smart siren, a second lock, a notification relay
 
 The command gap isn't unique to smart homes. It's structural — it appears anywhere an AI system needs to coordinate physical devices in response to real-world events.
 
-A hospital AI detects a deteriorating patient. It knows there's urgency. But it doesn't know which room equipment to prepare, which staff to page, which doors to unlock for the crash cart. With command-based protocols, an engineer had to anticipate that exact scenario in advance. With semantic intent, each device declares its relevance and the system responds.
-
-A factory line detects an anomaly on a critical component. The AI knows something is wrong. With commands, someone pre-wrote the response. With intent, the devices coordinate a safe shutdown based on their declared capabilities — and the audit log captures every action with a tamper-evident chain.
+A factory line detects an anomaly on a critical component. The AI knows something is wrong. With commands, someone pre-wrote the response. With intent, the devices coordinate the *response around* a shutdown — notifying the supervisor, logging a maintenance request, adjusting lighting and access — while the line's own safety-rated shutdown system does the actual stop. The audit log captures every action with a tamper-evident chain.
 
 The protocol is domain-agnostic. The insight is not.
 

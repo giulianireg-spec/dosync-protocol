@@ -576,7 +576,7 @@ The transition from `v0.x` to `v1.0` marks the protocol's stability milestone â€
 
 ### 11.1 Problem statement
 
-A single DoSync hub is a single point of failure. If the hub process crashes or the host machine fails, all connected devices lose their semantic coordinator. For safety-critical deployments (hospitals, industrial facilities, buildings with emergency systems), this is unacceptable.
+A single DoSync hub is a single point of failure. If the hub process crashes or the host machine fails, all connected devices lose their semantic coordinator. For safety-critical deployments (industrial facilities, buildings with emergency systems, and other regulated environments), this is unacceptable.
 
 ### 11.2 Scope and constraints
 
@@ -751,7 +751,7 @@ DoSync is NOT certified for safety-critical applications under IEC 61508, IEC 62
 - Industrial machinery with SIL (Safety Integrity Level) requirements
 
 **Appropriate uses:**
-- Coordination of non-critical peripherals in medical environments (lighting, access, comfort)
+- Coordination of non-critical peripherals (lighting, access, climate, comfort) alongside certified systems
 - Secondary notification layer alongside certified safety systems
 - Home environments where failure results in inconvenience, not injury
 

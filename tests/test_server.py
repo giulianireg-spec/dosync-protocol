@@ -47,7 +47,12 @@ def test_api_root_contract():
     body = r.json()
     for field in ["name", "version", "protocol", "status", "devices_registered"]:
         assert field in body, f"/api response must include '{field}'"
-    assert body["protocol"] == "dosync/0.1"
+    # The protocol string MUST derive from the single source of truth
+    # (DOSYNC_PROTOCOL_VERSION), not be hardcoded — regression guard against the
+    # three sites that previously hardcoded "dosync/0.1" while the constant moved.
+    from server import DOSYNC_PROTOCOL_VERSION
+    assert body["protocol"] == f"dosync/{DOSYNC_PROTOCOL_VERSION}", \
+        "protocol field must derive from DOSYNC_PROTOCOL_VERSION, not be hardcoded"
 
 
 def test_status_endpoint_has_versions():
@@ -58,6 +63,21 @@ def test_status_endpoint_has_versions():
     body = r.json()
     assert "protocol_version" in body
     assert "api_version" in body
+
+
+def test_protocol_version_consistent_across_endpoints():
+    """Regression guard: the protocol version is reported in several places
+    (/api, /v1/status, /v1/hub/heartbeat) and was previously hardcoded as
+    "dosync/0.1" in three sites, drifting from DOSYNC_PROTOCOL_VERSION. This
+    pins that every surface agrees with the single source of truth."""
+    from server import DOSYNC_PROTOCOL_VERSION
+    expected = DOSYNC_PROTOCOL_VERSION
+    api = client.get("/api").json()
+    status = client.get("/v1/status").json()
+    heartbeat = client.get("/v1/hub/heartbeat").json()
+    assert api["protocol"] == f"dosync/{expected}", "/api protocol must match constant"
+    assert status["protocol_version"] == expected, "/v1/status must match constant"
+    assert heartbeat["protocol_version"] == expected, "heartbeat must match constant"
 
 
 # ── Input validation (422) — error paths the cert doesn't systematically hit ──

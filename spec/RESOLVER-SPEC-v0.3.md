@@ -115,11 +115,11 @@ class IntentClass(str):
 ```bash
 POST /v1/intent-classes
 {
-  "name": "prepare_operating_room",
+  "name": "prepare_meeting_room",
   "urgency": "alert",
-  "resolution_tags": ["medical", "lighting", "access"],
+  "resolution_tags": ["lighting", "climate", "access"],
   "resolution_actuators": ["turn_on", "unlock", "notify"],
-  "domain": "healthcare"
+  "domain": "commercial"
 }
 ```
 
