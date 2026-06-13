@@ -200,6 +200,23 @@ hub.db.init_emergency_snapshots_table()
 _device_auth_manager = DeviceAuthManager(hub.db)
 set_device_auth_manager(_device_auth_manager)
 
+# ── Multi-hub monitor (Phase A) ───────────────────────────────────────────────
+# Active only when this hub is configured as a standby. On a primary it stays
+# None and all multi-hub endpoints report role=primary with no monitor. The
+# monitor is the pure decision core (dosync/hub_monitor.py); the polling loop
+# that feeds it observations is started in the lifespan/startup when standby.
+from dosync.hub_monitor import HubMonitor, HeartbeatObservation, MonitorState
+
+_hub_role = os.environ.get("DOSYNC_HUB_ROLE", "primary").lower()
+_primary_url = os.environ.get("DOSYNC_PRIMARY_URL")  # peer to watch (standby only)
+_hub_monitor: Optional[HubMonitor] = None
+if _hub_role == "standby":
+    _failure_threshold = int(os.environ.get("DOSYNC_FAILURE_THRESHOLD", "3"))
+    _hub_monitor = HubMonitor(
+        failure_threshold=_failure_threshold,
+        local_device_count=len(hub.registry.all()),
+    )
+
 
 # ── WebSocket manager ─────────────────────────────────────────────────────────
 
@@ -1338,6 +1355,7 @@ async def hub_heartbeat():
         "uptime_seconds":   uptime,
         "devices":          len(hub.registry.all()),
         "role":             role,
+        "multi_hub_capable": True,
         "transports": {
             "mqtt": {
                 "enabled":   _mqtt_adapter is not None,
@@ -1345,6 +1363,69 @@ async def hub_heartbeat():
                 "broker":    _mqtt_adapter.broker      if _mqtt_adapter else None,
             }
         },
+    }
+
+
+@app.get("/v1/hub/peers", tags=["Hub"], summary="Multi-hub monitor view (Phase A)")
+async def hub_peers():
+    """Return this hub's multi-hub coordination view.
+
+    On a primary, the monitor is inert. On a standby, returns the monitor's
+    current state, how many heartbeats the primary has missed, and whether
+    promotion would be safe or destructive (state divergence).
+    """
+    role = os.environ.get("DOSYNC_HUB_ROLE", "primary").lower()
+    if _hub_monitor is None:
+        return {"role": role, "monitor_state": "n/a", "primary_url": None}
+    snap = _hub_monitor.snapshot()
+    snap["role"] = role
+    snap["primary_url"] = _primary_url
+    return snap
+
+
+@app.post("/v1/hub/promote", tags=["Hub"], summary="Operator-assisted standby promotion (Phase A)")
+async def hub_promote(body: dict = None, auth=Depends(require_auth)):
+    """Promote this standby to primary. Operator-assisted, never automatic.
+
+    Requires the monitor to be in PRIMARY_DOWN. If promotion would be
+    destructive (the primary held more devices than this standby — no Phase B
+    replication yet), requires {"force": true} and returns 409 otherwise. This
+    is the human-in-the-loop gate that prevents split-brain and silent device
+    loss.
+    """
+    body = body or {}
+    if _hub_monitor is None:
+        raise HTTPException(status_code=400, detail="This hub is not a standby (no monitor running).")
+
+    if _hub_monitor.state is not MonitorState.PRIMARY_DOWN:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot promote: monitor state is {_hub_monitor.state.value}, expected PRIMARY_DOWN.",
+        )
+
+    proposal = _hub_monitor.promotion_proposal()
+    if proposal.destructive and not body.get("force"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "Promotion would lose state",
+                "reason": proposal.reason,
+                "local_devices": proposal.local_devices,
+                "primary_devices_last_known": proposal.primary_devices_last_known,
+                "hint": "Re-issue with {\"force\": true} to promote anyway.",
+            },
+        )
+
+    # Promote: flip role to primary. (Phase A: role failover only; state
+    # replication is Phase B. A forced destructive promotion serves a registry
+    # missing the primary's devices — the operator was warned.)
+    os.environ["DOSYNC_HUB_ROLE"] = "primary"
+    return {
+        "promoted": True,
+        "new_role": "primary",
+        "was_destructive": proposal.destructive,
+        "devices_served": proposal.local_devices,
+        "warning": proposal.reason if proposal.destructive else None,
     }
 
 

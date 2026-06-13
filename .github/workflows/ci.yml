@@ -213,6 +213,19 @@ jobs:
           pip install 'httpx>=0.27'
           DOSYNC_AUTH=false PYTHONPATH=. python3 tests/test_idempotency.py
 
+      # ── Step 4j: Multi-hub Phase A ──────────────────────────────────────
+      # 13 hub-monitor state-machine tests (pure: WATCHING/PRIMARY_DOWN/
+      # UNCERTAIN transitions + destructive-promotion safeguard) and 3 endpoint
+      # tests (multi_hub_capable flag, peers/promote wiring). The live two-machine
+      # failover is validated separately on the Pi+Mac topology.
+      - name: Multi-hub monitor tests (13 tests)
+        run: |
+          PYTHONPATH=. python3 tests/test_hub_monitor.py
+      - name: Multi-hub endpoint tests (3 tests)
+        run: |
+          pip install 'httpx>=0.27'
+          DOSYNC_AUTH=false PYTHONPATH=. python3 tests/test_multihub_endpoints.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py
