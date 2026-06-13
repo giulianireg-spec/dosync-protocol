@@ -202,6 +202,17 @@ jobs:
           pip install 'httpx>=0.27'
           DOSYNC_AUTH=false PYTHONPATH=. python3 tests/test_server.py
 
+      # ── Step 4i: Idempotency tests ──────────────────────────────────────
+      # 8 tests for protocol v0.2 idempotency on POST /v1/intent/async:
+      # no-key preserves v0.1 behavior, key+same-body returns cached intent
+      # (no re-execution), key+different-body rejected 409 (anti-suppression),
+      # body hash excludes the key. Makes the retry advised by the consistency
+      # model safe for physical actions.
+      - name: Idempotency tests (8 tests)
+        run: |
+          pip install 'httpx>=0.27'
+          DOSYNC_AUTH=false PYTHONPATH=. python3 tests/test_idempotency.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py

@@ -50,6 +50,35 @@ def _store_cleanup():
     expired = [k for k, v in _intent_store.items() if now - v["created_at"] > _INTENT_STORE_TTL]
     for k in expired:
         del _intent_store[k]
+    # Idempotency keys share the same retention window as intent results.
+    idem_expired = [k for k, v in _idempotency_store.items() if now - v["created_at"] > _INTENT_STORE_TTL]
+    for k in idem_expired:
+        del _idempotency_store[k]
+
+
+# ── Idempotency (protocol v0.2) ───────────────────────────────────────────────
+# Maps a client-supplied idempotency key -> {body_hash, intent_id, created_at}.
+# Delivery model: at-least-once with optional deduplication.
+#   - No key supplied  -> every request is unique (v0.1 behavior, unchanged).
+#   - Key + same body   -> return the cached intent_id, do NOT re-execute.
+#   - Key + different body -> 409 Conflict (anti-suppression: a key cannot be
+#     reused for different content, closing the intent-suppression attack).
+# Retention matches _INTENT_STORE_TTL so a key lives as long as its result.
+_idempotency_store: dict = {}
+
+def _intent_body_hash(req: "IntentRequest") -> str:
+    """Stable SHA-256 of the semantically meaningful intent fields.
+    Excludes idempotency_key itself so the same logical intent hashes equally."""
+    import hashlib, json as _json
+    payload = {
+        "intent":  req.intent,
+        "urgency": req.urgency,
+        "subject": req.subject,
+        "source":  req.source,
+        "context": req.context,
+    }
+    encoded = _json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 # ── Executor ──────────────────────────────────────────────────────────────────
 # _certify_mode is defined before DoSyncHub initialization (see above)
@@ -309,6 +338,7 @@ class IntentRequest(BaseModel):
     subject: Optional[str] = None
     source: str = "api"
     context: dict[str, Any] = {}
+    idempotency_key: Optional[str] = None  # opt-in dedup (protocol v0.2). UUID recommended.
 
 class EventRequest(BaseModel):
     device_id: str
@@ -444,7 +474,7 @@ app = FastAPI(
 # API version:      the REST API version (URL prefix /v1/)
 # These are exposed as response headers on every request so clients can detect
 # the version without parsing the URL or the response body.
-DOSYNC_PROTOCOL_VERSION = "0.1"
+DOSYNC_PROTOCOL_VERSION = "0.2"
 DOSYNC_API_VERSION = "1"
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -979,6 +1009,31 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
         urgency = Urgency(req.urgency)
     except ValueError:
         raise HTTPException(status_code=422, detail=f"Urgency '{req.urgency}' not valid. Use: emergency, alert, info")
+
+    # ── Idempotency check (protocol v0.2, opt-in) ─────────────────────────
+    # If the client supplied an idempotency key, deduplicate against prior
+    # requests within the retention window. This makes the retry advised by
+    # the consistency model (§6) safe for physical actions.
+    if req.idempotency_key:
+        _store_cleanup()
+        body_hash = _intent_body_hash(req)
+        prior = _idempotency_store.get(req.idempotency_key)
+        if prior is not None:
+            if prior["body_hash"] == body_hash:
+                # Legitimate retry: same key, same body. Return cached intent_id,
+                # do NOT re-execute (a lock must not unlock twice).
+                return {
+                    "intent_id": prior["intent_id"],
+                    "status":    "accepted",
+                    "idempotent_replay": True,
+                }
+            # Anti-suppression: same key, different body → reject. A key cannot
+            # be reused to suppress a different intent.
+            raise HTTPException(
+                status_code=409,
+                detail="Idempotency key reused with a different request body.",
+            )
+
     intent = Intent(
         intent=intent_class,
         urgency=urgency,
@@ -986,6 +1041,15 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
         source=req.source,
         context=req.context,
     )
+
+    # Register the idempotency key now (before execution) so a fast retry that
+    # arrives while the first is still running also deduplicates.
+    if req.idempotency_key:
+        _idempotency_store[req.idempotency_key] = {
+            "body_hash":  _intent_body_hash(req),
+            "intent_id":  intent.intent_id,
+            "created_at": _time.time(),
+        }
 
     _store_cleanup()
     _intent_store[intent.intent_id] = {
