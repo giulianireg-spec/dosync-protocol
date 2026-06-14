@@ -279,7 +279,7 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
       <line x1="17" y1="16" x2="13" y2="12" stroke="#AFA9EC" stroke-width="1"/>
     </svg>
     DoSync
-    <span class="nav-pill">v0.3</span>
+    <span class="nav-pill">Apache 2.0</span>
   </div>
   <div class="nav-links">
     <a href="#how">How it works</a>
@@ -391,7 +391,7 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
           <div><span class="t-device">wiz-living2-01</span> <span class="t-action">turn_on</span> <span style="color:#5F5E5A">brightness=100</span> <span class="t-success">✓</span></div>
           <div><span class="t-device">alarm-test-01</span> <span class="t-action">alarm</span> <span style="color:#5F5E5A">pattern=emergency</span> <span class="t-success">✓</span></div>
           <div><span class="t-device">notifier-sms-01</span> <span class="t-action">notify</span> <span style="color:#5F5E5A">→ +1555012...</span> <span class="t-success">✓</span></div>
-          <div style="margin-top:8px"><span class="t-comment"># 18 actions · 5 devices · 79ms</span></div>
+          <div style="margin-top:8px"><span class="t-comment"># 18 actions · 8 devices · 79ms</span></div>
           <div><span class="t-comment"># audit log updated · SHA-256 chain intact</span></div>
         </div>
       </div>
@@ -704,7 +704,7 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
       <div class="use-case">
         <div class="use-case-icon">🏭</div>
         <p class="use-case-name">Factory</p>
-        <p class="use-case-desc">"Line B failure" → safe shutdown, notifications, tamper-evident audit trail.</p>
+        <p class="use-case-desc">"Line B failure" → notifications, access control, tamper-evident audit trail — coordinated alongside the line's own safety systems.</p>
       </div>
     </div>
   </div>
@@ -763,7 +763,7 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
   <div class="section-inner">
     <p class="section-eyebrow">Project status</p>
     <h2 class="section-title">Honest about where we are.</h2>
-    <p class="section-sub">v0.3 — reference implementation. Apache 2.0. One person building it. Here's what's real today.</p>
+    <p class="section-sub">Reference implementation. Apache 2.0. One person building it. Here's what's real today.</p>
     <div class="status-grid">
       <div class="status-items">
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">REST API · WebSocket · Dashboard</span></div>
@@ -774,7 +774,8 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Local PKI + mTLS per-device auth</span></div>
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Raspberry Pi 5 — autonomous 24/7</span></div>
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">dosync-node — Node.js implementation</span></div>
-        <div class="status-item"><span class="status-badge wip">In progress</span><span class="status-item-name">Distributed state — multi-hub</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Multi-hub assisted failover</span></div>
+        <div class="status-item"><span class="status-badge wip">In progress</span><span class="status-item-name">Distributed state replication</span></div>
         <div class="status-item"><span class="status-badge planned">Planned</span><span class="status-item-name">BLE transport adapter</span></div>
         <div class="status-item"><span class="status-badge planned">Planned</span><span class="status-item-name">Third-party device certifications</span></div>
       </div>
@@ -783,15 +784,15 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
         <div class="roadmap-items">
           <div class="roadmap-item">
             <span class="roadmap-q">Q2 2026</span>
-            <span class="roadmap-text">Distributed state multi-hub · benchmark under concurrent load · penetration testing</span>
+            <span class="roadmap-text">Idempotency + delivery semantics · multi-hub assisted failover · protocol v0.2</span>
           </div>
           <div class="roadmap-item">
             <span class="roadmap-q">Q3 2026</span>
-            <span class="roadmap-text">Second independent implementation · BLE transport · first external device certification</span>
+            <span class="roadmap-text">Distributed state replication · benchmark under concurrent load · penetration testing · BLE transport</span>
           </div>
           <div class="roadmap-item">
             <span class="roadmap-q">Q4 2026</span>
-            <span class="roadmap-text">IEEE WF-IoT 2026 paper · outreach to device manufacturers · dosync.dev v2</span>
+            <span class="roadmap-text">IEEE WF-IoT 2026 paper · second independent implementation · outreach to device manufacturers</span>
           </div>
           <div class="roadmap-item">
             <span class="roadmap-q">2027+</span>
