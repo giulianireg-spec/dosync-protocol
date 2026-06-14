@@ -16,6 +16,76 @@ These are not limitations — they are deliberate design constraints that make D
 
 ---
 
+## The intelligence lives in the mind, not the body
+
+This is the deepest design commitment of the protocol, and the one that orients
+everything else. It is the full statement of the principle the previous section
+opens with.
+
+**In DoSync, intelligence lives in an external mind — the AI that connects — never
+in the device.** A device is a *body*: a set of actuators and sensors that declares
+what it can do and lends its physical structure to whatever mind is driving it. The
+device does not know *why* it is acting, *when* it should act, or *what* the larger
+goal is. It knows only its own capabilities. The intelligence is borrowed, at
+runtime, from outside.
+
+This inverts the model most people inherit from science fiction, where the machine
+*is* intelligent — the mind is built into the physical structure (the android, the
+robot). DoSync assumes the opposite, and the opposite is what is actually buildable:
+**the body is simple and cheap; the mind is external and connects.**
+
+Consider the consequences, from the mundane to the ambitious:
+
+- A **light** declares `turn_on`/`turn_off`. The mind decides it is an emergency
+  and that the light should go to full brightness. The light does not know about
+  emergencies.
+- An **oven** declares `preheat`/`set_temperature`/`set_timer`. The mind knows
+  *what* is being cooked and *when*; the oven is just heat the mind can direct.
+- A future **cooking robot** is, architecturally, no different — a structure that
+  declares `move`/`grasp`/`rotate`. Its intelligence is not in the chassis. A mind
+  (a home AI, or any connecting agent) drives it through DoSync. The body is the
+  same whether the mind is brilliant or absent; without a mind it simply does
+  nothing, correctly.
+
+The unifying frame: **DoSync is the nervous system that connects a mind to bodies.**
+The Capability Manifest is how a body announces what it can do. The semantic intent
+is how a mind expresses what it wants. The resolver maps one to the other. At no
+point does the body need to be intelligent, and at no point should the protocol try
+to make it so.
+
+### Why this matters for what DoSync should and should not contain
+
+This principle is not decoration — it decides scope. The most important consequence:
+
+**DoSync must not contain the intelligence itself.** A recurring temptation is to
+embed a language model inside the hub so it can "understand natural language." Under
+this principle, that is a category error: it puts the mind inside the nervous system.
+Natural-language understanding belongs to the connecting AI — that *is* its
+intelligence. DoSync's job is to offer that external mind a clean, expressive
+interface for discovering bodies and expressing intent (the MCP server, the intent
+API, the Capability Manifest), not to be intelligent on its behalf.
+
+Two practical implications follow:
+
+- **Expanding what DoSync can touch is more central than improving how you talk to
+  it.** The frontier is not faster language parsing; it is letting a mind act on
+  *more of the physical world* — more transports (BLE, and beyond), more device
+  classes, richer capabilities. A speaker, an oven, a robotic arm are all the same
+  problem: a new body for an existing mind.
+- **The body should not have to know DoSync exists.** Where possible, the adapter
+  that speaks a device's native protocol lives in the *hub*, not the device. This
+  lets DoSync lend intelligence to hardware that already exists and was never
+  designed for it — which is exactly what "the mind is external" implies at the
+  transport layer.
+
+What this principle defers, deliberately, is the modeling of bodies with continuous
+state and motion over time (an oven's rising temperature, a robot moving through
+space). The current manifest models discrete capabilities. That is enough for the
+devices that exist today, and the design should not *close the door* to continuous
+capabilities later — but it should not build for them before a real body needs them.
+
+---
+
 ## The three-layer model
 
 Any deployment of DoSync operates within a three-layer model:
@@ -267,6 +337,7 @@ These mechanisms collectively ensure that the hub recovers quickly from failures
 
 | Principle | What it means in practice |
 |---|---|
+| Mind external, body simple | Intelligence lives in the connecting AI, never in the device. DoSync is the nervous system; devices are bodies that declare capabilities and lend their structure. The protocol must not contain the intelligence itself. |
 | Deterministic resolver | Same input always produces same output. No autonomous learning. |
 | Tamper-evident audit log | Every action is logged and verifiable. Nothing is hidden. |
 | Human decision layer | DoSync informs. Humans decide. AI assists, never replaces. |
