@@ -1,17 +1,37 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DoSync Protocol — dependencies
+#
+# DoSync is an open protocol. The hub core depends ONLY on a web framework and a
+# schema validator. Every device adapter brings its OWN library, and each is
+# OPTIONAL: the adapter imports its library lazily and degrades to simulated mode
+# (or disables itself) when the library is absent. Installing DoSync does NOT
+# force you to install libraries for hardware you don't use.
+#
+# Install only what your deployment needs:
+#   pip install -r requirements.txt          # core + schema validation
+#   pip install pywizlight                    # only if you use Philips WiZ
+#   pip install twilio                        # only if you use SMS notifications
+#   pip install paho-mqtt                     # only if you use MQTT devices
+#   pip install aiohttp                        # only if you use the Home Assistant bridge
+#   pip install bleak                          # only if you enable the BLE adapter
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Core — required for the hub to run ───────────────────────────────────────
 fastapi>=0.100.0
 uvicorn>=0.23.0
 pydantic>=2.0.0
-aiohttp>=3.8.0
-pywizlight>=0.5.0
-twilio>=8.0.0
-websockets>=11.0
-paho-mqtt>=2.0.0
 
-# Optional — BLE adapter (universal Bluetooth Low Energy). Only needed if
-# DOSYNC_BLE_ENABLED=true. Uses BlueZ on Linux/Raspberry Pi.
-# bleak>=0.21
-
-# Schema validation — params_schema is JSON Schema draft 2020-12 (protocol 0.3).
-# Optional but recommended: without it, schema validation degrades gracefully
+# ── Schema validation — params_schema is JSON Schema draft 2020-12 (protocol 0.3)
+# Strongly recommended: without it, schema validation degrades gracefully
 # (skipped with a warning). The certification suite requires it.
 jsonschema>=4.18
+
+# ── Optional — device adapters ───────────────────────────────────────────────
+# Each line is needed ONLY if you use that adapter. The hub runs without them;
+# the corresponding adapter falls back to simulated mode or disables itself.
+#
+# pywizlight>=0.5.0     # Philips WiZ bulbs (UDP local)
+# twilio>=8.0.0         # SMS notifications
+# paho-mqtt>=2.0.0      # MQTT devices
+# aiohttp>=3.8.0        # Home Assistant bridge
+# bleak>=0.21           # universal BLE adapter (DOSYNC_BLE_ENABLED=true)
