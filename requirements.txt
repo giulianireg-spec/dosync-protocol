@@ -10,3 +10,8 @@ paho-mqtt>=2.0.0
 # Optional — BLE adapter (universal Bluetooth Low Energy). Only needed if
 # DOSYNC_BLE_ENABLED=true. Uses BlueZ on Linux/Raspberry Pi.
 # bleak>=0.21
+
+# Schema validation — params_schema is JSON Schema draft 2020-12 (protocol 0.3).
+# Optional but recommended: without it, schema validation degrades gracefully
+# (skipped with a warning). The certification suite requires it.
+jsonschema>=4.18

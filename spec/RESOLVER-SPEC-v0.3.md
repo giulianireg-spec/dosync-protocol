@@ -198,6 +198,66 @@ class CapabilityManifest:
     adapter_config:     dict
 ```
 
+### ActuatorSpec and parameter schemas (v0.3)
+
+```python
+@dataclass
+class ActuatorSpec:
+    id:            str
+    type:          str        # "set_brightness" | "unlock" | "preheat" | ...
+    description:   str = ""
+    params_schema: dict = {}  # JSON Schema (draft 2020-12) for this action's params
+```
+
+As of protocol v0.3, `params_schema` is a **JSON Schema (draft 2020-12)** object
+describing the parameters an action accepts. Prior to v0.3 it was a free-form dict
+of human-readable strings (e.g. `{"brightness": "int (0-100)"}`), which could not
+be validated by a machine. The standard now commits to JSON Schema so that any
+implementation — in any language — validates parameters identically.
+
+```python
+# v0.3 — machine-validable
+params_schema = {
+    "type": "object",
+    "properties": {"brightness": {"type": "integer", "minimum": 0, "maximum": 100}},
+    "required": ["brightness"],
+}
+```
+
+An empty `params_schema` (`{}`) means the action takes no parameters.
+
+**Who validates.** Validation is the responsibility of the hub and the connecting
+mind — never the device. A device only emits its manifest as static JSON; it never
+needs a JSON Schema library on board. This preserves the "dumb body" principle: the
+body declares, the hub/mind validates.
+
+**The standard commits to the format, not the library.** The spec requires JSON
+Schema draft 2020-12. Which validator a given implementation uses is an
+implementation choice (the reference implementation uses Python's `jsonschema`).
+
+**Scope and limits.** `params_schema` validates the *shape* of an action's input
+parameters — type, range, required fields. It does NOT express:
+
+- **Action duration or execution model.** A `preheat` that takes minutes is
+  described the same as an instantaneous `turn_on`. There is no field for how long
+  an action runs, whether it is long-running/asynchronous, what intermediate states
+  it passes through, or how to query its progress.
+
+  This is a **planned future extension**, deliberately out of scope for v0.3. When a
+  real device with long-running actions exists, the model is expected to grow an
+  optional field on `ActuatorSpec` — e.g. `execution_model: "instant" |
+  "long_running"` — that lives *alongside* `params_schema`, not in place of it. The
+  two are orthogonal: `params_schema` answers "what do you send?" while
+  `execution_model` would answer "how does the action unfold in time?". An action
+  like `move_to(x, y, z)` needs both — parameter validation AND a temporal model.
+  Adding the field later is backward-compatible (existing manifests default to
+  `instant`), so committing to JSON Schema now does not constrain that path.
+
+- **Physical safety.** A schema can confirm `angle` is a number in `[-180, 180]`; it
+  cannot confirm that angle won't drive a robot arm into a wall. Parameter
+  validation is a necessary step, not a safety guarantee. Physical safety belongs to
+  the deployment's safety systems, not the manifest.
+
 ---
 
 ## Intent Class Resolution — Database-backed (v0.3+)

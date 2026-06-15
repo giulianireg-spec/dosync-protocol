@@ -502,7 +502,7 @@ app = FastAPI(
 # API version:      the REST API version (URL prefix /v1/)
 # These are exposed as response headers on every request so clients can detect
 # the version without parsing the URL or the response body.
-DOSYNC_PROTOCOL_VERSION = "0.2"
+DOSYNC_PROTOCOL_VERSION = "0.3"
 DOSYNC_API_VERSION = "1"
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -657,6 +657,17 @@ def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth
                 **(manifest.adapter_config or {}),
                 "cert_authenticated": True,
             }
+        # Validate that each actuator's params_schema is well-formed JSON Schema
+        # (draft 2020-12). Protects the integrity of the standard: a manifest that
+        # claims JSON Schema must actually be valid. Skipped gracefully if the
+        # jsonschema library is absent (logs a warning, does not fail).
+        from dosync.validation import validate_manifest_schemas
+        schema_problems = validate_manifest_schemas(manifest)
+        if schema_problems:
+            raise HTTPException(
+                status_code=422,
+                detail="Invalid actuator params_schema: " + "; ".join(schema_problems),
+            )
         hub.register_device(manifest)
         return {
             "status": "registered",
