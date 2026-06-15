@@ -6,3 +6,7 @@ pywizlight>=0.5.0
 twilio>=8.0.0
 websockets>=11.0
 paho-mqtt>=2.0.0
+
+# Optional — BLE adapter (universal Bluetooth Low Energy). Only needed if
+# DOSYNC_BLE_ENABLED=true. Uses BlueZ on Linux/Raspberry Pi.
+# bleak>=0.21

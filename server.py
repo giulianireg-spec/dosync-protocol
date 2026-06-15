@@ -95,6 +95,17 @@ else:
         from dosync.adapters.wiz import WiZAdapter
         executor = AdapterExecutor(hub, fallback_to_simulated=True)
         executor.register(WiZAdapter(hub=hub))
+        # BLE adapter — opt-in. Only registered when DOSYNC_BLE_ENABLED=true, since
+        # not every hub has a Bluetooth radio. Universal: one adapter drives any
+        # BLE device via the manifest's action→characteristic map.
+        if os.environ.get("DOSYNC_BLE_ENABLED", "false").lower() == "true":
+            try:
+                from dosync.adapters.ble import BLEAdapter
+                executor.register(BLEAdapter(hub=hub))
+                logging.getLogger("dosync.server").info("BLEAdapter registered")
+            except Exception as _ble_e:
+                logging.getLogger("dosync.server").warning(
+                    "BLEAdapter registration failed: %s", _ble_e)
         from dosync.adapters.homeassistant import HABridge
         _ha_url = os.environ.get("HA_URL", "http://localhost:8123")
         _ha_token = os.environ.get("HA_TOKEN", "")
