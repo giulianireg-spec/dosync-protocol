@@ -231,6 +231,34 @@ mind — never the device. A device only emits its manifest as static JSON; it n
 needs a JSON Schema library on board. This preserves the "dumb body" principle: the
 body declares, the hub/mind validates.
 
+### Validation behavior at execution (v0.3)
+
+When an intent is resolved into an action plan, the hub validates each action's
+params against its actuator's `params_schema` **before dispatch**. The behavior on
+an invalid parameter is defined by the standard:
+
+- **The invalid action is rejected individually; the rest of the plan continues.**
+  A single out-of-range parameter never aborts a whole plan. This matters most in
+  emergencies, where one malformed action must not prevent the other lights, locks,
+  and notifications from executing.
+- **The intent resolves as `partial`** (or `rejected_invalid_params` if *every*
+  action was rejected). The result lists which actions executed and which were
+  rejected, with reasons.
+- **Every rejection is recorded in the audit log** with type
+  `action_rejected_invalid_params`, including the device, action, params, and
+  reason. Nothing is silently discarded.
+- **This is distinct from a device failing to respond.** A rejected action means
+  "the mind asked for something the actuator declared it does not accept"; a failed
+  device means "the request was well-formed but the device did not answer." Both may
+  surface as `partial`, but the audit log distinguishes them — one is a request-side
+  problem, the other a device-side one. This distinction matters for accountability.
+- **The emergency path skips validation** by default (latency guarantee): an
+  emergency response is never delayed or thinned by validation. Even with validation
+  active, reject-and-continue means it could only ever drop a single invalid action,
+  never the response — so skipping it on emergencies is a speed optimization, not a
+  safety necessity. Controlled by `DOSYNC_VALIDATE_PARAMS` (default on; emergencies
+  always skip).
+
 **The standard commits to the format, not the library.** The spec requires JSON
 Schema draft 2020-12. Which validator a given implementation uses is an
 implementation choice (the reference implementation uses Python's `jsonschema`).

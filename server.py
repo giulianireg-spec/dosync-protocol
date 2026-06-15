@@ -331,6 +331,7 @@ class ActuatorIn(BaseModel):
     id: str
     type: str
     description: str = ""
+    params_schema: dict = {}  # JSON Schema (draft 2020-12) for this action's params
 
 class EventSpecIn(BaseModel):
     id: str
@@ -644,7 +645,7 @@ def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth
             sensors=[SensorSpec(s.id, s.type, s.description, s.unit,
                                 poll_interval_ms=s.poll_interval_ms)
                      for s in req.sensors],
-            actuators=[ActuatorSpec(a.id, a.type, a.description)
+            actuators=[ActuatorSpec(a.id, a.type, a.description, a.params_schema)
                        for a in req.actuators],
             events=[EventSpec(e.id, Severity(e.severity), e.description)
                     for e in req.events],

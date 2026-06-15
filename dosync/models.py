@@ -349,11 +349,16 @@ class IntentResult:
     completed_at: float               = field(default_factory=time.time)
     failure_policy_applied: str       = "continue"
     status: str                       = "success"
+    rejected_actions: list            = field(default_factory=list)
     # "success"        — all actions completed successfully
-    # "partial"        — some actions failed, rest continued
+    # "partial"        — some actions failed or were rejected, rest continued
     # "partial_abort"  — some actions executed, rest aborted by ABORT policy
     # "failed"         — all actions failed or intent was blocked
     # "retry_exhausted"— retries exhausted, result is failure
+    # "rejected_invalid_params" — every action rejected by param validation (v0.3)
+    # rejected_actions: actions dropped because their params violated the
+    #   actuator's JSON Schema — distinct from failed_devices (device didn't
+    #   respond). Each entry: {device_id, action, reason}.
 
 
 # ── Phased action plan (for ordered sequences like multi-phase emergencies) ─────

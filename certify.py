@@ -7,7 +7,7 @@ Usage:
 
 Tiers:
   basic     (10 tests) — connectivity, authentication, device manifest
-  standard  (32 tests) — protocol conformance, events, health, version headers, manifest privacy, intent lifecycle
+  standard  (33 tests) — protocol conformance, events, health, version headers, manifest privacy, intent lifecycle
   emergency (35 tests) — emergency override, policy engine, audit log integrity, firmware re-registration
 
 Two testing modes:
@@ -392,7 +392,7 @@ def run_basic(base: str, report: CertReport) -> bool:
     return True
 
 
-# ── TIER STANDARD — 22 additional tests (total 32) ───────────────────────────
+# ── TIER STANDARD — 23 additional tests (total 33) ───────────────────────────
 
 def run_standard(base: str, report: CertReport):
     section("── Tier STANDARD — Protocol conformance + events ────────")
@@ -661,6 +661,37 @@ def run_standard(base: str, report: CertReport):
         f"status={s22_status}",
     ))
 
+    # S23. params_schema is enforced as JSON Schema (protocol v0.3)
+    # The standard commits to JSON Schema draft 2020-12 for action params. A hub
+    # MUST reject a manifest whose params_schema is not valid JSON Schema —
+    # otherwise the standard is not enforced. We register a device with a
+    # deliberately malformed schema (minimum is a string) and expect 422.
+    malformed_device = {
+        "device_id": "cert-schema-test-01",
+        "device_name": "Cert Schema Test",
+        "manufacturer": "Cert", "model": "Test", "firmware": "1",
+        "category": "actuator", "tags": ["light"], "sensors": [],
+        "actuators": [{
+            "id": "set_brightness", "type": "set_brightness", "description": "",
+            "params_schema": {"type": "object",
+                              "properties": {"brightness": {"type": "integer", "minimum": "low"}}},
+        }],
+        "emergency_capable": False, "cert_tier": "basic",
+    }
+    s23_status, _ = request("POST", f"{base}/v1/devices/register", malformed_device)
+    # Accept 422 (validation active). A 200 means the hub did not enforce the
+    # schema contract — that fails certification. (If the hub runs without the
+    # jsonschema library, validation degrades and this cannot be enforced; in
+    # that deployment the hub should install jsonschema to be conformant.)
+    report.add(TestResult(
+        "S23  params_schema enforced as JSON Schema — malformed rejected (422)",
+        s23_status == 422,
+        f"status={s23_status} (expected 422; 200 = schema contract not enforced)",
+    ))
+    # Cleanup in case it somehow registered.
+    if s23_status == 200:
+        request("DELETE", f"{base}/v1/devices/cert-schema-test-01")
+
 # ── TIER EMERGENCY — 13 additional tests (total 35) ─────────────────────────
 
 def run_emergency(base: str, report: CertReport):
@@ -839,7 +870,7 @@ Environment variables:
 
 Tier test counts:
   basic      10 tests  — connectivity, auth, registration, manifest
-  standard   32 tests  — + intents, events, health, explainability, version headers, intent lifecycle
+  standard   33 tests  — + intents, events, health, explainability, version headers, intent lifecycle
   emergency  35 tests  — + emergency override, audit log integrity, firmware re-registration
         """,
     )
@@ -855,7 +886,7 @@ Tier test counts:
     base   = f"http://{args.host}:{args.port}"
     report = CertReport(host=args.host, port=args.port, tier=args.tier)
 
-    tier_counts = {"basic": 10, "standard": 32, "emergency": 35}
+    tier_counts = {"basic": 10, "standard": 33, "emergency": 36}
     print(f"\n{C.BOLD}DoSync Certification CLI v0.3{C.RESET}")
     print(f"  Hub:   {base}")
     print(f"  Tier:  {C.BOLD}{args.tier.upper()}{C.RESET} ({tier_counts[args.tier]} tests)")

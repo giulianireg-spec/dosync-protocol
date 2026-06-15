@@ -245,6 +245,16 @@ jobs:
           pip install 'jsonschema>=4.18'
           PYTHONPATH=. python3 tests/test_validation.py
 
+      # ── Step 4m: Validation integration (real execution path) ─────────────
+      # 7 tests proving validation is WIRED, not just present: malformed schema
+      # rejected at the register endpoint (422), invalid params rejected at
+      # execution with the rest of the plan continuing (partial) and recorded in
+      # the audit log, and the emergency path skipping validation.
+      - name: Validation integration tests (7 tests)
+        run: |
+          pip install 'jsonschema>=4.18'
+          DOSYNC_AUTH=false PYTHONPATH=. python3 tests/test_validation_integration.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py

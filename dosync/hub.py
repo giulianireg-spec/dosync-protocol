@@ -8,6 +8,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import time
 from typing import Callable, Optional
 
@@ -1271,6 +1272,59 @@ class DoSyncHub:
         results = list(await asyncio.gather(*[_with_retry(a) for a in actions]))
         return results, [r.device_id for r in results if not r.success], []
 
+    def _validate_plan_params(self, plan, intent):
+        """Validate each action's params against its actuator's JSON Schema.
+
+        Returns (filtered_plan, rejected). Valid actions stay in the plan; each
+        invalid action is dropped and recorded — both in the returned `rejected`
+        list and in the audit log — so nothing is silently discarded.
+
+        Rejection here means "the mind asked for something the actuator declared
+        it does not accept" — distinct from a device that fails to respond at
+        execution time. The audit entry type makes that distinction explicit.
+        """
+        from .models import ActionPlan as _AP
+        from .validation import validate_params
+
+        valid, rejected = [], []
+        for action in plan.actions:
+            device = self.registry.get(action.device_id)
+            schema = None
+            if device:
+                for act in device.actuators:
+                    if act.type == action.action:
+                        schema = getattr(act, "params_schema", None)
+                        break
+            # No device or no schema for this action → nothing to validate against.
+            if not schema:
+                valid.append(action)
+                continue
+
+            ok, err = validate_params(schema, action.params or {})
+            if ok:
+                valid.append(action)
+            else:
+                rejected.append((action, err))
+                log.warning(
+                    "Action rejected by param validation: %s.%s — %s",
+                    action.device_id, action.action, err,
+                )
+                self.audit_log.append({
+                    "type":      "action_rejected_invalid_params",
+                    "intent_id": intent.intent_id,
+                    "intent":    intent.intent.value,
+                    "device_id": action.device_id,
+                    "action":    action.action,
+                    "params":    action.params,
+                    "reason":    err,
+                    "source":    getattr(intent, "source", "api"),
+                })
+
+        filtered = _AP(intent_id=plan.intent_id, actions=valid, urgency=plan.urgency,
+                       failure_policy=getattr(plan, "failure_policy", None),
+                       max_retries=getattr(plan, "max_retries", 1))
+        return filtered, rejected
+
     async def execute_intent(
         self,
         intent: Intent,
@@ -1279,6 +1333,21 @@ class DoSyncHub:
         log.info("Executing intent: %s [%s]", intent.intent.value, intent.urgency.value)
 
         plan = self.resolver.resolve(intent)
+
+        # ── Parameter validation (protocol v0.3) ──────────────────────────────
+        # Validate each action's params against its actuator's JSON Schema BEFORE
+        # dispatch. An action whose params violate the schema is rejected
+        # individually, recorded in the audit log, and the rest of the plan
+        # continues (partial result) — a single bad parameter never aborts a plan.
+        #
+        # Opt-out by latency: on the EMERGENCY path, validation is skipped so the
+        # response is never delayed. Even when active, rejection-and-continue means
+        # validation cannot tumble an emergency — only the invalid action drops.
+        # Controlled by DOSYNC_VALIDATE_PARAMS (default "true"); emergencies always skip.
+        rejected_actions = []
+        _validate = os.environ.get("DOSYNC_VALIDATE_PARAMS", "true").lower() == "true"
+        if _validate and intent.urgency != Urgency.EMERGENCY:
+            plan, rejected_actions = self._validate_plan_params(plan, intent)
 
         # Policy Engine evaluation
         if self.policy_engine:
@@ -1343,15 +1412,26 @@ class DoSyncHub:
             self._active_intents.pop(intent_value, None)
             self._active_intent_devices.pop(intent_value, None)
 
-        success = len(failed) == 0 and len(aborted) == 0
-        if not results:
+        # Rejected-by-validation actions count against full success: the plan did
+        # not do everything the mind asked. Per the panel, this resolves to
+        # `partial` even if every dispatched action succeeded — and is recorded
+        # distinctly from device failures (see audit type above).
+        has_rejected = len(rejected_actions) > 0
+        success = len(failed) == 0 and len(aborted) == 0 and not has_rejected
+        if not results and not has_rejected:
             status = "failed"
         elif aborted:
             status = "partial_abort"
+        elif not results and has_rejected:
+            # Every action was rejected by validation; nothing executed.
+            status = "rejected_invalid_params"
         elif failed and len(failed) < len(results):
             status = "partial"
         elif failed:
             status = "failed"
+        elif has_rejected:
+            # Some actions executed, some rejected by validation → partial.
+            status = "partial"
         elif any(getattr(r, "retries", 0) > 0 and not r.success for r in results):
             status = "retry_exhausted"
         else:
@@ -1365,6 +1445,10 @@ class DoSyncHub:
             aborted_devices=aborted,
             failure_policy_applied=policy_applied,
             status=status,
+            rejected_actions=[
+                {"device_id": a.device_id, "action": a.action, "reason": err}
+                for a, err in rejected_actions
+            ],
         )
         # Audit log
         self.audit_log.append({
