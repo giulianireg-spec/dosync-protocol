@@ -359,8 +359,8 @@ jobs:
           assert "v0.3" in output, f"certify.py header should be v0.3, got: {output[:200]}"
 
           # Check test counts are declared
-          assert "32 tests" in output, "Standard tier should declare 32 tests"
-          assert "35 tests" in output or "32 tests" in output, "Tier counts should be present"
+          assert "33 tests" in output, "Standard tier should declare 33 tests"
+          assert "36 tests" in output or "33 tests" in output, "Tier counts should be present"
 
           print("✓ certify.py structure: version v0.3, test counts declared")
           EOF
