@@ -223,6 +223,9 @@ class CertReport:
     failed: int = 0
     certified: bool = False
     fingerprint: str = ""
+    signature: str = ""          # Ed25519 signature over the canonical report (optional)
+    hub_version: str = ""        # hub's reported app version (reproducibility)
+    hub_protocol: str = ""       # hub's reported protocol version (reproducibility)
 
     def add(self, result: TestResult):
         self.tests.append(result)
@@ -243,13 +246,42 @@ class CertReport:
 
     def to_dict(self) -> dict:
         return {
-            "dosync_cert_version": "0.2",
+            "dosync_cert_version": "0.3",
             "certified": self.certified,
             "tier": self.tier,
             "hub": f"{self.host}:{self.port}",
+            "hub_version": self.hub_version,
+            "hub_protocol": self.hub_protocol,
             "timestamp": self.timestamp,
             "summary": {"passed": self.passed, "failed": self.failed, "total": self.passed + self.failed},
+            # ── Reproducibility ────────────────────────────────────────────────
+            # This report is self-issued. Its value comes from being reproducible:
+            # a third party can re-run the same certification against the same hub
+            # and compare. This block tells them exactly how.
+            "reproduce": {
+                "tool": "certify.py",
+                "command": f"python3 certify.py --host {self.host} --port {self.port} --tier {self.tier}",
+                "protocol_tested": self.hub_protocol or "see hub_protocol",
+                "note": "Re-run against the same hub and compare summary + per-test results.",
+            },
+            # ── Honesty: what this certifies, and what it does NOT ─────────────
+            # A signature proves the report wasn't altered after issuance; it does
+            # NOT make a self-issued cert an independent audit. We state the limits
+            # plainly — the same honesty applied to the audit log.
+            "attestation": {
+                "type": "self-issued",
+                "proves": [
+                    "the hub at this address passed these tests at this timestamp",
+                    "this report has not been altered since it was signed (if signature present)",
+                ],
+                "does_not_prove": [
+                    "future behavior, or behavior under different configuration",
+                    "that the test environment matches production",
+                    "independent third-party review (this is self-certification, not an authority)",
+                ],
+            },
             "fingerprint": self.fingerprint,
+            "signature": self.signature,
             "tests": [
                 {"name": t.name, "passed": t.passed, "detail": t.detail}
                 for t in self.tests
@@ -304,6 +336,9 @@ def run_basic(base: str, report: CertReport) -> bool:
 
     # B1. Hub reachable
     status, body = request("GET", f"{base}/v1/status")
+    if status == 200:
+        report.hub_version = str(body.get("version", ""))
+        report.hub_protocol = str(body.get("protocol", ""))
     report.add(TestResult(
         "B01  Hub reachable on the network",
         status == 200,
@@ -881,7 +916,32 @@ Tier test counts:
                         help="Certification tier to verify")
     parser.add_argument("--output", default=None,
                         help="Output file for JSON report (e.g. cert.json)")
+    parser.add_argument("--verify", default=None, metavar="REPORT.json",
+                        help="Verify the Ed25519 signature of an existing report and exit")
+    parser.add_argument("--no-sign", action="store_true",
+                        help="Do not sign the report (signing is on by default)")
     args = parser.parse_args()
+
+    # ── Verify mode — check an existing report's signature and exit ────────────
+    # A third party runs this against a report they received. No hub needed, no
+    # dependencies: the pure-Python Ed25519 verifies the embedded signature.
+    if args.verify:
+        from dosync.cert_signing import verify_report
+        try:
+            with open(args.verify) as f:
+                report_data = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"  {C.FAIL}Cannot read report: {e}{C.RESET}")
+            sys.exit(2)
+        ok, msg = verify_report(report_data)
+        if ok:
+            print(f"  {C.OK}✓ {msg}{C.RESET}")
+            print(f"  {C.WARN}Note: a valid signature proves the report was not altered after issuance.")
+            print(f"  It does not prove independent review — see the report's 'attestation' block.{C.RESET}")
+            sys.exit(0)
+        else:
+            print(f"  {C.FAIL}✗ {msg}{C.RESET}")
+            sys.exit(1)
 
     base   = f"http://{args.host}:{args.port}"
     report = CertReport(host=args.host, port=args.port, tier=args.tier)
@@ -915,8 +975,23 @@ Tier test counts:
         print(f"\n  {C.BOLD}{C.FAIL}✗ NOT CERTIFIED — {report.failed} test(s) failed{C.RESET}")
 
     output_file = args.output or f"dosync-cert-{args.tier}-{int(time.time())}.json"
+    report_dict = report.to_dict()
+
+    # Sign the report (on by default) so a third party can confirm it was not
+    # altered after issuance. Uses pure-Python Ed25519 — no dependency required.
+    # Degrades gracefully: if signing fails for any reason, the report is still
+    # written unsigned rather than lost.
+    if not args.no_sign:
+        try:
+            from dosync.cert_signing import sign_report
+            report_dict = sign_report(report_dict)
+            print(f"  Signed with key: {report_dict['signature']['public_key'][:16]}…")
+            print(f"  Verify with: python3 certify.py --verify {output_file}")
+        except Exception as e:
+            print(f"  {C.WARN}Report not signed ({e}); writing unsigned report.{C.RESET}")
+
     with open(output_file, "w") as f:
-        json.dump(report.to_dict(), f, indent=2)
+        json.dump(report_dict, f, indent=2)
     print(f"\n  Report saved: {output_file}\n")
 
     sys.exit(0 if report.certified else 1)

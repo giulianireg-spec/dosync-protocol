@@ -255,6 +255,13 @@ jobs:
           pip install 'jsonschema>=4.18'
           DOSYNC_AUTH=false PYTHONPATH=. python3 tests/test_validation_integration.py
 
+      # ── Step 4n: Cert signing — Ed25519 (pure Python, zero deps) ──────────
+      # Validates the pure-Python Ed25519 against RFC 8032 vectors before the
+      # cert tooling relies on it, plus the sign/verify/tamper-detection round
+      # trip. No dependency installed — that's the point of pure Python.
+      - name: Cert signing tests (8 tests)
+        run: PYTHONPATH=. python3 tests/test_ed25519_pure.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py
