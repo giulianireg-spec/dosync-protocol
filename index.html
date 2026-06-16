@@ -804,6 +804,37 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
   </div>
 </section>
 
+<!-- Home Assistant positioning -->
+<section style="padding:72px 40px;border-top:0.5px solid var(--border)">
+  <div class="section-inner">
+    <p class="section-eyebrow">Works with Home Assistant</p>
+    <h2 class="section-title">A layer on top of HA — not a replacement for it.</h2>
+    <p class="section-sub">Home Assistant already solved the hardest problem in the smart home: talking to thousands of devices. DoSync doesn't reinvent that — it reads devices from HA through a bridge that's already in the repo, and adds a semantic, auditable coordination layer above them. HA is one source of devices; the intelligence stays in the connecting AI.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:36px;align-items:start">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">HA's MCP server exposes commands</p>
+          <p style="font-size:13px;color:#888780;line-height:1.6">Turn on this light, set that thermostat. The intelligence of <em>what to do</em> lives in an automation you wrote, or in the AI sending commands.</p>
+        </div>
+        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">DoSync resolves intents</p>
+          <p style="font-size:13px;color:#888780;line-height:1.6">Express a goal — <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">ensure_safety</code> — and a resolver coordinates the right devices across <em>any</em> source, with a tamper-evident audit log of what acted and why.</p>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;padding-top:0">
+        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">When DoSync earns its place</p>
+          <p style="font-size:13px;color:#888780;line-height:1.6">When coordination <em>and</em> traceability both matter at once — a fall-response that unlocks the door, lights the house, and messages family, with an auditable record of exactly what fired.</p>
+        </div>
+        <div style="background:#0F1A16;border:0.5px solid #1E3A2E;border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:#5DCAA5;margin-bottom:6px">When it doesn't</p>
+          <p style="font-size:13px;color:#888780;line-height:1.6">For everyday automation — "porch light when I get home" — you don't need DoSync. HA's automations and its MCP cover that completely. The extra layer is for the narrow set of cases that need auditable coordination.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- Footer -->
 <footer>
   <div class="footer-inner">
