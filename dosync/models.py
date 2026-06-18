@@ -138,6 +138,17 @@ class ActuatorSpec:
     type: str                          # "lock" | "light" | "unlock" | etc.
     description: str = ""
     params_schema: dict = field(default_factory=dict)
+    # ── Execution model (orthogonal to params_schema) ─────────────────────────
+    # "instant"  (default): fire-and-result, exactly as every actuator works today.
+    # "long_running": the action takes time and has a lifecycle (see operations.py).
+    # The default keeps every existing manifest byte-for-byte compatible.
+    execution_model: str = "instant"
+    # Optional richness flags — only meaningful when execution_model == "long_running".
+    # A simple long-running device (e.g. an oven) declares none of these; a drone
+    # declares all three. The device declares how rich it is; the hub adapts.
+    supports_progress: bool = False    # hub can query intermediate progress
+    supports_cancel: bool = False      # the operation can be cancelled
+    emits_telemetry: bool = False      # device streams telemetry → enables sub-states + reconciliation
 
 @dataclass
 class EventSpec:

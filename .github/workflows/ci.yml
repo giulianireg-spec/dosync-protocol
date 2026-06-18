@@ -262,6 +262,14 @@ jobs:
       - name: Cert signing tests (8 tests)
         run: PYTHONPATH=. python3 tests/test_ed25519_pure.py
 
+      # ── Step 4o: Operation state machine (Carril 6 foundation) ────────────
+      # Pure-logic state machine for long-running operations (the execution_model
+      # foundation for the drone work). No hardware, no MAVLink — exhaustive
+      # coverage of the lifecycle: core path, rejection, human interruption (no
+      # resume), vehicle self-pause, telemetry gate, illegal transitions.
+      - name: Operation state machine tests (19 tests)
+        run: PYTHONPATH=. python3 tests/test_operations.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py
