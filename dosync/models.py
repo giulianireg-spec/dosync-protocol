@@ -361,12 +361,21 @@ class IntentResult:
     failure_policy_applied: str       = "continue"
     status: str                       = "success"
     rejected_actions: list            = field(default_factory=list)
+    # Long-running operations started by this intent (execution_model). Each entry:
+    # {operation_id, device_id, state}. EMPTY for intents that only triggered instant
+    # actions → a client that predates operations sees an identical IntentResult.
+    # The presence of entries signals "these actions started and are still running;
+    # track them by operation_id". (Querying/cancelling them is a separate API step.)
+    operations: list                  = field(default_factory=list)
     # "success"        — all actions completed successfully
     # "partial"        — some actions failed or were rejected, rest continued
     # "partial_abort"  — some actions executed, rest aborted by ABORT policy
     # "failed"         — all actions failed or intent was blocked
     # "retry_exhausted"— retries exhausted, result is failure
     # "rejected_invalid_params" — every action rejected by param validation (v0.3)
+    # "accepted"       — the intent started one or more long-running operations that
+    #   are still in progress (execution_model). Not success (not done) nor failed
+    #   (not failed) — accepted and running. Only appears when `operations` is non-empty.
     # rejected_actions: actions dropped because their params violated the
     #   actuator's JSON Schema — distinct from failed_devices (device didn't
     #   respond). Each entry: {device_id, action, reason}.

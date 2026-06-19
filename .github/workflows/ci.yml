@@ -283,6 +283,13 @@ jobs:
       - name: Operation reconciler tests (17 tests)
         run: PYTHONPATH=. python3 tests/test_reconciler.py
 
+      # ── Step 4r: execute_intent wiring (execution_model integration) ──────
+      # Wires long-running operations into execute_intent: plan split, write-ahead,
+      # operations in IntentResult, status 'accepted'. Instant path proven unchanged
+      # (backwards compatibility). Touches the hub core — guarded thoroughly.
+      - name: Operations wiring tests (7 tests)
+        run: DOSYNC_AUTH=false PYTHONPATH=. python3 tests/test_operations_wiring.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py

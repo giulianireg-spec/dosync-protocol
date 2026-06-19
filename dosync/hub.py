@@ -1325,6 +1325,107 @@ class DoSyncHub:
                        max_retries=getattr(plan, "max_retries", 1))
         return filtered, rejected
 
+    # ── Long-running operations: split + write-ahead (execution_model) ────────
+    # This is a SELF-CONTAINED sub-protocol layered on top of intent execution.
+    # The instant path (every existing action) is untouched: these helpers only
+    # ever handle actions whose actuator declares execution_model == "long_running".
+    # An implementer in another language can read this block as one unit.
+
+    def _action_execution_model(self, action: "DeviceAction") -> tuple[str, bool]:
+        """Return (execution_model, emits_telemetry) for an action by looking up
+        its actuator in the device manifest. Defaults to ("instant", False) when the
+        device/actuator is unknown — an unknown action is treated as instant, never
+        long-running, so a missing manifest can never strand an operation."""
+        manifest = self.registry.get(action.device_id)
+        if not manifest:
+            return ("instant", False)
+        for act in manifest.actuators:
+            if act.type == action.action:
+                return (getattr(act, "execution_model", "instant"),
+                        getattr(act, "emits_telemetry", False))
+        return ("instant", False)
+
+    def _split_plan_by_execution_model(self, plan):
+        """Split a plan's actions into (instant_actions, long_running_actions).
+        Each action goes to exactly one list — no action is ever in both."""
+        instant, long_running = [], []
+        for action in plan.actions:
+            model, _ = self._action_execution_model(action)
+            (long_running if model == "long_running" else instant).append(action)
+        return instant, long_running
+
+    async def _start_long_running_actions(self, long_running_actions, executor, intent):
+        """For each long-running action: WRITE-AHEAD (create + persist the operation
+        in `pending` BEFORE dispatching), then dispatch, then transition by the
+        dispatch result. Returns a list of {operation_id, device_id, state} for the
+        IntentResult. Never blocks waiting for the action to finish — it only starts.
+
+        Panel rules honored here:
+          - write-ahead: persist `pending` before dispatch, so a crash mid-dispatch
+            never leaves a running device with no operation record.
+          - silence != success: a successful DISPATCH means the device ACCEPTED the
+            command, not that it finished. For a telemetry device the operation waits
+            in `in_progress` for telemetry to confirm/advance; for a core device
+            (no telemetry) the successful dispatch is the only signal there will be,
+            so it goes to `in_progress` and a later positive signal completes it.
+          - graceful degradation: an adapter that doesn't cooperate just returns a
+            normal ActionResult; the operation is resolved from it. No adapter is
+            required to understand operations.
+        """
+        from .operations import Operation, OperationState
+
+        started = []
+        for action in long_running_actions:
+            _, emits_telemetry = self._action_execution_model(action)
+            op = Operation(
+                device_id=action.device_id,
+                action=action.action,
+                telemetry_capable=emits_telemetry,
+            )
+            # WRITE-AHEAD: persist in `pending` before we touch the device.
+            self.db.save_operation(op.to_dict(), terminal=op.is_terminal)
+            self.audit_log.append({
+                "type":         "operation_created",
+                "operation_id": op.operation_id,
+                "intent_id":    intent.intent_id,
+                "device_id":    action.device_id,
+                "action":       action.action,
+                "state":        op.state.value,
+            })
+
+            # Dispatch (start the action). We do NOT wait for it to finish.
+            try:
+                result = await executor.execute(action, intent.urgency)
+                dispatch_ok = bool(getattr(result, "success", False))
+                err = getattr(result, "error", None)
+            except Exception as e:  # an adapter blowing up must not strand the op
+                dispatch_ok = False
+                err = str(e)
+
+            if dispatch_ok:
+                # Accepted by the device. NOT completed — started.
+                op.transition_to(OperationState.IN_PROGRESS,
+                                 reason="dispatch accepted by device")
+            else:
+                # The device refused / dispatch failed → the operation never ran.
+                op.transition_to(OperationState.FAILED,
+                                 reason=f"dispatch failed: {err}" if err else "dispatch failed")
+
+            self.db.save_operation(op.to_dict(), terminal=op.is_terminal)
+            self.audit_log.append({
+                "type":         "operation_transition",
+                "operation_id": op.operation_id,
+                "intent_id":    intent.intent_id,
+                "from_state":   "pending",
+                "to_state":     op.state.value,
+            })
+            started.append({
+                "operation_id": op.operation_id,
+                "device_id":    action.device_id,
+                "state":        op.state.value,
+            })
+        return started
+
     async def execute_intent(
         self,
         intent: Intent,
@@ -1402,6 +1503,23 @@ class DoSyncHub:
         self._active_intents[intent_value] = get_intent_priority(intent_value)
         self._active_intent_devices[intent_value] = {a.device_id for a in plan.actions}
 
+        # ── Split by execution model (execution_model) ─────────────────────────
+        # Long-running actions follow a separate sub-protocol: they are STARTED and
+        # tracked as operations, not awaited to completion. Instant actions take the
+        # existing path completely unchanged. An intent with no long-running actions
+        # behaves exactly as before (started_operations stays empty).
+        from .models import ActionPlan as _APlan
+        _instant_actions, _long_running_actions = self._split_plan_by_execution_model(plan)
+        started_operations = []
+        if _long_running_actions:
+            started_operations = await self._start_long_running_actions(
+                _long_running_actions, executor, intent
+            )
+            # The instant path below operates only on the instant sub-plan.
+            plan = _APlan(intent_id=plan.intent_id, actions=_instant_actions,
+                          urgency=plan.urgency,
+                          failure_policy=getattr(plan, "failure_policy", None))
+
         # Execute with the plan's FailurePolicy
         results, failed, aborted, policy_applied = [], [], [], "continue"
         try:
@@ -1417,8 +1535,14 @@ class DoSyncHub:
         # `partial` even if every dispatched action succeeded — and is recorded
         # distinctly from device failures (see audit type above).
         has_rejected = len(rejected_actions) > 0
+        has_operations = len(started_operations) > 0
         success = len(failed) == 0 and len(aborted) == 0 and not has_rejected
-        if not results and not has_rejected:
+        if not results and not has_rejected and has_operations:
+            # The intent only started long-running operations (no instant actions).
+            # Not failed — accepted and running. `accepted` is the honest status:
+            # nothing is done yet, but operations are underway.
+            status = "accepted"
+        elif not results and not has_rejected:
             status = "failed"
         elif aborted:
             status = "partial_abort"
@@ -1434,6 +1558,10 @@ class DoSyncHub:
             status = "partial"
         elif any(getattr(r, "retries", 0) > 0 and not r.success for r in results):
             status = "retry_exhausted"
+        elif has_operations:
+            # Instant actions all succeeded AND long-running operations started:
+            # the instant part is done but the intent as a whole is still running.
+            status = "accepted"
         else:
             status = "success"
 
@@ -1449,6 +1577,7 @@ class DoSyncHub:
                 {"device_id": a.device_id, "action": a.action, "reason": err}
                 for a, err in rejected_actions
             ],
+            operations=started_operations,
         )
         # Audit log
         self.audit_log.append({
