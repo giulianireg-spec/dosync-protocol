@@ -155,6 +155,20 @@ def test_reconciling_resolves_to_outcome():
     assert op.state == OperationState.INTERRUPTED
 
 
+def test_can_enter_reconciling_from_active_states():
+    """A recovered operation must be able to ENTER reconciling from whatever active
+    state it was in when the hub went down — not just exist there from creation."""
+    for active in (OperationState.PENDING, OperationState.ARMING,
+                   OperationState.TAKING_OFF, OperationState.IN_PROGRESS,
+                   OperationState.PAUSED_BY_VEHICLE):
+        op = Operation(device_id="drone-01", action="go_to",
+                       state=active, telemetry_capable=True)
+        assert op.can_transition_to(OperationState.RECONCILING), \
+            f"must be able to reconcile from {active.value}"
+        op.transition_to(OperationState.RECONCILING, reason="hub restart")
+        assert op.state == OperationState.RECONCILING
+
+
 # ── Illegal transitions are rejected, never silently accepted ────────────────────
 
 def test_illegal_skip_rejected():

@@ -276,6 +276,13 @@ jobs:
       - name: Operations persistence tests (6 tests)
         run: DOSYNC_AUTH=false PYTHONPATH=. python3 tests/test_operations_persistence.py
 
+      # ── Step 4q: Operation reconciler (execution_model Layer 3) ───────────
+      # Turns abstract telemetry facts into state transitions. Telemetry wins,
+      # silence is never success. Covers the six panel scenarios + noisy/stale/
+      # out-of-order telemetry + restart reconciliation. Pure logic, no hardware.
+      - name: Operation reconciler tests (17 tests)
+        run: PYTHONPATH=. python3 tests/test_reconciler.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py

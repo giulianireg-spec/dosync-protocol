@@ -124,6 +124,7 @@ _ALLOWED_TRANSITIONS: dict[OperationState, frozenset[OperationState]] = {
         OperationState.CANCELLED,
         OperationState.INTERRUPTED,
         OperationState.FAILED,
+        OperationState.RECONCILING,   # recovered on restart while pending
     }),
     OperationState.ARMING: frozenset({
         OperationState.TAKING_OFF,
@@ -132,12 +133,14 @@ _ALLOWED_TRANSITIONS: dict[OperationState, frozenset[OperationState]] = {
         OperationState.CANCELLED,
         OperationState.INTERRUPTED,
         OperationState.REJECTED,
+        OperationState.RECONCILING,   # recovered on restart while arming
     }),
     OperationState.TAKING_OFF: frozenset({
         OperationState.IN_PROGRESS,
         OperationState.FAILED,
         OperationState.CANCELLED,
         OperationState.INTERRUPTED,
+        OperationState.RECONCILING,   # recovered on restart while taking off
     }),
     OperationState.IN_PROGRESS: frozenset({
         OperationState.COMPLETED,
@@ -145,12 +148,14 @@ _ALLOWED_TRANSITIONS: dict[OperationState, frozenset[OperationState]] = {
         OperationState.CANCELLED,
         OperationState.INTERRUPTED,
         OperationState.PAUSED_BY_VEHICLE,
+        OperationState.RECONCILING,   # recovered on restart while in progress
     }),
     OperationState.PAUSED_BY_VEHICLE: frozenset({
         OperationState.IN_PROGRESS,   # vehicle resumes on its own (wind eased)
         OperationState.FAILED,
         OperationState.CANCELLED,
         OperationState.INTERRUPTED,
+        OperationState.RECONCILING,   # recovered on restart while paused
     }),
     OperationState.RECONCILING: frozenset({
         OperationState.IN_PROGRESS,
