@@ -57,7 +57,7 @@ def test_operation_rehydrates_into_object():
     db, path = _fresh_db()
     try:
         op = Operation(device_id="drone-01", action="go_to", telemetry_capable=True)
-        op.transition_to(OperationState.ARMING, reason="arming")
+        op.transition_to(OperationState.PREPARING, reason="preparing")
         op.transition_to(OperationState.IN_PROGRESS, reason="navigating")
         _save(db, op)
 

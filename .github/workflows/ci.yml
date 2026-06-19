@@ -267,7 +267,7 @@ jobs:
       # foundation for the drone work). No hardware, no MAVLink — exhaustive
       # coverage of the lifecycle: core path, rejection, human interruption (no
       # resume), vehicle self-pause, telemetry gate, illegal transitions.
-      - name: Operation state machine tests (19 tests)
+      - name: Operation state machine tests (21 tests)
         run: PYTHONPATH=. python3 tests/test_operations.py
 
       # ── Step 4p: Operations persistence (execution_model Layer 2) ─────────

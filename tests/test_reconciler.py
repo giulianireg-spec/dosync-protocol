@@ -29,12 +29,12 @@ def _oven_op() -> Operation:
 
 # ── The six panel scenarios ──────────────────────────────────────────────────────
 
-def test_scenario_arrived_completes():
-    """Happy path: started → arrived. ARRIVED is the only path to completed."""
+def test_scenario_finished_completes():
+    """Happy path: started → finished. FINISHED is the only path to completed."""
     r = OperationReconciler()
     op = _drone_op()
     r.reconcile(op, TelemetryEvent.STARTED)
-    res = r.reconcile(op, TelemetryEvent.ARRIVED)
+    res = r.reconcile(op, TelemetryEvent.FINISHED)
     assert res.changed
     assert op.state == OperationState.COMPLETED
 
@@ -52,7 +52,7 @@ def test_scenario_rejected_by_vehicle():
     """The vehicle refuses before starting — distinct from failing."""
     r = OperationReconciler()
     op = _drone_op()
-    res = r.reconcile(op, TelemetryEvent.REJECTED_BY_VEHICLE, reason="no GPS fix")
+    res = r.reconcile(op, TelemetryEvent.REJECTED_BY_DEVICE, reason="no GPS fix")
     assert res.changed
     assert op.state == OperationState.REJECTED
 
@@ -77,31 +77,33 @@ def test_scenario_interrupted_by_human():
     assert op.is_terminal
 
 
-def test_scenario_vehicle_paused_then_resumed():
+def test_scenario_device_paused_then_resumed():
     """The vehicle pauses itself (wind) and later resumes on its own."""
     r = OperationReconciler()
     op = _drone_op()
     r.reconcile(op, TelemetryEvent.STARTED)
-    res1 = r.reconcile(op, TelemetryEvent.VEHICLE_PAUSED, reason="high wind")
+    res1 = r.reconcile(op, TelemetryEvent.DEVICE_PAUSED, reason="high wind")
     assert res1.changed
-    assert op.state == OperationState.PAUSED_BY_VEHICLE
-    res2 = r.reconcile(op, TelemetryEvent.VEHICLE_RESUMED, reason="wind eased")
+    assert op.state == OperationState.PAUSED_BY_DEVICE
+    res2 = r.reconcile(op, TelemetryEvent.DEVICE_RESUMED, reason="wind eased")
     assert res2.changed
     assert op.state == OperationState.IN_PROGRESS
 
 
 # ── Full arming/takeoff sequence (telemetry profile) ─────────────────────────────
 
-def test_full_flight_sequence():
+def test_full_lifecycle_sequence():
+    """A richer device's full path: preparing → in_progress → completed. The aerial
+    sub-phases (arming, taking_off) live in the operation's phase field, not as
+    separate telemetry events or protocol states."""
     r = OperationReconciler()
     op = _drone_op()
-    r.reconcile(op, TelemetryEvent.ARMING)
-    assert op.state == OperationState.ARMING
-    r.reconcile(op, TelemetryEvent.TOOK_OFF)
-    assert op.state == OperationState.TAKING_OFF
+    r.reconcile(op, TelemetryEvent.PREPARING)
+    assert op.state == OperationState.PREPARING
+    op.phase = "arming"  # domain sub-phase detail
     r.reconcile(op, TelemetryEvent.STARTED)
     assert op.state == OperationState.IN_PROGRESS
-    r.reconcile(op, TelemetryEvent.ARRIVED)
+    r.reconcile(op, TelemetryEvent.FINISHED)
     assert op.state == OperationState.COMPLETED
 
 
@@ -138,19 +140,19 @@ def test_stale_telemetry_after_terminal_ignored():
     op = _drone_op()
     r.reconcile(op, TelemetryEvent.STARTED)
     r.reconcile(op, TelemetryEvent.MANUAL_CONTROL_TAKEN)  # interrupted (terminal)
-    res = r.reconcile(op, TelemetryEvent.ARRIVED)  # stale "arrived" arrives late
+    res = r.reconcile(op, TelemetryEvent.FINISHED)  # stale "arrived" arrives late
     assert not res.changed
     assert op.state == OperationState.INTERRUPTED  # unchanged
     assert "terminal" in res.note
 
 
 def test_illegal_telemetry_is_noop_not_crash():
-    """A fact implying an illegal jump (e.g. 'took_off' while already in_progress
-    navigating) is a no-op with a note — it must never crash the hub."""
+    """A fact implying an illegal jump (e.g. 'preparing' while already in_progress)
+    is a no-op with a note — it must never crash the hub."""
     r = OperationReconciler()
     op = _drone_op()
     r.reconcile(op, TelemetryEvent.STARTED)  # in_progress
-    res = r.reconcile(op, TelemetryEvent.TOOK_OFF)  # taking_off illegal from in_progress
+    res = r.reconcile(op, TelemetryEvent.PREPARING)  # preparing illegal from in_progress
     assert not res.changed
     assert op.state == OperationState.IN_PROGRESS
     assert "illegal" in res.note
@@ -203,7 +205,7 @@ def test_oven_core_lifecycle():
     op = _oven_op()
     r.reconcile(op, TelemetryEvent.STARTED)
     assert op.state == OperationState.IN_PROGRESS
-    res = r.reconcile(op, TelemetryEvent.ARRIVED, reason="reached temp")
+    res = r.reconcile(op, TelemetryEvent.FINISHED, reason="reached temp")
     assert op.state == OperationState.COMPLETED
     assert res.changed
 
@@ -214,7 +216,7 @@ def test_oven_cannot_be_driven_into_telemetry_state():
     r = OperationReconciler()
     op = _oven_op()
     r.reconcile(op, TelemetryEvent.STARTED)
-    res = r.reconcile(op, TelemetryEvent.VEHICLE_PAUSED)
+    res = r.reconcile(op, TelemetryEvent.DEVICE_PAUSED)
     assert not res.changed
     assert op.state == OperationState.IN_PROGRESS
 

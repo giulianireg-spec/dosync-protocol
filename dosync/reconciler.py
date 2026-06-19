@@ -19,7 +19,7 @@ stays pure logic, fully testable by injecting fake telemetry. That separation is
 what lets the same reconciler serve a drone and an oven.
 
 The reconciler does NOT decide policy. It moves operations between states and
-records why. What to *do* about an operation that has been `paused_by_vehicle` for
+records why. What to *do* about an operation that has been `paused_by_device` for
 too long (notify the operator, trigger RTL) is the Policy Engine's job — the
 reconciler only exposes the state and the time-in-state. (Panel: keep the model
 and the policy separate, or the model becomes unimplementable.)
@@ -40,34 +40,35 @@ class TelemetryEvent(str, Enum):
 
     # ── Progress facts (positive signals — the only way forward) ──────────────
     STARTED = "started"                  # the action is confirmed underway
-    ARMING = "arming"                    # pre-takeoff phase began (telemetry profile)
-    TOOK_OFF = "took_off"                # ascended / reached working state (telemetry profile)
-    ARRIVED = "arrived"                  # reached the goal — positive completion signal
+    PREPARING = "preparing"              # a pre-action setup phase began (richer profile).
+                                         # Domain sub-phase (e.g. "arming") goes in the
+                                         # operation's `phase`, not in a new event name.
+    FINISHED = "finished"                # the action completed — positive completion signal.
+                                         # (A speaker finishes a track; a vehicle arrives.)
 
     # ── Trouble facts ─────────────────────────────────────────────────────────
-    REJECTED_BY_VEHICLE = "rejected_by_vehicle"   # device refused (not armed, no GPS, failsafe)
+    REJECTED_BY_DEVICE = "rejected_by_device"   # device refused (busy, not ready, unsafe)
     FAILED = "failed"                    # failed partway through
-    VEHICLE_PAUSED = "vehicle_paused"    # the vehicle paused itself (wind → LOITER)
-    VEHICLE_RESUMED = "vehicle_resumed"  # the vehicle resumed on its own
+    DEVICE_PAUSED = "device_paused"      # the device paused itself (lost stream, storage full, wind)
+    DEVICE_RESUMED = "device_resumed"    # the device resumed on its own
 
     # ── Human / control facts ─────────────────────────────────────────────────
-    MANUAL_CONTROL_TAKEN = "manual_control_taken"  # a human took the controls — interrupt
+    MANUAL_CONTROL_TAKEN = "manual_control_taken"  # a human took manual control — interrupt
     CANCELLED = "cancelled"              # explicit cancellation request honored
 
 
 # Maps a telemetry fact to the operation state it should drive toward. This is the
 # whole policy of "what does this fact mean for the lifecycle", in one table.
-# Note ARRIVED → COMPLETED is the ONLY path to completion: there is no way to reach
-# COMPLETED without a positive ARRIVED signal. Silence cannot complete an operation.
+# Note FINISHED → COMPLETED is the ONLY path to completion: there is no way to reach
+# COMPLETED without a positive FINISHED signal. Silence cannot complete an operation.
 _EVENT_TO_STATE: dict[TelemetryEvent, OperationState] = {
     TelemetryEvent.STARTED:              OperationState.IN_PROGRESS,
-    TelemetryEvent.ARMING:               OperationState.ARMING,
-    TelemetryEvent.TOOK_OFF:             OperationState.TAKING_OFF,
-    TelemetryEvent.ARRIVED:              OperationState.COMPLETED,
-    TelemetryEvent.REJECTED_BY_VEHICLE:  OperationState.REJECTED,
+    TelemetryEvent.PREPARING:            OperationState.PREPARING,
+    TelemetryEvent.FINISHED:             OperationState.COMPLETED,
+    TelemetryEvent.REJECTED_BY_DEVICE:   OperationState.REJECTED,
     TelemetryEvent.FAILED:               OperationState.FAILED,
-    TelemetryEvent.VEHICLE_PAUSED:       OperationState.PAUSED_BY_VEHICLE,
-    TelemetryEvent.VEHICLE_RESUMED:      OperationState.IN_PROGRESS,
+    TelemetryEvent.DEVICE_PAUSED:        OperationState.PAUSED_BY_DEVICE,
+    TelemetryEvent.DEVICE_RESUMED:       OperationState.IN_PROGRESS,
     TelemetryEvent.MANUAL_CONTROL_TAKEN: OperationState.INTERRUPTED,
     TelemetryEvent.CANCELLED:            OperationState.CANCELLED,
 }

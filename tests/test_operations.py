@@ -91,34 +91,48 @@ def test_interrupted_does_not_resume():
 
 # ── Telemetry-gated sub-states ───────────────────────────────────────────────────
 
-def test_arming_takeoff_phase_for_telemetry_device():
-    """A telemetry-capable device exposes the arming/takeoff phase where many
-    operations actually fail."""
-    op = Operation(device_id="drone-01", action="go_to", telemetry_capable=True)
-    op.transition_to(OperationState.ARMING, reason="arming motors")
-    op.transition_to(OperationState.TAKING_OFF, reason="ascending")
-    op.transition_to(OperationState.IN_PROGRESS, reason="navigating to waypoint")
-    op.transition_to(OperationState.COMPLETED, reason="telemetry: arrived")
+def test_preparing_phase_for_richer_device():
+    """A richer device exposes a preparing phase before the main action. The
+    generic state is `preparing`; the device-specific sub-phase lives in `phase`.
+    Here, a camera focusing before it records."""
+    op = Operation(device_id="camera-01", action="record", telemetry_capable=True)
+    op.transition_to(OperationState.PREPARING, reason="focusing")
+    op.phase = "focusing"
+    op.transition_to(OperationState.IN_PROGRESS, reason="recording")
+    op.transition_to(OperationState.COMPLETED, reason="telemetry: finished")
     assert op.state == OperationState.COMPLETED
 
 
-def test_arming_fails_before_takeoff():
-    """An operation can fail during arming, before ever taking off."""
+def test_aerial_phase_detail_in_phase_field():
+    """The aerial domain specializes `preparing` via the phase field — arming then
+    taking_off — without those being protocol-level states."""
     op = Operation(device_id="drone-01", action="go_to", telemetry_capable=True)
-    op.transition_to(OperationState.ARMING)
-    op.transition_to(OperationState.FAILED, reason="arming refused: GPS lost")
+    op.transition_to(OperationState.PREPARING, reason="arming motors")
+    op.phase = "arming"
+    assert op.state == OperationState.PREPARING
+    op.phase = "taking_off"  # still PREPARING, sub-phase advances
+    assert op.state == OperationState.PREPARING
+    op.transition_to(OperationState.IN_PROGRESS, reason="navigating")
+    assert op.state == OperationState.IN_PROGRESS
+
+
+def test_preparing_fails_before_main_action():
+    """An operation can fail during preparing, before the main action starts."""
+    op = Operation(device_id="drone-01", action="go_to", telemetry_capable=True)
+    op.transition_to(OperationState.PREPARING)
+    op.transition_to(OperationState.FAILED, reason="preparing refused: not ready")
     assert op.state == OperationState.FAILED
 
 
-def test_paused_by_vehicle_then_resume():
-    """The vehicle pauses itself (wind -> LOITER) and later resumes on its own.
-    Distinct from failed, interrupted, or in_progress."""
-    op = Operation(device_id="drone-01", action="go_to", telemetry_capable=True)
+def test_paused_by_device_then_resume():
+    """The device pauses itself (a speaker losing its stream) and later resumes on
+    its own. Distinct from failed, interrupted, or in_progress."""
+    op = Operation(device_id="speaker-01", action="play_album", telemetry_capable=True)
     op.transition_to(OperationState.IN_PROGRESS)
-    op.transition_to(OperationState.PAUSED_BY_VEHICLE, reason="high wind, holding")
-    assert op.state == OperationState.PAUSED_BY_VEHICLE
+    op.transition_to(OperationState.PAUSED_BY_DEVICE, reason="stream dropped")
+    assert op.state == OperationState.PAUSED_BY_DEVICE
     assert not op.is_terminal  # paused is not terminal
-    op.transition_to(OperationState.IN_PROGRESS, reason="wind eased, resuming")
+    op.transition_to(OperationState.IN_PROGRESS, reason="stream restored")
     assert op.state == OperationState.IN_PROGRESS
 
 
@@ -127,18 +141,18 @@ def test_telemetry_only_state_blocked_for_core_device():
     sub-state. This protects the dumb-body principle: a simple oven can't be
     asked to report an arming phase it has no concept of."""
     op = Operation(device_id="oven-01", action="preheat", telemetry_capable=False)
-    assert not op.can_transition_to(OperationState.ARMING)
+    assert not op.can_transition_to(OperationState.PREPARING)
     try:
-        op.transition_to(OperationState.ARMING)
+        op.transition_to(OperationState.PREPARING)
         assert False, "core-only device must not enter a telemetry-only state"
     except InvalidTransition as e:
         assert "telemetry" in str(e).lower()
 
 
-def test_paused_by_vehicle_blocked_for_core_device():
+def test_paused_by_device_blocked_for_core_device():
     op = Operation(device_id="oven-01", action="preheat", telemetry_capable=False)
     op.transition_to(OperationState.IN_PROGRESS)
-    assert not op.can_transition_to(OperationState.PAUSED_BY_VEHICLE)
+    assert not op.can_transition_to(OperationState.PAUSED_BY_DEVICE)
 
 
 # ── Reconciliation after restart ─────────────────────────────────────────────────
@@ -158,9 +172,9 @@ def test_reconciling_resolves_to_outcome():
 def test_can_enter_reconciling_from_active_states():
     """A recovered operation must be able to ENTER reconciling from whatever active
     state it was in when the hub went down — not just exist there from creation."""
-    for active in (OperationState.PENDING, OperationState.ARMING,
-                   OperationState.TAKING_OFF, OperationState.IN_PROGRESS,
-                   OperationState.PAUSED_BY_VEHICLE):
+    for active in (OperationState.PENDING, OperationState.PREPARING,
+                   OperationState.IN_PROGRESS,
+                   OperationState.PAUSED_BY_DEVICE):
         op = Operation(device_id="drone-01", action="go_to",
                        state=active, telemetry_capable=True)
         assert op.can_transition_to(OperationState.RECONCILING), \
@@ -212,7 +226,7 @@ def test_time_in_state_uses_injected_clock():
     op = Operation(device_id="drone-01", action="go_to", telemetry_capable=True,
                    created_at=1000.0, state_entered_at=1000.0)
     op.transition_to(OperationState.IN_PROGRESS, now=1000.0)
-    op.transition_to(OperationState.PAUSED_BY_VEHICLE, reason="wind", now=1005.0)
+    op.transition_to(OperationState.PAUSED_BY_DEVICE, reason="wind", now=1005.0)
     # 60 seconds later, still paused
     assert op.time_in_state(now=1065.0) == 60.0
 
@@ -221,12 +235,11 @@ def test_history_records_every_transition():
     """The full transition history is the audit trail. Every move is recorded,
     including the initial creation entry."""
     op = Operation(device_id="drone-01", action="go_to", telemetry_capable=True)
-    op.transition_to(OperationState.ARMING, reason="arming")
-    op.transition_to(OperationState.TAKING_OFF, reason="ascending")
+    op.transition_to(OperationState.PREPARING, reason="arming")
     op.transition_to(OperationState.IN_PROGRESS, reason="navigating")
     op.transition_to(OperationState.INTERRUPTED, reason="pilot took control")
-    # creation + 4 transitions = 5 entries
-    assert len(op.history) == 5
+    # creation + 3 transitions = 4 entries
+    assert len(op.history) == 4
     assert op.history[0].from_state is None  # creation
     assert op.history[0].to_state == OperationState.PENDING
     assert op.history[-1].to_state == OperationState.INTERRUPTED

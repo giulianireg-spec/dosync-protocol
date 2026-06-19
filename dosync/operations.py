@@ -33,17 +33,24 @@ real pilot):
             interrupted  — human intervention (a pilot takes the sticks). NOT a
                            failure: a normal, expected outcome. Does NOT resume —
                            if the system retakes control it is a NEW operation.
-      - Optional SUB-STATES, only meaningful for richer profiles (telemetry):
-            arming, taking_off  — the pre-navigation phase where many operations
-                                  actually fail, made visible instead of hidden
-                                  inside an opaque in_progress.
-            paused_by_vehicle   — the vehicle paused *itself* (wind -> LOITER).
-                                  Neither failed, nor interrupted, nor advancing.
+      - Optional SUB-STATES, only meaningful for richer profiles:
+            preparing           — a pre-action setup phase, made visible instead of
+                                  hidden inside an opaque in_progress. Universal: a
+                                  camera focusing, a blind releasing its lock, an
+                                  aerial vehicle arming/taking off. The device-
+                                  specific sub-phase is carried in Operation.phase
+                                  (the protocol understands `preparing`; a domain
+                                  profile specializes it).
+            paused_by_device    — the device paused *itself*. Universal: a speaker
+                                  whose stream dropped, a camera whose storage filled,
+                                  an aerial vehicle holding position in wind. Neither
+                                  failed, nor interrupted, nor advancing.
             reconciling         — transient state after a hub restart: the hub
                                   reconciles against telemetry before assuming
-                                  anything (the failsafe may have acted while the
-                                  hub was down).
-    A simple device (an oven) only ever sees the core. A drone sees all of it.
+                                  anything. Generic; its criticality varies by domain.
+    A simple device (an oven) only ever sees the core. A speaker adds cancellation;
+    a camera adds preparing; an aerial vehicle uses all of it. Each device declares
+    how rich it is — the names belong to the protocol, the domain detail to `phase`.
 
   * SILENCE IS NOT SUCCESS. Reaching `completed` requires a positive signal, never
     the mere absence of an error or a timeout. This is the opposite of the instant
@@ -81,10 +88,12 @@ class OperationState(str, Enum):
     CANCELLED = "cancelled"        # explicit cancellation
     INTERRUPTED = "interrupted"    # human intervention — normal outcome, does not resume
 
-    # ── Optional sub-states (telemetry-capable profiles only) ─────────────────
-    ARMING = "arming"              # pre-takeoff: arming actuators/motors
-    TAKING_OFF = "taking_off"      # pre-navigation: ascending to working state
-    PAUSED_BY_VEHICLE = "paused_by_vehicle"  # vehicle paused itself (e.g. wind)
+    # ── Optional sub-states (richer profiles only) ────────────────────────────
+    PREPARING = "preparing"        # pre-action setup phase (camera focusing, blind
+                                   # releasing its lock, a drone arming/taking off).
+                                   # Device-specific sub-phase carried in Operation.phase.
+    PAUSED_BY_DEVICE = "paused_by_device"  # the device paused itself (speaker lost its
+                                   # stream, camera storage full, drone holding in wind)
     RECONCILING = "reconciling"    # transient: hub reconciling against telemetry after restart
 
 
@@ -100,9 +109,8 @@ TERMINAL_STATES: frozenset[OperationState] = frozenset({
 # Sub-states that only apply to telemetry-capable profiles. A core-only device
 # (declares long_running without emits_telemetry) must never be driven into one.
 TELEMETRY_ONLY_STATES: frozenset[OperationState] = frozenset({
-    OperationState.ARMING,
-    OperationState.TAKING_OFF,
-    OperationState.PAUSED_BY_VEHICLE,
+    OperationState.PREPARING,
+    OperationState.PAUSED_BY_DEVICE,
     OperationState.RECONCILING,
 })
 
@@ -112,13 +120,12 @@ TELEMETRY_ONLY_STATES: frozenset[OperationState] = frozenset({
 #   - rejected only from pending (can't even start)
 #   - interrupted/failed/cancelled reachable from any active (non-terminal) state
 #   - terminal states have no outgoing transitions (interrupted does NOT resume)
-#   - sub-states (arming/taking_off) sit between pending and in_progress
-#   - paused_by_vehicle is reachable from active flight states and can resume
+#   - sub-state (preparing) sits between pending and in_progress
+#   - paused_by_device is reachable from active states and can resume
 #   - reconciling can reach any non-pending outcome once telemetry clarifies
 _ALLOWED_TRANSITIONS: dict[OperationState, frozenset[OperationState]] = {
     OperationState.PENDING: frozenset({
-        OperationState.ARMING,
-        OperationState.TAKING_OFF,
+        OperationState.PREPARING,
         OperationState.IN_PROGRESS,
         OperationState.REJECTED,
         OperationState.CANCELLED,
@@ -126,32 +133,24 @@ _ALLOWED_TRANSITIONS: dict[OperationState, frozenset[OperationState]] = {
         OperationState.FAILED,
         OperationState.RECONCILING,   # recovered on restart while pending
     }),
-    OperationState.ARMING: frozenset({
-        OperationState.TAKING_OFF,
+    OperationState.PREPARING: frozenset({
         OperationState.IN_PROGRESS,
         OperationState.FAILED,
         OperationState.CANCELLED,
         OperationState.INTERRUPTED,
         OperationState.REJECTED,
-        OperationState.RECONCILING,   # recovered on restart while arming
-    }),
-    OperationState.TAKING_OFF: frozenset({
-        OperationState.IN_PROGRESS,
-        OperationState.FAILED,
-        OperationState.CANCELLED,
-        OperationState.INTERRUPTED,
-        OperationState.RECONCILING,   # recovered on restart while taking off
+        OperationState.RECONCILING,   # recovered on restart while preparing
     }),
     OperationState.IN_PROGRESS: frozenset({
         OperationState.COMPLETED,
         OperationState.FAILED,
         OperationState.CANCELLED,
         OperationState.INTERRUPTED,
-        OperationState.PAUSED_BY_VEHICLE,
+        OperationState.PAUSED_BY_DEVICE,
         OperationState.RECONCILING,   # recovered on restart while in progress
     }),
-    OperationState.PAUSED_BY_VEHICLE: frozenset({
-        OperationState.IN_PROGRESS,   # vehicle resumes on its own (wind eased)
+    OperationState.PAUSED_BY_DEVICE: frozenset({
+        OperationState.IN_PROGRESS,   # device resumes on its own (wind eased, stream back)
         OperationState.FAILED,
         OperationState.CANCELLED,
         OperationState.INTERRUPTED,
@@ -159,7 +158,7 @@ _ALLOWED_TRANSITIONS: dict[OperationState, frozenset[OperationState]] = {
     }),
     OperationState.RECONCILING: frozenset({
         OperationState.IN_PROGRESS,
-        OperationState.PAUSED_BY_VEHICLE,
+        OperationState.PAUSED_BY_DEVICE,
         OperationState.COMPLETED,
         OperationState.FAILED,
         OperationState.INTERRUPTED,
@@ -203,8 +202,14 @@ class Operation:
     state_entered_at: float = field(default_factory=time.time)
     history: list[StateTransition] = field(default_factory=list)
     # Whether the device backing this operation emits telemetry. Gates the
-    # telemetry-only sub-states so a core-only device can't be driven into them.
+    # richer sub-states so a core-only device can't be driven into them.
     telemetry_capable: bool = False
+    # Optional domain-specific sub-phase detail, meaningful while in PREPARING.
+    # The protocol understands the generic PREPARING state; a domain profile can
+    # specialize it — e.g. an aerial vehicle sets phase="arming" then "taking_off",
+    # a camera "focusing". The protocol never interprets this string; the device
+    # and its operator do. Keeps the core universal while preserving granularity.
+    phase: str = ""
 
     def __post_init__(self):
         if isinstance(self.state, str):
@@ -277,6 +282,7 @@ class Operation:
             "created_at": self.created_at,
             "state_entered_at": self.state_entered_at,
             "telemetry_capable": self.telemetry_capable,
+            "phase": self.phase,
             "history": [
                 {
                     "from_state": t.from_state.value if t.from_state else None,
