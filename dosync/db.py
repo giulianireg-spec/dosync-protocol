@@ -611,6 +611,92 @@ class DoSyncDB:
         self._conn.commit()
         return cur.rowcount
 
+    # ── Long-running operations (execution_model) ─────────────────────────────
+    # Persists active long_running operations so they survive a hub restart. The
+    # panel's hard requirement: without this, a hub reboot orphans a drone still
+    # flying toward a waypoint — the hub comes back with no record it ever existed.
+    # On restart the hub reloads active operations and reconciles them against
+    # telemetry (reconciliation lives in the operations/reconciler layer; the DB
+    # only stores and retrieves). Follows the emergency_snapshots pattern exactly.
+    #
+    # The full operation (state machine + transition history) is owned by
+    # operations.Operation; here it is stored as its to_dict() JSON blob under a
+    # few indexed columns. The DB never interprets the lifecycle — it persists it.
+
+    def init_operations_table(self) -> None:
+        """Tabla para persistir operaciones long_running activas."""
+        self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS operations (
+                operation_id     TEXT PRIMARY KEY,
+                device_id        TEXT NOT NULL,
+                action           TEXT NOT NULL,
+                state            TEXT NOT NULL,
+                created_at       REAL NOT NULL,
+                state_entered_at REAL NOT NULL,
+                updated_at       REAL NOT NULL,
+                terminal         INTEGER NOT NULL DEFAULT 0,
+                data             TEXT NOT NULL
+            )
+        """)
+        self._conn.commit()
+
+    def save_operation(self, op_dict: dict, terminal: bool) -> None:
+        """Inserta o actualiza una operación. `op_dict` es Operation.to_dict();
+        `terminal` indica si la operación llegó a un estado terminal (para que
+        get_active_operations la excluya sin reinterpretar el estado)."""
+        import time, json
+        self._conn.execute("""
+            INSERT OR REPLACE INTO operations
+                (operation_id, device_id, action, state, created_at,
+                 state_entered_at, updated_at, terminal, data)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            op_dict["operation_id"],
+            op_dict["device_id"],
+            op_dict["action"],
+            op_dict["state"],
+            op_dict["created_at"],
+            op_dict["state_entered_at"],
+            time.time(),
+            1 if terminal else 0,
+            json.dumps(op_dict),
+        ))
+        self._conn.commit()
+
+    def get_active_operations(self) -> list[dict]:
+        """Devuelve las operaciones NO terminales — las que siguen vivas y deben
+        reconciliarse tras un reinicio. Cada elemento es el Operation.to_dict()
+        original, listo para rehidratar."""
+        import json
+        cur = self._conn.execute("""
+            SELECT data FROM operations
+            WHERE terminal = 0
+            ORDER BY created_at DESC
+        """)
+        return [json.loads(r[0]) for r in cur.fetchall()]
+
+    def get_operation(self, operation_id: str) -> dict | None:
+        """Recupera una operación puntual por id (terminal o no)."""
+        import json
+        cur = self._conn.execute(
+            "SELECT data FROM operations WHERE operation_id = ?", (operation_id,)
+        )
+        row = cur.fetchone()
+        return json.loads(row[0]) if row else None
+
+    def clear_old_operations(self, max_age_hours: int = 24) -> int:
+        """Limpia operaciones terminales o muy antiguas. Las operaciones activas
+        (terminal=0) NUNCA se borran por antigüedad — una operación vieja pero
+        viva es justamente la que hay que preservar para reconciliar."""
+        import time
+        cutoff = time.time() - (max_age_hours * 3600)
+        cur = self._conn.execute("""
+            DELETE FROM operations
+            WHERE terminal = 1 AND updated_at < ?
+        """, (cutoff,))
+        self._conn.commit()
+        return cur.rowcount
+
 
     # ── Custom Intent Classes ─────────────────────────────────────────────────
 

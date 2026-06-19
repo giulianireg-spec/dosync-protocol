@@ -208,6 +208,7 @@ if _resolver_url:
 # Device authentication manager
 hub.db.init_device_tokens_table()
 hub.db.init_emergency_snapshots_table()
+hub.db.init_operations_table()
 _device_auth_manager = DeviceAuthManager(hub.db)
 set_device_auth_manager(_device_auth_manager)
 
