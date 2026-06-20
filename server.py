@@ -1474,3 +1474,34 @@ def get_status():
         "family_profile":  hub.family_profile.family_name
                             if hub.family_profile else None,
     }
+
+
+# ── Long-running operations (execution_model) ─────────────────────────────────
+# Read-only query surface for operations started by execute_intent. The intent
+# response returns each operation's id; these endpoints let a client follow it.
+# Cancellation is intentionally NOT here yet — querying is safe and additive;
+# cancel is a state-changing action that belongs with the adapter that can carry
+# it out (e.g. the future MAVLink adapter). These endpoints never mutate state.
+
+@app.get("/v1/operations", tags=["Operations"], summary="List active long-running operations")
+def list_operations(auth: str = Depends(require_auth)):
+    """Active (non-terminal) long-running operations the hub is tracking. These are
+    the operations still in flight — the ones that would be reconciled after a
+    restart. Completed/failed/cancelled operations are not 'active' and are not
+    listed here (query them individually by id)."""
+    active = hub.db.get_active_operations()
+    return {
+        "count":      len(active),
+        "operations": active,
+    }
+
+
+@app.get("/v1/operations/{operation_id}", tags=["Operations"], summary="Get one operation by id")
+def get_operation(operation_id: str, auth: str = Depends(require_auth)):
+    """Full state of a single operation by id — current state, timing, and the
+    complete transition history (the audit trail of its lifecycle). Works for both
+    active and terminal operations until they are cleaned up."""
+    op = hub.db.get_operation(operation_id)
+    if op is None:
+        raise HTTPException(status_code=404, detail=f"Operation '{operation_id}' not found")
+    return op

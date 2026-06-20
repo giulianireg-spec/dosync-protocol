@@ -290,6 +290,12 @@ jobs:
       - name: Operations wiring tests (7 tests)
         run: DOSYNC_AUTH=false PYTHONPATH=. python3 tests/test_operations_wiring.py
 
+      # ── Step 4s: Operations query endpoints (execution_model API) ─────────
+      # Read-only HTTP surface: GET /v1/operations and /v1/operations/{id}. Lets a
+      # client follow an operation by the id returned from the intent. Never mutates.
+      - name: Operations endpoint tests (6 tests)
+        run: DOSYNC_AUTH=false PYTHONPATH=. python3 tests/test_operations_endpoints.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py
