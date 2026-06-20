@@ -304,6 +304,15 @@ jobs:
       - name: MAVLink adapter tests (11 tests)
         run: PYTHONPATH=. python3 tests/test_mavlink_adapter.py
 
+      # ── Step 4u: Telemetry bridge + MAVLink mapper (execution_model Step 2a) ─
+      # hub.apply_telemetry() — the GENERIC bridge that connects the reconciler to
+      # the hub for the first time (device-agnostic; an oven would use it too). Plus
+      # the PURE MAVLink->TelemetryEvent mapper with previous-mode memory, so
+      # MANUAL_CONTROL_TAKEN fires on the GUIDED->manual edge, not every heartbeat.
+      # Fully tested without a socket (fake messages injected).
+      - name: Telemetry bridge + mapper tests (24 tests)
+        run: PYTHONPATH=. python3 tests/test_telemetry_bridge.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py

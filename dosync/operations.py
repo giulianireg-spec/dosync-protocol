@@ -293,3 +293,39 @@ class Operation:
                 for t in self.history
             ],
         }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Operation":
+        """Rehydrate an Operation from its persisted dict — the inverse of
+        to_dict(). Used when telemetry arrives for an operation that lives in the
+        DB and must be reconciled against.
+
+        Fidelity matters here: we restore the real state, the real
+        state_entered_at, and the full transition history. A naive
+        Operation(state=...) would let __post_init__ synthesize a fresh history
+        and reset state_entered_at to *now*, silently destroying time_in_state —
+        the very signal the Policy Engine relies on to spot a stalled operation.
+        So we build the object, then overwrite those fields with the stored ones.
+        """
+        op = cls(
+            device_id=data["device_id"],
+            action=data["action"],
+            operation_id=data["operation_id"],
+            state=OperationState(data["state"]),
+            created_at=data["created_at"],
+            telemetry_capable=data.get("telemetry_capable", False),
+            phase=data.get("phase", ""),
+        )
+        # Restore the true timing and history (the constructor reset/synthesized
+        # these — replace them with what actually happened).
+        op.state_entered_at = data["state_entered_at"]
+        op.history = [
+            StateTransition(
+                from_state=OperationState(h["from_state"]) if h["from_state"] else None,
+                to_state=OperationState(h["to_state"]),
+                at=h["at"],
+                reason=h.get("reason", ""),
+            )
+            for h in data.get("history", [])
+        ]
+        return op

@@ -354,3 +354,130 @@ def mavlink_manifest(
         cert_tier=CertTier.BASIC,
         adapter_config={"connection": connection, "default_alt": default_alt},
     )
+
+
+# ── Telemetry mapping (pure, Step 2a) ─────────────────────────────────────────
+# The MAVLink-native -> abstract TelemetryEvent translation. This is a PURE
+# function of (message, remembered previous mode): no socket, no I/O. The
+# background listener loop (Step 2b) owns the socket and calls this for each
+# message; keeping the mapping pure means it is exhaustively testable by injecting
+# fake messages — including messages that produce NO event.
+#
+# Why a class and not a function: the most safety-critical event,
+# MANUAL_CONTROL_TAKEN, is a TRANSITION, not a level. The vehicle broadcasts a
+# HEARTBEAT ~1/s carrying its current flight mode. We must emit "a human took
+# control" exactly once, on the GUIDED -> manual edge — not on every heartbeat
+# that happens to be in a manual mode. That requires remembering the previous
+# mode. The memory lives here, isolated from the socket.
+
+# ArduCopter flight modes that mean "DoSync is driving" vs "a human/other is".
+# GUIDED is the mode DoSync commands the vehicle in. AUTO (running a mission) is
+# also autonomous. Anything else, entered while an operation is active, means
+# control left DoSync's hands — most often a pilot moving the sticks.
+_AUTONOMOUS_MODES = frozenset({"GUIDED", "AUTO"})
+
+
+class MAVLinkTelemetryMapper:
+    """Translates MAVLink messages into abstract TelemetryEvents, remembering the
+    previous flight mode so manual-takeover is detected as an edge, not a level.
+
+    Stateful only in the minimal way the transition detection requires. One mapper
+    per vehicle/connection. Pure with respect to I/O — it never touches a socket;
+    the listener loop (Step 2b) feeds it messages and acts on the events it returns.
+
+    Each call to map_message returns either a (TelemetryEvent, phase) tuple or
+    None when the message implies no operation-relevant fact. `phase` is an
+    optional domain sub-phase string (e.g. "arming") carried with PREPARING; it is
+    None for events that don't refine a phase.
+    """
+
+    def __init__(self):
+        # Last flight mode we saw in a HEARTBEAT. None until the first heartbeat.
+        self._last_mode: Optional[str] = None
+        # Whether we've already emitted STARTED for the current flight, so we don't
+        # re-emit it on every position update. Reset when disarmed.
+        self._takeoff_confirmed = False
+
+    def reset(self) -> None:
+        """Clear remembered state — used on reconnect, so the mapper re-learns the
+        vehicle's mode from the next heartbeat rather than assuming the past."""
+        self._last_mode = None
+        self._takeoff_confirmed = False
+
+    def map_message(self, msg) -> Optional[tuple]:
+        """Map one MAVLink message to (TelemetryEvent, phase) or None.
+
+        `msg` is anything with a `.get_type()` and the relevant fields — a real
+        pymavlink message in production, or a simple stand-in in tests. The mapping
+        reads only attributes, never a socket, so it is fully testable offline.
+        """
+        # Local import so this module still imports without the reconciler in any
+        # odd packaging; in practice it's always present.
+        from ..reconciler import TelemetryEvent
+
+        try:
+            mtype = msg.get_type()
+        except Exception:
+            return None
+
+        if mtype == "HEARTBEAT":
+            return self._map_heartbeat(msg, TelemetryEvent)
+        if mtype == "STATUSTEXT":
+            return self._map_statustext(msg, TelemetryEvent)
+        if mtype == "MISSION_ITEM_REACHED":
+            # The vehicle reached a commanded waypoint — the positive completion
+            # signal for a go_to. (Takeoff/land have their own confirmations.)
+            return (TelemetryEvent.FINISHED, None)
+        return None
+
+    def _map_heartbeat(self, msg, TelemetryEvent) -> Optional[tuple]:
+        """HEARTBEAT carries the current flight mode and the armed flag. This is
+        where manual-takeover is detected, on the autonomous->manual edge."""
+        mode = self._mode_name(msg)
+        if mode is None:
+            return None
+
+        prev = self._last_mode
+        self._last_mode = mode
+
+        # The critical safety edge: we WERE driving (autonomous) and now we are
+        # not. A human (or a failsafe) took control. Emit exactly once, on the edge.
+        if (prev in _AUTONOMOUS_MODES
+                and mode not in _AUTONOMOUS_MODES):
+            return (TelemetryEvent.MANUAL_CONTROL_TAKEN, None)
+
+        # No operation-relevant fact from this heartbeat (same mode, or a
+        # manual->manual change, or the first heartbeat). Steady-state heartbeats
+        # must NOT spam the reconciler.
+        return None
+
+    def _map_statustext(self, msg, TelemetryEvent) -> Optional[tuple]:
+        """STATUSTEXT carries human-readable vehicle notices. We map only the few
+        that correspond to operation facts; everything else is None."""
+        text = (getattr(msg, "text", "") or "").strip()
+        low = text.lower()
+        if not low:
+            return None
+        # Arming is the start of the PREPARING phase, sub-phase "arming".
+        if "arming motors" in low or low == "arming":
+            return (TelemetryEvent.PREPARING, "arming")
+        # A failure notice. ArduPilot emits varied failure text; we match the
+        # common, unambiguous markers and stay conservative otherwise.
+        if low.startswith("prearm") or "failsafe" in low or "crash" in low:
+            return (TelemetryEvent.FAILED, None)
+        return None
+
+    @staticmethod
+    def _mode_name(msg) -> Optional[str]:
+        """Extract the flight-mode name from a HEARTBEAT. Real pymavlink exposes
+        a mapping; in tests a stand-in can carry a `.mode_name` directly."""
+        # Test/stand-in fast path.
+        direct = getattr(msg, "mode_name", None)
+        if direct:
+            return direct
+        # Real pymavlink path: decode custom_mode via the message's own helper if
+        # present. We avoid importing mavutil here (keeps the mapper pure); the
+        # listener (Step 2b) can attach a resolved mode_name onto the message
+        # before calling, which is the direct path above. Returning None when we
+        # can't resolve is safe: it yields no event.
+        return None
