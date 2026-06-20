@@ -14,6 +14,7 @@
 #   pip install paho-mqtt                     # only if you use MQTT devices
 #   pip install aiohttp                        # only if you use the Home Assistant bridge
 #   pip install bleak                          # only if you enable the BLE adapter
+#   pip install pymavlink                      # only if you control a MAVLink vehicle (drone)
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Core — required for the hub to run ───────────────────────────────────────

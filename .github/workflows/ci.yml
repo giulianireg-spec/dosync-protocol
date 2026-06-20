@@ -296,6 +296,14 @@ jobs:
       - name: Operations endpoint tests (6 tests)
         run: DOSYNC_AUTH=false PYTHONPATH=. python3 tests/test_operations_endpoints.py
 
+      # ── Step 4t: MAVLink adapter — command channel (aerial profile) ───────
+      # Translates DoSync actions (take_off/go_to/land/return_home/loiter) into
+      # MAVLink commands, returning the COMMAND_ACK as dispatch acceptance. Tests
+      # the simulated-degradation path (pymavlink optional/lazy) + validation; the
+      # live SITL test is opt-in (DOSYNC_SITL_LIVE=1). No drone library required in CI.
+      - name: MAVLink adapter tests (11 tests)
+        run: PYTHONPATH=. python3 tests/test_mavlink_adapter.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py
