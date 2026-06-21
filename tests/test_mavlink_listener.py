@@ -287,6 +287,151 @@ def test_end_to_end_takeover_interrupts_operation():
     assert any(e["to_state"] == "interrupted" for e in tel)
 
 
+# ── Reconnect backoff (exponential) ───────────────────────────────────────────
+
+def test_backoff_starts_at_base():
+    import dosync.adapters.mavlink as m
+    q = _queue.Queue()
+    listener = MAVLinkTelemetryListener("drone-01", lambda: None, q)
+    # 0 or 1 failures → base interval.
+    listener._reconnect_failures = 0
+    assert listener._current_backoff() == m._RECONNECT_BASE_S
+    listener._reconnect_failures = 1
+    assert listener._current_backoff() == m._RECONNECT_BASE_S
+
+
+def test_backoff_grows_exponentially():
+    import dosync.adapters.mavlink as m
+    q = _queue.Queue()
+    listener = MAVLinkTelemetryListener("drone-01", lambda: None, q)
+    listener._reconnect_failures = 2
+    assert listener._current_backoff() == m._RECONNECT_BASE_S * 2
+    listener._reconnect_failures = 3
+    assert listener._current_backoff() == m._RECONNECT_BASE_S * 4
+
+
+def test_backoff_capped_at_max():
+    import dosync.adapters.mavlink as m
+    q = _queue.Queue()
+    listener = MAVLinkTelemetryListener("drone-01", lambda: None, q)
+    listener._reconnect_failures = 99  # absurdly high
+    assert listener._current_backoff() == m._RECONNECT_MAX_S
+
+
+def test_backoff_increments_on_failed_connect():
+    q = _queue.Queue()
+    # Factory returns None → connect "fails".
+    listener = MAVLinkTelemetryListener("drone-01", lambda: None, q)
+    assert listener._reconnect_failures == 0
+    listener._reconnect()
+    assert listener._reconnect_failures == 1
+    listener._reconnect()
+    assert listener._reconnect_failures == 2
+
+
+def test_backoff_resets_on_successful_connect():
+    q = _queue.Queue()
+    conn = FakeConnection([])
+    listener = MAVLinkTelemetryListener("drone-01", lambda: conn, q)
+    listener._reconnect_failures = 5  # simulate prior failures
+    ok = listener._reconnect()
+    assert ok is True
+    assert listener._reconnect_failures == 0  # reset on success
+
+
+# ── Waypoint arrival detection ────────────────────────────────────────────────
+
+# Córdoba center as the go_to destination.
+DEST_LAT, DEST_LON = -31.4201, -64.1888
+
+
+def _gpi(lat, lon):
+    """A GLOBAL_POSITION_INT stand-in (lat/lon in 1e7 degrees)."""
+    return FakeMsg("GLOBAL_POSITION_INT", lat=int(lat * 1e7), lon=int(lon * 1e7))
+
+
+def test_waypoint_no_destination_no_event():
+    q = _queue.Queue()
+    listener = MAVLinkTelemetryListener("drone-01", lambda: None, q)
+    # No destination set — a position message produces nothing.
+    listener._check_waypoint_arrival(_gpi(DEST_LAT, DEST_LON))
+    assert q.empty()
+
+
+def test_waypoint_far_no_event():
+    q = _queue.Queue()
+    listener = MAVLinkTelemetryListener("drone-01", lambda: None, q)
+    listener.set_destination(DEST_LAT, DEST_LON)
+    listener._check_waypoint_arrival(_gpi(-31.465, -64.1888))  # ~5km away
+    assert q.empty()
+    assert listener._get_destination() is not None  # still pending
+
+
+def test_waypoint_arrival_emits_finished():
+    q = _queue.Queue()
+    listener = MAVLinkTelemetryListener("drone-01", lambda: None, q)
+    listener.set_destination(DEST_LAT, DEST_LON)
+    # ~1m away — within the 3m arrival radius.
+    listener._check_waypoint_arrival(_gpi(-31.42011, -64.1888))
+    fact = q.get_nowait()
+    assert fact[0] == "drone-01"
+    assert fact[1] == TelemetryEvent.FINISHED
+    # Destination cleared so it fires only once.
+    assert listener._get_destination() is None
+
+
+def test_waypoint_fires_only_once():
+    q = _queue.Queue()
+    listener = MAVLinkTelemetryListener("drone-01", lambda: None, q)
+    listener.set_destination(DEST_LAT, DEST_LON)
+    near = _gpi(-31.42011, -64.1888)
+    listener._check_waypoint_arrival(near)  # arrives → FINISHED + clear
+    listener._check_waypoint_arrival(near)  # already cleared → nothing
+    facts = []
+    while not q.empty():
+        facts.append(q.get_nowait())
+    assert len(facts) == 1
+
+
+def test_waypoint_ignores_non_position_messages():
+    q = _queue.Queue()
+    listener = MAVLinkTelemetryListener("drone-01", lambda: None, q)
+    listener.set_destination(DEST_LAT, DEST_LON)
+    # A heartbeat near the destination is not a position fix — ignored.
+    listener._check_waypoint_arrival(FakeMsg("HEARTBEAT", mode_name="GUIDED"))
+    assert q.empty()
+    assert listener._get_destination() is not None
+
+
+def test_waypoint_set_and_clear():
+    q = _queue.Queue()
+    listener = MAVLinkTelemetryListener("drone-01", lambda: None, q)
+    assert listener._get_destination() is None
+    listener.set_destination(DEST_LAT, DEST_LON)
+    assert listener._get_destination() == (DEST_LAT, DEST_LON)
+    listener.clear_destination()
+    assert listener._get_destination() is None
+
+
+# ── Mode-name resolution (real-message bridge) ────────────────────────────────
+
+def test_attach_mode_name_respects_existing():
+    # A stand-in that already has mode_name (like our test fakes) is left as-is.
+    q = _queue.Queue()
+    listener = MAVLinkTelemetryListener("drone-01", lambda: None, q)
+    msg = FakeMsg("HEARTBEAT", mode_name="GUIDED")
+    listener._attach_mode_name(msg)
+    assert msg.mode_name == "GUIDED"
+
+
+def test_attach_mode_name_ignores_non_heartbeat():
+    q = _queue.Queue()
+    listener = MAVLinkTelemetryListener("drone-01", lambda: None, q)
+    msg = FakeMsg("ATTITUDE", roll=0.1)
+    listener._attach_mode_name(msg)  # must not crash, must not add mode_name
+    assert not hasattr(msg, "mode_name")
+
+
 # ── Live SITL test (opt-in) ──────────────────────────────────────────────────
 
 def test_listener_sitl_live():
@@ -313,13 +458,20 @@ def test_listener_sitl_live():
     started = adapter.start_telemetry("drone-01", "udp:127.0.0.1:14550")
     assert started, "telemetry should start with pymavlink + SITL"
 
-    # Let it gather telemetry for a few seconds, draining periodically.
+    # The listener now resolves mode_name on real heartbeats, so a manual-takeover
+    # (a mode change away from GUIDED) produces a real fact. To exercise it without
+    # a pilot, this test just gathers whatever telemetry the idle vehicle emits and
+    # confirms the listener runs end-to-end. To see MANUAL_CONTROL_TAKEN live, change
+    # the vehicle's mode in the MAVProxy console (mode GUIDED; mode STABILIZE) while
+    # this runs — the listener will detect the GUIDED->manual edge.
     facts_seen = 0
     for _ in range(20):
         time.sleep(0.25)
         facts_seen += adapter.drain_telemetry_once()
     adapter.stop_telemetry()
     print(f"    ✓ LIVE: listener processed telemetry from SITL ({facts_seen} facts applied)")
+    print("      (change mode in MAVProxy: 'mode GUIDED' then 'mode STABILIZE' to "
+          "see MANUAL_CONTROL_TAKEN live)")
 
 
 if __name__ == "__main__":

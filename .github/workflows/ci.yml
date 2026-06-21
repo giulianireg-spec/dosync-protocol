@@ -301,7 +301,7 @@ jobs:
       # MAVLink commands, returning the COMMAND_ACK as dispatch acceptance. Tests
       # the simulated-degradation path (pymavlink optional/lazy) + validation; the
       # live SITL test is opt-in (DOSYNC_SITL_LIVE=1). No drone library required in CI.
-      - name: MAVLink adapter tests (11 tests)
+      - name: MAVLink adapter tests (12 tests)
         run: PYTHONPATH=. python3 tests/test_mavlink_adapter.py
 
       # ── Step 4u: Telemetry bridge + MAVLink mapper (execution_model Step 2a) ─
@@ -320,7 +320,7 @@ jobs:
       # calls apply_telemetry. Disconnection never invents state (silence != success);
       # reconnect resets the mapper. Tested via a fake connection — no real socket.
       # The live SITL test is opt-in (DOSYNC_SITL_LIVE=1).
-      - name: MAVLink listener + consumer tests (14 tests)
+      - name: MAVLink listener + consumer tests (27 tests)
         run: PYTHONPATH=. python3 tests/test_mavlink_listener.py
 
       # ── Step 4w: Drone safety policies (aerial domain) ────────────────────

@@ -181,6 +181,25 @@ def test_mavlink_sitl_live():
     print("    ✓ LIVE: SITL accepted take_off to 10m")
 
 
+def test_go_to_simulated_mode_no_listener_no_crash():
+    # The command->telemetry bridge (setting the listener's destination on go_to)
+    # must be a safe no-op when no listener exists — e.g. simulated mode or
+    # telemetry not started. A go_to should still succeed without crashing.
+    import dosync.adapters.mavlink as m
+    saved = m._MAVLINK_AVAILABLE
+    m._MAVLINK_AVAILABLE = False
+    try:
+        a = MAVLinkAdapter()  # no listeners registered
+        action = DeviceAction(
+            device_id="drone-01", action="go_to",
+            params={"lat": -31.42, "lon": -64.18,
+                    "adapter_config": {"connection": "udp:127.0.0.1:14550"}})
+        res = _run(a.execute(action, Urgency.INFO))
+        assert res.success  # simulated mode returns success
+    finally:
+        m._MAVLINK_AVAILABLE = saved
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     passed = failed = 0

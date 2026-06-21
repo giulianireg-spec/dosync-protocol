@@ -248,6 +248,14 @@ class MAVLinkAdapter(DoSyncAdapter):
             # send in GUIDED mode. We confirm the vehicle is in GUIDED.
             ok = True
             detail = {"lat": lat, "lon": lon, "alt": alt}
+            # Tell this vehicle's telemetry listener where the vehicle is headed, so
+            # it can emit FINISHED on arrival (set_position_target gives no
+            # MISSION_ITEM_REACHED). This is the single point where the command
+            # channel touches the telemetry channel — guarded so it is a no-op when
+            # telemetry isn't running (simulated mode, or telemetry not started).
+            listener = self._listeners.get(action.device_id)
+            if listener is not None:
+                listener.set_destination(lat, lon)
 
         elif act == "land":
             ok = self._set_mode(conn, "LAND")
@@ -628,8 +636,37 @@ _RECV_TIMEOUT_S = 0.5
 # After this many seconds with no message at all, treat the link as down and begin
 # reconnect attempts. A healthy vehicle heartbeats ~1/s, so this is generous.
 _SILENCE_BEFORE_RECONNECT_S = 5.0
-# Fixed interval between reconnect attempts (the panel deferred exponential backoff).
-_RECONNECT_INTERVAL_S = 3.0
+# Reconnect backoff. On a long-range radio link a drop can last a while, and
+# hammering the factory every few seconds is poor radio citizenship (and wasteful).
+# So reconnect attempts back off exponentially: base, base*2, base*4 ... capped at
+# max. The counter resets to base the moment a connection succeeds, so a brief
+# blip recovers fast and only a sustained outage stretches the interval out.
+_RECONNECT_BASE_S = 3.0    # first retry waits this long
+_RECONNECT_MAX_S = 60.0    # never wait longer than this between attempts
+# Waypoint-arrival threshold. A go_to issued via set_position_target does NOT
+# produce a MISSION_ITEM_REACHED (that is mission-only), so without this the
+# vehicle would reach its destination and DoSync would never mark the operation
+# finished. The listener compares live position against the go_to target and emits
+# FINISHED once the vehicle is within this horizontal radius. 3m is a touch beyond
+# ArduPilot's typical 2m waypoint-acceptance radius, accounting for GPS jitter — a
+# vehicle never hovers perfectly still over a point. "Entered the radius = arrived";
+# we deliberately do not require holding for N seconds (a simpler, sufficient rule).
+_WAYPOINT_ARRIVAL_RADIUS_M = 3.0
+
+
+def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance between two lat/lon points, in meters. Module-level
+    so the listener can measure distance-to-target without depending on the policy
+    layer (the geofence policy has its own copy; a few lines of trig are cheaper to
+    duplicate than to couple a transport adapter to the policy engine)."""
+    import math
+    r = 6371000.0  # Earth radius in meters
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = (math.sin(dp / 2) ** 2
+         + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2)
+    return r * 2 * math.asin(math.sqrt(a))
 
 
 class MAVLinkTelemetryListener:
@@ -654,6 +691,39 @@ class MAVLinkTelemetryListener:
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._conn = None
+        # Reconnect backoff: how many consecutive connect attempts have failed.
+        # 0 = healthy. Each failure grows the wait (see _current_backoff); a
+        # successful connect resets it to 0.
+        self._reconnect_failures = 0
+        # Active go_to destination (lat, lon) for this vehicle, or None. Set by the
+        # adapter when it dispatches a go_to; cleared on arrival. This is the only
+        # spatial state the telemetry side holds, and it lives HERE (in the per-
+        # vehicle listener, already drone-specific) rather than in the pure mapper
+        # or the generic hub — neither of those should know about coordinates.
+        self._destination: Optional[tuple] = None
+        self._dest_lock = threading.Lock()
+
+    def set_destination(self, lat: float, lon: float) -> None:
+        """Record the active go_to target. The listener will emit FINISHED once the
+        vehicle reaches it. Called by the adapter from the command channel — the
+        one point where command and telemetry meet. Thread-safe: the adapter calls
+        this from the event-loop thread while the listener reads it on its own."""
+        with self._dest_lock:
+            self._destination = (lat, lon)
+
+    def clear_destination(self) -> None:
+        with self._dest_lock:
+            self._destination = None
+
+    def _get_destination(self) -> Optional[tuple]:
+        with self._dest_lock:
+            return self._destination
+
+    def _current_backoff(self) -> float:
+        """Seconds to wait before the next reconnect attempt, growing
+        exponentially with consecutive failures and capped at the max."""
+        interval = _RECONNECT_BASE_S * (2 ** max(0, self._reconnect_failures - 1))
+        return min(interval, _RECONNECT_MAX_S)
 
     def start(self) -> None:
         if self._running:
@@ -686,8 +756,9 @@ class MAVLinkTelemetryListener:
             # Ensure we have a connection; (re)connect if needed.
             if self._conn is None:
                 if not self._reconnect():
-                    # Could not connect — wait and retry, but keep checking _running.
-                    self._sleep_interruptible(_RECONNECT_INTERVAL_S)
+                    # Could not connect — wait (with exponential backoff) and retry,
+                    # but keep checking _running so stop() stays responsive.
+                    self._sleep_interruptible(self._current_backoff())
                     continue
                 last_message_at = time.time()
 
@@ -712,6 +783,13 @@ class MAVLinkTelemetryListener:
 
             # A real message arrived. Translate and, if it carries a fact, enqueue.
             last_message_at = now
+            # Resolve the human-readable flight-mode name on heartbeats before the
+            # mapper sees them. Real pymavlink HEARTBEATs carry the mode as a numeric
+            # custom_mode, but the (pure, socket-free) mapper keys off a `mode_name`
+            # string. Resolving it here — where we have the live connection — keeps
+            # the mapper pure while making manual-takeover detection actually work
+            # against a real vehicle (not just against tests that supply mode_name).
+            self._attach_mode_name(msg)
             try:
                 mapped = self._mapper.map_message(msg)
             except Exception as e:
@@ -724,19 +802,79 @@ class MAVLinkTelemetryListener:
                 # it. We never touch the DB here.
                 self._queue.put((self.device_id, event, phase))
 
+            # Waypoint-arrival detection. A go_to (set_position_target) gets no
+            # MISSION_ITEM_REACHED, so we close the loop by position: if a
+            # destination is set and the vehicle is within the arrival radius, emit
+            # FINISHED once and clear the destination. This is a positive
+            # confirmation (the vehicle actually reached the point) — silence still
+            # never completes anything.
+            self._check_waypoint_arrival(msg)
+
+    def _attach_mode_name(self, msg) -> None:
+        """For a HEARTBEAT, decode the numeric custom_mode into a mode-name string
+        and attach it as `msg.mode_name`, which is what the mapper reads. No-op for
+        other message types or if decoding is unavailable (the mapper then simply
+        emits no event for that heartbeat — safe)."""
+        try:
+            if msg.get_type() != "HEARTBEAT":
+                return
+        except Exception:
+            return
+        if getattr(msg, "mode_name", None):
+            return  # already resolved (e.g. a test stand-in)
+        try:
+            from pymavlink import mavutil
+            msg.mode_name = mavutil.mode_string_v10(msg)
+        except Exception:
+            # Cannot resolve (no pymavlink, or unexpected message) — leave it unset.
+            pass
+
+    def _check_waypoint_arrival(self, msg) -> None:
+        """If a go_to destination is active and this position message shows the
+        vehicle within the arrival radius, enqueue FINISHED and clear the target."""
+        try:
+            if msg.get_type() != "GLOBAL_POSITION_INT":
+                return
+        except Exception:
+            return
+        dest = self._get_destination()
+        if dest is None:
+            return
+        # GLOBAL_POSITION_INT carries lat/lon in 1e7 degrees.
+        try:
+            cur_lat = msg.lat / 1e7
+            cur_lon = msg.lon / 1e7
+        except Exception:
+            return
+        distance = _haversine_m(cur_lat, cur_lon, dest[0], dest[1])
+        if distance <= _WAYPOINT_ARRIVAL_RADIUS_M:
+            log.info("MAVLink listener %s: reached go_to target (%.1fm) — FINISHED",
+                     self.device_id, distance)
+            from ..reconciler import TelemetryEvent
+            self._queue.put((self.device_id, TelemetryEvent.FINISHED, None))
+            self.clear_destination()
+
     def _reconnect(self) -> bool:
         """Open a fresh connection via the factory and reset the mapper so it does
-        not assume the pre-disconnection mode. Returns True on success."""
+        not assume the pre-disconnection mode. Returns True on success.
+
+        On success the backoff counter resets to 0 (a recovered link retries fast
+        next time). On failure it grows, stretching the interval for a sustained
+        outage so we are not hammering a dead radio link."""
         try:
             self._conn = self._connection_factory()
             if self._conn is None:
+                self._reconnect_failures += 1
                 return False
             # Re-learn reality from the next heartbeat — never assume the past.
             self._mapper.reset()
+            self._reconnect_failures = 0  # healthy again — reset backoff
             log.info("MAVLink listener %s: connected", self.device_id)
             return True
         except Exception as e:
-            log.warning("MAVLink listener %s: connect failed: %s", self.device_id, e)
+            self._reconnect_failures += 1
+            log.warning("MAVLink listener %s: connect failed (attempt %d): %s",
+                        self.device_id, self._reconnect_failures, e)
             self._conn = None
             return False
 
