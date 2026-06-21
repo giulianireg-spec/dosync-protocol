@@ -323,6 +323,16 @@ jobs:
       - name: MAVLink listener + consumer tests (14 tests)
         run: PYTHONPATH=. python3 tests/test_mavlink_listener.py
 
+      # ── Step 4w: Drone safety policies (aerial domain) ────────────────────
+      # GeofencePolicy (BLOCK a go_to outside the permitted perimeter: center +
+      # radius + altitude ceiling) and ManualControlActivePolicy (BLOCK commands to
+      # a vehicle whose operation is interrupted — a human took the sticks). Both
+      # are ABSOLUTE: bypass_on_emergency=False. They filter intent before dispatch;
+      # the firmware failsafe remains the flight safety system. Pure logic, tested
+      # offline (no drone, no socket).
+      - name: Drone safety policy tests (19 tests)
+        run: PYTHONPATH=. python3 tests/test_drone_policies.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py

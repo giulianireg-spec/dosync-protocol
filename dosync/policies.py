@@ -951,3 +951,206 @@ class ContextualWeightingPolicy(BasePolicy):
             intent.context.get("trigger", "none")
         )
         return None  # let intent proceed with modified context
+
+
+# ── Aerial domain policies (drone safety) ─────────────────────────────────────
+# These two policies are the ones the expert panel identified as the essential
+# barriers for a vehicle that moves through physical space. They are deliberately
+# ABSOLUTE: both set bypass_on_emergency = False. A geofence protects something
+# real (an airport, a populated area, restricted airspace); a DoSync "emergency"
+# is never a reason to fly the vehicle there. And once a human has taken manual
+# control, an emergency must NOT wrestle it back — the takeover is very likely the
+# response to that emergency.
+#
+# CRITICAL BOUNDARY: these policies filter INTENT before DoSync dispatches a MAVLink
+# command. They are NOT the flight safety system. The failsafe (lost link, low
+# battery, GPS loss) lives in the vehicle firmware and acts on its own, even if
+# DoSync does not exist. DoSync is a policy layer above the firmware, never the
+# firmware's replacement. The firmware also has its own geofence; this complements
+# it, it does not substitute for it.
+
+
+class GeofencePolicy(BasePolicy):
+    """Blocks any go_to whose target lies outside the permitted perimeter.
+
+    The perimeter is a horizontal circle (center + max radius) plus a maximum
+    altitude ceiling — the standard, easy-to-reason-about geofence that covers the
+    overwhelming majority of cases. Each deployment configures its own perimeter
+    via the constructor, exactly like NeverAfterHoursPolicy configures its hours.
+    The protocol stays generic; the perimeter is deployment-specific.
+
+    Only go_to actions carry a destination, so only they are checked. take_off,
+    land, return_home and loiter do not move the vehicle to an arbitrary point and
+    are not constrained here (return_home in particular must always be allowed —
+    it is how the vehicle comes back).
+
+    This is an ABSOLUTE limit: bypass_on_emergency is False. The perimeter exists
+    because crossing it is dangerous or illegal, and no urgency changes that.
+
+    DESIGN NOTE — agnosticism and the deliberate coupling to `go_to`:
+    The PolicyEngine itself stays fully domain-agnostic; this is just one more
+    pluggable BasePolicy, registered only by deployments that fly something, like
+    NeverAfterHoursPolicy is registered only where time restrictions matter. It is
+    agnostic to the drone make/model (it reasons over lat/lon/alt, which are
+    universal), but it is inherently SPATIAL — an oven or a light has no position,
+    so a geofence is meaningless for them. That is correct and expected: generic
+    mechanism, domain-specific policy.
+    However, this policy is currently coupled to the MAVLink adapter's vocabulary:
+    it checks the literal action name "go_to" and the params "lat"/"lon"/"alt".
+    That coupling is DELIBERATE for now. DoSync has exactly one spatial adapter
+    (the drone). Abstracting "an action with a spatial destination" into a protocol-
+    level concept that any spatial adapter (a rover, a boat, a 3D robotic arm) would
+    declare is the right move ONLY once a SECOND spatial device exists to inform the
+    abstraction — designing it from a single example risks the wrong abstraction
+    (the same "don't abstract on one example" discipline applied to the
+    execution_model vocabulary). When a second spatial adapter arrives, extract a
+    declared "spatial destination" capability and have this policy operate on that
+    instead of the hardcoded "go_to". Until then, the explicit coupling is the
+    honest, simplest correct choice.
+    """
+
+    def __init__(self, center_lat: float, center_lon: float,
+                 max_radius_m: float, max_altitude_m: float = None,
+                 applies_to_devices: list = None):
+        """
+        Args:
+            center_lat, center_lon: center of the permitted circle (degrees).
+            max_radius_m: maximum allowed distance from center, in meters.
+            max_altitude_m: optional altitude ceiling, in meters. None = no ceiling.
+            applies_to_devices: optional list of device_ids this geofence governs.
+                None = applies to every go_to in the plan (single-perimeter deploy).
+        """
+        self._center_lat = center_lat
+        self._center_lon = center_lon
+        self._max_radius_m = max_radius_m
+        self._max_altitude_m = max_altitude_m
+        self._devices = set(applies_to_devices) if applies_to_devices else None
+
+    @property
+    def name(self) -> str:
+        return "geofence"
+
+    @property
+    def priority(self) -> int:
+        # Evaluate early — a geofence breach should be caught before lower-priority
+        # conveniences even look at the plan.
+        return 10
+
+    @property
+    def bypass_on_emergency(self) -> bool:
+        # ABSOLUTE. An emergency never licenses crossing the perimeter.
+        return False
+
+    @staticmethod
+    def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """Great-circle distance between two lat/lon points, in meters."""
+        import math
+        r = 6371000.0  # Earth radius in meters
+        p1, p2 = math.radians(lat1), math.radians(lat2)
+        dp = math.radians(lat2 - lat1)
+        dl = math.radians(lon2 - lon1)
+        a = (math.sin(dp / 2) ** 2
+             + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2)
+        return r * 2 * math.asin(math.sqrt(a))
+
+    def evaluate(self, intent: "Intent", plan: "ActionPlan") -> PolicyResult | None:
+        for action in plan.actions:
+            if action.action != "go_to":
+                continue
+            if self._devices is not None and action.device_id not in self._devices:
+                continue
+
+            params = action.params or {}
+            lat = params.get("lat")
+            lon = params.get("lon")
+            if lat is None or lon is None:
+                # A go_to without coordinates is malformed; let the adapter reject
+                # it. The geofence only judges destinations it can locate.
+                continue
+
+            distance = self._haversine_m(self._center_lat, self._center_lon, lat, lon)
+            if distance > self._max_radius_m:
+                return PolicyResult.block(
+                    self.name,
+                    f"go_to target ({lat:.5f}, {lon:.5f}) is {distance:.0f}m from "
+                    f"center — outside the {self._max_radius_m:.0f}m geofence.",
+                )
+
+            if self._max_altitude_m is not None:
+                alt = params.get("alt")
+                if alt is not None and alt > self._max_altitude_m:
+                    return PolicyResult.block(
+                        self.name,
+                        f"go_to altitude {alt:.0f}m exceeds the ceiling of "
+                        f"{self._max_altitude_m:.0f}m.",
+                    )
+
+        return None  # every go_to in the plan is within the perimeter
+
+
+class ManualControlActivePolicy(BasePolicy):
+    """Blocks commands to a vehicle whose active operation is `interrupted` — i.e.
+    a human has taken manual control.
+
+    This is the policy-level counterpart to the MANUAL_CONTROL_TAKEN telemetry
+    event. Once the pilot has the sticks, DoSync must not try to re-dispatch the
+    original (or any) command to that vehicle, or it would fight the human for
+    control. The pilot took over for a reason DoSync cannot see — most likely to
+    avoid something. DoSync goes quiet until a human explicitly returns control
+    (by clearing/finishing the interrupted operation out of band).
+
+    Consults the hub for the vehicle's active operations. An operation in the
+    INTERRUPTED state means a human is flying; any command in the plan targeting
+    that device is blocked.
+
+    ABSOLUTE: bypass_on_emergency is False. An emergency is very likely the reason
+    the human took control — it must never be used to wrestle control back.
+    """
+
+    INTERRUPTED_STATE = "interrupted"
+
+    def __init__(self, hub):
+        self._hub = hub
+
+    @property
+    def name(self) -> str:
+        return "manual_control_active"
+
+    @property
+    def priority(self) -> int:
+        # Evaluate very early — if a human is flying, nothing else about the plan
+        # for that device matters.
+        return 5
+
+    @property
+    def bypass_on_emergency(self) -> bool:
+        # ABSOLUTE. An emergency never wrestles control back from a human pilot.
+        return False
+
+    def _devices_under_manual_control(self) -> set:
+        """Return the set of device_ids whose active operation is interrupted."""
+        try:
+            active = self._hub.db.get_active_operations()
+        except Exception:
+            return set()
+        return {
+            o.get("device_id") for o in active
+            if o.get("state") == self.INTERRUPTED_STATE and o.get("device_id")
+        }
+
+    def evaluate(self, intent: "Intent", plan: "ActionPlan") -> PolicyResult | None:
+        manual = self._devices_under_manual_control()
+        if not manual:
+            return None
+
+        blocked = [a for a in plan.actions if a.device_id in manual]
+        if not blocked:
+            return None
+
+        devices = sorted({a.device_id for a in blocked})
+        return PolicyResult.block(
+            self.name,
+            f"Device(s) {devices} are under manual human control "
+            f"(operation interrupted). DoSync will not dispatch commands until a "
+            f"human returns control.",
+        )
