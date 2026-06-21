@@ -47,6 +47,10 @@ Manifest adapter_config schema (per vehicle):
 
 from __future__ import annotations
 import logging
+import threading
+import queue
+import time
+import asyncio
 from typing import Optional
 
 from ..models import ActionResult, DeviceAction, Urgency
@@ -100,6 +104,15 @@ class MAVLinkAdapter(DoSyncAdapter):
         # Cache of connection-string -> live mavutil connection. Keyed by endpoint
         # so multiple vehicles on different endpoints each keep their own link.
         self._connections: dict = {}
+        # ── Telemetry channel (Step 2b) ──────────────────────────────────────
+        # One listener thread per vehicle (producer) feeds a shared queue; a single
+        # consumer asyncio task (on the event-loop thread) drains it and calls
+        # hub.apply_telemetry. The queue is the thread-safe boundary; only the
+        # consumer touches the DB.
+        self._telemetry_queue: "queue.Queue" = queue.Queue()
+        self._listeners: dict = {}            # device_id -> MAVLinkTelemetryListener
+        self._consumer_task: Optional[asyncio.Task] = None
+        self._consumer_running = False
 
     @property
     def adapter_name(self) -> str:
@@ -305,8 +318,116 @@ class MAVLinkAdapter(DoSyncAdapter):
                         command_id, msg.result)
         return accepted
 
+    # ── Telemetry channel (Step 2b) ──────────────────────────────────────────
+    def start_telemetry(self, device_id: str, conn_str: str = None) -> bool:
+        """Begin listening to a vehicle's telemetry.
+
+        Spawns a listener thread for the vehicle and ensures the consumer task is
+        running. The listener reconnects on its own via the connection factory, so
+        this can be called even before the vehicle is reachable.
+
+        Returns False (and does nothing) in simulated mode — without pymavlink there
+        is no socket to listen to. A hub with no drone library still runs; it just
+        has no live telemetry, exactly like the command channel.
+        """
+        if not _MAVLINK_AVAILABLE:
+            log.info("[SIMULATED] telemetry not started for %s (pymavlink absent)",
+                     device_id)
+            return False
+        if device_id in self._listeners:
+            return True  # already listening
+
+        conn_str = conn_str or self._connection_string_for(device_id)
+        if not conn_str:
+            log.warning("Cannot start telemetry for %s: no connection string", device_id)
+            return False
+
+        # The factory lets the listener (re)open the link on its own thread, and
+        # lets tests inject a fake. We do NOT share the command-channel connection:
+        # telemetry reads continuously and must not contend with command ACKs.
+        def factory():
+            conn = mavutil.mavlink_connection(conn_str)
+            conn.wait_heartbeat(timeout=10)
+            return conn
+
+        listener = MAVLinkTelemetryListener(
+            device_id=device_id,
+            connection_factory=factory,
+            out_queue=self._telemetry_queue,
+        )
+        self._listeners[device_id] = listener
+        listener.start()
+        self._ensure_consumer()
+        return True
+
+    def _connection_string_for(self, device_id: str) -> Optional[str]:
+        """Resolve a device's MAVLink endpoint from its manifest adapter_config."""
+        if self._hub:
+            device = self._hub.registry.get(device_id)
+            if device and device.adapter_config:
+                return device.adapter_config.get("connection")
+        return None
+
+    def _ensure_consumer(self) -> None:
+        """Start the single consumer task if it isn't already running. The consumer
+        runs on the event-loop thread — the only place the DB is touched."""
+        if self._consumer_running:
+            return
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = None
+        if loop is None or not loop.is_running():
+            # No running loop (e.g. some test contexts). The consumer can be driven
+            # manually via drain_telemetry_once() instead.
+            return
+        self._consumer_running = True
+        self._consumer_task = loop.create_task(self._consume_telemetry())
+
+    async def _consume_telemetry(self) -> None:
+        """Drain the telemetry queue, applying each fact to the hub. Runs until
+        stop_telemetry() lowers the flag. Sleeps briefly when the queue is empty so
+        it never busy-spins."""
+        log.info("MAVLink telemetry consumer started")
+        while self._consumer_running:
+            applied = self.drain_telemetry_once()
+            if applied == 0:
+                await asyncio.sleep(0.1)
+        log.info("MAVLink telemetry consumer stopped")
+
+    def drain_telemetry_once(self) -> int:
+        """Apply all currently-queued telemetry facts to the hub. Returns how many
+        were applied. Separated from the async loop so tests can drive it directly
+        without an event loop. This is the ONLY place the DB is touched for
+        telemetry — always on the calling (event-loop) thread."""
+        applied = 0
+        while True:
+            try:
+                device_id, event, phase = self._telemetry_queue.get_nowait()
+            except queue.Empty:
+                break
+            if self._hub is not None:
+                try:
+                    self._hub.apply_telemetry(device_id, event, phase=phase)
+                except Exception as e:
+                    log.warning("apply_telemetry failed for %s (%s): %s",
+                                device_id, event, e)
+            applied += 1
+        return applied
+
+    def stop_telemetry(self) -> None:
+        """Stop all listeners and the consumer. Joins every listener thread."""
+        self._consumer_running = False
+        if self._consumer_task is not None:
+            self._consumer_task.cancel()
+            self._consumer_task = None
+        for device_id, listener in list(self._listeners.items()):
+            listener.stop()
+        self._listeners.clear()
+
     async def disconnect(self) -> None:
-        """Close all cached MAVLink connections."""
+        """Close all cached MAVLink connections and tear down the telemetry channel."""
+        self.stop_telemetry()
         for conn_str, conn in list(self._connections.items()):
             try:
                 conn.close()
@@ -481,3 +602,154 @@ class MAVLinkTelemetryMapper:
         # before calling, which is the direct path above. Returning None when we
         # can't resolve is safe: it yields no event.
         return None
+
+
+# ── Telemetry listener (background, Step 2b) ──────────────────────────────────
+# The listener is the producer half of a producer-consumer pair. It owns a thread
+# that blocks on the MAVLink socket — necessary because pymavlink's recv_match is
+# blocking and would freeze the asyncio event loop if called on it directly. The
+# thread translates each message with the (pure) mapper and ENQUEUES the resulting
+# (device_id, event, phase) fact. It NEVER touches the DB or the audit log: those
+# live on the event-loop thread (SQLite is not safely shared across threads), so
+# the consumer — an asyncio task on the main thread — is the only thing that calls
+# hub.apply_telemetry. This split is the whole reason the design is two objects.
+#
+# Disconnection safety (the panel's hard rule): when the socket goes quiet, the
+# thread does NOT invent state. Silence is not a fact and is never enqueued as one.
+# The thread logs the gap, tries to reconnect on a fixed interval, and on reconnect
+# calls mapper.reset() so it re-learns the vehicle's mode from scratch rather than
+# assuming the past. Active operations simply stay where they are; their
+# time_in_state grows and the Policy Engine is what watches them.
+
+# How long recv_match blocks before returning control to the loop so it can check
+# the stop flag and notice silence. Short, so manual-takeover latency stays ~1-2s
+# and shutdown is responsive.
+_RECV_TIMEOUT_S = 0.5
+# After this many seconds with no message at all, treat the link as down and begin
+# reconnect attempts. A healthy vehicle heartbeats ~1/s, so this is generous.
+_SILENCE_BEFORE_RECONNECT_S = 5.0
+# Fixed interval between reconnect attempts (the panel deferred exponential backoff).
+_RECONNECT_INTERVAL_S = 3.0
+
+
+class MAVLinkTelemetryListener:
+    """A background thread that reads one vehicle's MAVLink telemetry, translates
+    it with a MAVLinkTelemetryMapper, and enqueues abstract facts for the adapter's
+    consumer to apply. One listener per vehicle.
+
+    Lifecycle: start() spawns the thread; stop() lowers the running flag and joins.
+    The thread never blocks longer than _RECV_TIMEOUT_S, so stop() returns promptly.
+
+    The listener is given a `connection_factory` (a zero-arg callable returning an
+    object with recv_match) rather than a live connection, so it can reconnect by
+    calling the factory again — and so tests can inject a fake connection.
+    """
+
+    def __init__(self, device_id: str, connection_factory, out_queue: "queue.Queue",
+                 mapper: "MAVLinkTelemetryMapper" = None):
+        self.device_id = device_id
+        self._connection_factory = connection_factory
+        self._queue = out_queue
+        self._mapper = mapper or MAVLinkTelemetryMapper()
+        self._running = False
+        self._thread: Optional[threading.Thread] = None
+        self._conn = None
+
+    def start(self) -> None:
+        if self._running:
+            return
+        self._running = True
+        self._thread = threading.Thread(
+            target=self._run, name=f"mavlink-listener-{self.device_id}", daemon=True)
+        self._thread.start()
+        log.info("MAVLink listener started for %s", self.device_id)
+
+    def stop(self, join_timeout: float = 2.0) -> None:
+        """Signal the thread to stop and wait for it to exit. Idempotent."""
+        self._running = False
+        if self._thread is not None:
+            self._thread.join(timeout=join_timeout)
+            self._thread = None
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+            self._conn = None
+        log.info("MAVLink listener stopped for %s", self.device_id)
+
+    def _run(self) -> None:
+        """The thread body. Reads messages, maps them, enqueues facts. Handles
+        silence and reconnection without ever inventing operation state."""
+        last_message_at = time.time()
+        while self._running:
+            # Ensure we have a connection; (re)connect if needed.
+            if self._conn is None:
+                if not self._reconnect():
+                    # Could not connect — wait and retry, but keep checking _running.
+                    self._sleep_interruptible(_RECONNECT_INTERVAL_S)
+                    continue
+                last_message_at = time.time()
+
+            # Read one message (blocking up to _RECV_TIMEOUT_S).
+            try:
+                msg = self._conn.recv_match(blocking=True, timeout=_RECV_TIMEOUT_S)
+            except Exception as e:
+                log.warning("MAVLink listener %s: recv error: %s", self.device_id, e)
+                self._drop_connection()
+                continue
+
+            now = time.time()
+            if msg is None:
+                # No message this cycle. Not a fact — never enqueue anything. Just
+                # check whether the link has gone quiet long enough to be 'down'.
+                if now - last_message_at > _SILENCE_BEFORE_RECONNECT_S:
+                    log.warning("MAVLink listener %s: link silent %.1fs — reconnecting "
+                                "(operations untouched; silence is not success)",
+                                self.device_id, now - last_message_at)
+                    self._drop_connection()
+                continue
+
+            # A real message arrived. Translate and, if it carries a fact, enqueue.
+            last_message_at = now
+            try:
+                mapped = self._mapper.map_message(msg)
+            except Exception as e:
+                log.debug("MAVLink listener %s: map error on %s: %s",
+                          self.device_id, getattr(msg, "get_type", lambda: "?")(), e)
+                mapped = None
+            if mapped is not None:
+                event, phase = mapped
+                # Enqueue the abstract fact. The consumer (event-loop thread) applies
+                # it. We never touch the DB here.
+                self._queue.put((self.device_id, event, phase))
+
+    def _reconnect(self) -> bool:
+        """Open a fresh connection via the factory and reset the mapper so it does
+        not assume the pre-disconnection mode. Returns True on success."""
+        try:
+            self._conn = self._connection_factory()
+            if self._conn is None:
+                return False
+            # Re-learn reality from the next heartbeat — never assume the past.
+            self._mapper.reset()
+            log.info("MAVLink listener %s: connected", self.device_id)
+            return True
+        except Exception as e:
+            log.warning("MAVLink listener %s: connect failed: %s", self.device_id, e)
+            self._conn = None
+            return False
+
+    def _drop_connection(self) -> None:
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+        self._conn = None
+
+    def _sleep_interruptible(self, seconds: float) -> None:
+        """Sleep in small slices so a stop() is noticed quickly."""
+        deadline = time.time() + seconds
+        while self._running and time.time() < deadline:
+            time.sleep(min(0.2, deadline - time.time()))

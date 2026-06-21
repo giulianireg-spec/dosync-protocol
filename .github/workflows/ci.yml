@@ -313,6 +313,16 @@ jobs:
       - name: Telemetry bridge + mapper tests (24 tests)
         run: PYTHONPATH=. python3 tests/test_telemetry_bridge.py
 
+      # ── Step 4v: MAVLink telemetry listener + consumer (execution_model Step 2b) ─
+      # The background listener thread (producer) reads the live MAVLink socket,
+      # maps each message, and enqueues abstract facts; the consumer task (on the
+      # event-loop thread, the only one that touches the DB) drains the queue and
+      # calls apply_telemetry. Disconnection never invents state (silence != success);
+      # reconnect resets the mapper. Tested via a fake connection — no real socket.
+      # The live SITL test is opt-in (DOSYNC_SITL_LIVE=1).
+      - name: MAVLink listener + consumer tests (14 tests)
+        run: PYTHONPATH=. python3 tests/test_mavlink_listener.py
+
       # ── Step 5: Hub startup test ─────────────────────────────────────────
       # Verifies the hub initializes without errors using an in-memory DB.
       # Catches import errors that only manifest at startup (e.g., server.py
