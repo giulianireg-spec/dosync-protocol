@@ -1043,17 +1043,14 @@ class GeofencePolicy(BasePolicy):
 
     @staticmethod
     def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-        """Great-circle distance between two lat/lon points, in meters."""
-        import math
-        r = 6371000.0  # Earth radius in meters
-        p1, p2 = math.radians(lat1), math.radians(lat2)
-        dp = math.radians(lat2 - lat1)
-        dl = math.radians(lon2 - lon1)
-        a = (math.sin(dp / 2) ** 2
-             + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2)
-        return r * 2 * math.asin(math.sqrt(a))
+        """Great-circle distance, delegated to the shared geo module so the formula
+        lives in exactly one place (see dosync/geo.py). Kept as a thin wrapper for
+        backward compatibility with any code/tests referencing it."""
+        from .geo import haversine_m
+        return haversine_m(lat1, lon1, lat2, lon2)
 
     def evaluate(self, intent: "Intent", plan: "ActionPlan") -> PolicyResult | None:
+        from .geo import is_within_perimeter
         for action in plan.actions:
             if action.action != "go_to":
                 continue
@@ -1068,22 +1065,14 @@ class GeofencePolicy(BasePolicy):
                 # it. The geofence only judges destinations it can locate.
                 continue
 
-            distance = self._haversine_m(self._center_lat, self._center_lon, lat, lon)
-            if distance > self._max_radius_m:
-                return PolicyResult.block(
-                    self.name,
-                    f"go_to target ({lat:.5f}, {lon:.5f}) is {distance:.0f}m from "
-                    f"center — outside the {self._max_radius_m:.0f}m geofence.",
-                )
-
-            if self._max_altitude_m is not None:
-                alt = params.get("alt")
-                if alt is not None and alt > self._max_altitude_m:
-                    return PolicyResult.block(
-                        self.name,
-                        f"go_to altitude {alt:.0f}m exceeds the ceiling of "
-                        f"{self._max_altitude_m:.0f}m.",
-                    )
+            # Same shared rule the in-flight guard uses — admission vs monitoring.
+            ok, reason = is_within_perimeter(
+                lat, lon, self._center_lat, self._center_lon,
+                self._max_radius_m,
+                alt=params.get("alt"), max_altitude_m=self._max_altitude_m,
+            )
+            if not ok:
+                return PolicyResult.block(self.name, f"go_to target {reason}")
 
         return None  # every go_to in the plan is within the perimeter
 

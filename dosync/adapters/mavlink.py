@@ -655,18 +655,11 @@ _WAYPOINT_ARRIVAL_RADIUS_M = 3.0
 
 
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Great-circle distance between two lat/lon points, in meters. Module-level
-    so the listener can measure distance-to-target without depending on the policy
-    layer (the geofence policy has its own copy; a few lines of trig are cheaper to
-    duplicate than to couple a transport adapter to the policy engine)."""
-    import math
-    r = 6371000.0  # Earth radius in meters
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp = math.radians(lat2 - lat1)
-    dl = math.radians(lon2 - lon1)
-    a = (math.sin(dp / 2) ** 2
-         + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2)
-    return r * 2 * math.asin(math.sqrt(a))
+    """Great-circle distance between two lat/lon points, in meters. Delegates to the
+    shared geo module (dosync/geo.py) so the formula lives in exactly one place.
+    Kept as a thin module-level wrapper for the listener's waypoint-arrival check."""
+    from ..geo import haversine_m
+    return haversine_m(lat1, lon1, lat2, lon2)
 
 
 class MAVLinkTelemetryListener:
