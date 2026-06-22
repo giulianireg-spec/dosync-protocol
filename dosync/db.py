@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS intent_classes (
     description          TEXT NOT NULL DEFAULT '',
     domain               TEXT NOT NULL DEFAULT 'general',
     is_universal         INTEGER NOT NULL DEFAULT 0,
+    composition_kind     TEXT DEFAULT NULL,
     created_at           REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS rate_limit_log (
@@ -117,8 +118,28 @@ class DoSyncDB:
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.executescript(SCHEMA)
         self._conn.commit()
+        self._migrate_schema()
         log.info("Database initialized: %s", self.db_path.resolve())
         self._seed_universal_intents()
+
+    def _migrate_schema(self) -> None:
+        """Idempotent, additive migrations for databases created before a column
+        existed. CREATE TABLE IF NOT EXISTS never alters an existing table, so new
+        nullable columns are added here. Safe to run on every startup: each ADD
+        COLUMN is guarded by a column-existence check, so an already-migrated DB is
+        untouched and no existing row is affected.
+        """
+        def _has_column(table: str, column: str) -> bool:
+            rows = self._conn.execute(f"PRAGMA table_info({table})").fetchall()
+            return any(r["name"] == column for r in rows)
+
+        # composition_kind: marks an intent class as a composition intent (e.g.
+        # "perimeter" for inspect_area). NULL = a normal flat intent (unchanged path).
+        if not _has_column("intent_classes", "composition_kind"):
+            self._conn.execute(
+                "ALTER TABLE intent_classes ADD COLUMN composition_kind TEXT DEFAULT NULL")
+            self._conn.commit()
+            log.info("Migration: added intent_classes.composition_kind")
 
 
     def _seed_universal_intents(self) -> None:
@@ -702,21 +723,30 @@ class DoSyncDB:
 
     def save_intent_class(self, name: str, urgency: str,
                                   resolution_tags: list, resolution_actuators: list,
-                                  description: str, domain: str) -> None:
-        """Insert or update an intent class. Never modifies is_universal flag."""
+                                  description: str, domain: str,
+                                  composition_kind: str | None = None) -> None:
+        """Insert or update an intent class. Never modifies is_universal flag.
+
+        composition_kind: marks the intent as a composition intent (e.g. "perimeter"
+        for inspect_area). None = a normal flat intent. On update, if not provided
+        the existing value is preserved (so a plain re-save does not clear it)."""
         import time, json
         existing = self._conn.execute(
-            "SELECT is_universal FROM intent_classes WHERE name = ?", (name,)
+            "SELECT is_universal, composition_kind FROM intent_classes WHERE name = ?",
+            (name,)
         ).fetchone()
         is_universal = existing["is_universal"] if existing else 0
+        # Preserve an existing composition_kind unless a new one is explicitly given.
+        if composition_kind is None and existing is not None:
+            composition_kind = existing["composition_kind"]
         self._conn.execute("""
             INSERT OR REPLACE INTO intent_classes
             (name, urgency, resolution_tags, resolution_actuators,
-             description, domain, is_universal, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             description, domain, is_universal, composition_kind, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (name, urgency, json.dumps(resolution_tags),
               json.dumps(resolution_actuators),
-              description, domain, is_universal, time.time()))
+              description, domain, is_universal, composition_kind, time.time()))
         self._conn.commit()
 
     def get_intent_class(self, name: str) -> dict | None:
@@ -735,6 +765,7 @@ class DoSyncDB:
             "domain": row["domain"],
             "created_at": row["created_at"],
             "is_universal":         bool(row["is_universal"]),
+            "composition_kind":     row["composition_kind"] if "composition_kind" in row.keys() else None,
         }
 
     def list_intent_classes(self) -> list[dict]:
@@ -750,6 +781,7 @@ class DoSyncDB:
             "description":          r["description"],
             "domain":               r["domain"],
             "is_universal":         bool(r["is_universal"]),
+            "composition_kind":     r["composition_kind"] if "composition_kind" in r.keys() else None,
             "created_at":           r["created_at"],
         } for r in rows]
 
