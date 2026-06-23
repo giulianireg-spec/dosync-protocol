@@ -944,6 +944,7 @@ class CustomIntentClassRequest(BaseModel):
     resolution_actuators:  list[str] = []
     description:           str = ""
     domain:                str = "general"
+    composition_kind:      Optional[str] = None  # e.g. "perimeter"; None = flat intent
 
 @app.post("/v1/intent-classes", tags=["Protocol"], summary="Register a custom intent class")
 async def register_intent_class(
@@ -979,6 +980,19 @@ async def register_intent_class(
     if not req.resolution_tags:
         raise HTTPException(status_code=400, detail="resolution_tags cannot be empty")
 
+    # Validate composition_kind: only kinds the hub can actually compose may be
+    # declared. This mirrors the hub's routing (which fails explicitly on an unknown
+    # kind) — refusing the declaration up front is clearer than accepting an intent
+    # that would fail every time it fires. NULL = a normal flat intent.
+    _KNOWN_COMPOSITION_KINDS = {"perimeter"}
+    if req.composition_kind is not None and req.composition_kind not in _KNOWN_COMPOSITION_KINDS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown composition_kind '{req.composition_kind}'. "
+                   f"Known kinds: {sorted(_KNOWN_COMPOSITION_KINDS)}. "
+                   "Omit composition_kind for a normal (flat) intent."
+        )
+
     hub.db.save_intent_class(
         name=name,
         urgency=req.urgency,
@@ -986,6 +1000,7 @@ async def register_intent_class(
         resolution_actuators=req.resolution_actuators,
         description=req.description,
         domain=req.domain,
+        composition_kind=req.composition_kind,
     )
     return {
         "status":       "registered",
@@ -995,6 +1010,7 @@ async def register_intent_class(
         "resolution_actuators": req.resolution_actuators,
         "description":  req.description,
         "domain":       req.domain,
+        "composition_kind": req.composition_kind,
     }
 
 
