@@ -367,6 +367,8 @@ class RegisterDeviceRequest(BaseModel):
     events: list[EventSpecIn] = []
     emergency_capable: bool = False
     cert_tier: str = "basic"
+    adapter:         Optional[str] = None  # which adapter drives this device (e.g. "mavlink", "wiz")
+    adapter_config:  dict = {}             # adapter-specific config (e.g. {"connection": "udp:127.0.0.1:14550"})
     device_token:    Optional[str] = None  # token de autenticación del dispositivo
     certificate_pem: Optional[str] = None  # PEM certificate for mTLS auth (optional)
 
@@ -667,6 +669,8 @@ def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth
                     for e in req.events],
             emergency_capable=req.emergency_capable,
             cert_tier=CertTier(req.cert_tier),
+            adapter=req.adapter,
+            adapter_config=dict(req.adapter_config or {}),
         )
         # Store mTLS authentication status in adapter_config
         if cert_authenticated:
