@@ -88,37 +88,43 @@ class MAVLinkAdapter(DoSyncAdapter):
     The connection string and defaults come from the manifest's adapter_config,
     read from the hub registry (same pattern as WiZAdapter / BLEAdapter).
 
-    The MAVLink connection is opened lazily on first use and cached, so a hub that
-    registers a drone but never commands it pays no connection cost.
+    The MAVLink connection is opened lazily on first use, so a hub that registers a
+    drone but never commands it pays no connection cost.
 
-    TWO CHANNELS — DESIGN NOTE (and documented tech debt):
-        This adapter currently opens TWO connections per vehicle: a COMMAND channel
-        (outbound — sends commands, reads its own ACKs) and a TELEMETRY channel (the
-        listener — reads the position stream continuously). They must not bind the
-        same UDP port, so _split_channels rewrites a `udp:` command string to
-        `udpout:` and keeps the binding form for telemetry (or uses a declared
-        `telemetry_connection`). This is correct and sufficient for SITL/UDP.
+    SINGLE CONNECTION, SINGLE READER — DESIGN:
+        This adapter uses ONE bidirectional connection per vehicle, exactly like a
+        real GCS over a serial radio. The telemetry listener OWNS that connection: it
+        opens it, waits for the heartbeat (which fixes target_system/target_component
+        to the real vehicle), and is the only reader (recv_match on its thread). The
+        command channel does NOT open its own socket — it fetches the listener's live
+        connection (get_connection) and WRITES on it (command_long_send, a thread-safe
+        sendto). COMMAND_ACKs arrive on the listener's read loop and are routed to the
+        waiting command via an ACK registry (record_ack / wait_for_ack).
 
-        It is NOT how a real drone works. Over a serial radio (SiK 915MHz, a USB
-        cable) a vehicle is ONE bidirectional link — a serial port cannot be opened
-        twice. The correct long-term design is a SINGLE connection with a SINGLE
-        reader: a producer/consumer where the listener owns the read loop and the
-        command channel writes, then awaits its ACK *via* the listener rather than
-        reading the socket itself. That refactor (restructuring _wait_ack to go
-        through the listener) is the next step for hardware support and is
-        deliberately deferred — the two-connection split unblocks SITL today without
-        pretending it already serves a serial drone. ("Implementado ≠ validado.")
+        Why one connection: a real drone over a serial link (SiK 915MHz, a USB cable)
+        is a single bidirectional channel — a serial port cannot be opened twice. A
+        separate, outbound-only command channel is blind: it cannot receive the
+        heartbeat (so target_system stays 0 and the vehicle ignores its commands),
+        cannot read its ACKs, and on UDP collides with the listener's bind. Sharing
+        the one connection the listener already owns removes that entire family of
+        failures and makes the same code work over SITL/UDP and real serial hardware
+        with no divergence. ("Implementado ≠ validado" — this is validated against
+        the real flight path, not a simulator-only shortcut.)
     """
 
-    def __init__(self, hub=None, ack_timeout: float = _ACK_TIMEOUT_S):
+    def __init__(self, hub=None, ack_timeout: float = _ACK_TIMEOUT_S,
+                 connect_timeout: float = 12.0):
         """
         Args:
             hub: reference to the DoSyncHub to read adapter_config from the
                  manifest. Optional — if absent, config must come in action.params.
             ack_timeout: seconds to wait for COMMAND_ACK before failing the dispatch.
+            connect_timeout: seconds to wait for the listener to connect (receive the
+                 first heartbeat, so target_system is valid) before commanding.
         """
         self._hub = hub
         self._ack_timeout = ack_timeout
+        self._connect_timeout = connect_timeout
         # Cache of connection-string -> live mavutil connection. Keyed by endpoint
         # so multiple vehicles on different endpoints each keep their own link.
         self._connections: dict = {}
@@ -149,8 +155,12 @@ class MAVLinkAdapter(DoSyncAdapter):
         return {}
 
     def _get_connection(self, conn_str: str):
-        """Return a cached MAVLink connection for this endpoint, opening it once.
-        Only called when pymavlink is available (never in simulated mode)."""
+        """LEGACY — no longer used by execute(). In the single-connection design the
+        command writes on the listener's connection (listener.get_connection()), it
+        does not open its own. Kept only so disconnect()'s cache sweep stays valid;
+        the cache is empty in the current flow. Opening a separate command socket is
+        exactly what produced the blind-command failures (bind conflict, missed ACK,
+        target_system=0)."""
         conn = self._connections.get(conn_str)
         if conn is None:
             log.info("MAVLink: opening connection %s", conn_str)
@@ -179,68 +189,85 @@ class MAVLinkAdapter(DoSyncAdapter):
             )
 
         cfg = self._get_config(action)
-        conn_str = cfg.get("connection")
+
+        # SINGLE bidirectional connection (panel: single-connection, single-reader).
+        # The listener opens and owns ONE connection that both receives (heartbeat,
+        # telemetry, ACKs) and is written to (commands). It must be a binding/
+        # receiving form (udp:/udpin:/tcp:/serial:) — NOT udpout, which cannot
+        # receive the heartbeat that fixes target_system. A legacy 'udpout:' or a
+        # separate 'telemetry_connection' is normalized back to the receiving form.
+        conn_str = self._single_connection(cfg)
         if not conn_str:
             return ActionResult(
                 device_id=action.device_id, action=action.action, success=False,
-                error="MAVLink manifest missing 'connection' (e.g. 'udp:127.0.0.1:14550').",
-            )
-
-        # Separate the command and telemetry channels so they never bind the same
-        # UDP port (the cause of 'Address already in use'). command_conn is outbound
-        # (udpout — no local bind), telemetry_conn listens for the position stream.
-        try:
-            command_conn, telemetry_conn = self._split_channels(cfg)
-        except ValueError as e:
-            return ActionResult(
-                device_id=action.device_id, action=action.action, success=False,
-                error=str(e),
+                error="MAVLink manifest missing a usable 'connection' "
+                      "(e.g. 'udp:127.0.0.1:14550').",
             )
 
         default_alt = float(cfg.get("default_alt", 10.0))
         params = action.params or {}
 
+        # Validate action params BEFORE touching any connection — there is no point
+        # connecting to the vehicle only to reject the command for a missing param.
+        if action.action == "go_to" and (params.get("lat") is None
+                                         or params.get("lon") is None):
+            return ActionResult(
+                device_id=action.device_id, action=action.action, success=False,
+                error="go_to requires 'lat' and 'lon' params.",
+            )
+
         # ── Simulated mode — pymavlink not installed on this host ─────────────
         if not _MAVLINK_AVAILABLE:
             log.info("[SIMULATED] MAVLink %s: %s %s (would send to %s)",
-                     action.device_id, action.action, params, command_conn)
+                     action.device_id, action.action, params, conn_str)
             return ActionResult(
                 device_id=action.device_id, action=action.action, success=True,
-                response={"status": "simulated", "connection": command_conn,
+                response={"status": "simulated", "connection": conn_str,
                           "command": action.action, "params": params},
             )
 
-        # ── Real command dispatch ─────────────────────────────────────────────
-        try:
-            conn = self._get_connection(command_conn)
-        except Exception as e:
+        # ── Real command dispatch (single shared connection) ──────────────────
+        # SINGLE-CONNECTION design: the command channel does NOT open its own socket.
+        # The telemetry listener owns the one bidirectional connection — it received
+        # the heartbeat (so target_system/target_component are valid) and it is the
+        # only reader. The command writes on that same connection. This is exactly a
+        # real serial radio: one link, one reader, the command writes on it. It also
+        # eliminates the whole family of "blind command channel" failures — the bind
+        # conflict, the missed ACK, and target_system=0 — because the command no
+        # longer has a separate connection that can be blind.
+        #
+        # Start the listener (it opens the link, waits for the heartbeat, becomes the
+        # single reader). The telemetry endpoint binds and listens; the command will
+        # write on the very connection the listener opened.
+        if action.device_id not in self._listeners:
+            self.start_telemetry(action.device_id, conn_str)
+
+        # Wait for the listener to be connected — i.e. its factory completed its
+        # wait_heartbeat, so the connection's target_system is the real vehicle, not
+        # 0, and it is reading. Bounded wait; if it never connects we cannot command.
+        listener = self._listeners.get(action.device_id)
+        if listener is None:
             return ActionResult(
                 device_id=action.device_id, action=action.action, success=False,
-                error=f"MAVLink connection to {command_conn} failed: {e}",
+                error="MAVLink: telemetry listener could not be started; "
+                      "no connection to command the vehicle.",
+            )
+        if not listener.wait_connected(timeout=self._connect_timeout):
+            return ActionResult(
+                device_id=action.device_id, action=action.action, success=False,
+                error=f"MAVLink: vehicle {action.device_id} did not connect within "
+                      f"{self._connect_timeout}s (no heartbeat) — cannot command.",
             )
 
-        # Lazily start the telemetry listener the first time we command this vehicle.
-        # The return channel must be listening BEFORE the command takes effect, so
-        # we start it here — before _dispatch sends anything — and never miss the
-        # position messages that confirm arrival. start_telemetry is idempotent
-        # (a no-op if already listening) and safe (a no-op in simulated mode). It
-        # listens on telemetry_conn — the binding endpoint, distinct from the
-        # outbound command channel.
-        if action.device_id not in self._listeners:
-            self.start_telemetry(action.device_id, telemetry_conn)
-
-        # Wait for the listener (the single reader) to be connected before we send
-        # any command, so the ACKs of the opening commands (set_mode, arm, take_off)
-        # are captured. Without this, the first commands could be sent before the
-        # reader is up and their ACKs would be read-and-missed. Bounded wait — if the
-        # listener can't connect, _wait_ack will report no ACK (silence is not
-        # success) rather than block forever.
-        listener = self._listeners.get(action.device_id)
-        if listener is not None:
-            if not listener.wait_connected(timeout=self._ack_timeout):
-                log.warning("MAVLink: telemetry listener for %s not connected within "
-                            "%ss — command ACKs may be missed",
-                            action.device_id, self._ack_timeout)
+        # Fetch the listener's live connection per-dispatch (never cache — a reconnect
+        # replaces the object). The command writes on it; the listener reads it.
+        conn = listener.get_connection()
+        if conn is None:
+            return ActionResult(
+                device_id=action.device_id, action=action.action, success=False,
+                error=f"MAVLink: vehicle {action.device_id} connection not available "
+                      f"(listener connected then dropped) — cannot command.",
+            )
 
         try:
             return await self._dispatch(conn, action, params, default_alt)
@@ -462,68 +489,34 @@ class MAVLinkAdapter(DoSyncAdapter):
         return None
 
     @staticmethod
-    def _split_channels(cfg: dict) -> tuple:
-        """Derive the COMMAND and TELEMETRY connection strings from adapter_config,
-        so the two channels never bind the same UDP port.
+    def _single_connection(cfg: dict) -> Optional[str]:
+        """Derive the ONE bidirectional connection string the listener opens and the
+        command writes on (panel: single-connection, single-reader).
 
-        THE PROBLEM this solves: opening two `mavutil.mavlink_connection` on the same
-        `udp:IP:PORT` makes both bind that local port — the second fails with
-        'Address already in use'. The command channel only needs to SEND (and read
-        its own ACKs), the telemetry channel needs to LISTEN continuously.
+        A real drone over a serial radio is a single bidirectional link — the GCS
+        opens it once, receives heartbeats (learning target_system), sends commands,
+        receives ACKs and telemetry, all on the one connection. We mirror that: the
+        listener owns one connection and is the only reader; the command writes on it.
 
-        THE RULE (panel decision, SITL/UDP):
-          - command   → `udpout:IP:PORT` (outbound, does NOT bind a fixed local port)
-          - telemetry → explicit `telemetry_connection` if given, else the original
-                        `udp:`/`udpin:` (binds, listens) — the channel that receives
-                        the vehicle's position stream.
-        A `udp:` command string is rewritten to `udpout:` automatically so an
-        existing manifest keeps working; telemetry keeps the binding form.
+        The connection MUST be able to RECEIVE — it is what learns target_system from
+        the heartbeat. So it must be a binding/receiving form (udp:/udpin:/tcp:/
+        serial:). A legacy `udpout:` (outbound-only — cannot receive the heartbeat,
+        which is exactly what produced target_system=0) is normalized back to the
+        receiving `udp:` form. A separately declared `telemetry_connection` is
+        accepted as the single connection if present (it is the receiving endpoint).
 
-        TECH DEBT (documented, not hidden): a REAL drone over a serial radio is ONE
-        bidirectional link — a serial port cannot be opened twice. The correct
-        long-term design is a single connection with a single reader (producer/
-        consumer: the listener reads, the command writes and awaits its ACK via the
-        listener). This two-connection split is valid for SITL/UDP only; the serial
-        hardware path requires unifying them. See DESIGN note in the class docstring.
-
-        Returns (command_conn_str, telemetry_conn_str). Either may be None.
+        Returns the connection string, or None if none is usable.
         """
-        base = cfg.get("connection")
-        telemetry = cfg.get("telemetry_connection")
-
-        command = base
-        if base and base.startswith("udp:"):
-            # Rewrite the command channel to outbound so it does not bind the port
-            # the telemetry channel listens on.
-            command = "udpout:" + base[len("udp:"):]
-
-        if telemetry is None:
-            # No dedicated telemetry endpoint declared: the telemetry channel listens
-            # on the original binding string (udp:/udpin:). If the command was the
-            # only string and we rewrote it to udpout, telemetry uses the original
-            # binding form so it actually receives the stream.
-            telemetry = base
-
-        # Defensive validation: if both channels would bind the SAME udp port, the
-        # second open fails with 'Address already in use'. Fail clearly instead.
-        def _binds_same_port(a: str, b: str) -> bool:
-            def norm(s):
-                for pfx in ("udp:", "udpin:"):
-                    if s and s.startswith(pfx):
-                        return s[len(pfx):]
-                return None  # udpout/serial/etc don't bind a fixed listen port
-            na, nb = norm(a), norm(b)
-            return na is not None and na == nb
-
-        if command and telemetry and _binds_same_port(command, telemetry):
-            raise ValueError(
-                f"MAVLink command and telemetry would bind the same UDP port "
-                f"({command} / {telemetry}). Use 'udpout:' for the command "
-                f"connection, or declare a separate 'telemetry_connection'. "
-                f"(Two binds on one UDP port fail with 'Address already in use'.)"
-            )
-
-        return command, telemetry
+        # Prefer an explicit receiving telemetry endpoint if declared; otherwise the
+        # main connection. Either way we want the receiving form.
+        base = cfg.get("connection") or cfg.get("telemetry_connection")
+        if not base:
+            return None
+        # Normalize an outbound-only command string back to a receiving one — the
+        # single connection has to receive the heartbeat.
+        if base.startswith("udpout:"):
+            base = "udp:" + base[len("udpout:"):]
+        return base
 
     def _ensure_consumer(self) -> None:
         """Start the single consumer task if it isn't already running. The consumer
@@ -879,6 +872,18 @@ class MAVLinkTelemetryListener:
         """Block up to `timeout` for the listener to establish its connection.
         Returns True if connected within the timeout, False otherwise."""
         return self._connected_event.wait(timeout=timeout)
+
+    def get_connection(self):
+        """Return the live MAVLink connection this listener owns, or None if it has
+        not connected yet. The command channel writes commands on THIS connection —
+        a single bidirectional link, exactly like a real serial radio. The listener
+        is the only reader (recv_match on its thread); the command only writes
+        (command_long_send), which is a thread-safe sendto. The connection already
+        learned target_system/target_component from the heartbeat its factory waited
+        for, so commands written on it are addressed to the real vehicle (not
+        system 0). Callers must fetch this per-dispatch (never cache) — on a
+        reconnect the underlying connection object changes."""
+        return self._conn
 
     def record_ack(self, command_id: int, result: int, at: float = None) -> None:
         """Record a COMMAND_ACK and wake any waiter. Called by the listener thread

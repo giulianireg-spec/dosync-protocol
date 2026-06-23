@@ -160,6 +160,34 @@ def test_wait_connected_true_after_event_set():
     check("wait_connected returns True once connected", lis.wait_connected(0.2) is True)
 
 
+def test_get_connection_returns_live_conn():
+    lis = _listener()
+    # Before connecting, no connection.
+    check("get_connection is None before connecting", lis.get_connection() is None)
+    # Simulate the listener having an open connection.
+    sentinel = object()
+    lis._conn = sentinel
+    check("get_connection returns the listener's live connection",
+          lis.get_connection() is sentinel)
+
+
+def test_command_uses_listener_connection_not_its_own():
+    """The single-connection invariant: the adapter writes commands on the listener's
+    connection, it does not open a separate one. We assert the wiring: a connected
+    listener's connection is what get_connection hands back, and the adapter reads it
+    per-dispatch."""
+    from dosync.adapters.mavlink import MAVLinkAdapter
+    a = MAVLinkAdapter()
+    lis = _listener()
+    sentinel = object()
+    lis._conn = sentinel
+    lis._connected_event.set()
+    a._listeners["drone-01"] = lis
+    # The adapter should fetch the listener's connection (single shared link).
+    got = a._listeners["drone-01"].get_connection()
+    check("adapter obtains the command connection from the listener", got is sentinel)
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

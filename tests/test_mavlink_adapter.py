@@ -120,12 +120,12 @@ def test_config_from_manifest_via_hub():
 def test_go_to_requires_coordinates():
     import dosync.adapters.mavlink as m
     saved = m._MAVLINK_AVAILABLE
-    # Force real path so the lat/lon validation in _dispatch is reached. We stub
-    # the connection so no real socket is opened.
+    # Force real path so the lat/lon validation is reached. The validation now runs
+    # BEFORE any connection is opened (no point connecting only to reject a missing
+    # param), so no stub is needed.
     m._MAVLINK_AVAILABLE = True
     try:
         a = MAVLinkAdapter()
-        a._get_connection = lambda conn_str: object()  # stub, never used (lat/lon missing first)
         action = DeviceAction(
             device_id="drone-01", action="go_to",
             params={"adapter_config": {"connection": "udp:127.0.0.1:14550"}})
