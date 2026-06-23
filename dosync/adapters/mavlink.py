@@ -229,6 +229,19 @@ class MAVLinkAdapter(DoSyncAdapter):
         if action.device_id not in self._listeners:
             self.start_telemetry(action.device_id, telemetry_conn)
 
+        # Wait for the listener (the single reader) to be connected before we send
+        # any command, so the ACKs of the opening commands (set_mode, arm, take_off)
+        # are captured. Without this, the first commands could be sent before the
+        # reader is up and their ACKs would be read-and-missed. Bounded wait — if the
+        # listener can't connect, _wait_ack will report no ACK (silence is not
+        # success) rather than block forever.
+        listener = self._listeners.get(action.device_id)
+        if listener is not None:
+            if not listener.wait_connected(timeout=self._ack_timeout):
+                log.warning("MAVLink: telemetry listener for %s not connected within "
+                            "%ss — command ACKs may be missed",
+                            action.device_id, self._ack_timeout)
+
         try:
             return await self._dispatch(conn, action, params, default_alt)
         except Exception as e:
@@ -256,14 +269,16 @@ class MAVLinkAdapter(DoSyncAdapter):
             # Sequence: GUIDED -> arm -> NAV_TAKEOFF. The panel's "preparing" phase
             # (arming/taking_off) will be surfaced by telemetry in Step 2; here we
             # only dispatch the order and confirm acceptance.
-            self._set_mode(conn, "GUIDED")
-            self._arm(conn)
+            self._set_mode(conn, "GUIDED", device_id=action.device_id)
+            self._arm(conn, device_id=action.device_id)
+            send_time = time.time()
             conn.mav.command_long_send(
                 conn.target_system, conn.target_component,
                 mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
                 0, 0, 0, 0, 0, 0, 0, alt,
             )
-            ok = self._wait_ack(conn, mavutil.mavlink.MAV_CMD_NAV_TAKEOFF)
+            ok = self._wait_ack(conn, mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
+                                device_id=action.device_id, since=send_time)
             detail = {"altitude": alt}
             # Tell this vehicle's telemetry listener to confirm the climb: emit
             # FINISHED once the vehicle reaches the commanded altitude. Without this
@@ -306,15 +321,15 @@ class MAVLinkAdapter(DoSyncAdapter):
                 listener.set_arrival_target("position", (lat, lon))
 
         elif act == "land":
-            ok = self._set_mode(conn, "LAND")
+            ok = self._set_mode(conn, "LAND", device_id=action.device_id)
             detail = {"mode": "LAND"}
 
         elif act == "return_home":
-            ok = self._set_mode(conn, "RTL")
+            ok = self._set_mode(conn, "RTL", device_id=action.device_id)
             detail = {"mode": "RTL"}
 
         elif act == "loiter":
-            ok = self._set_mode(conn, "LOITER")
+            ok = self._set_mode(conn, "LOITER", device_id=action.device_id)
             detail = {"mode": "LOITER"}
 
         if ok:
@@ -330,48 +345,70 @@ class MAVLinkAdapter(DoSyncAdapter):
         )
 
     # ── MAVLink primitives ────────────────────────────────────────────────────
-    def _set_mode(self, conn, mode_name: str) -> bool:
+    def _set_mode(self, conn, mode_name: str, device_id: str = None) -> bool:
         """Set a flight mode by name and confirm via COMMAND_ACK."""
         mode_map = conn.mode_mapping()
         if mode_map is None or mode_name not in mode_map:
             log.warning("MAVLink: mode '%s' unknown to this vehicle", mode_name)
             return False
         mode_id = mode_map[mode_name]
+        send_time = time.time()
         conn.mav.command_long_send(
             conn.target_system, conn.target_component,
             mavutil.mavlink.MAV_CMD_DO_SET_MODE, 0,
             mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, mode_id,
             0, 0, 0, 0, 0,
         )
-        return self._wait_ack(conn, mavutil.mavlink.MAV_CMD_DO_SET_MODE)
+        return self._wait_ack(conn, mavutil.mavlink.MAV_CMD_DO_SET_MODE,
+                              device_id=device_id, since=send_time)
 
-    def _arm(self, conn) -> bool:
+    def _arm(self, conn, device_id: str = None) -> bool:
         """Arm the vehicle's motors and confirm via COMMAND_ACK."""
+        send_time = time.time()
         conn.mav.command_long_send(
             conn.target_system, conn.target_component,
             mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM, 0,
             1, 0, 0, 0, 0, 0, 0,
         )
-        return self._wait_ack(conn, mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM)
+        return self._wait_ack(conn, mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
+                              device_id=device_id, since=send_time)
 
-    def _wait_ack(self, conn, command_id) -> bool:
+    def _wait_ack(self, conn, command_id, device_id: str = None,
+                  since: float = None) -> bool:
         """Wait for a COMMAND_ACK for the given command. Returns True only on an
         explicit ACCEPTED result — silence or rejection is False. This is the
-        command-channel embodiment of 'no positive signal, no success'."""
-        msg = conn.recv_match(type="COMMAND_ACK", blocking=True,
-                              timeout=self._ack_timeout)
-        if msg is None:
+        command-channel embodiment of 'no positive signal, no success'.
+
+        SINGLE-READER design: the ACK is read by the telemetry listener (the only
+        reader of the socket) and recorded in its ACK registry; this method consumes
+        it from there via wait_for_ack, rather than reading the socket itself. The
+        old socket read does not work once the command channel is outbound-only
+        (udpout) — the ACK arrives on the listener's socket, not the command's.
+
+        `since` is the command's send time; only an ACK that arrived at or after it
+        counts, so a stale ACK from an earlier identical command is never accepted.
+        If no listener is running for this device, there is no reader for the ACK —
+        we log and return False (never assume success)."""
+        listener = self._listeners.get(device_id) if device_id else None
+        if listener is None:
+            # No single reader for this device's ACKs. With an outbound-only command
+            # channel there is nothing to read the ACK from, so we cannot confirm.
+            # Silence is not success.
+            log.warning("MAVLink: no telemetry listener for %s — cannot confirm "
+                        "COMMAND_ACK for command %s (treating as not accepted)",
+                        device_id, command_id)
+            return False
+
+        send_time = since if since is not None else time.time()
+        result = listener.wait_for_ack(command_id, send_time, self._ack_timeout)
+        if result is None:
             log.warning("MAVLink: no COMMAND_ACK for command %s within %ss",
                         command_id, self._ack_timeout)
             return False
-        if msg.command != command_id:
-            # An ACK for a different command — not ours. Treat conservatively.
-            log.debug("MAVLink: got ACK for %s while waiting for %s",
-                      msg.command, command_id)
-        accepted = (msg.result == mavutil.mavlink.MAV_RESULT_ACCEPTED)
+        accepted = (result == mavutil.mavlink.MAV_RESULT_ACCEPTED)
         if not accepted:
             log.warning("MAVLink: command %s result=%s (not ACCEPTED)",
-                        command_id, msg.result)
+                        command_id, result)
         return accepted
 
     # ── Telemetry channel (Step 2b) ──────────────────────────────────────────
@@ -818,6 +855,58 @@ class MAVLinkTelemetryListener:
         self._arrival_target: Optional[tuple] = None  # (kind, value) | None
         self._target_lock = threading.Lock()
 
+        # ── COMMAND_ACK registry (single-reader design) ──────────────────────
+        # The listener is the ONLY reader of the socket, so COMMAND_ACKs arrive
+        # here, not on the (outbound-only) command channel. We record the latest
+        # ACK per command id and notify waiters. _wait_ack (called from the command
+        # path) consumes from here instead of reading the socket itself — which is
+        # exactly how a real GCS handles a single bidirectional link, and what makes
+        # this adapter work over a serial radio (one link, one reader), not just
+        # SITL/UDP. Maps command_id -> (result, arrival_time). A waiter only accepts
+        # an ACK whose arrival_time is at or after its own send time, so a stale ACK
+        # from an earlier identical command is never mistaken for a fresh one, and an
+        # ACK that arrives just before the waiter starts waiting is not lost.
+        self._ack_registry: dict = {}            # command_id -> (result, arrival_time)
+        self._ack_condition = threading.Condition()
+        # Set once the listener has an open connection. The command path waits on
+        # this before dispatching, so the listener (the single reader) is already
+        # listening when the first command's ACK comes back — otherwise the ACKs of
+        # the opening commands (set_mode, arm) could be read-and-missed before the
+        # reader is up.
+        self._connected_event = threading.Event()
+
+    def wait_connected(self, timeout: float) -> bool:
+        """Block up to `timeout` for the listener to establish its connection.
+        Returns True if connected within the timeout, False otherwise."""
+        return self._connected_event.wait(timeout=timeout)
+
+    def record_ack(self, command_id: int, result: int, at: float = None) -> None:
+        """Record a COMMAND_ACK and wake any waiter. Called by the listener thread
+        when it reads a COMMAND_ACK off the socket."""
+        ts = at if at is not None else time.time()
+        with self._ack_condition:
+            self._ack_registry[command_id] = (result, ts)
+            self._ack_condition.notify_all()
+
+    def wait_for_ack(self, command_id: int, since: float, timeout: float) -> Optional[int]:
+        """Block up to `timeout` seconds for a COMMAND_ACK for `command_id` that
+        arrived at or after `since`. Returns the MAVLink result code, or None on
+        timeout. Thread-safe: the listener thread records ACKs while this runs on
+        the command path. The `since` filter is what prevents both the lost-ACK race
+        (ACK arrived just before we started waiting — still counted, its arrival_time
+        >= since) and the stale-ACK bug (an ACK from a prior identical command —
+        arrival_time < since, ignored)."""
+        deadline = time.time() + timeout
+        with self._ack_condition:
+            while True:
+                entry = self._ack_registry.get(command_id)
+                if entry is not None and entry[1] >= since:
+                    return entry[0]
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    return None
+                self._ack_condition.wait(timeout=remaining)
+
     def set_arrival_target(self, kind: str, value) -> None:
         """Record the active arrival target. kind is "position" (value=(lat,lon)) or
         "altitude" (value=target_m). The listener emits FINISHED once the vehicle
@@ -917,6 +1006,16 @@ class MAVLinkTelemetryListener:
 
             # A real message arrived. Translate and, if it carries a fact, enqueue.
             last_message_at = now
+            # COMMAND_ACK capture (single-reader design). The listener is the only
+            # reader of the socket, so a command's ACK arrives HERE, not on the
+            # outbound command channel. Record it so the waiting command path
+            # (wait_for_ack) can consume it. This is what lets the command confirm
+            # its ACK over a one-reader link — the serial-real design, not just SITL.
+            try:
+                if msg.get_type() == "COMMAND_ACK":
+                    self.record_ack(msg.command, msg.result, now)
+            except Exception:
+                pass
             # Resolve the human-readable flight-mode name on heartbeats before the
             # mapper sees them. Real pymavlink HEARTBEATs carry the mode as a numeric
             # custom_mode, but the (pure, socket-free) mapper keys off a `mode_name`
@@ -1027,6 +1126,7 @@ class MAVLinkTelemetryListener:
             # Re-learn reality from the next heartbeat — never assume the past.
             self._mapper.reset()
             self._reconnect_failures = 0  # healthy again — reset backoff
+            self._connected_event.set()
             log.info("MAVLink listener %s: connected", self.device_id)
             return True
         except Exception as e:
@@ -1043,6 +1143,7 @@ class MAVLinkTelemetryListener:
             except Exception:
                 pass
         self._conn = None
+        self._connected_event.clear()
 
     def _sleep_interruptible(self, seconds: float) -> None:
         """Sleep in small slices so a stop() is noticed quickly."""
