@@ -190,6 +190,14 @@ class MAVLinkAdapter(DoSyncAdapter):
                 error=f"MAVLink connection to {conn_str} failed: {e}",
             )
 
+        # Lazily start the telemetry listener the first time we command this vehicle.
+        # The return channel must be listening BEFORE the command takes effect, so
+        # we start it here — before _dispatch sends anything — and never miss the
+        # position messages that confirm arrival. start_telemetry is idempotent
+        # (a no-op if already listening) and safe (a no-op in simulated mode).
+        if action.device_id not in self._listeners:
+            self.start_telemetry(action.device_id, conn_str)
+
         try:
             return await self._dispatch(conn, action, params, default_alt)
         except Exception as e:
@@ -226,6 +234,15 @@ class MAVLinkAdapter(DoSyncAdapter):
             )
             ok = self._wait_ack(conn, mavutil.mavlink.MAV_CMD_NAV_TAKEOFF)
             detail = {"altitude": alt}
+            # Tell this vehicle's telemetry listener to confirm the climb: emit
+            # FINISHED once the vehicle reaches the commanded altitude. Without this
+            # the take_off would dispatch, be ACK'd, and then stall forever (silence
+            # is not success) because nothing ever confirms the climb completed.
+            # Guarded so it's a no-op when telemetry isn't running.
+            if ok:
+                listener = self._listeners.get(action.device_id)
+                if listener is not None:
+                    listener.set_arrival_target("altitude", alt)
 
         elif act == "go_to":
             lat = params.get("lat")
@@ -255,7 +272,7 @@ class MAVLinkAdapter(DoSyncAdapter):
             # telemetry isn't running (simulated mode, or telemetry not started).
             listener = self._listeners.get(action.device_id)
             if listener is not None:
-                listener.set_destination(lat, lon)
+                listener.set_arrival_target("position", (lat, lon))
 
         elif act == "land":
             ok = self._set_mode(conn, "LAND")
@@ -652,6 +669,12 @@ _RECONNECT_MAX_S = 60.0    # never wait longer than this between attempts
 # vehicle never hovers perfectly still over a point. "Entered the radius = arrived";
 # we deliberately do not require holding for N seconds (a simpler, sufficient rule).
 _WAYPOINT_ARRIVAL_RADIUS_M = 3.0
+# A take_off is considered FINISHED once the vehicle reaches this fraction of the
+# commanded altitude. ArduPilot itself treats a climb as complete around 95% — a
+# vehicle oscillates and rarely settles exactly on the target, so requiring the exact
+# altitude would never confirm and the supervisor would stall. Vertical analogue of
+# the waypoint arrival radius.
+_TAKEOFF_ARRIVAL_FRACTION = 0.95
 
 
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -688,29 +711,52 @@ class MAVLinkTelemetryListener:
         # 0 = healthy. Each failure grows the wait (see _current_backoff); a
         # successful connect resets it to 0.
         self._reconnect_failures = 0
-        # Active go_to destination (lat, lon) for this vehicle, or None. Set by the
-        # adapter when it dispatches a go_to; cleared on arrival. This is the only
-        # spatial state the telemetry side holds, and it lives HERE (in the per-
-        # vehicle listener, already drone-specific) rather than in the pure mapper
-        # or the generic hub — neither of those should know about coordinates.
-        self._destination: Optional[tuple] = None
-        self._dest_lock = threading.Lock()
+        # Active ARRIVAL TARGET for this vehicle, or None. A single target at a time:
+        # the supervisor runs steps sequentially (it waits for one step's FINISHED
+        # before dispatching the next), so a take_off (altitude target) and a go_to
+        # (position target) are never active simultaneously. This unifies what were
+        # two parallel mechanisms into one "arrival target" with a kind:
+        #   ("position", (lat, lon))  — reached when within _WAYPOINT_ARRIVAL_RADIUS_M
+        #   ("altitude", target_m)    — reached at _TAKEOFF_ARRIVAL_FRACTION of target
+        # Lives HERE (per-vehicle, already drone-specific), not in the pure mapper or
+        # the generic hub — neither should know about coordinates or altitude.
+        self._arrival_target: Optional[tuple] = None  # (kind, value) | None
+        self._target_lock = threading.Lock()
 
+    def set_arrival_target(self, kind: str, value) -> None:
+        """Record the active arrival target. kind is "position" (value=(lat,lon)) or
+        "altitude" (value=target_m). The listener emits FINISHED once the vehicle
+        reaches it. Called by the adapter from the command channel — the one point
+        where command and telemetry meet. Replaces any prior target (the supervisor's
+        sequencing guarantees there is at most one in flight)."""
+        with self._target_lock:
+            self._arrival_target = (kind, value)
+
+    def clear_arrival_target(self) -> None:
+        with self._target_lock:
+            self._arrival_target = None
+
+    def _get_arrival_target(self) -> Optional[tuple]:
+        with self._target_lock:
+            return self._arrival_target
+
+    # Backward-compatible aliases — set_destination/clear_destination were the
+    # position-only API before take_off needed altitude confirmation. Kept so any
+    # existing caller/test using them still works; they delegate to the unified target.
     def set_destination(self, lat: float, lon: float) -> None:
-        """Record the active go_to target. The listener will emit FINISHED once the
-        vehicle reaches it. Called by the adapter from the command channel — the
-        one point where command and telemetry meet. Thread-safe: the adapter calls
-        this from the event-loop thread while the listener reads it on its own."""
-        with self._dest_lock:
-            self._destination = (lat, lon)
+        self.set_arrival_target("position", (lat, lon))
 
     def clear_destination(self) -> None:
-        with self._dest_lock:
-            self._destination = None
+        self.clear_arrival_target()
 
     def _get_destination(self) -> Optional[tuple]:
-        with self._dest_lock:
-            return self._destination
+        """Backward-compatible accessor: returns the active position target (lat,lon)
+        or None. Returns None if the active target is an altitude (take_off) rather
+        than a position — preserving the original position-only semantics."""
+        target = self._get_arrival_target()
+        if target is not None and target[0] == "position":
+            return target[1]
+        return None
 
     def _current_backoff(self) -> float:
         """Seconds to wait before the next reconnect attempt, growing
@@ -801,7 +847,7 @@ class MAVLinkTelemetryListener:
             # FINISHED once and clear the destination. This is a positive
             # confirmation (the vehicle actually reached the point) — silence still
             # never completes anything.
-            self._check_waypoint_arrival(msg)
+            self._check_arrival(msg)
 
     def _attach_mode_name(self, msg) -> None:
         """For a HEARTBEAT, decode the numeric custom_mode into a mode-name string
@@ -822,30 +868,54 @@ class MAVLinkTelemetryListener:
             # Cannot resolve (no pymavlink, or unexpected message) — leave it unset.
             pass
 
-    def _check_waypoint_arrival(self, msg) -> None:
-        """If a go_to destination is active and this position message shows the
-        vehicle within the arrival radius, enqueue FINISHED and clear the target."""
+    def _check_arrival(self, msg) -> None:
+        """If an arrival target is active and this position message shows the vehicle
+        has reached it, enqueue FINISHED once and clear the target. Handles both
+        target kinds — a position (go_to) reached within the arrival radius, and an
+        altitude (take_off) reached at the arrival fraction. GLOBAL_POSITION_INT
+        carries both lat/lon (1e7 deg) and relative_alt (mm), so one message type
+        serves both checks. The supervisor's sequencing guarantees only one target is
+        ever active, so there is no risk of a double FINISHED."""
         try:
             if msg.get_type() != "GLOBAL_POSITION_INT":
                 return
         except Exception:
             return
-        dest = self._get_destination()
-        if dest is None:
+        target = self._get_arrival_target()
+        if target is None:
             return
-        # GLOBAL_POSITION_INT carries lat/lon in 1e7 degrees.
-        try:
-            cur_lat = msg.lat / 1e7
-            cur_lon = msg.lon / 1e7
-        except Exception:
-            return
-        distance = _haversine_m(cur_lat, cur_lon, dest[0], dest[1])
-        if distance <= _WAYPOINT_ARRIVAL_RADIUS_M:
-            log.info("MAVLink listener %s: reached go_to target (%.1fm) — FINISHED",
-                     self.device_id, distance)
-            from ..reconciler import TelemetryEvent
-            self._queue.put((self.device_id, TelemetryEvent.FINISHED, None))
-            self.clear_destination()
+        kind, value = target
+        from ..reconciler import TelemetryEvent
+
+        if kind == "position":
+            try:
+                cur_lat = msg.lat / 1e7
+                cur_lon = msg.lon / 1e7
+            except Exception:
+                return
+            distance = _haversine_m(cur_lat, cur_lon, value[0], value[1])
+            if distance <= _WAYPOINT_ARRIVAL_RADIUS_M:
+                log.info("MAVLink listener %s: reached go_to target (%.1fm) — FINISHED",
+                         self.device_id, distance)
+                self._queue.put((self.device_id, TelemetryEvent.FINISHED, None))
+                self.clear_arrival_target()
+
+        elif kind == "altitude":
+            try:
+                cur_alt = msg.relative_alt / 1000.0  # mm -> m
+            except Exception:
+                return
+            target_alt = float(value)
+            if target_alt > 0 and cur_alt >= target_alt * _TAKEOFF_ARRIVAL_FRACTION:
+                log.info("MAVLink listener %s: reached take_off altitude "
+                         "(%.1fm of %.1fm) — FINISHED",
+                         self.device_id, cur_alt, target_alt)
+                self._queue.put((self.device_id, TelemetryEvent.FINISHED, None))
+                self.clear_arrival_target()
+
+    # Backward-compatible alias for the former method name.
+    def _check_waypoint_arrival(self, msg) -> None:
+        self._check_arrival(msg)
 
     def _reconnect(self) -> bool:
         """Open a fresh connection via the factory and reset the mapper so it does
