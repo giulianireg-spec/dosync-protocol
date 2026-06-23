@@ -354,6 +354,15 @@ class MAVLinkAdapter(DoSyncAdapter):
         elif act == "return_home":
             ok = self._set_mode(conn, "RTL", device_id=action.device_id)
             detail = {"mode": "RTL"}
+            # Register a disarm arrival target so the supervisor waits for the RTL to
+            # actually complete: the listener emits FINISHED when the vehicle disarms
+            # (landed at home, motors off) — the real "RTL done" signal. Without this
+            # the step would be evaluated on the ACK alone and finish/abort instantly,
+            # never waiting for the descent. Guarded so it's a no-op without telemetry.
+            if ok:
+                listener = self._listeners.get(action.device_id)
+                if listener is not None:
+                    listener.set_arrival_target("disarm", None)
 
         elif act == "loiter":
             ok = self._set_mode(conn, "LOITER", device_id=action.device_id)
@@ -645,7 +654,12 @@ def mavlink_manifest(
 # GUIDED is the mode DoSync commands the vehicle in. AUTO (running a mission) is
 # also autonomous. Anything else, entered while an operation is active, means
 # control left DoSync's hands — most often a pilot moving the sticks.
-_AUTONOMOUS_MODES = frozenset({"GUIDED", "AUTO"})
+_AUTONOMOUS_MODES = frozenset({"GUIDED", "AUTO", "RTL", "LAND"})
+# RTL and LAND are autonomous modes WE command (return_home, land). Without them
+# here, the GUIDED->RTL transition our own return_home triggers would be read as the
+# autonomous->manual edge and emit a false MANUAL_CONTROL_TAKEN. (A pilot selecting
+# RTL on the radio is a real handover, but distinguishing who selected the mode is a
+# later refinement — for now our commanded RTL/LAND are autonomous.)
 
 
 class MAVLinkTelemetryMapper:
@@ -1068,23 +1082,41 @@ class MAVLinkTelemetryListener:
             pass
 
     def _check_arrival(self, msg) -> None:
-        """If an arrival target is active and this position message shows the vehicle
-        has reached it, enqueue FINISHED once and clear the target. Handles both
-        target kinds — a position (go_to) reached within the arrival radius, and an
-        altitude (take_off) reached at the arrival fraction. GLOBAL_POSITION_INT
-        carries both lat/lon (1e7 deg) and relative_alt (mm), so one message type
-        serves both checks. The supervisor's sequencing guarantees only one target is
-        ever active, so there is no risk of a double FINISHED."""
-        try:
-            if msg.get_type() != "GLOBAL_POSITION_INT":
-                return
-        except Exception:
-            return
+        """If an arrival target is active and this message shows the vehicle has
+        reached it, enqueue FINISHED once and clear the target. Handles three target
+        kinds:
+          - position (go_to)      — GLOBAL_POSITION_INT within the arrival radius
+          - altitude (take_off)   — GLOBAL_POSITION_INT at the arrival fraction
+          - disarm  (return_home) — HEARTBEAT showing the vehicle disarmed (it landed
+                                    at home after RTL and shut its motors down)
+        The supervisor's sequencing guarantees only one target is ever active, so
+        there is no risk of a double FINISHED, and a disarm is only read as success
+        when a return_home is actually in flight."""
         target = self._get_arrival_target()
         if target is None:
             return
         kind, value = target
         from ..reconciler import TelemetryEvent
+
+        try:
+            mtype = msg.get_type()
+        except Exception:
+            return
+
+        # ── disarm target (return_home): confirmed by the disarm in a HEARTBEAT ──
+        if kind == "disarm":
+            if mtype != "HEARTBEAT":
+                return
+            if self._is_disarmed(msg):
+                log.info("MAVLink listener %s: disarmed after RTL — return_home "
+                         "FINISHED", self.device_id)
+                self._queue.put((self.device_id, TelemetryEvent.FINISHED, None))
+                self.clear_arrival_target()
+            return
+
+        # ── position / altitude targets: confirmed by GLOBAL_POSITION_INT ───────
+        if mtype != "GLOBAL_POSITION_INT":
+            return
 
         if kind == "position":
             try:
@@ -1111,6 +1143,18 @@ class MAVLinkTelemetryListener:
                          self.device_id, cur_alt, target_alt)
                 self._queue.put((self.device_id, TelemetryEvent.FINISHED, None))
                 self.clear_arrival_target()
+
+    @staticmethod
+    def _is_disarmed(msg) -> bool:
+        """True if a HEARTBEAT shows the vehicle disarmed. The armed state is the
+        MAV_MODE_FLAG_SAFETY_ARMED bit (0x80) of base_mode: set = armed, clear =
+        disarmed. A vehicle that completed RTL and landed clears this bit."""
+        try:
+            base_mode = msg.base_mode
+        except Exception:
+            return False
+        ARMED_BIT = 0x80  # mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
+        return (base_mode & ARMED_BIT) == 0
 
     # Backward-compatible alias for the former method name.
     def _check_waypoint_arrival(self, msg) -> None:
