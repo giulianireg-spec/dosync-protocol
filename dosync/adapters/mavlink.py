@@ -90,6 +90,24 @@ class MAVLinkAdapter(DoSyncAdapter):
 
     The MAVLink connection is opened lazily on first use and cached, so a hub that
     registers a drone but never commands it pays no connection cost.
+
+    TWO CHANNELS — DESIGN NOTE (and documented tech debt):
+        This adapter currently opens TWO connections per vehicle: a COMMAND channel
+        (outbound — sends commands, reads its own ACKs) and a TELEMETRY channel (the
+        listener — reads the position stream continuously). They must not bind the
+        same UDP port, so _split_channels rewrites a `udp:` command string to
+        `udpout:` and keeps the binding form for telemetry (or uses a declared
+        `telemetry_connection`). This is correct and sufficient for SITL/UDP.
+
+        It is NOT how a real drone works. Over a serial radio (SiK 915MHz, a USB
+        cable) a vehicle is ONE bidirectional link — a serial port cannot be opened
+        twice. The correct long-term design is a SINGLE connection with a SINGLE
+        reader: a producer/consumer where the listener owns the read loop and the
+        command channel writes, then awaits its ACK *via* the listener rather than
+        reading the socket itself. That refactor (restructuring _wait_ack to go
+        through the listener) is the next step for hardware support and is
+        deliberately deferred — the two-connection split unblocks SITL today without
+        pretending it already serves a serial drone. ("Implementado ≠ validado.")
     """
 
     def __init__(self, hub=None, ack_timeout: float = _ACK_TIMEOUT_S):
@@ -168,35 +186,48 @@ class MAVLinkAdapter(DoSyncAdapter):
                 error="MAVLink manifest missing 'connection' (e.g. 'udp:127.0.0.1:14550').",
             )
 
+        # Separate the command and telemetry channels so they never bind the same
+        # UDP port (the cause of 'Address already in use'). command_conn is outbound
+        # (udpout — no local bind), telemetry_conn listens for the position stream.
+        try:
+            command_conn, telemetry_conn = self._split_channels(cfg)
+        except ValueError as e:
+            return ActionResult(
+                device_id=action.device_id, action=action.action, success=False,
+                error=str(e),
+            )
+
         default_alt = float(cfg.get("default_alt", 10.0))
         params = action.params or {}
 
         # ── Simulated mode — pymavlink not installed on this host ─────────────
         if not _MAVLINK_AVAILABLE:
             log.info("[SIMULATED] MAVLink %s: %s %s (would send to %s)",
-                     action.device_id, action.action, params, conn_str)
+                     action.device_id, action.action, params, command_conn)
             return ActionResult(
                 device_id=action.device_id, action=action.action, success=True,
-                response={"status": "simulated", "connection": conn_str,
+                response={"status": "simulated", "connection": command_conn,
                           "command": action.action, "params": params},
             )
 
         # ── Real command dispatch ─────────────────────────────────────────────
         try:
-            conn = self._get_connection(conn_str)
+            conn = self._get_connection(command_conn)
         except Exception as e:
             return ActionResult(
                 device_id=action.device_id, action=action.action, success=False,
-                error=f"MAVLink connection to {conn_str} failed: {e}",
+                error=f"MAVLink connection to {command_conn} failed: {e}",
             )
 
         # Lazily start the telemetry listener the first time we command this vehicle.
         # The return channel must be listening BEFORE the command takes effect, so
         # we start it here — before _dispatch sends anything — and never miss the
         # position messages that confirm arrival. start_telemetry is idempotent
-        # (a no-op if already listening) and safe (a no-op in simulated mode).
+        # (a no-op if already listening) and safe (a no-op in simulated mode). It
+        # listens on telemetry_conn — the binding endpoint, distinct from the
+        # outbound command channel.
         if action.device_id not in self._listeners:
-            self.start_telemetry(action.device_id, conn_str)
+            self.start_telemetry(action.device_id, telemetry_conn)
 
         try:
             return await self._dispatch(conn, action, params, default_alt)
@@ -392,6 +423,70 @@ class MAVLinkAdapter(DoSyncAdapter):
             if device and device.adapter_config:
                 return device.adapter_config.get("connection")
         return None
+
+    @staticmethod
+    def _split_channels(cfg: dict) -> tuple:
+        """Derive the COMMAND and TELEMETRY connection strings from adapter_config,
+        so the two channels never bind the same UDP port.
+
+        THE PROBLEM this solves: opening two `mavutil.mavlink_connection` on the same
+        `udp:IP:PORT` makes both bind that local port — the second fails with
+        'Address already in use'. The command channel only needs to SEND (and read
+        its own ACKs), the telemetry channel needs to LISTEN continuously.
+
+        THE RULE (panel decision, SITL/UDP):
+          - command   → `udpout:IP:PORT` (outbound, does NOT bind a fixed local port)
+          - telemetry → explicit `telemetry_connection` if given, else the original
+                        `udp:`/`udpin:` (binds, listens) — the channel that receives
+                        the vehicle's position stream.
+        A `udp:` command string is rewritten to `udpout:` automatically so an
+        existing manifest keeps working; telemetry keeps the binding form.
+
+        TECH DEBT (documented, not hidden): a REAL drone over a serial radio is ONE
+        bidirectional link — a serial port cannot be opened twice. The correct
+        long-term design is a single connection with a single reader (producer/
+        consumer: the listener reads, the command writes and awaits its ACK via the
+        listener). This two-connection split is valid for SITL/UDP only; the serial
+        hardware path requires unifying them. See DESIGN note in the class docstring.
+
+        Returns (command_conn_str, telemetry_conn_str). Either may be None.
+        """
+        base = cfg.get("connection")
+        telemetry = cfg.get("telemetry_connection")
+
+        command = base
+        if base and base.startswith("udp:"):
+            # Rewrite the command channel to outbound so it does not bind the port
+            # the telemetry channel listens on.
+            command = "udpout:" + base[len("udp:"):]
+
+        if telemetry is None:
+            # No dedicated telemetry endpoint declared: the telemetry channel listens
+            # on the original binding string (udp:/udpin:). If the command was the
+            # only string and we rewrote it to udpout, telemetry uses the original
+            # binding form so it actually receives the stream.
+            telemetry = base
+
+        # Defensive validation: if both channels would bind the SAME udp port, the
+        # second open fails with 'Address already in use'. Fail clearly instead.
+        def _binds_same_port(a: str, b: str) -> bool:
+            def norm(s):
+                for pfx in ("udp:", "udpin:"):
+                    if s and s.startswith(pfx):
+                        return s[len(pfx):]
+                return None  # udpout/serial/etc don't bind a fixed listen port
+            na, nb = norm(a), norm(b)
+            return na is not None and na == nb
+
+        if command and telemetry and _binds_same_port(command, telemetry):
+            raise ValueError(
+                f"MAVLink command and telemetry would bind the same UDP port "
+                f"({command} / {telemetry}). Use 'udpout:' for the command "
+                f"connection, or declare a separate 'telemetry_connection'. "
+                f"(Two binds on one UDP port fail with 'Address already in use'.)"
+            )
+
+        return command, telemetry
 
     def _ensure_consumer(self) -> None:
         """Start the single consumer task if it isn't already running. The consumer
