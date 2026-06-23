@@ -1711,12 +1711,82 @@ class DoSyncHub:
         })
         return final
 
+    async def _route_composite_intent(self, intent, executor, composition_kind):
+        """Route a composition intent to the right composer and run it as a closed-
+        loop supervised sequence, wrapping the terminal CompositeState in the
+        IntentResult the caller expects.
+
+        The selection is a simple `if`, not a generic registry (panel: no premature
+        abstraction with one composer). An UNKNOWN kind fails EXPLICITLY — a declared
+        composition the hub cannot compose is a configuration error that must shout,
+        never a silent fall-through to the flat path.
+
+        The composition context (center, radius_m, device_id, ...) travels in
+        intent.context — the same place every intent carries its context.
+        """
+        if composition_kind != "perimeter":
+            # Explicit failure — never silently degrade to the flat path.
+            log.error("Intent '%s' declares composition_kind='%s' but no composer "
+                      "handles it.", intent.intent.value, composition_kind)
+            self.audit_log.append({
+                "type": "composite_unknown_kind",
+                "intent_id": intent.intent_id,
+                "intent": intent.intent.value,
+                "composition_kind": composition_kind,
+            })
+            return IntentResult(
+                intent_id=intent.intent_id, success=False, results=[],
+                failed_devices=[], status="failed",
+            )
+
+        from .composite_operations import CompositeState
+        try:
+            final_state = await self.execute_composite_intent(
+                intent, executor, context=intent.context)
+        except ValueError as e:
+            # e.g. missing device_id / center in the context.
+            log.error("Composite intent '%s' rejected: %s", intent.intent.value, e)
+            self.audit_log.append({
+                "type": "composite_rejected",
+                "intent_id": intent.intent_id,
+                "intent": intent.intent.value,
+                "reason": str(e),
+            })
+            return IntentResult(
+                intent_id=intent.intent_id, success=False, results=[],
+                failed_devices=[], status="failed",
+            )
+
+        # Map the terminal CompositeState to the IntentResult contract.
+        success = final_state == CompositeState.COMPLETED
+        return IntentResult(
+            intent_id=intent.intent_id, success=success, results=[],
+            failed_devices=[], status=final_state.value,
+        )
+
     async def execute_intent(
         self,
         intent: Intent,
         executor: "DeviceExecutor",
     ) -> IntentResult:
         log.info("Executing intent: %s [%s]", intent.intent.value, intent.urgency.value)
+
+        # ── Composition routing (Level 2) ─────────────────────────────────────
+        # A composition intent (declared with composition_kind, e.g. inspect_area
+        # -> "perimeter") does NOT resolve to a flat parallel plan. It composes an
+        # ordered sequence the OperationSupervisor drives in a closed loop. The
+        # routing decision lives HERE in the hub — not in the REST endpoint — so
+        # every client (REST, MCP, tests) inherits the same behavior.
+        #
+        # An intent WITHOUT composition_kind falls straight through to the normal
+        # flat path below — zero change for every existing intent. An UNKNOWN kind
+        # fails explicitly (never silently falls to the flat path): a declared
+        # composition the hub cannot compose is a configuration error that must shout.
+        intent_class_row = self.db.get_intent_class(intent.intent.value)
+        composition_kind = (intent_class_row or {}).get("composition_kind")
+        if composition_kind:
+            return await self._route_composite_intent(
+                intent, executor, composition_kind)
 
         plan = self.resolver.resolve(intent)
 
