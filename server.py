@@ -106,6 +106,21 @@ else:
             except Exception as _ble_e:
                 logging.getLogger("dosync.server").warning(
                     "BLEAdapter registration failed: %s", _ble_e)
+        # MAVLink adapter — opt-in. Only registered when DOSYNC_MAVLINK_ENABLED=true,
+        # since most hubs don't drive an aerial/ground vehicle and the adapter needs
+        # pymavlink. Each vehicle declares its own endpoint in its manifest
+        # adapter_config["connection"] (e.g. "udp:127.0.0.1:14550" for SITL, or a
+        # serial string for a real radio) — the adapter is identical for both; only
+        # the connection string changes. Kept off the default path so a hub without a
+        # drone never imports pymavlink or opens a MAVLink link.
+        if os.environ.get("DOSYNC_MAVLINK_ENABLED", "false").lower() == "true":
+            try:
+                from dosync.adapters.mavlink import MAVLinkAdapter
+                executor.register(MAVLinkAdapter(hub=hub))
+                logging.getLogger("dosync.server").info("MAVLinkAdapter registered")
+            except Exception as _mav_e:
+                logging.getLogger("dosync.server").warning(
+                    "MAVLinkAdapter registration failed: %s", _mav_e)
         from dosync.adapters.homeassistant import HABridge
         _ha_url = os.environ.get("HA_URL", "http://localhost:8123")
         _ha_token = os.environ.get("HA_TOKEN", "")
