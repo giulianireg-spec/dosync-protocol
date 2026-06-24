@@ -129,9 +129,48 @@ def fmt(data: dict) -> str:
 server = Server("dosync-hub")
 
 
+async def _intent_property_schema() -> dict:
+    """Build the JSON-schema fragment for the `intent` argument by reading the
+    intent classes the hub declares. Returns a property dict either with a live
+    `enum` (hub reachable) or a plain string (hub unreachable — degrade gracefully;
+    the hub validates anyway). Also surfaces, in the description, which intents are
+    compositions so the AI knows they need geographic context."""
+    base_desc = "Clase de intención semántica (declarada en el hub)"
+    try:
+        listing = await hub_request("GET", "/v1/intent-classes")
+        classes = listing.get("intent_classes") if isinstance(listing, dict) else None
+        if classes:
+            names = [c.get("name") for c in classes if c.get("name")]
+            # Note which ones are compositions — they need structured context.
+            composites = [c.get("name") for c in classes
+                          if c.get("name") and c.get("composition_kind")]
+            desc = base_desc
+            if composites:
+                desc += (". Composition intents " + ", ".join(sorted(composites))
+                         + " require geographic context (e.g. center=[lat,lon], "
+                           "radius_m, altitude_m) passed in the 'context' object.")
+            if names:
+                return {"type": "string", "description": desc, "enum": sorted(names)}
+    except Exception:
+        pass
+    # Fallback: hub unreachable. Free-form string — the hub validates on fire.
+    return {"type": "string",
+            "description": base_desc + " (hub no consultado — el hub validará)"}
+
+
 @server.list_tools()
 async def list_tools() -> list[types.Tool]:
     """Define las herramientas disponibles para el LLM."""
+    # Read the available intent classes from the hub — the single source of truth.
+    # The hub declares them in /v1/intent-classes; the MCP reflects that rather than
+    # carrying its own hardcoded copy (which inevitably diverges — that is how
+    # inspect_area was invisible to the AI). This is the protocol's "everything is
+    # declared" principle applied to the AI layer: a new intent declared on the hub
+    # appears here with no code change. The enum is only a guide for the AI; the hub
+    # is the real validator (it returns 422 for an unregistered intent), so if the
+    # hub is unreachable when describing tools we degrade gracefully to a free-form
+    # string and the AI can still fire a known intent by name.
+    intent_schema = await _intent_property_schema()
     return [
 
         types.Tool(
@@ -145,21 +184,23 @@ async def list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "intent": {
-                        "type": "string",
-                        "description": "Clase de intención",
-                        "enum": [
-                            "ensure_safety", "notify", "report_status",
-                            "set_environment", "control_access", "monitor_health",
-                            "save_energy", "remind_chore", "alert_anomaly",
-                            "bedtime_routine", "morning_routine", "away_mode",
-                        ],
-                    },
+                    "intent": intent_schema,
                     "urgency": {
                         "type": "string",
                         "description": "Urgency level: info=routine, alert=high-priority (action likely), emergency=bypass all policies (immediate execution)",
                         "enum": ["info", "warning", "alert", "emergency"],
                         "default": "info",
+                    },
+                    "context": {
+                        "type": "object",
+                        "description": (
+                            "Structured context passed to the intent's resolver. "
+                            "Free-form by design — each intent reads what it needs. "
+                            "Composition intents (e.g. inspect_area) need geographic "
+                            "fields: device_id (the vehicle), center=[lat,lon], "
+                            "radius_m, altitude_m. Home intents may use location, "
+                            "message, etc. The hub and resolver interpret it."
+                        ),
                     },
                     "subject": {
                         "type": "string",
@@ -335,18 +376,23 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         subject  = arguments.get("subject")
         message  = arguments.get("message", "")
         location = arguments.get("location", "")
+        # Arbitrary structured context the AI fills per intent (center/radius_m/
+        # altitude_m for a composition, etc.). Passed through to the hub as-is.
+        ctx = dict(arguments.get("context") or {})
+
+        # Merge the home-automation convenience fields into context for backward
+        # compatibility, without overwriting anything the AI put in `context`.
+        for k, v in (("message", message), ("location", location)):
+            if v and k not in ctx:
+                ctx[k] = v
+        ctx.setdefault("trigger", "mcp_client")
 
         body = {
             "intent":  intent,
             "urgency": urgency,
             "subject": subject,
             "source":  "mcp",
-            "context": {
-                "message":          message,
-                "location":         location,
-                "trigger":          "mcp_client",
-                "emergency_number": "911",
-            },
+            "context": ctx,
         }
 
         # Fire async — returns intent_id immediately, no blocking
