@@ -23,6 +23,32 @@ visible and testable, not buried inside a semantic resolver.
 
 This module has NO drone dependencies and NO hub dependencies. It is pure geometry
 plus step construction, fully unit-testable on its own.
+
+DESIGN NOTE — who plans the route: the brain (AI) or the nervous system (DoSync)?
+This is a subtle but defining boundary, so it is worth stating explicitly.
+
+  The AI (the brain) decides the GOAL and its STRATEGIC PARAMETERS: *that* an area
+  should be inspected, the center, the radius, the altitude, the shape. None of that
+  is invented here — it all arrives as the intent and its context, authored by the
+  AI. This composer never decides whether to fly, where, or how high.
+
+  This composer (the nervous system / cerebellum) does only the DETERMINISTIC
+  TRANSLATION of that goal into exact motor geometry: given "perimeter, 1km, centered
+  here," there is exactly one correct set of corner coordinates. That is computation,
+  not decision — the same way the cerebellum turns "walk to the kitchen" into precise
+  joint kinematics without the conscious mind computing a single angle. That is why
+  compose_inspect_area RAISES if the center is missing: it refuses to invent a
+  decision that belongs to the brain.
+
+  Crucially, this composer is NOT mandatory. It is a translation SERVICE the AI uses
+  when it wants to delegate the geometry. An AI that prefers to plan every waypoint
+  itself — irregular paths, avoiding a zone, optimizing for wind — simply emits its
+  own go_to sequence directly and skips the composer entirely, exactly as a brain can
+  move a single limb deliberately instead of delegating the gait to the cerebellum.
+
+  In one line: the brain decides the goal and the parameters; the nervous system
+  translates that goal into exact motor geometry and keeps the loop closed during
+  execution. This file is translation, never autonomous planning.
 """
 
 from __future__ import annotations
