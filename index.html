@@ -413,6 +413,75 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
     </div>
   </div>
 </section>
+<!-- AI commands a drone -->
+<section id="drone" style="padding:80px 40px;border-top:0.5px solid var(--border)">
+  <div class="section-inner">
+    <p class="section-eyebrow">Milestone · June 2026</p>
+    <h2 class="section-title">An AI gave one sentence.<br>A drone flew the whole mission.</h2>
+    <p class="section-sub">DoSync was built domain-agnostic — nothing in it assumes a house. The proof: we took it to the hardest device, an autonomous drone. Then an AI model, from a single sentence in plain language, fired the intent and the drone flew the entire mission — every step confirmed by real telemetry, validated against ArduPilot SITL.</p>
+
+    <!-- The flow: sentence → intent → flight -->
+    <div class="layers" style="margin-top:40px">
+      <div class="layer" style="grid-column:span 1">
+        <p class="layer-num">Human → AI</p>
+        <p class="layer-name">A sentence</p>
+        <p class="layer-desc">“inspect the perimeter of this area”</p>
+      </div>
+      <div class="layer">
+        <p class="layer-num">AI → Intent</p>
+        <p class="layer-name">inspect_area</p>
+        <p class="layer-desc">model builds the context and fires it</p>
+      </div>
+      <div class="layer">
+        <p class="layer-num">DoSync → Drone</p>
+        <p class="layer-name">Mission</p>
+        <p class="layer-desc">take_off → 4× go_to → return_home → land</p>
+      </div>
+    </div>
+
+    <!-- Path A vs Path B -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px">
+      <div style="background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px">
+        <p style="font-size:11px;font-weight:500;color:var(--text-faint);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Path A — verified first</p>
+        <p style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:6px">Intent fired by API</p>
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.6">The full mission flown by posting the semantic intent to the hub. Proves the closed loop: command, telemetry, confirmed arrival at every step.</p>
+      </div>
+      <div style="background:#1A1830;border:0.5px solid #534AB7;border-radius:var(--radius-lg);padding:20px 22px">
+        <p style="font-size:11px;font-weight:500;color:#7F77DD;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Path B — the real goal</p>
+        <p style="font-size:15px;font-weight:500;color:#AFA9EC;margin-bottom:6px">Intent fired by an AI model</p>
+        <p style="font-size:13px;color:#7F77DD;line-height:1.6">A model (Claude Haiku, via DoSync's native MCP server) read the goal in plain language, chose <code style="font-family:var(--font-mono);font-size:12px">inspect_area</code>, built the context, and fired it. The AI decided to act — the whole point of the protocol.</p>
+      </div>
+    </div>
+
+    <!-- Screenshots -->
+    <div style="display:grid;gap:16px;margin-top:24px">
+      <div style="background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+        <img src="img/drone-ai-conversation.png" alt="An AI model receives a plain-language instruction and fires the inspect_area intent" style="display:block;width:100%;height:auto">
+        <div style="padding:14px 18px;border-top:0.5px solid var(--border);font-size:13px;color:var(--text-muted);line-height:1.6"><span style="color:var(--text);font-weight:500">1 · The AI commands.</span> A sentence in plain language → the model fires <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">inspect_area</code> with the center, radius and altitude it inferred.</div>
+      </div>
+      <div style="background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+        <img src="img/drone-hub-log.png" alt="DoSync hub log showing each waypoint command followed by a telemetry-confirmed arrival" style="display:block;width:100%;height:auto">
+        <div style="padding:14px 18px;border-top:0.5px solid var(--border);font-size:13px;color:var(--text-muted);line-height:1.6"><span style="color:var(--text);font-weight:500">2 · The hub confirms.</span> Every <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">go_to accepted</code> is followed by a telemetry-confirmed <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">reached target — FINISHED</code>. Acceptance ≠ completion.</div>
+      </div>
+      <div style="background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+        <img src="img/drone-sitl-console.png" alt="ArduPilot SITL console: arm, takeoff, climb, RTL, land, disarm" style="display:block;width:100%;height:auto">
+        <div style="padding:14px 18px;border-top:0.5px solid var(--border);font-size:13px;color:var(--text-muted);line-height:1.6"><span style="color:var(--text);font-weight:500">3 · The drone flies.</span> ArduPilot SITL: <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">ARM → NAV_TAKEOFF → height 25 → RTL → land → DISARMED</code>. A complete autonomous mission.</div>
+      </div>
+    </div>
+
+    <!-- Safety property -->
+    <div style="margin-top:24px;border-left:3px solid #E24B4A;background:#1F0808;border-radius:0 var(--radius-lg) var(--radius-lg) 0;padding:20px 24px">
+      <p style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:6px">When the AI guessed wrong, the system caught it.</p>
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.65">On the first attempt — with no coordinates given — the model filled the gap with a plausible guess <span style="color:var(--text)">11,000 km away</span> from the drone. The supervisor did not fake success: it waited for a confirmed arrival, none came, and it aborted the mission with a clear diagnosis. <span style="color:var(--text)">The AI can be wrong. The protocol does not have to be.</span></p>
+    </div>
+
+    <!-- CTA -->
+    <div style="margin-top:32px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <button class="btn-primary" onclick="window.open('https://dev.to/giulianiregspec/i-gave-an-ai-one-sentence-a-drone-flew-the-mission-and-when-the-ai-guessed-wrong-the-system-2h3m','_blank')">Read the full build log →</button>
+      <span style="font-size:13px;color:var(--text-faint)">Validated in ArduPilot SITL · physical-hardware flight is the next step, not a claim made today.</span>
+    </div>
+  </div>
+</section>
 
 
 <!-- Semantic Event Timeline -->
