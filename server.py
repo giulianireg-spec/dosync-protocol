@@ -993,7 +993,7 @@ async def register_intent_class(
     if req.urgency not in ("emergency", "alert", "info"):
         raise HTTPException(
             status_code=400,
-            detail="urgency must be one of: emergency, alert, info"
+            detail="urgency must be one of: emergency, alert, warning, info"
         )
     # Validate tags
     if not req.resolution_tags:
@@ -1084,7 +1084,7 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
     try:
         urgency = Urgency(req.urgency)
     except ValueError:
-        raise HTTPException(status_code=422, detail=f"Urgency '{req.urgency}' not valid. Use: emergency, alert, info")
+        raise HTTPException(status_code=422, detail=f"Urgency '{req.urgency}' not valid. Use: emergency, alert, warning, info")
 
     # ── Idempotency check (protocol v0.2, opt-in) ─────────────────────────
     # If the client supplied an idempotency key, deduplicate against prior

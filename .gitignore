@@ -21,3 +21,6 @@ dosync.db-wal
 .env
 certs/
 implementations/dosync-node/node_modules/
+
+# runtime log (should not be tracked)
+server.log

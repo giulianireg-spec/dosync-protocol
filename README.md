@@ -6,14 +6,14 @@
 [![Protocol](https://img.shields.io/badge/protocol-v0.1-green.svg)](spec/DoSync-SPEC-v0.1.md)
 [![Version](https://img.shields.io/badge/hub-v0.3.0-blue.svg)](server.py)
 [![CI](https://github.com/giulianireg-spec/dosync-protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/giulianireg-spec/dosync-protocol/actions/workflows/ci.yml)
-[![Certification](https://img.shields.io/badge/certification-32%2F32%20Standard-orange.svg)](certify.py)
+[![Certification](https://img.shields.io/badge/certification-33%2F33%20Standard-orange.svg)](certify.py)
 [![MCP](https://img.shields.io/badge/MCP-compatible-purple.svg)](dosync/mcp_server.py)
 
 ---
 
 ## The problem
 
-Today's smart home protocols speak the language of commands. AI speaks the language of goals.
+Today's IoT protocols speak the language of commands. AI speaks the language of goals.
 
 ```python
 # Existing protocols
@@ -141,7 +141,7 @@ PYTHONPATH=. uvicorn server:app --host 0.0.0.0 --port 47200 --reload
 | Web dashboard | ✅ |
 | API key authentication + SHA-256 audit log | ✅ |
 | Capability-based resolver | ✅ |
-| Certification CLI v0.3 — 32/32 Standard tests | ✅ |
+| Certification CLI v0.3 — 33/33 Standard tests | ✅ |
 | Philips WiZ adapter (UDP local) | ✅ |
 | Home Assistant bridge (10 domains) | ✅ |
 | Native MCP server (Claude, ChatGPT, any LLM) | ✅ |
@@ -153,6 +153,9 @@ PYTHONPATH=. uvicorn server:app --host 0.0.0.0 --port 47200 --reload
 | External Resolver Protocol (HTTP wire format) | ✅ |
 | SQLite persistence (survives restarts) | ✅ |
 | CI pipeline (GitHub Actions) | ✅ |
+| Multi-hub assisted failover (Phase A — operator-in-the-loop) | ✅ |
+| Long-running operations + telemetry reconciliation (state machine) | ✅ |
+| Drone / MAVLink adapter — full AI→intent→mission loop in ArduPilot SITL | ✅ software (physical flight pending) |
 
 ---
 
@@ -182,8 +185,8 @@ python3 certify.py --host <hub-ip> --port 47200 --tier standard
 | Tier | Tests | What it validates |
 |---|---|---|
 | **Basic** | 10 | Connectivity, auth, device manifest |
-| **Standard** | 32 | Protocol conformance, events, health, version headers |
-| **Emergency** | 35 | Emergency override, policy engine, audit log integrity |
+| **Standard** | 33 | Protocol conformance, events, health, version headers |
+| **Emergency** | 36 | Emergency override, policy engine, audit log integrity |
 
 ---
 
@@ -191,8 +194,8 @@ python3 certify.py --host <hub-ip> --port 47200 --tier standard
 
 | Language | Location | Author | Certification |
 |---|---|---|---|
-| Python (reference) | `server.py` | this project | 32/32 Standard ✅ |
-| Node.js (companion) | [giulianireg-spec/dosync-node](https://github.com/giulianireg-spec/dosync-node) | this project | 32/32 Standard ✅ |
+| Python (reference) | `server.py` | this project | 33/33 Standard ✅ |
+| Node.js (companion) | [giulianireg-spec/dosync-node](https://github.com/giulianireg-spec/dosync-node) | this project | 33/33 Standard ✅ |
 
 The Node.js implementation is a **companion** port that validates the protocol
 is implementable in a second language against the same certification suite —
@@ -200,6 +203,22 @@ both share the same author. A genuinely **independent** implementation
 (different author or organization) is a tracked milestone for v1.0: a protocol
 needs multiple independent implementations to become a standard. See the
 [roadmap](ROADMAP.md).
+
+---
+
+## Works with Home Assistant — a layer on top, not a replacement
+
+Home Assistant already solved the hardest problem: talking to thousands of devices, and since 2025 it ships an MCP server so an AI can control them directly. DoSync doesn't reinvent that — it reads devices from HA through a bridge already in the repo and adds **one thing**: it turns a semantic goal (`ensure_safety`, `away_mode`) into a coordinated, **auditable** set of actions across *any* source (HA, WiZ, GPIO, MQTT, BLE).
+
+The honest version: for everyday automation ("porch light when I get home") you **don't need DoSync** — HA's automations and its MCP cover that completely. DoSync earns its place only when **coordination and traceability matter at once** — e.g. a fall-response that unlocks the door, lights the house, and messages family, with a tamper-evident record of exactly what fired and when. Full reasoning: [Home Assistant Already Talks to Your Devices. So What Would DoSync Add?](https://dev.to/giulianiregspec/home-assistant-already-talks-to-your-devices-so-what-would-dosync-add-1iei)
+
+---
+
+## Beyond the home
+
+Nothing in DoSync assumes a house — the same 5-layer stack coordinates physical systems anywhere an AI needs to act: retail cold-chain, hotels, factory peripherals (alongside certified safety systems, never replacing them).
+
+The proof: we took it to the hardest device, an **autonomous drone**. From a single plain-language sentence, an AI model (Claude Haiku, via DoSync's MCP server) fired an `inspect_area` intent and the drone flew the full mission in ArduPilot SITL — every step confirmed by real telemetry. When the AI guessed coordinates 11,000 km away, the supervisor didn't fake success: it waited for a confirmed arrival, none came, and it aborted with a clear diagnosis. **The AI can be wrong; the protocol doesn't have to be.** [Full build log](https://dev.to/giulianiregspec/i-gave-an-ai-one-sentence-a-drone-flew-the-mission-and-when-the-ai-guessed-wrong-the-system-2h3m) · *(validated in SITL; physical-hardware flight is the next step, not a claim made today.)*
 
 ---
 
