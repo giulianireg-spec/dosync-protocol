@@ -36,37 +36,36 @@
 - GitHub Discussions open
 - `RESOLVER-SPEC-v0.2.md` — formal resolver interface specification
 
+### v0.3 — Observability, Distribution, Robotics
+- **Persistent state cache** — `StateAwareResolver` persists device state to SQLite, survives restarts.
+- **Device Health Monitor** — per-device execution success rate with operator-facing alerts. The resolver does not modify scores autonomously — the operator decides. See [DESIGN-PRINCIPLES.md](DESIGN-PRINCIPLES.md).
+- **Explainability endpoint** — `GET /v1/intents/{id}/explain` returns the resolver's reasoning.
+- **MQTT transport adapter** — Layer 1 transport for devices that can't use HTTP.
+- **External Resolver Protocol** — delegate resolution to an external HTTP service (`DOSYNC_RESOLVER_URL`).
+- **Idempotency + delivery semantics** — opt-in idempotency keys make retries safe for physical actions.
+- **Openly-registered intent classes** — 5 universal intents + domain-specific classes registered at runtime.
+- **Multi-hub assisted failover (Phase A)** — operator-in-the-loop promotion with gateway-probe disambiguation; validated on real hardware. See [When Automatic Failover Is More Dangerous Than No Failover](https://dev.to/giulianiregspec/when-automatic-failover-is-more-dangerous-than-no-failover-2c9o).
+- **Long-running operations** — hierarchical state machine + telemetry reconciliation for actions that take time ("silence is not success").
+- **Robotics / drone milestone** — full AI→intent→mission loop flown in ArduPilot SITL from a single plain-language sentence, every step telemetry-confirmed; the supervisor aborts honestly when the AI guesses wrong. The proof that DoSync is domain-agnostic. See [the build log](https://dev.to/giulianiregspec/i-gave-an-ai-one-sentence-a-drone-flew-the-mission-and-when-the-ai-guessed-wrong-the-system-2h3m). *(SITL; physical flight pending.)*
+- **dosync-node** — companion Node.js (device-side) implementation, same author, Standard-certified.
+- **Certification CLI** — 33 Standard / 36 Emergency tests, signed reports (Ed25519).
+
 ---
 
 ## Planned
 
-### v0.3 — Observability + Persistent State
-**Target:** Q3 2026
-
-- **Persistent state cache** — `StateAwareResolver` persists device state to SQLite. Survives hub restarts. ✅ Shipped in v0.2.
-- **Device Health Monitor** — tracks execution success rate per device. Surfaces alerts when a device fails consistently. The resolver does not modify scores autonomously — the operator decides how to act on the data. See [docs/DESIGN-PRINCIPLES.md](docs/DESIGN-PRINCIPLES.md) for the reasoning.
-- **Explainability endpoint** — `GET /v1/intents/{id}/explain` returns the resolver's reasoning: which devices scored, why, and what was filtered by policies. Structured for both human review and AI interpretation.
-- **Tag-based indexing** — pre-group devices by tag to bring large registries (5000+ devices) to near-O(1) resolution. Current O(n) algorithm handles production scale well; indexing unlocks industrial deployments.
-- **Execution metrics dashboard** — aggregated statistics visible in the web dashboard: actions per intent class, success rates, policy blocks, resolver latency over time.
-
-**Design note:** autonomous learned patterns (weight updates based on execution history) were evaluated and rejected for the default resolver. The risks — unpredictability in critical environments, feedback loop failure modes, cold start problems — outweigh the benefits for a general-purpose protocol. See [docs/DESIGN-PRINCIPLES.md](docs/DESIGN-PRINCIPLES.md).
-
-### v0.4 — Multi-Agent + Physical Hardware
-**Target:** Q4 2026
-
-- **Physical lock demo** — relay + GPIO for `control_access` intent. Video demo.
-- **BLE transport adapter** — Bluetooth LE device support.
-- **Multi-agent conflict resolution** — formal model for simultaneous intents from multiple agents of equal priority against shared physical state. Current last-write-wins approach is insufficient for multi-agent environments.
-- **Shelly adapter** — HTTP local control for Shelly relays and switches.
-- **zigbee2mqtt adapter** — Zigbee device support via zigbee2mqtt bridge.
+### Near-term
+- **Emergency device-level preemption** — guarantee an emergency intent wins the last write on a shared device, even against an in-progress routine. Closes a documented consistency gap.
+- **Multi-hub state replication (Phase B)** — replicate registry + audit log across hubs. Failover *safety* already shipped in Phase A; this adds state continuity.
+- **Physical hardware** — drone flight on real hardware (pending airframe + regulation); BLE adapter validated against real hardware; physical lock demo.
+- **Resolver recall** — per-intent coverage metrics + tagging guidance to raise recall on broad intents.
 
 ### v1.0 — Stable Interface + Independent Implementation
 **Target:** 2027
 
-- **Second independent implementation** — minimal hub in Node.js or Go implementing the resolver interface, 3+ endpoints, and the certification suite. A protocol needs multiple independent implementations to become a standard.
+- **A genuinely independent implementation** — by a *different author or organization*. `dosync-node` proves the spec is re-implementable in a second language, but a protocol becomes a standard only with independent implementors. This is the gating milestone for v1.0.
 - **Stable API** — breaking changes require a major version bump from this point forward.
-- **Third-party certification** — external review process for the CLI-generated certification report.
-- **Hardware certification program** — formal DoSync certification tiers for device manufacturers.
+- **Third-party / hardware certification** — external review process for the signed certification report; formal DoSync certification tiers for device manufacturers.
 - **LLM-backed resolver** — local LLM (Llama, Mistral) as a drop-in resolver. The interface is already designed for this path.
 
 ---

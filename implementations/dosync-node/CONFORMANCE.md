@@ -19,26 +19,26 @@ This document formally declares which protocol features dosync-node implements, 
 
 ## Certification Results
 
-dosync-node v0.3.0 passes the DoSync STANDARD certification tier (32/32 tests):
+dosync-node v0.3.0 passes the DoSync STANDARD certification tier (33/33 tests):
 
 ```
 $ DOSYNC_TOKEN=<token> python3 certify.py --host localhost --port 47201 --tier standard
 
 DoSync Certification CLI v0.3
   Hub:   http://localhost:47201
-  Tier:  STANDARD (32 tests)
+  Tier:  STANDARD (33 tests)
 
 ── Tier BASIC — Connectivity and registration ──────────
   ✓  B01–B10  (10/10)
 
 ── Tier STANDARD — Protocol conformance + events ────────
-  ✓  S01–S22  (22/22)
+  ✓  S01–S23  (23/23)
 
 ── Result ────────────────────────────────────────────────
-  Passed: 32 / 32
-  Failed: 0 / 32
+  Passed: 33 / 33
+  Failed: 0 / 33
 
-  ✓ CERTIFIED — DoSync STANDARD (32/32)
+  ✓ CERTIFIED — DoSync STANDARD (33/33)
   Fingerprint: [see dosync-cert-standard-*.json]
 ```
 
@@ -215,9 +215,9 @@ await device.pushEvent('motion_detected', { location: 'entrance' });
 
 ## Compliance Statement
 
-dosync-node v0.3 is **DoSync Emergency Certified** as of June 2026. It conforms to the DoSync Protocol Specification v0.1 and Resolver Interface Specification v0.3 for all features marked ✅ in the matrix above.
+dosync-node v0.3 is **DoSync Standard Certified** as of June 2026. It conforms to the DoSync Protocol Specification v0.3 and Resolver Interface Specification v0.3 for all features marked ✅ in the matrix above. (Emergency tier requires hub-side capabilities — emergency override, tamper-evident audit log, per-device mTLS — that are out of scope for this device-side implementation.)
 
-The certification was performed against the DoSync Python reference hub using the public `certify.py` CLI (32/32 tests passing, Emergency tier).
+The certification was performed against the DoSync Python reference hub using the public `certify.py` CLI (33/33 tests passing, Standard tier).
 
 ---
 

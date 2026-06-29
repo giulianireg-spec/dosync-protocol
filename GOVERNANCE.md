@@ -95,7 +95,7 @@ DoSync uses semantic versioning: `MAJOR.MINOR.PATCH`.
 | Additive feature (new intent, new optional field) | MINOR | 0.1.0 → 0.2.0 |
 | Breaking change | MAJOR | 0.1.x → 1.0.0 |
 
-The protocol version (`dosync/0.1`) and the hub implementation version (`v0.3.0`) are independent. A hub at v0.3.0 implements protocol v0.1. The protocol version only bumps when the spec changes.
+The protocol version (`dosync/0.3`) and the hub implementation version (`v0.3.0`) are independent version lines that currently happen to share a number. The protocol version bumps when the spec changes; it advanced 0.1 → 0.2 → 0.3 through additive, backward-compatible changes (idempotency keys + delivery semantics, openly-registered intent classes, the `warning` urgency level, and the external resolver protocol). The hub reports the protocol version in the `protocol` field of `/v1/status` and the `X-DoSync-Protocol-Version` header.
 
 **Stability guarantee:** From v1.0.0 onward, all changes within a major version are backward compatible. Until v1.0.0, the spec may have breaking changes between minor versions with 30 days notice.
 

@@ -3,7 +3,7 @@
 > The semantic layer between AI agents and physical devices.
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Protocol](https://img.shields.io/badge/protocol-v0.1-green.svg)](spec/DoSync-SPEC-v0.1.md)
+[![Protocol](https://img.shields.io/badge/protocol-v0.3-green.svg)](spec/DoSync-SPEC-v0.1.md)
 [![Version](https://img.shields.io/badge/hub-v0.3.0-blue.svg)](server.py)
 [![CI](https://github.com/giulianireg-spec/dosync-protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/giulianireg-spec/dosync-protocol/actions/workflows/ci.yml)
 [![Certification](https://img.shields.io/badge/certification-33%2F33%20Standard-orange.svg)](certify.py)
