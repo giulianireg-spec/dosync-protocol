@@ -1,0 +1,266 @@
+"""
+Deterministic concurrency tests for emergency preemption (DeviceArbiter).
+
+These tests do NOT use sleeps or timing — a race tested with `sleep + assert` is
+flaky and gives false greens. Instead a BarrierExecutor lets each test pin the exact
+interleaving: an action can be held "in flight" (mid-send, holding the per-device
+lock) at a known point, a second action fired, and the gate released in the order
+under test. Time is injected (now_fn) so the claim-window expiry is deterministic too.
+
+Contract under test (spec/CONSISTENCY-MODEL.md §3, revised):
+  An emergency-urgency write is the DEVICE-FINAL write within a bounded window;
+  lower-urgency writes on a claimed device are dropped (success=False, superseded)
+  and never reach the device — without aborting an in-flight action mid-send.
+
+Run:  python3 -m pytest tests/test_emergency_preemption.py -v
+"""
+
+from __future__ import annotations
+
+import asyncio
+
+from dosync.models import ActionResult, DeviceAction, Urgency
+from dosync.executor import DeviceExecutor
+from dosync.device_arbiter import DeviceArbiter
+
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+def run(coro):
+    return asyncio.run(coro)
+
+
+def act(device_id: str, action: str) -> DeviceAction:
+    return DeviceAction(device_id=device_id, action=action, params={})
+
+
+class BarrierExecutor(DeviceExecutor):
+    """Inner executor that records what actually reached the device and can block a
+    call mid-send at a per-device gate, so tests control the interleaving exactly."""
+
+    def __init__(self):
+        self.applied: list[tuple[str, str]] = []      # (device, action) actually applied, in order
+        self.final_state: dict[str, str] = {}         # device -> last action applied
+        self.call_log: list[tuple[str, str]] = []      # every execute() that entered the inner layer
+        self._gates: dict[str, asyncio.Event] = {}
+        self._reached: dict[str, asyncio.Event] = {}
+
+    def gate(self, device_id: str) -> asyncio.Event:
+        """Make the next inner execute() on this device block until the event is set.
+        Returns the event the test releases."""
+        self._gates[device_id] = asyncio.Event()
+        self._reached[device_id] = asyncio.Event()
+        return self._gates[device_id]
+
+    async def reached(self, device_id: str) -> None:
+        """Await until an inner execute() on this device has reached its gate (i.e. it
+        is mid-send and holding the per-device lock)."""
+        ev = self._reached.get(device_id)
+        if ev is not None:
+            await ev.wait()
+
+    async def execute(self, action: DeviceAction, urgency: Urgency) -> ActionResult:
+        self.call_log.append((action.device_id, action.action))
+        gate = self._gates.get(action.device_id)
+        if gate is not None:
+            reached = self._reached.get(action.device_id)
+            if reached is not None:
+                reached.set()
+            await gate.wait()
+        self.applied.append((action.device_id, action.action))
+        self.final_state[action.device_id] = action.action
+        return ActionResult(device_id=action.device_id, action=action.action,
+                            success=True, response={"applied": action.action})
+
+
+EMERGENCY_ONLY = _emr = None  # claim threshold = emergency (the default)
+
+
+def _arbiter(inner, **kw):
+    # Default tests claim at EMERGENCY rank; TTL large unless overridden.
+    kw.setdefault("claim_ttl", 1000.0)
+    return DeviceArbiter(inner, **kw)
+
+
+# ── 1. emergency after routine fully completes ────────────────────────────────
+
+def test_emergency_after_routine_is_device_final():
+    async def scenario():
+        bar = BarrierExecutor()
+        arb = _arbiter(bar)
+        r1 = await arb.execute(act("light", "dim"), Urgency.INFO)          # routine first
+        r2 = await arb.execute(act("light", "full"), Urgency.EMERGENCY)    # emergency after
+        r3 = await arb.execute(act("light", "dim_again"), Urgency.INFO)    # routine during window
+        return bar, r1, r2, r3
+    bar, r1, r2, r3 = run(scenario())
+    assert r1.success is True
+    assert r2.success is True
+    assert r3.success is False and r3.response["superseded"] is True       # dropped
+    assert bar.final_state["light"] == "full"                              # emergency is final
+    assert ("light", "dim_again") not in bar.applied                       # never reached device
+
+
+# ── 2. emergency before routine (routine arrives during the claim window) ─────
+
+def test_emergency_before_routine_blocks_routine():
+    async def scenario():
+        bar = BarrierExecutor()
+        arb = _arbiter(bar)
+        r_emr = await arb.execute(act("light", "full"), Urgency.EMERGENCY)
+        r_rt = await arb.execute(act("light", "dim"), Urgency.INFO)        # should be superseded
+        return bar, r_emr, r_rt
+    bar, r_emr, r_rt = run(scenario())
+    assert r_emr.success is True
+    assert r_rt.success is False and r_rt.response["superseded"] is True
+    assert bar.final_state["light"] == "full"
+    assert bar.applied == [("light", "full")]                             # routine never applied
+
+
+# ── 3. emergency DURING an in-flight routine (the hard interleaving) ──────────
+
+def test_emergency_during_inflight_routine():
+    async def scenario():
+        bar = BarrierExecutor()
+        arb = _arbiter(bar)
+        gate = bar.gate("light")
+
+        # routine acquires the per-device lock and blocks mid-send
+        t_routine = asyncio.create_task(arb.execute(act("light", "dim"), Urgency.INFO))
+        await bar.reached("light")            # routine is now in flight, holding the lock
+
+        # emergency arrives: sets the claim, then waits for the lock
+        t_emr = asyncio.create_task(arb.execute(act("light", "full"), Urgency.EMERGENCY))
+        await asyncio.sleep(0)                # let the emergency set its claim + queue on the lock
+
+        # a second routine arrives during the claim → must self-drop before the lock
+        r_late = await arb.execute(act("light", "dim_late"), Urgency.INFO)
+
+        gate.set()                            # release the in-flight routine
+        r_routine = await t_routine
+        r_emr = await t_emr
+        return bar, r_routine, r_emr, r_late
+
+    bar, r_routine, r_emr, r_late = run(scenario())
+    assert r_routine.success is True          # the in-flight action was NOT aborted mid-send
+    assert r_emr.success is True
+    assert r_late.success is False and r_late.response["superseded"] is True
+    # device sees: routine's in-flight write, then the emergency overwrites it (final)
+    assert bar.applied == [("light", "dim"), ("light", "full")]
+    assert bar.final_state["light"] == "full"
+    assert ("light", "dim_late") not in bar.call_log   # dropped before reaching the device
+
+
+# ── 4. claim window is bounded — after TTL a routine proceeds normally ────────
+
+def test_claim_window_expires():
+    async def scenario():
+        clock = [1000.0]
+        bar = BarrierExecutor()
+        arb = DeviceArbiter(bar, claim_ttl=10.0, now_fn=lambda: clock[0])
+        r_emr = await arb.execute(act("light", "full"), Urgency.EMERGENCY)   # claims until 1010
+        clock[0] = 1011.0                                                    # past the window
+        r_rt = await arb.execute(act("light", "dim"), Urgency.INFO)          # claim expired
+        return bar, r_emr, r_rt
+    bar, r_emr, r_rt = run(scenario())
+    assert r_emr.success is True
+    assert r_rt.success is True                       # no longer superseded
+    assert bar.final_state["light"] == "dim"          # routine took effect after the window
+
+
+# ── 5. different devices run in parallel (claim is per-device) ────────────────
+
+def test_claim_is_per_device():
+    async def scenario():
+        bar = BarrierExecutor()
+        arb = _arbiter(bar)
+        await arb.execute(act("light_a", "full"), Urgency.EMERGENCY)         # claims light_a only
+        r_b = await arb.execute(act("light_b", "dim"), Urgency.INFO)         # different device
+        return bar, r_b
+    bar, r_b = run(scenario())
+    assert r_b.success is True
+    assert bar.final_state["light_b"] == "dim"        # unaffected by light_a's claim
+
+
+# ── 6. no claim, no supersede — ordinary same-device actions both apply ───────
+
+def test_no_claim_both_routines_apply():
+    async def scenario():
+        bar = BarrierExecutor()
+        arb = _arbiter(bar)
+        r1 = await arb.execute(act("light", "scene1"), Urgency.INFO)
+        r2 = await arb.execute(act("light", "scene2"), Urgency.INFO)
+        return bar, r1, r2
+    bar, r1, r2 = run(scenario())
+    assert r1.success is True and r2.success is True   # neither is dropped
+    assert bar.final_state["light"] == "scene2"        # plain last-write, serialized
+
+
+# ── 7. supersede is reported to the audit hook ────────────────────────────────
+
+def test_audit_hook_records_supersede():
+    audit: list[dict] = []
+
+    async def scenario():
+        bar = BarrierExecutor()
+        arb = _arbiter(bar, audit_hook=audit.append)
+        await arb.execute(act("light", "full"), Urgency.EMERGENCY)
+        await arb.execute(act("light", "dim"), Urgency.INFO)   # superseded → audited
+        return bar
+    run(scenario())
+    assert len(audit) == 1
+    entry = audit[0]
+    assert entry["type"] == "action_superseded_by_priority"
+    assert entry["device_id"] == "light"
+    assert entry["action"] == "dim"
+    assert entry["claimed_by_urgency"] == "emergency"
+
+
+# ── 8. emergency never waits for more than the single in-flight action ────────
+
+def test_emergency_does_not_wait_for_queued_lower_priority():
+    """Two lower-priority actions are queued behind an in-flight one; when the
+    emergency arrives it must not wait for the queue to drain — the queued lower
+    actions self-drop, so the emergency only ever waits for the one mid-send."""
+    async def scenario():
+        bar = BarrierExecutor()
+        arb = _arbiter(bar)
+        gate = bar.gate("light")
+        t0 = asyncio.create_task(arb.execute(act("light", "dim0"), Urgency.INFO))
+        await bar.reached("light")                      # dim0 in flight, holds lock
+        # queue two more routines behind the lock
+        t1 = asyncio.create_task(arb.execute(act("light", "dim1"), Urgency.INFO))
+        t2 = asyncio.create_task(arb.execute(act("light", "dim2"), Urgency.INFO))
+        await asyncio.sleep(0)
+        # emergency arrives
+        t_emr = asyncio.create_task(arb.execute(act("light", "full"), Urgency.EMERGENCY))
+        await asyncio.sleep(0)
+        gate.set()
+        results = await asyncio.gather(t0, t1, t2, t_emr)
+        return bar, results
+    bar, (r0, r1, r2, r_emr) = run(scenario())
+    assert r0.success is True                           # the one in flight completed
+    assert r_emr.success is True
+    # the two queued lower-priority actions were superseded by the emergency claim
+    assert r1.success is False and r2.success is False
+    assert bar.final_state["light"] == "full"
+    # only dim0 (in flight) and full (emergency) ever reached the device
+    assert bar.applied == [("light", "dim0"), ("light", "full")]
+
+
+if __name__ == "__main__":
+    # Standalone runner (no pytest required), mirrors the repo's asyncio.run style.
+    import sys
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
+    failed = 0
+    for fn in fns:
+        try:
+            fn()
+            print(f"  PASS  {fn.__name__}")
+        except AssertionError as e:
+            failed += 1
+            print(f"  FAIL  {fn.__name__}: {e}")
+        except Exception as e:  # noqa
+            failed += 1
+            print(f"  ERROR {fn.__name__}: {type(e).__name__}: {e}")
+    print(f"\n{len(fns) - failed}/{len(fns)} passed")
+    sys.exit(1 if failed else 0)
