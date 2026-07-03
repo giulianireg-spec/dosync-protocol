@@ -10,46 +10,51 @@ in-flight actions. The dispatch (`asyncio.gather` per plan) has no per-device
 serialization, so both commands race the same device and last-write-wins can leave
 it in the routine's (lower-urgency) state. See spec/CONSISTENCY-MODEL.md §3.
 
-This component closes that gap at the EXECUTION layer. It guarantees that the
-highest-urgency writer is the *device-final* writer within a bounded window, WITHOUT
-aborting in-flight actions mid-send.
+This component closes that gap at the EXECUTION layer. It guarantees that an
+`emergency`-urgency write is the *device-final* write with respect to any
+lower-urgency action it OVERLAPS WITH — without aborting an in-flight action
+mid-send.
 
 Scope: INSTANT actions only. Preempting a long-running operation (a drone
 mid-maneuver) is a separate concern handled by the operations supervisor
-(dosync/operations.py, the INTERRUPTED state). The reason they are different:
-aborting an instant light command leaves no undefined intermediate state, while
-aborting a maneuver does — so the two cases need different contracts.
+(dosync/operations.py, the INTERRUPTED state). Aborting an instant light command
+leaves no undefined intermediate state; aborting a maneuver does — different
+contracts.
 
-Mechanism — claim-first, then per-device lock:
+Claim lifetime — OVERLAP-SCOPED, not wall-clock
+-----------------------------------------------
+A claim is NOT a fixed-duration lock on a device (an earlier design used a 30 s TTL;
+it was wrong — it broke certification and would block a legitimate routine fired
+minutes after an emergency had already resolved). A claim lasts only as long as the
+contention it exists to win:
 
-  1. CLAIM-FIRST. An action whose urgency rank is >= the claim threshold claims its
-     device *before* contending for the per-device lock, at its urgency rank, for
-     `DOSYNC_EMERGENCY_CLAIM_TTL` seconds. Setting the claim first means lower-rank
-     actions already queued on the lock self-drop the moment they acquire it — so an
-     emergency waits at most for the single action currently mid-send, never for the
-     whole lower-priority plan.
+  * SET when an action whose urgency rank >= the claim threshold (default: emergency)
+    is executed. The claim is HELD (open-ended) while the emergency intent is active.
+  * RELEASED by the hub via `release_claim(device_ids)` when the emergency intent
+    completes. Release does not drop the claim instantly — it starts a short `grace`
+    countdown that covers the dispatch skew of a concurrently-dispatched lower-urgency
+    plan whose straggler command may still be arriving. `grace` must be > 0 (0 reopens
+    the race) and is sized to the adapter's execution latency, not to minutes.
+  * SAFETY CAP `max_hold`: if `release_claim` is never called (a wiring bug, a crash),
+    the claim expires anyway after `max_hold`, so a device is never locked forever.
 
-  2. RESPECT HIGHER CLAIMS. Any action targeting a device with an active claim of
-     STRICTLY HIGHER rank is dropped (never sent), returned as success=False with a
-     superseded marker, and reported to the audit hook. A dropped action never
-     reaches the adapter, so it never calls `resolver.update_state()` — the state
-     cache is never poisoned by the superseded routine. Cache coherence is preserved
-     as a consequence of the drop, not as a separate step.
+A lower-urgency action targeting a device with an active, strictly-higher claim is
+dropped (never sent), returned as success=False with a superseded marker, and
+reported to the audit hook. A dropped action never reaches the adapter, so it never
+calls `resolver.update_state()` — cache coherence is preserved as a consequence of
+the drop, not as a separate step.
 
-  3. PER-DEVICE SERIALIZATION. At most one action is mid-send per device, so two
-     plans never race the same physical device. Different devices stay fully parallel
-     (one lock per device_id). The claim is re-checked after acquiring the lock,
-     because a higher claim may have arrived while waiting.
+Per-device serialization: at most one action is mid-send per device (one lock per
+device_id); different devices stay fully parallel. The claim is re-checked after
+acquiring the lock, because a higher claim may have arrived while waiting.
 
 Urgency is the arbitration axis — not the intent-class priority map — because it is
-the signal available at the executor boundary, it is exactly what distinguishes the
-canonical case (emergency vs routine), and it keeps the executor decoupled from
-intent semantics. Same-urgency conflicts remain the PolicyEngine's job, pre-dispatch.
+the signal available at the executor boundary and exactly what distinguishes the
+canonical case (emergency vs routine). Same-urgency conflicts remain the
+PolicyEngine's job, pre-dispatch.
 
-Transparent wrapper: callers keep using `await executor.execute(action, urgency)`.
-Any other attribute (`.register`, `.get_state`, ...) is delegated to the inner
-executor, so an AdapterExecutor wrapped in a DeviceArbiter behaves like the
-AdapterExecutor for everything except the added arbitration.
+Transparent wrapper: callers keep using `await executor.execute(action, urgency)`;
+any other attribute is delegated to the inner executor.
 """
 
 from __future__ import annotations
@@ -58,7 +63,7 @@ import asyncio
 import logging
 import os
 import time
-from typing import Callable, Optional
+from typing import Callable, Iterable, Optional
 
 from .models import ActionResult, DeviceAction, Urgency
 
@@ -83,39 +88,65 @@ def _default_claim_min_rank() -> int:
         return _URGENCY_RANK[Urgency.EMERGENCY]
 
 
-def _default_claim_ttl() -> float:
-    """Seconds a device stays claimed after a high-urgency write. Bounded by design:
-    the device returns to normal control after the window. Default 30s."""
+def _default_grace() -> float:
+    """Seconds a claim lingers AFTER the emergency intent is released, to cover the
+    dispatch skew of a concurrently-dispatched lower-urgency straggler. Sized to
+    adapter latency, not minutes. Must be > 0. Default 3s."""
     try:
-        return float(os.environ.get("DOSYNC_EMERGENCY_CLAIM_TTL", "30"))
+        return max(0.0, float(os.environ.get("DOSYNC_EMERGENCY_CLAIM_GRACE", "3")))
     except ValueError:
-        return 30.0
+        return 3.0
+
+
+def _default_max_hold() -> float:
+    """Safety cap: max seconds a claim is held if release_claim() is never called
+    (wiring bug / crash), so a device is never locked forever. Default 60s."""
+    try:
+        return max(1.0, float(os.environ.get("DOSYNC_EMERGENCY_CLAIM_MAX_HOLD", "60")))
+    except ValueError:
+        return 60.0
 
 
 class _Claim:
-    __slots__ = ("rank", "urgency", "expires_at")
+    """A device claim. HELD (open-ended, capped by max_hold) until released; once
+    released, active only for `grace` more seconds."""
+    __slots__ = ("rank", "urgency", "set_at", "released_at", "grace", "max_hold")
 
-    def __init__(self, rank: int, urgency: str, expires_at: float):
+    def __init__(self, rank: int, urgency: str, set_at: float, grace: float, max_hold: float):
         self.rank = rank
         self.urgency = urgency
-        self.expires_at = expires_at
+        self.set_at = set_at
+        self.released_at: Optional[float] = None
+        self.grace = grace
+        self.max_hold = max_hold
+
+    def is_active(self, now: float) -> bool:
+        if self.released_at is None:
+            return now < self.set_at + self.max_hold      # held (until safety cap)
+        return now < self.released_at + self.grace         # releasing (grace countdown)
+
+    def release(self, now: float) -> None:
+        if self.released_at is None:
+            self.released_at = now
 
 
 class DeviceArbiter:
     """Wraps any executor exposing `async execute(action, urgency) -> ActionResult`,
-    adding per-device serialization and bounded emergency claims."""
+    adding per-device serialization and overlap-scoped emergency claims."""
 
     def __init__(
         self,
         inner,
         audit_hook: Optional[Callable[[dict], None]] = None,
-        claim_ttl: Optional[float] = None,
+        grace: Optional[float] = None,
+        max_hold: Optional[float] = None,
         claim_min_rank: Optional[int] = None,
         now_fn: Callable[[], float] = time.time,
     ):
         self._inner = inner
         self._audit_hook = audit_hook
-        self._claim_ttl = claim_ttl if claim_ttl is not None else _default_claim_ttl()
+        self._grace = grace if grace is not None else _default_grace()
+        self._max_hold = max_hold if max_hold is not None else _default_max_hold()
         self._claim_min_rank = (
             claim_min_rank if claim_min_rank is not None else _default_claim_min_rank()
         )
@@ -145,10 +176,22 @@ class DeviceArbiter:
         c = self._claims.get(device_id)
         if c is None:
             return None
-        if c.expires_at <= now:
+        if not c.is_active(now):
             self._claims.pop(device_id, None)
             return None
         return c
+
+    def _set_claim(self, device_id: str, rank: int, urgency: Urgency, now: float) -> None:
+        existing = self._active_claim(device_id, now)
+        if existing is not None and existing.rank > rank:
+            return  # a strictly-higher claim already owns the device; don't downgrade
+        self._claims[device_id] = _Claim(
+            rank=rank,
+            urgency=urgency.value if hasattr(urgency, "value") else str(urgency),
+            set_at=now,
+            grace=self._grace,
+            max_hold=self._max_hold,
+        )
 
     def _supersede(self, action: DeviceAction, claim: _Claim) -> ActionResult:
         reason = (
@@ -176,20 +219,38 @@ class DeviceArbiter:
             response={"superseded": True, "claimed_by_urgency": claim.urgency},
         )
 
-    # ── public ───────────────────────────────────────────────────────────────
+    # ── claim lifecycle (called by the hub) ───────────────────────────────────
+    def release_claim(self, device_ids: Iterable[str]) -> None:
+        """Called by the hub when an emergency intent completes. Starts the grace
+        countdown on each device's claim (does not drop it instantly — a
+        concurrently-dispatched straggler may still be arriving)."""
+        now = self._now()
+        for device_id in device_ids:
+            c = self._claims.get(device_id)
+            if c is not None:
+                c.release(now)
+
+    def clear_claims(self) -> None:
+        """Drop all claims immediately. For tests and for deterministic resets."""
+        self._claims.clear()
+
+    def active_claims(self) -> dict[str, str]:
+        """Introspection: device_id -> claiming urgency, for active claims only."""
+        now = self._now()
+        return {d: c.urgency for d, c in list(self._claims.items()) if c.is_active(now)}
+
+    # ── public ─────────────────────────────────────────────────────────────────
     async def execute(self, action: DeviceAction, urgency: Urgency) -> ActionResult:
         device_id = action.device_id
         rank = self._rank(urgency)
         now = self._now()
 
-        # 1. Claim-first: claim the device before contending for the lock, so
-        #    lower-urgency actions queued on the lock self-drop when they acquire it.
+        # 1. Claim-first: a qualifying high-urgency action claims the device before
+        #    contending for the lock, so lower-urgency actions queued on the lock
+        #    self-drop the moment they acquire it (the emergency only ever waits for
+        #    the single action currently mid-send, never the whole lower plan).
         if rank >= self._claim_min_rank:
-            self._claims[device_id] = _Claim(
-                rank=rank,
-                urgency=urgency.value if hasattr(urgency, "value") else str(urgency),
-                expires_at=now + self._claim_ttl,
-            )
+            self._set_claim(device_id, rank, urgency, now)
 
         # 2. Respect a strictly-higher existing claim before queuing on the lock.
         claim = self._active_claim(device_id, now)
@@ -198,7 +259,6 @@ class DeviceArbiter:
 
         # 3. Per-device serialization (different devices stay parallel).
         async with self._lock_for(device_id):
-            # Re-check: a higher claim may have arrived while we waited for the lock.
             claim = self._active_claim(device_id, self._now())
             if claim is not None and claim.rank > rank:
                 return self._supersede(action, claim)

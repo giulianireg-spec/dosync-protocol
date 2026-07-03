@@ -73,12 +73,10 @@ class BarrierExecutor(DeviceExecutor):
                             success=True, response={"applied": action.action})
 
 
-EMERGENCY_ONLY = _emr = None  # claim threshold = emergency (the default)
-
-
 def _arbiter(inner, **kw):
-    # Default tests claim at EMERGENCY rank; TTL large unless overridden.
-    kw.setdefault("claim_ttl", 1000.0)
+    # Default: claim threshold = emergency. A HELD claim (never released) stays
+    # active until max_hold, so the interleaving tests below drop lower-urgency
+    # actions without needing to call release_claim().
     return DeviceArbiter(inner, **kw)
 
 
@@ -150,21 +148,78 @@ def test_emergency_during_inflight_routine():
     assert ("light", "dim_late") not in bar.call_log   # dropped before reaching the device
 
 
-# ── 4. claim window is bounded — after TTL a routine proceeds normally ────────
+# ── 4. claim is HELD until the emergency intent is released ───────────────────
 
-def test_claim_window_expires():
+def test_claim_held_until_released():
+    """While the emergency intent is active (not released), lower-urgency actions on
+    the device are dropped — regardless of how much wall-clock time passes."""
     async def scenario():
         clock = [1000.0]
         bar = BarrierExecutor()
-        arb = DeviceArbiter(bar, claim_ttl=10.0, now_fn=lambda: clock[0])
-        r_emr = await arb.execute(act("light", "full"), Urgency.EMERGENCY)   # claims until 1010
-        clock[0] = 1011.0                                                    # past the window
-        r_rt = await arb.execute(act("light", "dim"), Urgency.INFO)          # claim expired
-        return bar, r_emr, r_rt
-    bar, r_emr, r_rt = run(scenario())
-    assert r_emr.success is True
-    assert r_rt.success is True                       # no longer superseded
-    assert bar.final_state["light"] == "dim"          # routine took effect after the window
+        arb = DeviceArbiter(bar, grace=5.0, max_hold=1000.0, now_fn=lambda: clock[0])
+        await arb.execute(act("light", "full"), Urgency.EMERGENCY)     # claim HELD
+        clock[0] = 1050.0                                              # 50s later, still not released
+        r_rt = await arb.execute(act("light", "dim"), Urgency.INFO)
+        return bar, r_rt
+    bar, r_rt = run(scenario())
+    assert r_rt.success is False and r_rt.response["superseded"] is True   # still owned
+    assert bar.final_state["light"] == "full"
+
+
+# ── 5. after release, the claim lingers only for `grace`, then frees the device ─
+
+def test_grace_expires_after_release():
+    async def scenario():
+        clock = [1000.0]
+        bar = BarrierExecutor()
+        arb = DeviceArbiter(bar, grace=10.0, max_hold=1000.0, now_fn=lambda: clock[0])
+        await arb.execute(act("light", "full"), Urgency.EMERGENCY)     # claim HELD
+        arb.release_claim(["light"])                                   # intent completed → grace starts (until 1010)
+        r_mid = await arb.execute(act("light", "dim"), Urgency.INFO)   # clock=1000, within grace
+        clock[0] = 1011.0                                              # past grace
+        r_after = await arb.execute(act("light", "scene"), Urgency.INFO)
+        return bar, r_mid, r_after
+    bar, r_mid, r_after = run(scenario())
+    assert r_mid.success is False and r_mid.response["superseded"] is True  # grace still protects
+    assert r_after.success is True                                          # freed after grace
+    assert bar.final_state["light"] == "scene"
+
+
+# ── 6. safety cap — a claim never locks a device forever if release is missed ──
+
+def test_max_hold_safety_cap():
+    """If the hub never calls release_claim (wiring bug/crash), the claim still
+    expires after max_hold so the device is not locked forever."""
+    async def scenario():
+        clock = [1000.0]
+        bar = BarrierExecutor()
+        arb = DeviceArbiter(bar, grace=5.0, max_hold=50.0, now_fn=lambda: clock[0])
+        await arb.execute(act("light", "full"), Urgency.EMERGENCY)     # HELD, no release
+        clock[0] = 1040.0
+        r_within = await arb.execute(act("light", "dim"), Urgency.INFO)    # within max_hold
+        clock[0] = 1051.0
+        r_after = await arb.execute(act("light", "scene"), Urgency.INFO)   # past max_hold
+        return bar, r_within, r_after
+    bar, r_within, r_after = run(scenario())
+    assert r_within.success is False and r_within.response["superseded"] is True
+    assert r_after.success is True                     # safety cap freed the device
+    assert bar.final_state["light"] == "scene"
+
+
+# ── 7. clear_claims frees everything immediately (deterministic reset) ─────────
+
+def test_clear_claims_frees_device():
+    async def scenario():
+        bar = BarrierExecutor()
+        arb = _arbiter(bar)
+        await arb.execute(act("light", "full"), Urgency.EMERGENCY)
+        assert arb.active_claims() == {"light": "emergency"}
+        arb.clear_claims()
+        r_rt = await arb.execute(act("light", "dim"), Urgency.INFO)
+        return arb, r_rt
+    arb, r_rt = run(scenario())
+    assert r_rt.success is True
+    assert arb.active_claims() == {}
 
 
 # ── 5. different devices run in parallel (claim is per-device) ────────────────
