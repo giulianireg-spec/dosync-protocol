@@ -302,6 +302,22 @@ def test_emergency_does_not_wait_for_queued_lower_priority():
     assert bar.applied == [("light", "dim0"), ("light", "full")]
 
 
+def test_lower_urgency_release_does_not_free_emergency_claim():
+    """If a routine sharing a device with an emergency completes FIRST, its
+    release_claim(rank=0) must not start the grace on the emergency's claim (rank=3)."""
+    async def scenario():
+        clock = [1000.0]
+        bar = BarrierExecutor()
+        arb = DeviceArbiter(bar, grace=5.0, max_hold=1000.0, now_fn=lambda: clock[0])
+        await arb.execute(act("light", "full"), Urgency.EMERGENCY)   # emergency claim (rank 3, held)
+        arb.release_claim(["light"], rank=0)                         # routine completes first → must NOT release
+        clock[0] = 1100.0                                            # long after
+        r = await arb.execute(act("light", "dim"), Urgency.INFO)
+        return r
+    r = run(scenario())
+    assert r.success is False and r.response["superseded"] is True   # emergency claim still held
+
+
 if __name__ == "__main__":
     # Standalone runner (no pytest required), mirrors the repo's asyncio.run style.
     import sys

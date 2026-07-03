@@ -1882,8 +1882,21 @@ class DoSyncHub:
                 plan, executor, intent
             )
         finally:
+            _claim_devices = self._active_intent_devices.get(intent_value, set())
             self._active_intents.pop(intent_value, None)
             self._active_intent_devices.pop(intent_value, None)
+            # Release any device claim this intent asserted at the arbiter layer, so
+            # the short grace window starts now (see dosync/device_arbiter.py). The
+            # rank guard ensures a lower-urgency intent completing first cannot start
+            # the grace on a higher-urgency (emergency) claim on a shared device.
+            _release = getattr(executor, "release_claim", None)
+            if _release is not None and _claim_devices:
+                try:
+                    _rank = {"info": 0, "warning": 1, "alert": 2, "emergency": 3}.get(
+                        getattr(intent.urgency, "value", str(intent.urgency)), 0)
+                    _release(_claim_devices, _rank)
+                except Exception:
+                    pass
 
         # Rejected-by-validation actions count against full success: the plan did
         # not do everything the mind asked. Per the panel, this resolves to

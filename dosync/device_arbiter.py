@@ -220,14 +220,19 @@ class DeviceArbiter:
         )
 
     # ── claim lifecycle (called by the hub) ───────────────────────────────────
-    def release_claim(self, device_ids: Iterable[str]) -> None:
-        """Called by the hub when an emergency intent completes. Starts the grace
-        countdown on each device's claim (does not drop it instantly — a
-        concurrently-dispatched straggler may still be arriving)."""
+    def release_claim(self, device_ids: Iterable[str], rank: Optional[int] = None) -> None:
+        """Called by the hub when an intent completes. Starts the grace countdown on
+        each device's claim (does not drop it instantly — a concurrently-dispatched
+        straggler may still be arriving).
+
+        `rank` guards against a lower-urgency intent releasing a higher claim: only
+        claims with `claim.rank <= rank` are released. When two intents share a device
+        and the routine completes first, its release (rank=0) must NOT start the grace
+        on the emergency's claim (rank=3). rank=None releases any claim (used in tests)."""
         now = self._now()
         for device_id in device_ids:
             c = self._claims.get(device_id)
-            if c is not None:
+            if c is not None and (rank is None or c.rank <= rank):
                 c.release(now)
 
     def clear_claims(self) -> None:

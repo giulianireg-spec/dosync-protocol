@@ -201,6 +201,18 @@ if _mqtt_broker:
 else:
     _mqtt_adapter = None
 
+# ── Device Arbiter — emergency preemption at the execution layer ──────────────
+# Wrap the fully-configured executor so an emergency-urgency write is device-final
+# with respect to any lower-urgency action it overlaps with (dosync/device_arbiter.py,
+# spec/CONSISTENCY-MODEL.md §3). Wrapped in ALL modes (adapter / simulated / certify)
+# so behaviour is identical in production and certification. The hub releases claims
+# on intent completion. `_adapter_executor` keeps the unwrapped reference for the
+# isinstance checks below (the arbiter delegates everything else transparently).
+from dosync.device_arbiter import DeviceArbiter
+_adapter_executor = executor
+executor = DeviceArbiter(executor, audit_hook=hub.audit_log.append)
+logging.getLogger("dosync.server").info("DeviceArbiter active — emergency preemption enabled")
+
 # ── External Resolver (optional) ─────────────────────────────────────────────
 # If DOSYNC_RESOLVER_URL is set, the hub delegates intent resolution to an
 # external HTTP service implementing the DoSync External Resolver Protocol.
@@ -461,9 +473,9 @@ async def lifespan(app: FastAPI):
     _refresh_task = None
     try:
         from dosync.adapters import AdapterExecutor
-        if isinstance(hub.resolver, __import__('dosync.hub', fromlist=['StateAwareResolver']).StateAwareResolver)                 and isinstance(executor, AdapterExecutor):
+        if isinstance(hub.resolver, __import__('dosync.hub', fromlist=['StateAwareResolver']).StateAwareResolver)                 and isinstance(_adapter_executor, AdapterExecutor):
             _refresh_task = asyncio.create_task(
-                hub.resolver.start_background_refresh(executor)
+                hub.resolver.start_background_refresh(_adapter_executor)
             )
             log.info("Background state refresher started")
         else:

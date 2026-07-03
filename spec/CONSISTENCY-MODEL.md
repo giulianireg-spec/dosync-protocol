@@ -50,18 +50,24 @@ An `ensure_safety [emergency]` intent runs concurrently with any in-progress exe
 
 1. The emergency intent is resolved immediately
 2. The emergency ActionPlan is dispatched in parallel with the in-progress plan
-3. Both plans complete independently — the emergency plan does NOT abort the in-progress plan
+3. The emergency plan does NOT abort the in-progress plan (aborting an in-flight action risks leaving a device in an undefined intermediate state; instant actions are not aborted mid-send)
 4. Both executions are logged as separate audit entries
 
-**Rationale:** aborting an in-progress plan risks leaving devices in undefined intermediate states. Running both in parallel is safer: the emergency plan reaches its goal, and the in-progress plan completes normally.
+**Normative guarantee — emergency device-finality (overlap-scoped).** For instant (non–long-running) actions, an `emergency`-urgency write is the *device-final* write with respect to any lower-urgency action it overlaps with. Concretely, when an emergency and a lower-urgency plan target the same device with contradictory actions (e.g., `bedtime_routine` dims a light while `ensure_safety` sets it to full brightness):
 
-**Known limitation — same-device conflict under parallelism.** If the in-progress plan and the emergency plan target the same device with contradictory actions (e.g., `bedtime_routine` dims lights while `ensure_safety` sets them to full brightness), both commands reach the device. The device executes both in arrival order: the emergency command runs first (higher priority dispatch), then the routine command may overwrite it. The observable result is that the device ends in the state commanded by the in-progress routine — not the emergency state.
+- The emergency action is applied and the device ends in the emergency-commanded state.
+- Any lower-urgency action on that device that arrives while the emergency is in effect is **dropped** (not sent to the device), reported with `success=false`, and recorded in the audit log as `action_superseded_by_priority`.
+- If a lower-urgency action was already mid-send when the emergency arrived, it is not aborted; the emergency write follows and is the final state.
 
-Operators who require guaranteed emergency state on specific devices should configure a `DeviceExclusionPolicy` that removes those devices from comfort/efficiency intents, preventing the conflict at the policy layer.
+The window in which the emergency remains device-final is **bounded by the overlap**, not by a fixed wall-clock duration: it is held while the emergency intent is active and released on its completion, lingering only for a short `grace` that covers the dispatch skew of a concurrently-dispatched straggler (default 3 s, `DOSYNC_EMERGENCY_CLAIM_GRACE`; a `DOSYNC_EMERGENCY_CLAIM_MAX_HOLD` safety cap prevents an unreleased claim from ever locking a device). A routine dispatched *after* the emergency has resolved (beyond the grace) controls the device normally — the guarantee governs *overlap*, not ownership.
+
+This guarantee is enforced at the **execution layer** (the device arbiter), not the pre-dispatch policy layer, because a pre-dispatch policy cannot retract or reorder actions from a plan that is already in flight. It applies to instant actions only; preemption of a long-running operation (e.g., a drone mid-maneuver) is governed by the operation lifecycle (the `INTERRUPTED` state), not this section.
 
 ### 4. Device-level conflict resolution
 
-When two simultaneous ActionPlans include actions on the same device:
+Two cases, resolved at two different layers:
+
+**Simultaneous (both plans seen before dispatch)** — the `ConflictResolutionPolicy` resolves at the policy layer before dispatch:
 
 | Scenario | Resolution | Status |
 |---|---|---|
@@ -70,7 +76,7 @@ When two simultaneous ActionPlans include actions on the same device:
 | Same device, conflicting actions (on vs off) | Higher-priority intent wins; lower-priority action dropped | Implemented |
 | Different devices, no overlap | Both execute in parallel, no conflict | Implemented |
 
-The `ConflictResolutionPolicy` enforces this at the policy layer before dispatch. Rows marked "Specified (v0.4)" describe intended behavior not yet present in the reference implementation.
+**Overlapping (a plan already in flight when a higher-urgency intent arrives)** — the pre-dispatch policy cannot act on an in-flight plan. The **device arbiter** enforces emergency device-finality per §3: per-device serialization plus an overlap-scoped claim under which lower-urgency actions are dropped and audited. Rows marked "Specified (v0.4)" describe intended behavior not yet present in the reference implementation.
 
 ### 5. Audit log guarantees
 
@@ -109,12 +115,12 @@ This is acceptable: the device receives two commands and executes both. The seco
 |---|---|
 | Two intents, different priorities | Higher priority dispatched first; lower is serialized after |
 | Two intents, same priority | FIFO ordering |
-| Emergency + in-progress routine | Both run in parallel; emergency does not abort routine ¹ |
+| Emergency + in-progress routine | Both run in parallel; emergency does not abort routine, but is device-final on any shared device ¹ |
 | Two intents conflict on same device | Higher priority wins at device level |
 | Two intents, no device overlap | Full parallel execution |
 | Partial device failure | `intent_partial` logged; no rollback |
 
-¹ If both plans target the same device with contradictory actions, the device may end in the routine's state, not the emergency state. See §3 Known limitation.
+¹ On a shared device, the emergency write is the final state (§3): a lower-urgency action overlapping the emergency is dropped and audited as `action_superseded_by_priority`, not applied over the emergency.
 
 ---
 
