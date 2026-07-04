@@ -57,6 +57,25 @@ See [Protocol Specification §12.3](spec/DoSync-SPEC-v0.1.md) for the full opera
 
 ---
 
+## Is DoSync for you?
+
+DoSync earns its place in specific situations — and honestly gets in the way in others. A quick filter:
+
+**It probably fits if you:**
+- Are building an **AI agent that acts on physical devices** and need an auditable record of what it did, when, and why.
+- Coordinate **heterogeneous devices** (different brands / transports) and want one semantic layer — express a goal, devices resolve it — with a tamper-evident audit trail.
+- Work in **robotics or physical automation** and want a policy + safety layer (emergency preemption, confirmation policies) *between* the AI and the actuators.
+- Keep hand-writing per-device command sequences and wish you could just say *"secure the space."*
+
+**It's probably not for you if you:**
+- Want home automation (schedules, motion → light). [Home Assistant](https://www.home-assistant.io/) and its automations — and its MCP server — already do that better; DoSync would be overhead.
+- Have a single device or one brand's ecosystem — you don't need a coordination layer.
+- Don't need auditability or a policy layer.
+
+**If the first list is you:** the fastest way in is the **[20-minute device tutorial](TUTORIAL.md)** — build a device that senses, expresses a goal, and acts, with the full audit trail. Or open an [issue](https://github.com/giulianireg-spec/dosync-protocol/issues) describing what you're trying to coordinate and we'll tell you honestly whether DoSync fits.
+
+---
+
 ## Demo
 
 [![DoSync Demo](https://img.shields.io/badge/▶_Watch_Demo-YouTube-red?style=for-the-badge)](https://youtu.be/2czAqoIrd08)
