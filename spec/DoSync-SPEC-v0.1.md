@@ -35,6 +35,8 @@ This document defines the **DoSync protocol**: the wire format, data model, and 
 
 A third-party implementation is conforming if it passes the certification CLI at the declared tier. The certification tests are transport-agnostic and test the protocol surface, not the implementation internals.
 
+**Normative vs roadmap.** This specification describes the protocol as implemented and certified. Where it records intended-but-unimplemented capability — native radio bindings, a constrained-transport binary framing, native-transport onboarding, fine-grained permission scopes — that text is labeled *"roadmap — non-normative"* inline. Only normative text constrains conformance; roadmap items are direction, not requirements.
+
 ---
 
 ## 1. Design Principles
@@ -60,7 +62,7 @@ A third-party implementation is conforming if it passes the certification CLI at
 ├─────────────────────────────────────────┤
 │        Layer 2 — Secure Channel         │  mTLS, local PKI, zero-trust
 ├─────────────────────────────────────────┤
-│      Layer 1 — Transport (HAL)          │  WiFi / BLE / Zigbee / Z-Wave
+│      Layer 1 — Transport (HAL)          │  Transport-agnostic · ref: HTTP/WS
 └─────────────────────────────────────────┘
 ```
 
@@ -68,32 +70,51 @@ A third-party implementation is conforming if it passes the certification CLI at
 
 ## 3. Layer 1 — Transport (HAL)
 
-The Hardware Abstraction Layer normalizes all physical transports into a unified message bus. Each transport adapter implements the following interface:
+**DoSync is transport-agnostic. This is a normative design principle:** the protocol does not mandate a physical medium or a single wire format at Layer 1. Any transport that can deliver a DoSync message between a device and the hub — WiFi, Ethernet, Bluetooth LE, Zigbee / Z-Wave / Thread / LoRa radio, or cellular — is a conforming transport. Layers 3–5 (registry, semantics, intent) are identical regardless of how the bytes move underneath.
+
+Conceptually, a transport binding realizes a minimal interface:
 
 ```
-send(device_id: str, payload: bytes) -> Ack
+send(device_id, payload) -> Ack
 receive() -> Iterator[Message]
 discover() -> Iterator[DeviceAnnouncement]
 ```
 
-### 3.1 Supported transports (v0.1)
+The reference implementation realizes this over **HTTP/1.1 + WebSocket with JSON payloads** (§7.2). Devices on radios the hub cannot address directly (Zigbee, Z-Wave, Thread, Matter) participate today through **adapters and bridges** rather than a native DoSync binding — most notably the Home Assistant bridge, which exposes thousands of such devices to the hub. This is deliberate layering: DoSync adds semantics on top of transports that already exist, rather than replacing them.
+
+### 3.1 Transports
+
+**Implemented — reference transport:**
 
 | Transport | Port / Channel | Notes |
 |-----------|---------------|-------|
-| WiFi / TCP | 47200 (DoSync default) | Primary for fixed appliances |
-| WiFi / UDP | 47201 | Discovery broadcasts |
-| Bluetooth LE | GATT service UUID `DS01` | Battery-powered sensors |
-| Zigbee | Cluster `0xFC00` | Low-power mesh |
-| Z-Wave | Command class `0x9F` | Legacy interop |
-| Ethernet | Same as WiFi/TCP | Wired appliances |
+| WiFi / Ethernet / TCP | 47200 (HTTP + WebSocket) | Primary transport for the hub API |
+| WiFi / UDP | 47201 | Device discovery broadcasts |
+
+**Reachable via adapter / bridge (implemented):**
+
+| Path | Reaches | Mechanism |
+|------|---------|-----------|
+| WiZ adapter | Philips WiZ devices | UDP on the local network |
+| MQTT adapter | MQTT-capable devices | broker (opt-in) |
+| Home Assistant bridge | Zigbee, Z-Wave, Thread, Matter and 3000+ integrations | HA REST / WebSocket API |
+
+**Planned native bindings — non-normative (roadmap):**
+
+| Transport | Intended channel | Status |
+|-----------|-----------------|--------|
+| Bluetooth LE | native GATT service | planned — not implemented |
+| Zigbee (native) | dedicated cluster | planned — not implemented |
+| Z-Wave (native) | dedicated command class | planned — not implemented |
+| Cellular (LTE / NB-IoT) | direct device → hub | planned — not implemented |
+
+A *native* binding means a device speaks DoSync directly over that medium, without an intermediate bridge. These are genuine engineering efforts (MTU fragmentation, pairing, reconnection, power management) tracked on the roadmap — not promised here as available.
 
 ### 3.2 Message framing
 
-All messages use length-prefixed binary framing:
+The reference transport frames messages as standard **HTTP requests / responses with JSON bodies**, and real-time events as **JSON text frames over WebSocket** (§7.3). This is the normative wire format for the reference transport.
 
-```
-[4 bytes: total length] [1 byte: version=1] [1 byte: msg_type] [payload: JSON-UTF8]
-```
+**Roadmap — optional binding for constrained transports (non-normative).** Media with small MTUs (BLE, LoRa) cannot carry HTTP/JSON efficiently. A future native binding may use a compact length-prefixed binary framing — e.g. `[4 bytes length][1 byte version][1 byte msg_type][JSON or CBOR payload]`. This is a planned optional binding for constrained native transports, not a requirement of the protocol.
 
 ---
 
@@ -103,41 +124,33 @@ All DoSync communication is encrypted and mutually authenticated. No unencrypted
 
 ### 4.1 Local PKI
 
-The DoSync Hub acts as a local Certificate Authority (CA). On first boot:
+The DoSync Hub acts as a local Certificate Authority (CA):
 
-1. Hub generates a self-signed root CA (`dosync-root.crt`).
-2. Each joining device receives a signed device certificate.
-3. All channel encryption uses TLS 1.3 with mutual authentication (mTLS).
-4. Certificates are rotated annually or on manual revocation.
+1. The hub provisions a local CA (`ca.crt` in the reference deployment).
+2. Each joining device may present a certificate signed by that CA; the hub verifies the chain and records `cert_authenticated` on the device manifest.
+3. Channel encryption uses TLS 1.3 with mutual authentication (mTLS) when certificates are configured.
+4. Certificate rotation is performed manually or by operator script. *(Automated rotation is on the roadmap.)*
 
 ### 4.2 Device onboarding
 
-```
-Device                    Hub
-  │──── HELLO (device_id, pub_key) ──────►│
-  │◄─── CHALLENGE (nonce) ────────────────│
-  │──── RESPONSE (signed_nonce) ──────────►│
-  │◄─── CERT (signed_device_cert) ────────│
-  │──── ACK ───────────────────────────────►│
-  │         [TLS 1.3 channel established]  │
-```
+In the reference implementation a device onboards over the REST API:
 
-### 4.3 Permission model
+1. *(Optional)* The operator provisions a `device_id` and receives a one-time `device_token` (`POST /v1/devices/provision`).
+2. The device registers via `POST /v1/devices/register`, presenting either its `device_token` or a `certificate_pem` signed by the local CA (verified against the CA; `cert_authenticated` is recorded on the manifest).
+3. On success the device's Capability Manifest (§5) enters the registry and the device participates in intent resolution.
 
-Each device has a permission scope defined at onboarding:
+Devices reached through a bridge (e.g. Home Assistant) are onboarded by the bridge on their behalf.
 
-```json
-{
-  "device_id": "lock-frontdoor-01",
-  "permissions": {
-    "actuate": ["lock", "unlock"],
-    "sense": ["state"],
-    "emergency_override": true
-  }
-}
-```
+**Roadmap — native-transport onboarding (non-normative).** For future native bindings over constrained media, a compact challenge/response handshake (device `HELLO` → hub `CHALLENGE` → device `RESPONSE` → hub `CERT`) is planned to establish an mTLS channel without REST round-trips. Not implemented today.
 
-`emergency_override: true` allows the AI to actuate the device during a declared emergency event, bypassing normal family permission requirements.
+### 4.3 Permission and override model
+
+Authorization in the reference implementation is expressed at two levels, not as a per-device permission object:
+
+- **`emergency_capable`** (manifest flag): a device declares whether it may be actuated during a declared emergency, bypassing normal policy confirmation. This is the flag the resolver and Policy Engine honor for emergency intents.
+- **Policy Engine** (§6.6): explicit, auditable policies (e.g. `NeverAfterHoursPolicy`, `RequireConfirmationPolicy`, `DeviceExclusionPolicy`) constrain what may be actuated, when, and by whom.
+
+**Roadmap — fine-grained permission scopes (non-normative).** A richer per-device permission object (explicit `actuate` / `sense` scopes negotiated at onboarding) is planned but not implemented; today the `emergency_capable` flag plus the Policy Engine cover the model.
 
 ---
 
@@ -820,5 +833,7 @@ DoSync's Layer 1 (HAL) explicitly abstracts over Matter, Zigbee, Z-Wave, Thread,
 *Via integration with FamilyOS
 
 ---
+
+*Revision (2026-07-03): Layers 1–2 reconciled with the reference implementation — transport-agnosticism stated as a normative design principle; native radio bindings, constrained-transport binary framing, native-transport onboarding, and fine-grained permission scopes relocated to explicitly non-normative "roadmap" notes; onboarding and permission model rewritten to the implemented REST + local-CA flow. No protocol behavior changed — documentation fidelity only.*
 
 *DoSync Protocol Specification v0.1 — DoSync Initiative — Apache 2.0 License*
