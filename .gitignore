@@ -24,3 +24,7 @@ implementations/dosync-node/node_modules/
 
 # runtime log (should not be tracked)
 server.log
+
+# runtime artifacts (never track)
+audit_log_backup_*.json
+benchmark_run_*.log
