@@ -3,7 +3,7 @@
 **Implementation:** dosync-node  
 **Language:** Node.js / TypeScript  
 **Repository:** github.com/giulianireg-spec/dosync-protocol (implementations/dosync-node)  
-**Protocol version:** DoSync v0.3  
+**Protocol version:** DoSync v0.4  
 **Declaration date:** June 2026  
 **Maintainer:** Rodrigo Giuliani — rgiuliani@dosync.dev
 
@@ -215,7 +215,7 @@ await device.pushEvent('motion_detected', { location: 'entrance' });
 
 ## Compliance Statement
 
-dosync-node v0.3 is **DoSync Standard Certified** as of June 2026. It conforms to the DoSync Protocol Specification v0.3 and Resolver Interface Specification v0.3 for all features marked ✅ in the matrix above. (Emergency tier requires hub-side capabilities — emergency override, tamper-evident audit log, per-device mTLS — that are out of scope for this device-side implementation.)
+dosync-node v0.3 is **DoSync Standard Certified** as of June 2026. It conforms to the DoSync Protocol Specification v0.4 and Resolver Interface Specification v0.3 for all features marked ✅ in the matrix above. (Emergency tier requires hub-side capabilities — emergency override, tamper-evident audit log, per-device mTLS — that are out of scope for this device-side implementation.)
 
 The certification was performed against the DoSync Python reference hub using the public `certify.py` CLI (33/33 tests passing, Standard tier).
 

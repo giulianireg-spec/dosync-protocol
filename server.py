@@ -524,7 +524,7 @@ app = FastAPI(
         "El hub central que conecta la IA con los gadgets del hogar.\n"
         "Protocolo abierto · Apache 2.0 · github.com/dosync/protocol"
     ),
-    version="0.3.0",
+    version="0.4.0",
     lifespan=lifespan,
 )
 
@@ -533,7 +533,7 @@ app = FastAPI(
 # API version:      the REST API version (URL prefix /v1/)
 # These are exposed as response headers on every request so clients can detect
 # the version without parsing the URL or the response body.
-DOSYNC_PROTOCOL_VERSION = "0.3"
+DOSYNC_PROTOCOL_VERSION = "0.4"
 DOSYNC_API_VERSION = "1"
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -576,7 +576,7 @@ async def websocket_endpoint(ws: WebSocket):
             "type": "connected",
             "data": {
                 "devices":    len(hub.registry.all()),
-                "hub_version": "0.1.0",
+                "hub_version": "0.4.0",
                 "protocol":   f"dosync/{DOSYNC_PROTOCOL_VERSION}",
             }
         }))
@@ -610,7 +610,7 @@ def dashboard():
 def root():
     return {
         "name": "DoSync Hub",
-        "version": "0.1.0",
+        "version": "0.4.0",
         "protocol": f"dosync/{DOSYNC_PROTOCOL_VERSION}",
         "status": "running",
         "devices_registered": len(hub.registry.all()),
@@ -1506,7 +1506,7 @@ def get_status():
     occupancy = hub.get_occupancy()
     return {
         "name":            "DoSync Hub",
-        "version":         "0.3.0",
+        "version":         "0.4.0",
         "protocol":        f"dosync/{DOSYNC_PROTOCOL_VERSION}",
         "status":          "running",
         "certify_mode":    _certify_mode,

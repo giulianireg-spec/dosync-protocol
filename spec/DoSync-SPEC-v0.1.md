@@ -149,7 +149,7 @@ Every DoSync device broadcasts a **Capability Manifest** upon joining the networ
 
 ```json
 {
-  "dosync_version": "0.3",
+  "dosync_version": "0.4",
   "device_id": "fridge-kitchen-01",
   "device_name": "Kitchen refrigerator",
   "manufacturer": "AcmeCorp",
@@ -508,7 +508,7 @@ DoSync maintains two independent versioned surfaces:
 
 | Surface | Current | Exposed as |
 |---|---|---|
-| **Protocol version** | `0.3` | `dosync/0.3` in `protocol` field of `/v1/status`; `X-DoSync-Protocol-Version` response header |
+| **Protocol version** | `0.4` | `dosync/0.4` in `protocol` field of `/v1/status`; `X-DoSync-Protocol-Version` response header |
 | **REST API version** | `1` | `/v1/` URL prefix; `X-DoSync-API-Version` response header |
 
 Every HTTP response from the hub includes both headers:
@@ -592,7 +592,7 @@ The heartbeat endpoint (`GET /v1/hub/heartbeat`) MUST be used by standby hubs an
 {
   "hub_id":           "8f16f011beab295a",
   "status":           "healthy",
-  "protocol_version": "0.3",
+  "protocol_version": "0.4",
   "api_version":      "1",
   "timestamp":        "2026-06-06T15:02:22.556184+00:00",
   "uptime_seconds":   1842,
