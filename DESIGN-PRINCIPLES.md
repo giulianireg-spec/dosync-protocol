@@ -264,6 +264,32 @@ The MCP server exposes the protocol's capabilities, not elevated access. An AI a
 
 ---
 
+## On perception, reflexes, and judgment
+
+An AI that *perceives* a situation and fires an intent on its own — without a human telling it what to do — is a natural and powerful use of DoSync. A model watching a camera can decide "someone fell, ensure their safety" and fire the intent itself. This is agency, not automation: the model judges the situation from context, rather than following a pre-written `if-this-then-that` rule.
+
+Three boundaries make this safe and keep the protocol clean.
+
+**1. Perception lives in Layer 2, outside the protocol.** The component that watches a sensor or a camera, reasons about what it sees, and decides to fire an intent is a *client* of DoSync — not part of the protocol. DoSync is the response layer (Layer 1): it receives an intent, governs it, executes it, and records it. It does not perceive, and it does not interpret raw sensor data for the operator. A reference perception agent may ship alongside the protocol to demonstrate the pattern, but it is a client — device- and model-agnostic by design (pluggable frame source, pluggable perception model), never normative. Anyone may write their own; conformance is unaffected. This mirrors the rest of the protocol: the resolver, the transport, and the AI model are all pluggable and all live outside the normative core.
+
+**2. Reflexes are not judgment — and must never pass through a model.** A decision splits by a single test: *if a wrong or late decision causes physical harm within the time it takes to call a model, it is a reflex; otherwise it is judgment.*
+
+- **Reflex** — collision avoidance on a moving vehicle, an over-temperature cutoff, a machine emergency stop. Resolved in milliseconds, deterministically, locally: in the flight controller, in the operation guards, in threshold logic. A model round-trip (seconds) is far too slow; routing a reflex through an LLM is a safety defect, not a feature.
+- **Judgment** — turning on a light for someone who entered a dark room, opening a gate, adjusting the environment, deciding a drone's next waypoint. Latency-tolerant and context-dependent. This is where a model earns its place — and where a fixed rule cannot capture the nuance (a model can decline to act at 3am when a rule would blindly fire).
+
+A capable device may use both layers at once: for an autonomous drone, "don't hit the tree" is a reflex (flight control + guards) while "investigate that broken fence you saw" is judgment (model → intent → DoSync). The fast reflex keeps it safe; the slow judgment decides the mission.
+
+**3. The model proposes; policy disposes; the log records.** An autonomous agent firing intents shifts some decision-making from Layer 3 (human) toward Layer 2 (model). That shift is graduated by consequence, never blanket:
+
+- **Reversible, low-stakes actions** (a light, the climate, a notification): the agent may decide; the Policy Engine and audit log are the record.
+- **Irreversible or high-stakes actions** (a lock, anything affecting physical safety, spending): the agent *proposes*; a confirmation policy or a human *decides*.
+
+In all cases the proposed intent passes through the Policy Engine (confirm / block / modify) and the tamper-evident audit log before any device acts. The agent never actuates a device directly. This is the safety architecture for autonomy: the model proposes from judgment, policy imposes the guardrails, and the log makes the whole chain — what was perceived, what was proposed, what was done — verifiable after the fact.
+
+**The honest limit.** Reliable perception — not failing to notice the fall, not hallucinating one — is only as good as the model doing the watching, and DoSync does not provide or guarantee it. For safety-critical detection (industrial hazards, life safety), the perception must be a deterministic reflex or a certified sensor, not a general-purpose model. DoSync coordinates the response; it does not vouch for the perception.
+
+---
+
 ## On domain applicability
 
 DoSync's 5-layer architecture is domain-agnostic. The same protocol stack operates in a home, a hotel, a factory, or a smart building.
