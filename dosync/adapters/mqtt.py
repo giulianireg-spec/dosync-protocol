@@ -292,19 +292,26 @@ class MQTTAdapter(DoSyncAdapter):
             log.warning("MQTTAdapter: failed to register device '%s': %s", device_id, exc)
 
     async def _handle_event(self, device_id: str, data: dict) -> None:
-        """Forward a device event to the hub's event processor."""
+        """Forward a device event to the hub so it reaches the audit log AND the
+        event stream (WebSocket broadcast) that autonomous agents subscribe to.
+
+        Previously this called a non-existent `process_event` guarded by hasattr,
+        so MQTT device events were silently dropped and never reached an agent."""
         if self._hub is None:
             return
         try:
-            from ..models import DeviceEvent
+            from ..models import DeviceEvent, Severity
+            try:
+                severity = Severity(data.get("severity", "info"))
+            except ValueError:
+                severity = Severity("info")
             event = DeviceEvent(
                 device_id=device_id,
                 event_id=data.get("event_id", "mqtt_event"),
-                severity=data.get("severity", "info"),
+                severity=severity,
                 data=data.get("data", {}),
             )
-            if hasattr(self._hub, "process_event"):
-                await self._hub.process_event(event)
+            await self._hub.receive_event(event)
             log.debug("MQTTAdapter: event '%s' from '%s'", event.event_id, device_id)
         except Exception as exc:
             log.warning("MQTTAdapter: failed to process event from '%s': %s", device_id, exc)
