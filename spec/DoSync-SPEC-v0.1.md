@@ -1,4 +1,6 @@
-# DoSync Protocol — Specification v0.1
+# DoSync Protocol — Specification
+
+*(Protocol version 0.4 — see the changelog / §10. The file keeps its original name to preserve external links.)*
 
 **Status:** Draft  
 **Authors:** DoSync Initiative  
@@ -836,4 +838,4 @@ DoSync's Layer 1 (HAL) explicitly abstracts over Matter, Zigbee, Z-Wave, Thread,
 
 *Revision (2026-07-03): Layers 1–2 reconciled with the reference implementation — transport-agnosticism stated as a normative design principle; native radio bindings, constrained-transport binary framing, native-transport onboarding, and fine-grained permission scopes relocated to explicitly non-normative "roadmap" notes; onboarding and permission model rewritten to the implemented REST + local-CA flow. No protocol behavior changed — documentation fidelity only.*
 
-*DoSync Protocol Specification v0.1 — DoSync Initiative — Apache 2.0 License*
+*DoSync Protocol Specification (protocol v0.4) — DoSync Initiative — Apache 2.0 License*

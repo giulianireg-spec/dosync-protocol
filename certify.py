@@ -8,7 +8,7 @@ Usage:
 Tiers:
   basic     (10 tests) — connectivity, authentication, device manifest
   standard  (33 tests) — protocol conformance, events, health, version headers, manifest privacy, intent lifecycle
-  emergency (35 tests) — emergency override, policy engine, audit log integrity, firmware re-registration
+  emergency (46 tests) — everything in standard + emergency override, policy engine, audit log integrity, firmware re-registration
 
 Two testing modes:
 
@@ -727,7 +727,7 @@ def run_standard(base: str, report: CertReport):
     if s23_status == 200:
         request("DELETE", f"{base}/v1/devices/cert-schema-test-01")
 
-# ── TIER EMERGENCY — 13 additional tests (total 35) ─────────────────────────
+# ── TIER EMERGENCY — 13 additional tests (cumulative tier total: 46) ────────
 
 def run_emergency(base: str, report: CertReport):
     section("── Tier EMERGENCY — Override, policies, audit log ───────")
@@ -906,7 +906,7 @@ Environment variables:
 Tier test counts:
   basic      10 tests  — connectivity, auth, registration, manifest
   standard   33 tests  — + intents, events, health, explainability, version headers, intent lifecycle
-  emergency  35 tests  — + emergency override, audit log integrity, firmware re-registration
+  emergency  46 tests  — + emergency override, audit log integrity, firmware re-registration
         """,
     )
     parser.add_argument("--host",   default="localhost",  help="Hub IP or hostname")
@@ -946,7 +946,9 @@ Tier test counts:
     base   = f"http://{args.host}:{args.port}"
     report = CertReport(host=args.host, port=args.port, tier=args.tier)
 
-    tier_counts = {"basic": 10, "standard": 33, "emergency": 36}
+    # NOTE: cumulative totals — basic(10), +standard(23)=33, +emergency(13)=46.
+    # The "CERTIFIED (passed/total)" line below uses the real runtime count; keep these in sync.
+    tier_counts = {"basic": 10, "standard": 33, "emergency": 46}
     print(f"\n{C.BOLD}DoSync Certification CLI v0.3{C.RESET}")
     print(f"  Hub:   {base}")
     print(f"  Tier:  {C.BOLD}{args.tier.upper()}{C.RESET} ({tier_counts[args.tier]} tests)")

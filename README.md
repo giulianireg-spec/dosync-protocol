@@ -123,7 +123,7 @@ Benchmark (Raspberry Pi 5, Python 3.11.2):
 | 4 | **Semantic** | Resolver maps intent → device actions |
 | 3 | **Registry** | Devices self-declare capabilities on join |
 | 2 | **Secure channel** | mTLS, local PKI — no internet required |
-| 1 | **Transport (HAL)** | WiFi · BLE · MQTT · Zigbee · Z-Wave · Thread |
+| 1 | **Transport (HAL)** | Reference: WiFi/HTTP-WS · MQTT. Via bridge: Zigbee · Z-Wave · Thread · Matter (Home Assistant). Native BLE/radio bindings: roadmap |
 
 ---
 
@@ -165,7 +165,7 @@ PYTHONPATH=. uvicorn server:app --host 0.0.0.0 --port 47200 --reload
 | Home Assistant bridge (10 domains) | ✅ |
 | Native MCP server (Claude, ChatGPT, any LLM) | ✅ |
 | GPIO adapter — Raspberry Pi 5 (PIR + DHT22) | ✅ |
-| SMS notifications via Twilio | ✅ |
+| SMS notifications via Twilio | ✅ code (requires an active Twilio plan) |
 | MQTT transport adapter (Mosquitto) | ✅ |
 | Shelly adapter (HTTP local, Gen1 + Gen2) | ✅ code, not hardware-tested |
 | Matter adapter (via HA bridge / python-matter-server) | ✅ code, not hardware-tested |
@@ -205,7 +205,7 @@ python3 certify.py --host <hub-ip> --port 47200 --tier standard
 |---|---|---|
 | **Basic** | 10 | Connectivity, auth, device manifest |
 | **Standard** | 33 | Protocol conformance, events, health, version headers |
-| **Emergency** | 36 | Emergency override, policy engine, audit log integrity |
+| **Emergency** | 46 | Everything in Standard + emergency override, policy engine, audit log integrity |
 
 ---
 
