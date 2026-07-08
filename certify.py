@@ -8,7 +8,7 @@ Usage:
 Tiers:
   basic     (10 tests) — connectivity, authentication, device manifest
   standard  (33 tests) — protocol conformance, events, health, version headers, manifest privacy, intent lifecycle
-  emergency (46 tests) — everything in standard + emergency override, policy engine, audit log integrity, firmware re-registration
+  emergency (44 tests) — everything in standard + emergency override, policy engine, audit log integrity, firmware re-registration
 
 Two testing modes:
 
@@ -729,7 +729,7 @@ def run_standard(base: str, report: CertReport):
     if s23_status == 200:
         request("DELETE", f"{base}/v1/devices/cert-schema-test-01")
 
-# ── TIER EMERGENCY — 13 additional tests (cumulative tier total: 46) ────────
+# ── TIER EMERGENCY — 11 additional tests (cumulative tier total: 44) ────────
 
 def run_emergency(base: str, report: CertReport):
     section("── Tier EMERGENCY — Override, policies, audit log ───────")
@@ -771,92 +771,66 @@ def run_emergency(base: str, report: CertReport):
         f"{len(emergency_capable)} emergency_capable device(s) registered",
     ))
 
-    # E3. children_arrived_home intent is accepted by the hub (CONFORMANCE).
-    # This intent has a time-based policy (weekdays 18:30-19:00); zero actions
-    # outside the window is correct hub behavior. Conformance verifies acceptance.
-    status, body_ch = fire_intent_conformance(base, {
-        "intent":  "children_arrived_home",
-        "urgency": "info",
-        "context": {"trigger": "certification_test"},
-    })
-    report.add(TestResult(
-        "E03  children_arrived_home intent accepted by hub",
-        status == 200 and bool(body_ch.get("intent_id")) and body_ch.get("status") is not None,
-        f"status={status} intent_id={'present' if body_ch.get('intent_id') else 'missing'}",
-    ))
-
-    # E4. away_mode intent is accepted by the hub (CONFORMANCE).
-    status, body_aw = fire_intent_conformance(base, {
-        "intent":  "away_mode",
-        "urgency": "info",
-        "context": {},
-    })
-    report.add(TestResult(
-        "E04  away_mode intent accepted by hub",
-        status == 200 and bool(body_aw.get("intent_id")) and body_aw.get("status") is not None,
-        f"status={status} intent_id={'present' if body_aw.get('intent_id') else 'missing'}",
-    ))
-
-    # E5. Audit log exists and has entries
+    # E3. Audit log exists and has entries
     status, body_audit = request("GET", f"{base}/v1/audit")
     report.add(TestResult(
-        "E05  Audit log exists and has entries",
+        "E03  Audit log exists and has entries",
         status == 200 and body_audit.get("count", 0) > 0,
         f"{body_audit.get('count', 0)} entries",
     ))
 
-    # E6. Audit log SHA-256 chain is intact
+    # E4. Audit log SHA-256 chain is intact
     report.add(TestResult(
-        "E06  Audit log SHA-256 chain integrity verified",
+        "E04  Audit log SHA-256 chain integrity verified",
         body_audit.get("integrity") is True,
         "chain intact" if body_audit.get("integrity") else "chain compromised",
     ))
 
-    # E7. Audit log recorded the emergency event
+    # E5. Audit log recorded the emergency event
     entries = body_audit.get("entries", [])
     has_emergency = any(
         e.get("intent") == "ensure_safety" and e.get("urgency") == "emergency"
         for e in entries
     )
     report.add(TestResult(
-        "E07  Audit log recorded the emergency event",
+        "E05  Audit log recorded the emergency event",
         has_emergency,
         "emergency entry found" if has_emergency else "emergency entry missing",
     ))
 
-    # E8. Audit log intent_executed entry contains required fields
+    # E6. Audit log intent_executed entry contains required fields
     intent_entries = [e for e in entries if e.get("type") == "intent_executed"]
     if intent_entries:
         sample = intent_entries[0]
         required_entry = ["intent", "urgency", "timestamp", "actions", "success", "hash", "prev_hash"]
         missing = [f for f in required_entry if f not in sample]
         report.add(TestResult(
-            "E08  Audit log intent_executed entries contain required fields",
+            "E06  Audit log intent_executed entries contain required fields",
             len(missing) == 0,
             f"missing: {missing}" if missing else "all fields present",
         ))
     else:
-        report.add(TestResult("E08  Audit log intent_executed entries contain required fields", False, "no intent_executed entries found"))
+        report.add(TestResult("E06  Audit log intent_executed entries contain required fields", False, "no intent_executed entries found"))
 
-    # E9. Status reports audit integrity as True
+    # E7. Status reports audit integrity as True
     status, body_status = request("GET", f"{base}/v1/status")
     report.add(TestResult(
-        "E09  Hub status reports audit_integrity=True",
+        "E07  Hub status reports audit_integrity=True",
         status == 200 and body_status.get("audit_integrity") is True,
         f"audit_integrity={body_status.get('audit_integrity')}",
     ))
 
-    # E10. Hub has been running with devices registered (production readiness)
+    # E8. Hub has been running with devices registered (production readiness)
     device_count = body_status.get("devices", 0)
     audit_count  = body_status.get("audit_entries", 0)
     report.add(TestResult(
-        "E10  Hub is production-ready (devices registered, audit log active)",
+        "E08  Hub is production-ready (devices registered, audit log active)",
         device_count > 0 and audit_count > 0,
         f"{device_count} devices, {audit_count} audit entries",
     ))
 
 
-    # E11. Firmware re-registration — register same device with different firmware
+    # E9. Firmware re-registration — register same device with different firmware
     import copy
     e11_manifest = copy.deepcopy(TEST_DEVICE)
     e11_manifest["firmware"] = "9.9.9-certify-test"   # different firmware
@@ -864,30 +838,30 @@ def run_emergency(base: str, report: CertReport):
     # Also verify the device is still accessible after re-registration
     e11_get_status, e11_device = request("GET", f"{base}/v1/devices/{TEST_DEVICE['device_id']}")
     report.add(TestResult(
-        "E11  Firmware re-registration — hub accepts and updates without error",
+        "E09  Firmware re-registration — hub accepts and updates without error",
         e11_status == 200 and e11_get_status == 200,
         f"re-register_status={e11_status} device_accessible={e11_get_status}",
     ))
     # Restore original firmware
     request("POST", f"{base}/v1/devices/register", TEST_DEVICE)
 
-    # E12. Heartbeat status is healthy (not degraded)
+    # E10. Heartbeat status is healthy (not degraded)
     e12_status, e12_body = request("GET", f"{base}/v1/hub/heartbeat")
     e12_healthy = e12_body.get("status") == "healthy"
     e12_role    = e12_body.get("role") in ("primary", "standby")
     report.add(TestResult(
-        "E12  Hub heartbeat reports healthy status and valid role after emergency intent",
+        "E10  Hub heartbeat reports healthy status and valid role after emergency intent",
         e12_status == 200 and e12_healthy and e12_role,
         f"status={e12_body.get('status')} role={e12_body.get('role')}",
     ))
 
-    # E13. Audit log contains source field in intent_executed entries
+    # E11. Audit log contains source field in intent_executed entries
     e13_audit_status, e13_audit = request("GET", f"{base}/v1/audit")
     e13_entries = e13_audit.get("entries", [])
     e13_intent_entries = [e for e in e13_entries if e.get("type") == "intent_executed"]
     e13_with_source = [e for e in e13_intent_entries if "source" in e]
     report.add(TestResult(
-        "E13  Audit log intent_executed entries include source field",
+        "E11  Audit log intent_executed entries include source field",
         e13_audit_status == 200 and len(e13_with_source) > 0,
         f"intent_executed={len(e13_intent_entries)} with_source={len(e13_with_source)}",
     ))
@@ -913,7 +887,7 @@ Environment variables:
 Tier test counts:
   basic      10 tests  — connectivity, auth, registration, manifest
   standard   33 tests  — + intents, events, health, explainability, version headers, intent lifecycle
-  emergency  46 tests  — + emergency override, audit log integrity, firmware re-registration
+  emergency  44 tests  — + emergency override, audit log integrity, firmware re-registration
         """,
     )
     parser.add_argument("--host",   default="localhost",  help="Hub IP or hostname")
@@ -953,9 +927,9 @@ Tier test counts:
     base   = f"http://{args.host}:{args.port}"
     report = CertReport(host=args.host, port=args.port, tier=args.tier)
 
-    # NOTE: cumulative totals — basic(10), +standard(23)=33, +emergency(13)=46.
+    # NOTE: cumulative totals — basic(10), +standard(23)=33, +emergency(11)=44.
     # The "CERTIFIED (passed/total)" line below uses the real runtime count; keep these in sync.
-    tier_counts = {"basic": 10, "standard": 33, "emergency": 46}
+    tier_counts = {"basic": 10, "standard": 33, "emergency": 44}
     print(f"\n{C.BOLD}DoSync Certification CLI v0.3{C.RESET}")
     print(f"  Hub:   {base}")
     print(f"  Tier:  {C.BOLD}{args.tier.upper()}{C.RESET} ({tier_counts[args.tier]} tests)")

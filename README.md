@@ -205,7 +205,7 @@ python3 certify.py --host <hub-ip> --port 47200 --tier standard
 |---|---|---|
 | **Basic** | 10 | Connectivity, auth, device manifest |
 | **Standard** | 33 | Protocol conformance, events, health, version headers |
-| **Emergency** | 46 | Everything in Standard + emergency override, policy engine, audit log integrity |
+| **Emergency** | 44 | Everything in Standard + emergency override, policy engine, audit log integrity |
 
 ---
 
