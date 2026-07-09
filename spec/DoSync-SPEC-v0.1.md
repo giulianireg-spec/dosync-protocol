@@ -836,6 +836,41 @@ DoSync's Layer 1 (HAL) explicitly abstracts over Matter, Zigbee, Z-Wave, Thread,
 
 ---
 
+---
+
+## Appendix A — Recommended metrics (non-normative)
+
+Observability is an **operational feature of an implementation, not part of the
+protocol**. A hub that exposes no metrics is still conforming. However, so that
+independent implementations are comparable and operable with the same dashboards,
+implementations that expose Prometheus-format metrics SHOULD use these names:
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `dosync_intents_total` | counter | `intent_class`, `urgency`, `outcome` | Intents received (`accepted` / `rejected`). Rejected intents MUST be counted under `intent_class="_invalid"` — never place unbounded user input in a label value. |
+| `dosync_intent_executions_total` | counter | `outcome` | Completed executions (`success` / `partial` / `failed`) |
+| `dosync_intent_actions_total` | counter | `result` | Device actions dispatched (`success` / `failed` / `superseded`) |
+| `dosync_policy_decisions_total` | counter | `decision` | Policy engine decisions (`allow` / `block` / `confirm` / `modify`) |
+| `dosync_emergency_intents_total` | counter | — | Intents accepted with emergency urgency |
+| `dosync_device_preemptions_total` | counter | — | Lower-urgency actions superseded by an emergency device claim |
+| `dosync_devices_registered` | gauge | — | Devices currently in the capability registry |
+| `dosync_devices_emergency_capable` | gauge | — | Devices declaring `emergency_capable=true` |
+| `dosync_audit_entries` | gauge | — | Entries in the tamper-evident audit log |
+| `dosync_audit_integrity` | gauge | — | 1 if the SHA-256 chain verifies, 0 if broken |
+| `dosync_ws_connections` | gauge | — | Active WebSocket connections |
+| `dosync_hub_uptime_seconds` | gauge | — | Seconds since process start |
+| `dosync_device_success_rate` | gauge | `device_id` | Per-device success rate over recent executions. `device_id` is acceptable here only because device health is a bounded, low-volume gauge; implementations MUST NOT use `device_id` as a label on high-volume counters. |
+
+Latency histograms (`dosync_intent_resolution_seconds`, `dosync_action_execution_seconds`)
+are anticipated in a future revision of this appendix once the reference
+implementation ships them.
+
+The reference implementation serves these at `GET /metrics` behind the same
+authentication as the rest of the API (unlike `/v1/status`, which stays public as
+a minimal health check for monitors and standby hubs).
+
+---
+
 *Revision (2026-07-03): Layers 1–2 reconciled with the reference implementation — transport-agnosticism stated as a normative design principle; native radio bindings, constrained-transport binary framing, native-transport onboarding, and fine-grained permission scopes relocated to explicitly non-normative "roadmap" notes; onboarding and permission model rewritten to the implemented REST + local-CA flow. No protocol behavior changed — documentation fidelity only.*
 
 *DoSync Protocol Specification (protocol v0.4) — DoSync Initiative — Apache 2.0 License*

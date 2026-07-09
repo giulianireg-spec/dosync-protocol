@@ -12,11 +12,12 @@ import json
 import os
 import re
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from dosync.hub import DoSyncHub
+from dosync import metrics as M
 from dosync.executor import SimulatedExecutor
 from dosync.auth import AuthManager, set_auth_manager, DeviceAuthManager, set_device_auth_manager
 from dosync.auth_fastapi import require_auth
@@ -161,6 +162,17 @@ try:
         actuator_types=["alarm"],
         reason="Alarm activation requires explicit confirmation"
     ))
+    # Metrics: count policy decisions without touching policies.py (same wrap
+    # pattern used below for audit_log.append).
+    _original_policy_evaluate = policy_engine.evaluate
+    def _metered_policy_evaluate(intent, plan):
+        result = _original_policy_evaluate(intent, plan)
+        try:
+            M.policy_decisions_total.inc({"decision": result.decision.value})
+        except Exception:
+            pass
+        return result
+    policy_engine.evaluate = _metered_policy_evaluate
     hub.policy_engine = policy_engine
     logging.getLogger("dosync.server").info("PolicyEngine initialized with %d policies", len(policy_engine.list_policies()))
 except Exception as _e:
@@ -1084,10 +1096,14 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
     try:
         intent_class = IntentClass(req.intent)
     except ValueError as e:
+        # Cardinality rule: rejected intents carry arbitrary user strings — never
+        # use them as a label value. Count them under the fixed "_invalid" class.
+        M.intents_total.inc({"intent_class": "_invalid", "urgency": req.urgency if req.urgency in ("emergency", "alert", "info") else "_invalid", "outcome": "rejected"})
         raise HTTPException(status_code=422, detail=str(e))
     # Validate intent class is registered in DB
     if not hub.db.get_intent_class(req.intent):
         registered = [r["name"] for r in hub.db.list_intent_classes()]
+        M.intents_total.inc({"intent_class": "_invalid", "urgency": req.urgency if req.urgency in ("emergency", "alert", "info") else "_invalid", "outcome": "rejected"})
         raise HTTPException(
             status_code=422,
             detail=f"Intent '{req.intent}' is not registered. "
@@ -1096,6 +1112,7 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
     try:
         urgency = Urgency(req.urgency)
     except ValueError:
+        M.intents_total.inc({"intent_class": req.intent, "urgency": "_invalid", "outcome": "rejected"})
         raise HTTPException(status_code=422, detail=f"Urgency '{req.urgency}' not valid. Use: emergency, alert, warning, info")
 
     # ── Idempotency check (protocol v0.2, opt-in) ─────────────────────────
@@ -1179,6 +1196,22 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
             "intent":     req.intent,
             "urgency":    req.urgency,
         }
+
+        # ── Metrics: execution outcome + per-action results ──────────────
+        M.intent_executions_total.inc({"outcome": _intent_store[intent.intent_id]["status"]})
+        for r in result.results:
+            if r.success:
+                _res = "success"
+            elif r.error and str(r.error).startswith("superseded"):
+                _res = "superseded"
+                M.device_preemptions_total.inc()
+            else:
+                _res = "failed"
+            M.intent_actions_total.inc({"result": _res})
+
+    M.intents_total.inc({"intent_class": req.intent, "urgency": req.urgency, "outcome": "accepted"})
+    if urgency == Urgency.EMERGENCY:
+        M.emergency_intents_total.inc()
 
     asyncio.create_task(_run_intent())
 
@@ -1498,6 +1531,70 @@ async def hub_promote(body: dict = None, auth=Depends(require_auth)):
         "devices_served": proposal.local_devices,
         "warning": proposal.reason if proposal.destructive else None,
     }
+
+
+# ── Metrics (Prometheus text format) ─────────────────────────────────────────
+# Operational feature of the reference implementation — NOT part of the
+# normative protocol (a hub without /metrics is still conforming). Auth-protected:
+# unlike /v1/status (minimal public health for monitors/standby hubs), /metrics
+# exposes operational detail, so it requires a token. Point your Prometheus
+# scraper at it with:  authorization: { credentials: "<token>" }.
+
+_metrics_start_time = _time.time()
+
+M.REGISTRY.gauge_func(
+    "dosync_devices_registered",
+    "Devices currently registered in the capability registry",
+    lambda: len(hub.registry.all()),
+)
+M.REGISTRY.gauge_func(
+    "dosync_devices_emergency_capable",
+    "Registered devices declaring emergency_capable=true",
+    lambda: sum(1 for d in hub.registry.all() if getattr(d, "emergency_capable", False)),
+)
+M.REGISTRY.gauge_func(
+    "dosync_audit_entries",
+    "Entries in the tamper-evident audit log",
+    lambda: len(hub.audit_log.entries()),
+)
+M.REGISTRY.gauge_func(
+    "dosync_audit_integrity",
+    "1 if the audit log SHA-256 chain verifies, 0 if broken",
+    lambda: 1 if hub.audit_log.verify() else 0,
+)
+M.REGISTRY.gauge_func(
+    "dosync_ws_connections",
+    "Active WebSocket connections",
+    lambda: ws_manager.active_connections,
+)
+M.REGISTRY.gauge_func(
+    "dosync_hub_uptime_seconds",
+    "Seconds since the hub process started",
+    lambda: _time.time() - _metrics_start_time,
+)
+
+def _device_success_rate_samples():
+    # device_id label is acceptable here ONLY because device health is a bounded,
+    # low-volume gauge (see cardinality rule in dosync/metrics.py). Detailed
+    # per-device history stays in /v1/health/devices.
+    out = []
+    for d in hub.db.get_all_health(last_n=100):
+        dev = d.get("device_id")
+        rate = d.get("success_rate")
+        if dev is not None and rate is not None:
+            out.append(({"device_id": dev}, rate))
+    return out
+
+M.REGISTRY.gauge_func(
+    "dosync_device_success_rate",
+    "Per-device action success rate over the last 100 executions (0.0-1.0)",
+    _device_success_rate_samples,
+)
+
+
+@app.get("/metrics", tags=["Status"], summary="Prometheus metrics (reference implementation feature, non-normative)")
+def get_metrics(auth: str = Depends(require_auth)):
+    return PlainTextResponse(M.REGISTRY.render(), media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 @app.get("/v1/status", tags=["Status"])
