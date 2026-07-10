@@ -1,0 +1,45 @@
+# DoSync — GPIO adapter (PIR HC-SR501 + DHT22) as a systemd service
+# =================================================================
+# This keeps the Pi's autonomous perception pipeline (PIR -> intent) alive
+# across reboots and crashes. Without it, motion events silently stop.
+#
+# INSTALL (on the Pi):
+#   1. Create the environment file with your real values (mode 600 — it holds a token):
+#        sudo mkdir -p /etc/dosync
+#        sudo sh -c 'cat > /etc/dosync/gpio.env' << 'ENV'
+#        DOSYNC_HUB_URL=https://192.168.100.109:47200
+#        DOSYNC_TOKEN=<your-api-token>
+#        DOSYNC_CA_CERT=/home/rgiuliani/dosync-protocol/certs/ca.crt
+#        ENV
+#        sudo chmod 600 /etc/dosync/gpio.env
+#   2. Install and start:
+#        sudo cp config/dosync-gpio.service /etc/systemd/system/
+#        sudo systemctl daemon-reload
+#        sudo systemctl enable --now dosync-gpio
+#   3. Verify:
+#        systemctl status dosync-gpio            # active (running)
+#        journalctl -u dosync-gpio -n 20         # PIR/DHT startup lines
+#      Then wave at the PIR: the event must appear in the hub audit log.
+#
+# NOTE: the GPIO libraries must be available to the python below (the adapter
+# imports them lazily). If you run it from the repo venv, install them there.
+
+[Unit]
+Description=DoSync GPIO adapter (PIR + DHT22 -> hub events/intents)
+After=network-online.target dosync.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rgiuliani
+Group=gpio
+WorkingDirectory=/home/rgiuliani/dosync-protocol
+EnvironmentFile=/etc/dosync/gpio.env
+ExecStart=/home/rgiuliani/dosync-protocol/venv/bin/python3 gpio_adapter.py
+Restart=always
+RestartSec=5
+# The adapter only needs GPIO + outbound HTTPS to the hub:
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -7,8 +7,9 @@ Uso:
     python3 gpio_adapter.py --hub http://192.168.100.X:47200 --token <token>
 
 Variables de entorno (alternativa):
-    DOSYNC_HUB_URL=http://192.168.100.X:47200
+    DOSYNC_HUB_URL=https://192.168.100.X:47200
     DOSYNC_TOKEN=<token>
+    DOSYNC_CA_CERT=certs/ca.crt
 """
 
 import argparse
@@ -17,6 +18,7 @@ import json
 import logging
 import os
 import time
+import ssl
 import urllib.request
 import urllib.error
 from datetime import datetime
@@ -31,6 +33,13 @@ log = logging.getLogger("dosync.gpio")
 # ── Config ────────────────────────────────────────────────────────────────────
 HUB_URL   = os.environ.get("DOSYNC_HUB_URL", "http://192.168.100.1:47200")
 HUB_TOKEN = os.environ.get("DOSYNC_TOKEN", "")
+CA_CERT   = os.environ.get("DOSYNC_CA_CERT", "")
+
+# TLS: the hub speaks HTTPS with a locally-provisioned CA. If DOSYNC_CA_CERT is
+# set, verify against it (the correct, permanent setup). If unset, fall back to
+# the system trust store — which will fail against the local CA, loudly, which
+# is better than silently skipping verification.
+_SSL_CTX = ssl.create_default_context(cafile=CA_CERT) if CA_CERT else ssl.create_default_context()
 
 PIR_GPIO  = 17   # GPIO 17 — Pin 11
 DHT_GPIO  = 4    # GPIO 4  — Pin 7
@@ -53,7 +62,7 @@ def hub_post(path: str, body: dict) -> dict:
         HUB_URL + path, data=data, headers=headers, method="POST"
     )
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=15, context=_SSL_CTX) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         log.error("HTTP %s: %s", e.code, e.read().decode()[:200])
