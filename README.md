@@ -4,9 +4,9 @@
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Protocol](https://img.shields.io/badge/protocol-v0.4-green.svg)](spec/DoSync-SPEC-v0.1.md)
-[![Version](https://img.shields.io/badge/hub-v0.3.0-blue.svg)](server.py)
+[![Version](https://img.shields.io/badge/hub-v0.4.0-blue.svg)](server.py)
 [![CI](https://github.com/giulianireg-spec/dosync-protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/giulianireg-spec/dosync-protocol/actions/workflows/ci.yml)
-[![Certification](https://img.shields.io/badge/certification-33%2F33%20Standard-orange.svg)](certify.py)
+[![Certification](https://img.shields.io/badge/certification-Standard%2033%2F33%20·%20Emergency%2044%2F44-orange.svg)](certify.py)
 [![MCP](https://img.shields.io/badge/MCP-compatible-purple.svg)](dosync/mcp_server.py)
 
 ---
@@ -160,7 +160,7 @@ PYTHONPATH=. uvicorn server:app --host 0.0.0.0 --port 47200 --reload
 | Web dashboard | ✅ |
 | API key authentication + SHA-256 audit log | ✅ |
 | Capability-based resolver | ✅ |
-| Certification CLI v0.3 — 33/33 Standard tests | ✅ |
+| Certification CLI — Standard 33/33 · Emergency 44/44 (signed reports) | ✅ |
 | Philips WiZ adapter (UDP local) | ✅ |
 | Home Assistant bridge (10 domains) | ✅ |
 | Native MCP server (Claude, ChatGPT, any LLM) | ✅ |
@@ -213,7 +213,7 @@ python3 certify.py --host <hub-ip> --port 47200 --tier standard
 
 | Language | Location | Author | Certification |
 |---|---|---|---|
-| Python (reference) | `server.py` | this project | 33/33 Standard ✅ |
+| Python (reference) | `server.py` | this project | Standard 33/33 · Emergency 44/44 ✅ |
 | Node.js (companion) | [giulianireg-spec/dosync-node](https://github.com/giulianireg-spec/dosync-node) | this project | 33/33 Standard ✅ |
 
 The Node.js implementation is a **companion** port that validates the protocol

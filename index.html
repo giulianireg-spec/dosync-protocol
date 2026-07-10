@@ -543,7 +543,7 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
 (function(){
 var TL_STEPS=[
   {id:'tl-s0',delay:300, dot:'#534AB7', time:'t=0ms',  tag:'Hub',         tagBg:'#1A1830', tagColor:'#AFA9EC', title:'Intent received',           sub:'Token validated · intent_id <b>gen:a3f9c2</b> · queued'},
-  {id:'tl-s1',delay:700, dot:'#1D9E75', time:'t=2ms',  tag:'Resolver',    tagBg:'#0A2018', tagColor:'#5DCAA5', title:'Tag index scan',            sub:'41 devices evaluated · <b>8 candidates</b> · O(tags) lookup'},
+  {id:'tl-s1',delay:700, dot:'#1D9E75', time:'t=2ms',  tag:'Resolver',    tagBg:'#0A2018', tagColor:'#5DCAA5', title:'Tag index scan',            sub:'33 devices evaluated · <b>8 candidates</b> · O(tags) lookup'},
   {id:'tl-s2',delay:1050,dot:'#EF9F27', time:'t=3ms',  tag:'Policy Engine',tagBg:'#1E1405',tagColor:'#EF9F27', title:'Emergency bypass',          sub:'urgency=emergency · <b>confirmation skipped</b> · all policies bypassed'},
   {id:'tl-s3',delay:1400,dot:'#534AB7', time:'t=4ms',  tag:'Hub',         tagBg:'#1A1830', tagColor:'#AFA9EC', title:'ActionPlan built',          sub:'8 actions · <b>parallel execution</b> · AdapterExecutor dispatched'},
   {id:'tl-s4',delay:1800,dot:'#7F77DD', time:'t=12–18ms',tag:'WiZ UDP',  tagBg:'#1A1830', tagColor:'#AFA9EC', title:'5 bulbs — full brightness', sub:'', bulbs:true},
@@ -836,7 +836,7 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
     <div class="status-grid">
       <div class="status-items">
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">REST API · WebSocket · Dashboard</span></div>
-        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Certification CLI — 33/33 tests</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Certification CLI — Standard 33/33 · Emergency 44/44</span></div>
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Philips WiZ adapter (UDP local)</span></div>
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Home Assistant bridge (10 domains)</span></div>
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Native MCP server (Claude, any LLM)</span></div>
@@ -844,6 +844,8 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Raspberry Pi 5 — autonomous 24/7</span></div>
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">dosync-node — Node.js implementation</span></div>
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Multi-hub assisted failover</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Emergency preemption — device-finality guaranteed (v0.4)</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Prometheus /metrics — zero-dep observability</span></div>
         <div class="status-item"><span class="status-badge wip">In progress</span><span class="status-item-name">Distributed state replication</span></div>
         <div class="status-item"><span class="status-badge planned">Planned</span><span class="status-item-name">BLE transport adapter</span></div>
         <div class="status-item"><span class="status-badge planned">Planned</span><span class="status-item-name">Third-party device certifications</span></div>
