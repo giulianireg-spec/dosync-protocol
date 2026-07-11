@@ -547,7 +547,7 @@ def run_standard(base: str, report: CertReport):
     ))
 
     # S11. Explainability endpoint returns scoring breakdown
-    status, body_exp = request("GET", f"{base}/v1/intents/ensure_safety/explain")
+    status, body_exp = request("GET", f"{base}/v1/intents/ensure_safety/explain?urgency=emergency")
     required_exp = ["intent", "devices_evaluated", "devices_included", "included"]
     missing_exp  = [f for f in required_exp if f not in body_exp]
     report.add(TestResult(

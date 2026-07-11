@@ -379,10 +379,18 @@ class CapabilityMatchingResolver(BaseResolver):
             actuator_bonus   = len(actuator_matched) * 12.0
             score            = tag_overlap + location_bonus + emergency_bonus + actuator_bonus
 
+            # HARD FILTER — must mirror _relevance_score exactly: when the intent
+            # resolution demands specific (non-generic) tags and the device has
+            # none of them, resolve() returns 0.0 regardless of any bonuses.
+            # explain() must report the same, or the transparency endpoint lies.
+            hard_filtered = bool(specific_tags) and not (specific_tags & device_tags)
+            if hard_filtered:
+                score = 0.0
+
             # Exclusion reason when score == 0
             if score == 0:
-                if specific_tags and not (specific_tags & device_tags):
-                    reason = f"required specific tags {specific_tags} not in device tags {device_tags}"
+                if hard_filtered:
+                    reason = f"required specific tags {sorted(specific_tags)} not in device tags {sorted(device_tags)} (hard filter — bonuses do not apply)"
                 elif not (target_tags & device_tags):
                     reason = "no tag overlap with intent resolution tags"
                 else:

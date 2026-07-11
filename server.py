@@ -751,10 +751,11 @@ async def explain_intent(
     try:
         intent_cls = IntentClass(intent_class)
     except ValueError:
-        valid = [e.value for e in IntentClass]
+        registered = [r["name"] for r in hub.db.list_intent_classes()]
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid intent class '{intent_class}'. Valid values: {valid}"
+            detail=(f"Invalid intent class name '{intent_class}' "
+                    f"(must match ^[a-z][a-z0-9_]*$). Registered classes: {registered}")
         )
 
     # Validar urgency
