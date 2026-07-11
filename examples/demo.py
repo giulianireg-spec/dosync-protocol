@@ -187,7 +187,7 @@ async def scenario_fridge_malfunction(hub: DoSyncHub, executor: SimulatedExecuto
 
     # 2. AI builds notify intent
     intent = Intent(
-        intent=IntentClass.NOTIFY_FAMILY,
+        intent=IntentClass("notify_family"),
         urgency=Urgency.WARNING,
         context={
             "trigger":    "fridge_malfunction",

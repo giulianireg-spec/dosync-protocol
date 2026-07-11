@@ -28,7 +28,6 @@ from dosync.models import (
 )
 from dosync.hub import DoSyncHub
 from dosync.executor import SimulatedExecutor
-from dosync.scheduler import DoSyncScheduler
 
 
 # ── Colores ───────────────────────────────────────────────────────────────────
@@ -325,7 +324,7 @@ async def demo_fridge(hub, executor, fast):
 
     section("IA resuelve intent: notify_family [WARNING]")
     intent = Intent(
-        intent=IntentClass.NOTIFY_FAMILY, urgency=Urgency.WARNING,
+        intent=IntentClass("notify_family"), urgency=Urgency.WARNING,
         context={"trigger":"fridge_malfunction",
                  "message":"⚠️ La heladera dejó de enfriar (18.5°C, 45 min). "
                            "Considerá mover los alimentos."},
@@ -418,7 +417,7 @@ async def demo_energy(hub, executor, fast):
 
     section("IA resuelve intent: save_energy")
     intent = Intent(
-        intent=IntentClass.SAVE_ENERGY, urgency=Urgency.INFO,
+        intent=IntentClass("save_energy"), urgency=Urgency.INFO,
         context={"trigger":"nobody_home","target_brightness":0,"target_temp":17},
     )
     result = await hub.execute_intent(intent, executor)
@@ -444,7 +443,7 @@ async def demo_laundry(hub, executor, fast):
 
     section("IA resuelve intent: remind_chore")
     intent = Intent(
-        intent=IntentClass.REMIND_CHORE, urgency=Urgency.INFO,
+        intent=IntentClass("remind_chore"), urgency=Urgency.INFO,
         context={"message":"El lavarropas terminó (algodón 60°, 95 min). "
                            "No olvides pasar la ropa al secarropas."},
     )
@@ -455,69 +454,6 @@ async def demo_laundry(hub, executor, fast):
         else: action_fail(r.device_id, r.action, r.error)
     result_line(result.success)
 
-
-async def demo_morning(hub, scheduler, executor, fast):
-    header("Escenario 6 — Buenos días · Rutina matutina")
-    print(f"  {C.DIM}07:23am. Primer movimiento del día detectado.{C.RESET}")
-    print(f"  {C.DIM}Perfil: {hub.family_profile.family_name} — "
-          f"{len(hub.family_profile.routine_morning)} acciones configuradas.{C.RESET}")
-    pause(1.5, fast)
-
-    section("Sensor emite evento: first_motion_today")
-    await hub.receive_event(DeviceEvent(
-        device_id="garage-door-01", event_id="car_arrived",
-        severity=Urgency.INFO,
-        data={"time":"07:23"},
-    ))
-    pause(0.5, fast)
-
-    section("Scheduler dispara: morning_routine")
-    profile = hub.family_profile
-    intent = Intent(
-        intent=IntentClass.MORNING_ROUTINE, urgency=Urgency.INFO,
-        context={
-            "trigger": "first_motion_today",
-            "family":  profile.family_name,
-            "actions": [{"tag":a.tag,"action_type":a.action_type,"params":a.params}
-                        for a in profile.routine_morning],
-            "message": f"Buenos días, {profile.family_name}.",
-        },
-    )
-    result = await hub.execute_intent(intent, executor)
-    divider()
-    for r in result.results:
-        if r.success: action_ok(r.device_id, r.action, r.response)
-        else: action_fail(r.device_id, r.action, r.error)
-    result_line(result.success)
-
-
-async def demo_bedtime(hub, scheduler, executor, fast):
-    header("Escenario 7 — Hora de dormir · Rutina nocturna")
-    print(f"  {C.DIM}El scheduler detecta que son las 21:30.{C.RESET}")
-    print(f"  {C.DIM}Rutina configurada: atenuar luces + bajar persianas.{C.RESET}")
-    pause(1.5, fast)
-
-    scheduler.simulate_time(21, 30)
-    section("Scheduler dispara: bedtime_routine (21:30)")
-    profile = hub.family_profile
-    intent = Intent(
-        intent=IntentClass.BEDTIME_ROUTINE, urgency=Urgency.INFO,
-        context={
-            "trigger": "scheduled_bedtime",
-            "family":  profile.family_name,
-            "actions": [{"tag":a.tag,"action_type":a.action_type,"params":a.params}
-                        for a in profile.routine_bedtime],
-        },
-    )
-    result = await hub.execute_intent(intent, executor)
-    divider()
-    for r in result.results:
-        if r.success: action_ok(r.device_id, r.action, r.response)
-        else: action_fail(r.device_id, r.action, r.error)
-    result_line(result.success)
-
-
-# ── Audit log final ───────────────────────────────────────────────────────────
 
 def show_audit(hub):
     header("Audit Log — registro tamper-evident")
@@ -557,14 +493,13 @@ def show_audit(hub):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 SCENARIOS = {
     "fall":    demo_fall,
     "fridge":  demo_fridge,
     "smoke":   demo_smoke,
     "energy":  demo_energy,
     "laundry": demo_laundry,
-    "morning": demo_morning,
-    "bedtime": demo_bedtime,
 }
 
 async def main():
@@ -588,11 +523,9 @@ Ejemplos:
     # Setup
     hub       = DoSyncHub(db_path=":memory:")   # demo usa DB en memoria
     executor  = SimulatedExecutor(failure_rate=0.0)
-    scheduler = DoSyncScheduler(hub)
 
     profile = build_family_profile()
     hub.set_family_profile(profile)
-    scheduler.load_profile(profile)
 
     for device in build_all_devices():
         hub.register_device(device)
@@ -605,7 +538,7 @@ Ejemplos:
     print("  ██   ██ ██    ██      ██    ██    ██  ██ ██ ██      ")
     print("  ██████   ██████  ███████    ██    ██   ████  ██████ ")
     print(f"{C.RESET}")
-    print(f"  {C.BOLD}Protocol v0.1{C.RESET}  ·  "
+    print(f"  {C.BOLD}Protocol v0.4{C.RESET}  ·  "
           f"{C.DIM}github.com/giulianireg-spec/dosync-protocol{C.RESET}")
     print(f"  {C.DIM}{len(hub.registry.all())} dispositivos registrados  ·  "
           f"Familia: {profile.family_name}  ·  "
@@ -616,10 +549,7 @@ Ejemplos:
     # Correr escenarios
     if args.scenario:
         fn = SCENARIOS[args.scenario]
-        if args.scenario in ("morning", "bedtime"):
-            await fn(hub, scheduler, executor, args.fast)
-        else:
-            await fn(hub, executor, args.fast)
+        await fn(hub, executor, args.fast)
     else:
         await demo_fall(hub, executor, args.fast)
         pause(2, args.fast)
@@ -631,16 +561,12 @@ Ejemplos:
         pause(2, args.fast)
         await demo_laundry(hub, executor, args.fast)
         pause(2, args.fast)
-        await demo_morning(hub, scheduler, executor, args.fast)
-        pause(2, args.fast)
-        await demo_bedtime(hub, scheduler, executor, args.fast)
-        pause(2, args.fast)
         show_audit(hub)
 
     # Footer
     print(f"\n{C.BOLD}{C.BLUE}{'═' * 62}{C.RESET}")
-    print(f"  {C.BOLD}DoSync Protocol v0.1{C.RESET}  ·  Apache 2.0  ·  "
-          f"{C.DIM}dosync.io{C.RESET}")
+    print(f"  {C.BOLD}DoSync Protocol v0.4{C.RESET}  ·  Apache 2.0  ·  "
+          f"{C.DIM}dosync.dev{C.RESET}")
     print(f"{C.BOLD}{C.BLUE}{'═' * 62}{C.RESET}\n")
 
 

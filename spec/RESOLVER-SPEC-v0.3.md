@@ -1,6 +1,6 @@
 # DoSync Resolver Interface — v0.3 Specification
 
-**Status:** Draft  
+**Status:** Current — supersedes v0.2 (see decision trail in repo history)  
 **Date:** June 2026  
 **Author:** Rodrigo Giuliani  
 **Contact:** rgiuliani@dosync.dev

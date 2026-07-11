@@ -89,7 +89,7 @@ python3 /tmp/benchmark_concurrent.py
 - Timeout per intent: 20s
 - Gap between rounds: 300ms
 
-Raw results: [`benchmark_concurrent.json`](../benchmark_concurrent.json)
+Raw results: [`benchmarks/benchmark_concurrent.json`](../benchmarks/benchmark_concurrent.json)
 
 ---
 

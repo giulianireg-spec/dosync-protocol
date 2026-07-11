@@ -430,7 +430,7 @@ class FamilyProfile:
     # Morning routine — triggered by the first motion detection of the day
     routine_morning: list[RoutineAction] = field(default_factory=list)
 
-    # Bedtime routine — triggered by the scheduler
+    # Bedtime routine — time-based; fired by an external scheduler client
     routine_bedtime: list[RoutineAction] = field(default_factory=list)
     bedtime_hour:   int = 21
     bedtime_minute: int = 30

@@ -105,7 +105,7 @@ The change from 8 to 12 is correct semantically but produces no measurable F1 ch
 ## Methodology
 
 ```bash
-python3 scoring_sensitivity.py
+python3 tools/scoring_sensitivity.py
 ```
 
 - Ground truth: expert knowledge of 38-device production registry

@@ -202,7 +202,7 @@ async def scenario_nobody_home(hub: DoSyncHub, executor: SimulatedExecutor):
 
     # 3. La IA construye el intent de ahorro de energia
     intent = Intent(
-        intent=IntentClass.SAVE_ENERGY,
+        intent=IntentClass("save_energy"),
         urgency=Urgency.INFO,
         context={
             "trigger":      "nobody_home",
@@ -243,7 +243,7 @@ async def scenario_laundry_done(hub: DoSyncHub, executor: SimulatedExecutor):
 
     # La IA notifica a la familia
     intent = Intent(
-        intent=IntentClass.REMIND_CHORE,
+        intent=IntentClass("remind_chore"),
         urgency=Urgency.INFO,
         context={
             "trigger":  "cycle_complete",

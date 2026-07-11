@@ -112,11 +112,11 @@ The resolver adds less than 1% overhead to total execution time in any real depl
 
 ```bash
 # Run from repo root (no hub required)
-python3 benchmark_resolver.py
+python3 benchmarks/benchmark_resolver.py
 
 # Against a live hub
-python3 benchmark_resolver.py --hub https://192.168.100.109:47200 --token <token>
+python3 benchmarks/benchmark_resolver.py --hub https://192.168.100.109:47200 --token <token>
 ```
 
-Source: [`benchmark_resolver.py`](../benchmark_resolver.py)  
-Raw results: [`benchmark_results_real.json`](../benchmark_results_real.json)
+Source: [`benchmarks/benchmark_resolver.py`](../benchmarks/benchmark_resolver.py)  
+Raw results: [`benchmarks/benchmark_results_real.json`](../benchmarks/benchmark_results_real.json)

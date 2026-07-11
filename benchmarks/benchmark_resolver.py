@@ -448,11 +448,11 @@ def main():
     for ic_name, v in sorted(pi.items(), key=lambda x: -x[1]["mean_ms"]):
         print(f"  {ic_name:<28} {v['mean_ms']:>10.4f}  {v['mean_actions']:>12.1f}  {v['samples']:>8}")
 
-    with open("benchmark_results_real.json", "w") as f:
+    with open("benchmarks/benchmark_results_real.json", "w") as f:
         json.dump(results, f, indent=2)
 
     print(f"\n{'='*64}")
-    print(f"  Resultados guardados: benchmark_results_real.json")
+    print(f"  Resultados guardados: benchmarks/benchmark_results_real.json")
     print(f"{'='*64}\n")
 
 if __name__ == "__main__":
