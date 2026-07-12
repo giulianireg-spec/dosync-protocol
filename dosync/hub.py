@@ -195,11 +195,19 @@ class ExternalResolver(BaseResolver):
 
     TIMEOUT_S = 0.5  # 500ms — spec requirement for non-LLM resolvers
 
-    def __init__(self, registry: 'CapabilityRegistry', url: str, hub_id: str = ""):
+    def __init__(self, registry: 'CapabilityRegistry', url: str, hub_id: str = "",
+                 hub: "DoSyncHub | None" = None):
         super().__init__(registry)
         self._url     = url.rstrip("/") + "/resolve"
         self._hub_id  = hub_id
+        # Wiring contract (regression: tests/test_resolution_wiring.py): every
+        # resolver that reads intent resolutions needs a hub handle (_hub) for
+        # DB access — INCLUDING the local fallback. An unwired fallback returns
+        # empty resolutions for every intent, which is exactly the silent
+        # failure that gutted production explain()/fallback until 2026-07-11.
+        self._hub = hub
         self._fallback = CapabilityMatchingResolver(registry)
+        self._fallback._hub = hub
         log.info("ExternalResolver configured: %s (fallback: CapabilityMatchingResolver)", self._url)
 
     def resolve(self, intent: Intent) -> ActionPlan:

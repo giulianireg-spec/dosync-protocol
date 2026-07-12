@@ -56,3 +56,22 @@ def test_tag_matched_device_resolves_without_emergency():
     plan = hub.resolver.resolve(intent)
     assert any(a.device_id == "lock-1" for a in plan.actions), (
         "lock did not resolve for control_access — resolution wiring broken")
+
+
+def test_external_resolver_and_its_fallback_are_wired():
+    """Regression (2026-07-11, second door): server.py replaces hub.resolver with
+    an ExternalResolver whose local fallback did NOT receive the hub handle —
+    every production explain() and every fallback resolution ran with empty
+    resolutions. Both the wrapper and its fallback must read real resolutions."""
+    from dosync.hub import ExternalResolver
+    hub = _hub()
+    ext = ExternalResolver(hub.registry, "http://resolver.invalid:9", hub_id="t", hub=hub)
+    intent = Intent(intent_id="t", intent=IntentClass("control_access"),
+                    urgency=Urgency.ALERT, context={})
+    # ExternalResolver itself delegates resolution to the external service
+    # (BaseResolver — no _get_resolution); the DB-reading path is its fallback.
+    assert ext._fallback._get_resolution(intent).get("tags") == ["lock"]
+    # explain flows through the fallback: it must show the real breakdown,
+    # not the read-only empty-resolution branch
+    exp = ext.explain(intent)
+    assert exp["resolution_tags"] == ["lock"]
