@@ -75,3 +75,5 @@ def test_external_resolver_and_its_fallback_are_wired():
     # not the read-only empty-resolution branch
     exp = ext.explain(intent)
     assert exp["resolution_tags"] == ["lock"]
+    # the wrapper must not clobber the fallback's semantic note
+    assert "resolver_note" in exp and "external service" in exp["resolver_note"]

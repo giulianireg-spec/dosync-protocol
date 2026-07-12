@@ -308,7 +308,10 @@ class ExternalResolver(BaseResolver):
         result = self._fallback.explain(intent)
         result["resolver"] = "ExternalResolver"
         result["external_url"] = self._url
-        result["note"] = (
+        # Preserve the fallback's semantic note (e.g. the read-only status-query
+        # explanation) — clobbering it hid WHY actuators don't fire. The wrapper
+        # context goes in its own field instead.
+        result["resolver_note"] = (
             "Scoring shown is from local CapabilityMatchingResolver (fallback). "
             "Actual resolution is delegated to the external service."
         )
