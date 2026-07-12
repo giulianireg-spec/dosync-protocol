@@ -47,6 +47,13 @@ FIXTURE_DIR = Path(__file__).resolve().parent.parent / "benchmarks" / "fixtures"
 def load_registry(path: Path, hub: DoSyncHub) -> None:
     data = json.loads(path.read_text())
     for d in data["devices"]:
+        # Accept BOTH shapes: the fixture shape (sensors/actuators at top level)
+        # and the live API shape (GET /v1/devices nests them under
+        # "capabilities") — so a raw export of the production registry works
+        # as-is, with no transformation step to get wrong.
+        caps = d.get("capabilities") or {}
+        sensors_raw = d.get("sensors") or caps.get("sensors") or []
+        actuators_raw = d.get("actuators") or caps.get("actuators") or []
         manifest = CapabilityManifest(
             device_id=d["device_id"],
             device_name=d.get("device_name", d["device_id"]),
@@ -57,10 +64,10 @@ def load_registry(path: Path, hub: DoSyncHub) -> None:
             tags=list(d.get("tags", [])),
             sensors=[SensorSpec(id=sn["id"], type=sn["type"],
                                 description=sn.get("description", ""))
-                     for sn in d.get("sensors", [])],
+                     for sn in sensors_raw],
             actuators=[ActuatorSpec(id=a["id"], type=a["type"],
                                     description=a.get("description", ""))
-                       for a in d.get("actuators", [])],
+                       for a in actuators_raw],
             events=[],
             emergency_capable=bool(d.get("emergency_capable", False)),
             cert_tier=d.get("cert_tier", "standard"),
