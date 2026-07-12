@@ -180,16 +180,11 @@ def test_relevance_scores_are_non_negative():
 # ── Runner ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    tests = [
-        test_specific_tag_filter,
-        test_tag_overlap_increases_score,
-        test_emergency_bonus_increases_score,
-        test_location_bonus_increases_score,
-        test_all_emergency_capable_in_emergency_plan,
-        test_sensor_excluded_from_actuator_plan,
-        test_empty_registry_returns_empty_plan,
-        test_relevance_scores_are_non_negative,
-    ]
+    # Auto-discovery: a manual list silently breaks when a test is renamed
+    # (it broke CI runs #264-#269 on 2026-07-12). Pytest discovers these
+    # automatically; this runner now does the same.
+    tests = [v for k, v in sorted(globals().items())
+             if k.startswith("test_") and callable(v)]
     passed = failed = 0
     for t in tests:
         try:
