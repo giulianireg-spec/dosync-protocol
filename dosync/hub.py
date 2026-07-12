@@ -327,10 +327,17 @@ class CapabilityMatchingResolver(BaseResolver):
         # Tag overlap
         target_tags = set(resolution.get("tags", []))
         device_tags = set(device.tags)
-        # If resolution uses specific non-generic tags, require exact match
+        # Hard-filter semantics (2026-07-11 panel decision, F3b):
+        # - Resolution with ONLY specific (non-generic) tags -> the specific tags
+        #   are a requirement: no overlap means the device is out (score 0).
+        # - MIXED resolution (generic + specific) -> the generic tags define who
+        #   is invited; specific tags are a boost, not a gate. The previous
+        #   behavior gated mixed resolutions too, which made alert_anomaly
+        #   exclude the very sensors/displays its own generic tags invited.
         generic_tags = {"light", "climate", "communication", "sensor", "appliance", "display"}
         specific_tags = target_tags - generic_tags
-        if specific_tags and not (specific_tags & device_tags):
+        resolution_is_all_specific = bool(specific_tags) and not (target_tags & generic_tags)
+        if resolution_is_all_specific and not (specific_tags & device_tags):
             return 0.0
         score += len(target_tags & device_tags) * 10.0
 
@@ -366,6 +373,44 @@ class CapabilityMatchingResolver(BaseResolver):
         included = []
         excluded = []
 
+        # Empty resolution = READ-ONLY status query — mirrors resolve() (F4a):
+        # the plan reads sensors on every sensing device; actuators never fire.
+        if not target_tags and not target_actuators:
+            for device in self.registry.all():
+                if device.sensors:
+                    included.append({
+                        "device_id":   device.device_id,
+                        "device_name": device.device_name,
+                        "device_tags": sorted(device.tags),
+                        "score":       1.0,
+                        "score_breakdown": {"read_only_status_query": True,
+                                            "sensors": [sn.id for sn in device.sensors]},
+                        "emergency_capable": device.emergency_capable,
+                        "included": True,
+                    })
+                else:
+                    excluded.append({
+                        "device_id":   device.device_id,
+                        "device_name": device.device_name,
+                        "device_tags": sorted(device.tags),
+                        "reason":      "read-only status query — device has no sensors to read",
+                        "included":    False,
+                    })
+            return {
+                "intent":              intent.intent.value,
+                "urgency":             intent.urgency.value,
+                "context":             intent.context,
+                "resolution_tags":     [],
+                "resolution_actuators": [],
+                "devices_evaluated":   len(included) + len(excluded),
+                "devices_included":    len(included),
+                "devices_excluded":    len(excluded),
+                "included":            included,
+                "excluded":            excluded,
+                "note": ("Empty resolution: this intent is a read-only status query. "
+                         "The plan is read_sensors on every sensing device; actuators never fire."),
+            }
+
         for device in self.registry.all():
             device_tags      = set(device.tags)
             device_actuators = {a.type for a in device.actuators}
@@ -379,13 +424,21 @@ class CapabilityMatchingResolver(BaseResolver):
             actuator_bonus   = len(actuator_matched) * 12.0
             score            = tag_overlap + location_bonus + emergency_bonus + actuator_bonus
 
-            # HARD FILTER — must mirror _relevance_score exactly: when the intent
-            # resolution demands specific (non-generic) tags and the device has
-            # none of them, resolve() returns 0.0 regardless of any bonuses.
-            # explain() must report the same, or the transparency endpoint lies.
-            hard_filtered = bool(specific_tags) and not (specific_tags & device_tags)
+            # HARD FILTER — must mirror _relevance_score exactly (F3b semantics):
+            # the gate applies only when the resolution has ONLY specific tags;
+            # mixed resolutions treat specific tags as boost, not requirement.
+            resolution_is_all_specific = bool(specific_tags) and not (target_tags & generic_tags)
+            hard_filtered = resolution_is_all_specific and not (specific_tags & device_tags)
             if hard_filtered:
                 score = 0.0
+
+            # Emergency force-inclusion — mirrors resolve() (F2b): emergency_capable
+            # devices always participate in an emergency response, with their full
+            # capability set, even when tags/actuators match nothing.
+            forced_emergency = (score == 0.0 and intent.urgency == Urgency.EMERGENCY
+                                and device.emergency_capable)
+            if forced_emergency:
+                score = 50.0
 
             # Exclusion reason when score == 0
             if score == 0:
@@ -415,6 +468,7 @@ class CapabilityMatchingResolver(BaseResolver):
                         "emergency_bonus":  emergency_bonus,
                         "actuator_match":   actuator_bonus,
                         "matched_actuators": sorted(actuator_matched),
+                        "forced_emergency": forced_emergency,
                     },
                     "emergency_capable": device.emergency_capable,
                     "included": True,
@@ -512,7 +566,12 @@ class CapabilityMatchingResolver(BaseResolver):
         Falls back to empty resolution if intent class is not registered.
         """
         try:
-            hub = getattr(self, "hub", None)
+            # StateAwareResolver stores the hub as self._hub; some external/custom
+            # resolvers may expose it publicly as self.hub. Check both — this line
+            # being wrong ("hub" only) silently emptied EVERY intent resolution in
+            # production until 2026-07-11: the resolver ran purely on the
+            # emergency-capable bonus. Regression: tests/test_resolution_wiring.py
+            hub = getattr(self, "_hub", None) or getattr(self, "hub", None)
             db  = getattr(hub, "db", None)
             if db:
                 name = str(intent.intent)
@@ -559,10 +618,25 @@ class CapabilityMatchingResolver(BaseResolver):
             # O(|target_tags| + |candidates|) with the inverted index.
             candidates = self.registry.find_by_tags(list(target_tags))
         else:
-            # Intents with no resolution tags (e.g. report_status) select all devices.
-            # This is intentional — report_status is a status query across the
-            # entire deployment, not a targeted action.
-            candidates = self.registry.all()
+            # Empty resolution (e.g. report_status) = a READ-ONLY status query
+            # across the deployment (2026-07-11 panel decision, F4a): the plan is
+            # read_sensors on every device that senses — actuators never fire on
+            # a status query. Note: before this, the "all devices as candidates"
+            # branch was dead code — every candidate scored 0 and was dropped, so
+            # report_status had never produced a single action in production.
+            read_actions = [
+                DeviceAction(
+                    device_id=d.device_id,
+                    action="read_sensors",
+                    params={"sensor_ids": [sn.id for sn in d.sensors]},
+                )
+                for d in self.registry.all() if d.sensors
+            ]
+            return ActionPlan(
+                intent_id=intent.intent_id,
+                actions=read_actions,
+                urgency=intent.urgency,
+            )
 
         # Emergency intents: always include emergency_capable devices as candidates,
         # even if their tags don't overlap with the intent's resolution tags.
@@ -584,16 +658,30 @@ class CapabilityMatchingResolver(BaseResolver):
         scored.sort(key=lambda x: x[0], reverse=True)
 
         # Emergency: always include ALL emergency-capable devices
+        forced_ids: set = set()
         if intent.urgency == Urgency.EMERGENCY:
             scored_ids = {d.device_id for _, d in scored}
             for device in self.registry.find_emergency_capable():
                 if device.device_id not in scored_ids:
                     scored.append((50.0, device))
+                    forced_ids.add(device.device_id)
 
-        # Build actions
+        # Build actions. F2b (2026-07-11 panel decision): at EMERGENCY urgency,
+        # an emergency_capable device whose resolution-scoped build yields ZERO
+        # actions falls back to its FULL capability set — a safety device that
+        # shows up and does nothing is worse than one that acts broadly. This
+        # covers both force-included devices and tag/bonus-scored devices whose
+        # actuator types simply don't appear in the resolution list. Tag and
+        # type devices correctly (TAG-VOCABULARY.md) for precise, resolution-
+        # scoped behavior instead. NOTE: the fallback builds every actuator the
+        # device declares — a deliberately blunt instrument for emergencies.
         all_actions: list[DeviceAction] = []
         for score, device in scored:
             actions = self._build_actions_for_device(device, intent, resolution)
+            if (not actions and intent.urgency == Urgency.EMERGENCY
+                    and device.emergency_capable):
+                actions = self._build_actions_for_device(
+                    device, intent, {**resolution, "actuators": []})
             for a in actions:
                 a.relevance_score = score
             all_actions.extend(actions)

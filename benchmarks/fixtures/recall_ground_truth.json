@@ -1,0 +1,59 @@
+{
+  "_comment": "Expected devices per universal intent for the fixture registry. wiz-mistagged-01 IS expected for ensure_safety (it is physically an emergency-capable light) \u2014 the benchmark must report it as a miss caused by its tags.",
+  "cases": [
+    {
+      "intent": "ensure_safety",
+      "urgency": "emergency",
+      "context": {},
+      "expected": [
+        "wiz-living-01",
+        "wiz-bedroom-01",
+        "wiz-mistagged-01",
+        "notifier-sms-01",
+        "lock-front-01",
+        "tv-display-01"
+      ],
+      "_note": "tv-display-01 belongs here: communication tag + notify actuator (family notification on screen)"
+    },
+    {
+      "intent": "alert_anomaly",
+      "urgency": "alert",
+      "context": {},
+      "expected": [
+        "notifier-sms-01",
+        "tv-display-01",
+        "pir-hall-01",
+        "dht-living-01"
+      ]
+    },
+    {
+      "intent": "control_access",
+      "urgency": "alert",
+      "context": {},
+      "expected": [
+        "lock-front-01"
+      ]
+    },
+    {
+      "intent": "report_status",
+      "urgency": "info",
+      "context": {},
+      "expected": [
+        "pir-hall-01",
+        "dht-living-01"
+      ],
+      "_note": "F4a: read-only status query \u2014 the plan reads sensors; actuators never fire"
+    },
+    {
+      "intent": "notify",
+      "urgency": "info",
+      "context": {
+        "message": "test"
+      },
+      "expected": [
+        "notifier-sms-01",
+        "tv-display-01"
+      ]
+    }
+  ]
+}

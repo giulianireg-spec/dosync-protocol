@@ -147,7 +147,7 @@ class DoSyncDB:
         These are the only intents defined at the protocol level — valid in any domain."""
         import json, time
         universals = [
-            ("ensure_safety",  "emergency", ["emergency","alarm","communication","notification"], ["alarm","notify","call"],    "Safety emergency — protect people and property",    "universal", 1),
+            ("ensure_safety",  "emergency", ["emergency","alarm","communication","notification"], ["alarm","notify","call","turn_on","set_brightness"], "Safety emergency — protect people and property",    "universal", 1),
             ("alert_anomaly",  "alert",     ["communication","notification","sensor"],            ["notify","call"],            "Unexpected condition detected — investigate",        "universal", 1),
             ("control_access", "alert",     ["lock"],                                             ["lock","unlock"],            "Manage physical access to a space",                 "universal", 1),
             ("report_status",  "info",      [],                                                   [],                          "Generate a status report of the environment",        "universal", 1),
@@ -155,13 +155,22 @@ class DoSyncDB:
         ]
         now = time.time()
         for name, urgency, tags, actuators, desc, domain, is_univ in universals:
-            exists = self._conn.execute(
-                "SELECT 1 FROM intent_classes WHERE name = ?", (name,)
+            row = self._conn.execute(
+                "SELECT resolution_tags, resolution_actuators FROM intent_classes WHERE name = ?", (name,)
             ).fetchone()
-            if not exists:
+            if not row:
                 self._conn.execute(
                     "INSERT INTO intent_classes (name,urgency,resolution_tags,resolution_actuators,description,domain,is_universal,created_at) VALUES (?,?,?,?,?,?,?,?)",
                     (name, urgency, json.dumps(tags), json.dumps(actuators), desc, domain, is_univ, now)
+                )
+            elif row[0] != json.dumps(tags) or row[1] != json.dumps(actuators):
+                # Universal intent classes are protocol-defined, not user data:
+                # reconcile existing deployments to the canonical definition on
+                # startup (custom/domain classes are never touched). Without this,
+                # a seed fix would never reach an already-initialized DB.
+                self._conn.execute(
+                    "UPDATE intent_classes SET urgency=?, resolution_tags=?, resolution_actuators=?, description=? WHERE name=? AND is_universal=1",
+                    (urgency, json.dumps(tags), json.dumps(actuators), desc, name)
                 )
         self._conn.commit()
 

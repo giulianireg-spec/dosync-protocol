@@ -1,0 +1,173 @@
+{
+  "_comment": "Labeled fixture registry for the recall benchmark. Modeled on the production deployment. wiz-mistagged-01 deliberately carries the bad production tags (smart-plug, wiz) instead of TAG-VOCABULARY ones \u2014 the benchmark must detect and explain that miss.",
+  "devices": [
+    {
+      "device_id": "wiz-living-01",
+      "device_name": "Living Light 1",
+      "category": "actuator",
+      "tags": [
+        "light",
+        "living-room",
+        "emergency"
+      ],
+      "emergency_capable": true,
+      "actuators": [
+        {
+          "id": "p",
+          "type": "light",
+          "description": "on/off"
+        },
+        {
+          "id": "b",
+          "type": "set_brightness",
+          "description": "dim"
+        }
+      ]
+    },
+    {
+      "device_id": "wiz-bedroom-01",
+      "device_name": "Bedroom Light",
+      "category": "actuator",
+      "tags": [
+        "light",
+        "bedroom",
+        "emergency"
+      ],
+      "emergency_capable": true,
+      "actuators": [
+        {
+          "id": "p",
+          "type": "light",
+          "description": "on/off"
+        }
+      ]
+    },
+    {
+      "device_id": "wiz-mistagged-01",
+      "device_name": "Mistagged Light",
+      "category": "actuator",
+      "tags": [
+        "smart-plug",
+        "wiz"
+      ],
+      "emergency_capable": true,
+      "actuators": [
+        {
+          "id": "p",
+          "type": "light",
+          "description": "on/off"
+        }
+      ]
+    },
+    {
+      "device_id": "notifier-sms-01",
+      "device_name": "SMS Notifier",
+      "category": "communication",
+      "tags": [
+        "communication",
+        "notification"
+      ],
+      "emergency_capable": true,
+      "actuators": [
+        {
+          "id": "n",
+          "type": "notify",
+          "description": "sms"
+        },
+        {
+          "id": "c",
+          "type": "call",
+          "description": "voice"
+        }
+      ]
+    },
+    {
+      "device_id": "tv-display-01",
+      "device_name": "Living TV",
+      "category": "actuator",
+      "tags": [
+        "display",
+        "living-room",
+        "communication"
+      ],
+      "emergency_capable": false,
+      "actuators": [
+        {
+          "id": "n",
+          "type": "notify",
+          "description": "on-screen"
+        },
+        {
+          "id": "d",
+          "type": "display",
+          "description": "show"
+        }
+      ]
+    },
+    {
+      "device_id": "lock-front-01",
+      "device_name": "Front Door Lock",
+      "category": "actuator",
+      "tags": [
+        "lock",
+        "entrance"
+      ],
+      "emergency_capable": true,
+      "actuators": [
+        {
+          "id": "l",
+          "type": "lock",
+          "description": "lock"
+        },
+        {
+          "id": "u",
+          "type": "unlock",
+          "description": "unlock"
+        }
+      ]
+    },
+    {
+      "device_id": "pir-hall-01",
+      "device_name": "Hall PIR",
+      "category": "sensor",
+      "tags": [
+        "sensor",
+        "motion",
+        "hall"
+      ],
+      "emergency_capable": false,
+      "actuators": [],
+      "sensors": [
+        {
+          "id": "motion",
+          "type": "motion",
+          "description": "PIR motion"
+        }
+      ]
+    },
+    {
+      "device_id": "dht-living-01",
+      "device_name": "Living DHT22",
+      "category": "sensor",
+      "tags": [
+        "sensor",
+        "climate",
+        "living-room"
+      ],
+      "emergency_capable": false,
+      "actuators": [],
+      "sensors": [
+        {
+          "id": "temp",
+          "type": "temperature",
+          "description": "C"
+        },
+        {
+          "id": "hum",
+          "type": "humidity",
+          "description": "%"
+        }
+      ]
+    }
+  ]
+}

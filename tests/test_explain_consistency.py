@@ -20,13 +20,15 @@ def _device(tags, emergency=True):
     )
 
 
-def _setup(device_tags, resolution):
+def _setup(device_tags, resolution, urgency=Urgency.ALERT):
+    # ALERT by default: isolates the hard filter from the emergency machinery
+    # (force-inclusion + full-capability fallback), which has its own tests.
     reg = CapabilityRegistry()
     reg.register(_device(device_tags))
     r = CapabilityMatchingResolver(reg)
     r._get_resolution = lambda intent: resolution
     intent = Intent(intent_id="i1", intent=IntentClass("control_access"),
-                    urgency=Urgency.EMERGENCY, context={})
+                    urgency=urgency, context={})
     return r, intent
 
 
@@ -59,3 +61,17 @@ def test_generic_tags_only_no_hard_filter():
     r, intent = _setup(["light"], {"tags": ["light"], "actuators": ["turn_on"]})
     in_plan, in_explain, _ = _agree(r, intent)
     assert in_plan is True and in_explain is True
+
+
+def test_emergency_forces_inclusion_in_both():
+    """F2b/F5: at EMERGENCY, an emergency_capable device that fails the hard
+    filter is force-included by resolve (full capability set) and explain must
+    report the same — consistency in the inclusion direction too."""
+    r, intent = _setup(["light", "living-room"],
+                       {"tags": ["security", "lock"], "actuators": ["lock"]},
+                       urgency=Urgency.EMERGENCY)
+    in_plan, in_explain, exp = _agree(r, intent)
+    assert in_plan is True, "resolve must force-include emergency_capable devices"
+    assert in_explain is True, "explain must mirror the emergency force-inclusion"
+    entry = next(d for d in exp["included"] if d["device_id"] == "dev-x")
+    assert entry["score_breakdown"].get("forced_emergency") is True

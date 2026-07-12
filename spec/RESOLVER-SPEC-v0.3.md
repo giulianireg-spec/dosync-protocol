@@ -339,6 +339,31 @@ The default resolver. Scores every registered device against the intent using:
 
 Devices with score > 0 are included in the action plan.
 
+#### Normative semantics (rev. 2026-07-11)
+
+1. **Specific-tag gate — all-specific resolutions only.** Resolution tags are
+   either *generic* (`light`, `climate`, `communication`, `sensor`, `appliance`,
+   `display`) or *specific* (everything else). If a resolution contains ONLY
+   specific tags, a device sharing none of them is excluded regardless of any
+   bonuses (the tags are a requirement). If the resolution MIXES generic and
+   specific tags, the generic tags define who participates and the specific
+   tags act as a ranking boost, not a gate.
+2. **Emergency full-capability fallback.** At `emergency` urgency, every
+   `emergency_capable` device participates in the response. If its
+   resolution-scoped action build yields zero actions (its actuator types do
+   not appear in the resolution), it falls back to its **full capability set**
+   — a safety device that shows up and does nothing is worse than one that
+   acts broadly. Correct tagging (see TAG-VOCABULARY.md) yields precise,
+   resolution-scoped behavior instead.
+3. **Empty resolution = read-only status query.** An intent whose resolution
+   has no tags and no actuators (e.g. `report_status`) resolves to
+   `read_sensors` actions on every device that declares sensors. Actuators
+   never fire on a status query.
+
+The `/v1/intents/{class}/explain` endpoint MUST mirror these semantics exactly
+(including the emergency force-inclusion, reported with
+`score_breakdown.forced_emergency = true`).
+
 **Strengths:** Fast, deterministic, no external dependencies. Tag index reduces candidate evaluation by up to 97% for specific intents (v0.3).  
 **Limitations:** No temporal context, no learned patterns
 

@@ -59,19 +59,23 @@ def make_hub():
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
-def test_specific_tag_filter():
-    """Devices without required specific tags are excluded from the plan."""
+def test_specific_tag_boost_in_mixed_resolution():
+    """F3b (2026-07-11): t_safety's resolution ["emergency","light"] is MIXED
+    (generic "light" + specific "emergency"). Mixed resolutions do NOT gate:
+    the generic tag invites every light; the specific tag is a boost that ranks
+    correctly-tagged devices above the rest. (The old behavior gated mixed
+    resolutions, which made intents exclude the very devices their own generic
+    tags invited — see tests/test_resolver_semantics.py.)"""
     _, resolver = make_hub()
     intent = Intent(intent=IntentClass("t_safety"), urgency=Urgency.INFO, context={})
     plan = resolver.resolve(intent)
     device_ids = {a.device_id for a in plan.actions}
+    scores = {a.device_id: a.relevance_score for a in plan.actions}
 
-    # light-entrance has emergency_capable=True but lacks the "emergency" TAG
-    # Tag filter applies at non-emergency urgency — only EMERGENCY urgency bypasses it
-    assert "light-emg"      in device_ids,     "device with 'emergency' tag must be included"
-    assert "light-normal"   not in device_ids, "device without specific 'emergency' tag must be excluded"
-    assert "sensor-pir"     not in device_ids, "sensor-only device must not appear in actuator plan"
-    assert "light-entrance" not in device_ids, "emergency_capable without 'emergency' TAG excluded at INFO urgency"
+    assert "light-emg"    in device_ids, "device with 'emergency' tag must be included"
+    assert "light-normal" in device_ids, "generic 'light' overlap participates (mixed resolution: no gate)"
+    assert scores["light-emg"] > scores["light-normal"], "specific tag must rank higher (boost)"
+    assert "sensor-pir" not in device_ids, "no tag overlap -> excluded"
 
 
 def test_tag_overlap_increases_score():
