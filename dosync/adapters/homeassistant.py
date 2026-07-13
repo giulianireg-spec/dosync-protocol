@@ -54,7 +54,7 @@ log = logging.getLogger("dosync.adapters.ha")
 HA_DOMAIN_MAP = {
     "light": {
         "category": DeviceCategory.HYBRID,
-        "tags":      ["light", "climate"],
+        "tags":      ["light"],
         "actuators": [
             ActuatorSpec("turn_on",        "turn_on",        "Encender"),
             ActuatorSpec("turn_off",       "turn_off",       "Apagar"),
@@ -81,11 +81,18 @@ HA_DOMAIN_MAP = {
             SensorSpec("state",      "boolean",  "Encendida/apagada"),
             SensorSpec("brightness", "integer",  "Brillo actual", unit="%"),
         ],
-        "emergency_capable": True,
+        # Bridged devices reach DoSync through the HA hop: an emergency response
+        # should rely on natively-integrated devices, not on a bridge dependency.
+        # Deployments that accept the dependency can override per device after
+        # registration. (2026-07-12 — operator benchmark finding: the Ambilight
+        # was force-included in emergencies because of this default.)
+        "emergency_capable": False,
     },
     "switch": {
         "category": DeviceCategory.ACTUATOR,
-        "tags":      ["smart-plug", "appliance"],
+        # "smart-plug" is a deprecated vendor-ish tag (TAG-VOCABULARY); the
+        # native adapters stopped emitting it — the HA map lagged behind.
+        "tags":      ["appliance"],
         "actuators": [
             ActuatorSpec("turn_on",  "turn_on",  "Encender"),
             ActuatorSpec("turn_off", "turn_off", "Apagar"),
