@@ -144,3 +144,23 @@ if __name__ == "__main__":
             failed += 1
     print(f"\n{passed}/{passed+failed} adapter tests passed.")
     sys.exit(1 if failed else 0)
+
+
+def test_ha_bridge_skips_all_wiz_entities():
+    """Regression (2026-07-12): the WiZ filter only skipped power sub-sensors,
+    so light.wiz_rgbw_tunable_* entities were imported as ha-light-wiz_* —
+    duplicating all 10 natively-registered WiZ bulbs (registry jumped 30->40).
+    Every WiZ entity must be skipped; devices with a native adapter are never
+    re-imported through the bridge."""
+    from dosync.adapters.homeassistant import HABridge
+    bridge = HABridge.__new__(HABridge)  # no I/O; we only exercise _state_to_manifest
+    bridge._url = "http://localhost:8123"  # referenced when building a manifest
+    for eid in ("light.wiz_rgbw_tunable_ca6528",
+                "sensor.wiz_rgbw_tunable_ca6528_power",
+                "switch.wiz_plug_living"):
+        m = bridge._state_to_manifest({"entity_id": eid, "attributes": {}, "state": "on"})
+        assert m is None, f"WiZ entity {eid} should be skipped, got {m}"
+    # a non-WiZ light still imports
+    m = bridge._state_to_manifest(
+        {"entity_id": "light.tv_philips_ambilight", "attributes": {}, "state": "on"})
+    assert m is not None and m.device_id == "ha-light-tv_philips_ambilight"

@@ -384,13 +384,14 @@ class HABridge(DoSyncAdapter):
         if domain not in HA_DOMAIN_MAP:
             return None
 
-        # Skip WiZ power monitoring sensors — these are read-only sub-entities
-        # that HA auto-creates for WiZ bulbs. DoSync registers WiZ bulbs directly
-        # via WiZAdapter, so importing these creates logical duplicates.
-        if (domain == "sensor"
-                and "wiz" in entity_id.lower()
-                and entity_id.rsplit("_", 1)[-1] in {"power", "energy", "voltage", "current"}):
-            log.debug("Skipping WiZ sub-sensor (already registered via WiZAdapter): %s", entity_id)
+        # Skip ALL WiZ entities — DoSync registers WiZ bulbs directly via
+        # WiZAdapter (device_id "wiz-*"), so importing their HA mirror creates
+        # logical duplicates. This covers BOTH the primary light.wiz_* entity
+        # (which duplicated all 10 bulbs on 2026-07-12) AND the read-only power
+        # sub-sensors (sensor.wiz_*_power/energy/...) HA auto-creates. Devices
+        # with a native DoSync adapter must not be re-imported through the bridge.
+        if "wiz" in entity_id.lower():
+            log.debug("Skipping WiZ entity (already registered via WiZAdapter): %s", entity_id)
             return None
 
         mapping = HA_DOMAIN_MAP[domain]
