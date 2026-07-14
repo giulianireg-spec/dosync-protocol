@@ -38,9 +38,12 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          # Test-only deps: the suite step below runs every test file via pytest,
-          # including ones that use fixtures and cannot run as bare scripts.
-          pip install pytest pytest-asyncio
+          # Test-only deps (see requirements-dev.txt for why each is here).
+          # Needed by the individual test steps too, not just the pytest sweep:
+          # starlette 1.3.1 moved TestClient onto httpx2, so every test file
+          # using TestClient — including ones this workflow already ran — fails
+          # to import without it.
+          pip install -r requirements-dev.txt
 
       # ── Step 1: Syntax check ─────────────────────────────────────────────
       # Catches syntax errors before any test runs.

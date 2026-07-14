@@ -1,0 +1,21 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DoSync Protocol — development/test dependencies
+#
+# Runtime deps live in requirements.txt and are deliberately minimal (the hub
+# core needs only a web framework and a schema validator). These are the extras
+# needed to RUN THE TEST SUITE — they are never required to run a hub.
+#
+#   pip install -r requirements.txt -r requirements-dev.txt
+#   PYTHONPATH=. python3 -m pytest tests/ -q
+#
+# Why httpx2 (2026-07-14): starlette 1.3.1 moved its TestClient from httpx to
+# httpx2 and deprecated the old path. requirements.txt pins nothing (`>=`), so
+# CI resolves the newest starlette on every run — that release turned CI red
+# with no code change on our side, because test files using TestClient could no
+# longer import. Declaring the test client dep explicitly makes the suite
+# reproducible instead of dependent on whatever pip resolves that day.
+# ─────────────────────────────────────────────────────────────────────────────
+
+pytest>=8.0
+pytest-asyncio>=0.23
+httpx2>=2.0          # starlette.testclient backend (see note above)
