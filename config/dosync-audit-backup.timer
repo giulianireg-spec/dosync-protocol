@@ -1,0 +1,12 @@
+# Runs the DoSync audit backup daily. See dosync-audit-backup.service for install.
+[Unit]
+Description=Daily DoSync audit log backup
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+# %i in the service isn't expanded by timers; the service writes a fixed name per
+# run — to keep dated files, the ExecStart below uses a shell date instead.
+
+[Install]
+WantedBy=timers.target

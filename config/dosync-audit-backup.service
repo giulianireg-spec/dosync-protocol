@@ -1,0 +1,28 @@
+# DoSync — periodic audit log backup (REL-2)
+# Installs alongside dosync-audit-backup.timer. Writes a timestamped, integrity-
+# checked backup of the audit log to /var/backups/dosync/ (rotated by the timer's
+# own accumulation — prune with a tmpfiles rule or cron if desired).
+#
+# INSTALL (on the Pi):
+#   sudo mkdir -p /var/backups/dosync
+#   sudo cp config/dosync-audit-backup.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now dosync-audit-backup.timer
+#   systemctl list-timers dosync-audit-backup.timer   # confirm next run
+#   # run once now to verify:
+#   sudo systemctl start dosync-audit-backup.service
+#   ls -la /var/backups/dosync/
+
+[Unit]
+Description=DoSync audit log backup (integrity-checked)
+After=dosync.service
+
+[Service]
+Type=oneshot
+User=rgiuliani
+WorkingDirectory=/home/rgiuliani/dosync-protocol
+# --db points at the hub's production DB; the backup is read-only w.r.t. the log.
+ExecStart=/bin/sh -c '/home/rgiuliani/dosync-protocol/venv/bin/python3 \
+  /home/rgiuliani/dosync-protocol/manage.py \
+  --db /home/rgiuliani/dosync-protocol/dosync.db \
+  db audit-backup --out /var/backups/dosync/audit_backup_$(date +%%Y%%m%%d_%%H%%M%%S).json' 

@@ -13,6 +13,7 @@ Uso:
 """
 
 import argparse
+import json
 import sqlite3
 import sys
 import time
@@ -301,6 +302,13 @@ Examples:
     p_clean.add_argument("--yes", action="store_true", help="Skip confirmation")
 
     db_sub.add_parser("audit-reset", help="Reset broken audit log chain (creates backup first)")
+    p_abak = db_sub.add_parser("audit-backup", help="Back up the audit log to a JSON file (does not modify the log)")
+    p_abak.add_argument("--out", default=None, help="Backup file path (default: audit_backup_<ts>.json)")
+    p_aver = db_sub.add_parser("audit-verify", help="Verify the audit log SHA-256 chain (live DB or a backup file)")
+    p_aver.add_argument("--file", default=None, help="Verify a backup file instead of the live DB")
+    p_arst = db_sub.add_parser("audit-restore", help="Restore the audit log from a backup file")
+    p_arst.add_argument("--file", required=True, help="Backup file to restore from")
+    p_arst.add_argument("--force", action="store_true", help="Overwrite a non-empty audit log")
 
     # ── certs subcommand ───────────────────────────────────────────────────────
     certs_parser = sub.add_parser("certs", help="TLS certificate management")
@@ -338,7 +346,10 @@ Examples:
         if args.command == "stats":         db_stats(args)
         elif args.command == "devices":     db_devices(args)
         elif args.command == "clean":       db_clean(args)
-        elif args.command == "audit-reset": db_audit_reset(args)
+        elif args.command == "audit-reset":   db_audit_reset(args)
+        elif args.command == "audit-backup":  db_audit_backup(args)
+        elif args.command == "audit-verify":  db_audit_verify(args)
+        elif args.command == "audit-restore": db_audit_restore(args)
 
     elif args.group == "certs":
         if   args.command == "status":         certs_status(args)
@@ -348,6 +359,89 @@ Examples:
 
     else:
         parser.print_help()
+
+
+def db_audit_backup(args):
+    """Back up the audit log to a self-describing JSON file. Read-only."""
+    from dosync import audit_backup
+    db = get_db(args.db)
+    entries = db.load_audit_log()
+    out = args.out or f"audit_backup_{int(time.time())}.json"
+    manifest = audit_backup.write_backup(entries, out)
+    ok = manifest["chain_valid_at_backup"]
+    print("Audit backup")
+    print(f"  Entries:       {manifest['count']}")
+    print(f"  Chain valid:   {'yes' if ok else 'NO — chain is broken (backup still written for review)'}")
+    print(f"  payload sha256:{manifest['payload_sha256'][:32]}...")
+    print(f"  Written to:    {out}")
+    if not ok:
+        print("  WARNING: the live chain does not verify. Investigate before trusting this log.")
+
+
+def db_audit_verify(args):
+    """Verify the SHA-256 chain of the live audit log, or of a backup file."""
+    from dosync import audit_backup
+    if args.file:
+        try:
+            doc = audit_backup.read_backup(args.file)   # also checks file-level checksum
+        except ValueError as e:
+            print(f"Audit verify — FAILED\n  {e}")
+            sys.exit(1)
+        entries = doc["entries"]
+        source = f"backup file {args.file}"
+    else:
+        db = get_db(args.db)
+        entries = db.load_audit_log()
+        source = "live database"
+    ok = audit_backup.verify_entries(entries)
+    print("Audit verify")
+    print(f"  Source:      {source}")
+    print(f"  Entries:     {len(entries)}")
+    print(f"  Chain valid: {'yes ✓' if ok else 'NO ✗ — tamper or corruption detected'}")
+    sys.exit(0 if ok else 1)
+
+
+def db_audit_restore(args):
+    """Restore the audit log from a backup file (refuses to clobber unless --force)."""
+    from dosync import audit_backup
+    try:
+        doc = audit_backup.read_backup(args.file)
+    except ValueError as e:
+        print(f"Audit restore — ABORTED\n  {e}")
+        sys.exit(1)
+    entries = doc["entries"]
+    if not audit_backup.verify_entries(entries):
+        print("Audit restore — ABORTED\n  The backup's own chain does not verify; refusing to restore a broken log.")
+        sys.exit(1)
+
+    db = get_db(args.db)
+    existing = db.audit_count()
+    if existing > 0 and not args.force:
+        print(f"Audit restore — ABORTED\n  The audit log already has {existing} entries. "
+              "Use --force to overwrite (the current log is NOT auto-backed-up; run "
+              "'audit-backup' first if you want to keep it).")
+        sys.exit(1)
+
+    import sqlite3 as _sq
+    conn = _sq.connect(args.db)
+    try:
+        conn.execute("DELETE FROM audit_log")
+        for entry in entries:
+            conn.execute(
+                "INSERT INTO audit_log (entry_json, hash, timestamp) VALUES (?, ?, ?)",
+                (json.dumps(entry), entry.get("hash", ""), entry.get("timestamp", time.time())),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # re-verify what actually landed in the DB
+    db2 = get_db(args.db)
+    ok = audit_backup.verify_entries(db2.load_audit_log())
+    print("Audit restore")
+    print(f"  Restored:    {len(entries)} entries from {args.file}")
+    print(f"  Chain valid: {'yes ✓' if ok else 'NO ✗ — restore produced a broken chain!'}")
+    sys.exit(0 if ok else 1)
 
 
 def db_audit_reset(args):
