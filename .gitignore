@@ -28,3 +28,4 @@ server.log
 # runtime artifacts (never track)
 audit_log_backup_*.json
 benchmark_run_*.log
+benchmarks/recall-prod-*.json
