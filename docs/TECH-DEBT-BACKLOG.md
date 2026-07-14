@@ -21,3 +21,19 @@ hours or device IDs; benchmark can run pre- and post-policy.
 recall 1.0). Once POL-1 lands, add a mode that applies the PolicyEngine so the tool
 can also report the configured-deployment precision (an operator property). Both
 numbers are honest; they measure different layers (see docs/BENCHMARK-RECALL.md).
+
+
+## SENSOR-KIND — Distinguish environment sensors from device state (panel 2026-07-14) · effort M
+`report_status` (empty-resolution read-only branch) reads every device that declares ANY
+sensor. WiZ bulbs declare brightness+state as SensorSpec, so a status query over the home
+reads 28 devices — 20 of them lamp brightness/on-off, not environmental sensing. The number
+is correct but misleading, and the query is genuinely ambiguous ("all state" vs "environment").
+Panel (DoSync-Panel-SensorKind) consensus: the SensorSpec stays (brightness IS real telemetry;
+hiding it would be lying, the TV mistake we rejected), but the MODEL should distinguish the two:
+  (a) add SensorSpec.kind: "environment" | "device_state" (default "environment", non-breaking),
+  (b) make report_status scope selectable by context/policy ({"scope": "environment" | "all"}),
+      with the default being deployment preference (a hospital may want all; a home may want
+      environment only) — protocol distinguishes, deployment decides.
+This is protocol evolution (touches the spec + adapters that declare sensors) and enables
+answering precisely "how many environmental sensors vs device-state readings". Not urgent.
+Validation: a report_status can be scoped; metrics can separate the two sensor kinds.

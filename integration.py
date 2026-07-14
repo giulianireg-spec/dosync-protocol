@@ -95,16 +95,26 @@ class IntegrationReport:
 
 
 def _classify(poll: dict) -> tuple[str, str]:
-    """Turn a completed intent poll into an integration outcome + detail."""
+    """Turn a completed intent poll into an integration outcome + detail.
+
+    NOTE on counting: actions_taken and failed_devices are ACTION-level, not
+    device-level. A device with several actuators (e.g. a WiZ bulb exposes
+    turn_on + set_brightness) contributes multiple actions, and failed_devices
+    lists a device_id per failed action — so an unreachable bulb appears once
+    per attempted actuator. We report failed ACTIONS and, separately, the count
+    of DISTINCT devices affected, so "11 failed" never reads as "11 dead bulbs".
+    """
     status = poll.get("status")
     taken = poll.get("actions_taken", 0)
     failed = poll.get("failed_devices", []) or []
+    distinct_failed = len(set(failed))
     if status == "timeout":
         return "error", "intent did not complete within the poll window"
     if status == "failed" and taken == 0:
         return "no-op", "no device actions executed (devices off/unreachable?)"
     if failed:
-        return "partial", f"{taken} action(s) executed, {len(failed)} device(s) failed"
+        return "partial", (f"{taken} action(s) executed, {len(failed)} action(s) failed "
+                           f"across {distinct_failed} device(s)")
     if taken > 0:
         return "executed", f"{taken} action(s) executed on real devices"
     return "no-op", "resolved to zero actions"
