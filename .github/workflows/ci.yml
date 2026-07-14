@@ -20,6 +20,14 @@ jobs:
     name: Protocol tests — Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
 
+    # Tests never touch a real database. server.py builds its hub at module level
+    # from DOSYNC_DB, so a test that sets this inside itself is already too late —
+    # whichever file imports `server` first decides for the whole run. Setting it
+    # job-wide makes the invariant hold for every step, whether pytest (which also
+    # has tests/conftest.py as a second guard) or a file run as a script.
+    env:
+      DOSYNC_DB: ":memory:"
+
     strategy:
       matrix:
         python-version: [ "3.11" ]

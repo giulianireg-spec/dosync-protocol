@@ -42,7 +42,11 @@ STRICT_BRIGHTNESS = {
 
 
 def _hub_with_lamp():
-    hub = DoSyncHub()
+    # db_path is REQUIRED here: DoSyncHub() defaults to "dosync.db", so this
+    # helper was creating a real database in the repo directory on every run
+    # (found 2026-07-14 while tracing why the suite left an 80KB dosync.db and a
+    # broken audit chain behind). Tests never touch a real database.
+    hub = DoSyncHub(db_path=":memory:")
     m = CapabilityManifest(
         device_id="lamp-01", device_name="Lamp", manufacturer="X", model="Y",
         firmware="1", category=DeviceCategory.ACTUATOR, tags=["light"],

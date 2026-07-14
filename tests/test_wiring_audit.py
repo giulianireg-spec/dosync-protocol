@@ -150,3 +150,40 @@ async def test_refresh_cycle_is_positive_signal_only():
     assert hub.health.is_unreachable("lamp-d") is False, \
         "a failed probe must not manufacture an unreachable mark"
     assert hub.health.snapshot("lamp-d")["reachable"] is None   # still unknown
+
+
+# ── Invariant: tests never touch a real database ─────────────────────────────
+
+def test_no_test_file_builds_a_hub_on_the_real_database():
+    """DoSyncHub() defaults to db_path="dosync.db" — a REAL file in the repo.
+
+    Found 2026-07-14: test_validation_integration called DoSyncHub() with no
+    db_path, so running the suite created an 80KB dosync.db in the working
+    directory and wrote to its audit log. Combined with six test files importing
+    `server` (which builds its hub at module level from whatever env the FIRST
+    importer saw), the suite could leave a developer's database with
+    audit_integrity=False — which is exactly how this surfaced.
+
+    This is checked with the AST rather than grep: a substring search would match
+    docstrings and comments, and would miss `DoSyncHub (` spacing. Only real call
+    nodes count.
+    """
+    import ast
+    import pathlib
+
+    tests_dir = pathlib.Path(__file__).resolve().parent
+    offenders = []
+    for path in sorted(tests_dir.glob("test_*.py")):
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "DoSyncHub"):
+                has_positional = bool(node.args)
+                has_db_kwarg = any(kw.arg == "db_path" for kw in node.keywords)
+                if not (has_positional or has_db_kwarg):
+                    offenders.append(f"{path.name}:{node.lineno}")
+
+    assert not offenders, (
+        "DoSyncHub() without db_path writes to the real ./dosync.db — pass "
+        f"db_path=':memory:' or a tmp_path. Offenders: {', '.join(offenders)}")

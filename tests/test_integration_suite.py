@@ -1,61 +1,136 @@
-"""Smoke test for the integration suite (C2): it must run, classify outcomes,
-and stay distinct from conformance (certify.py)."""
-import subprocess
-import sys
-import threading
-import time
-from pathlib import Path
+"""Unit tests for the integration suite's logic (C2).
 
-REPO = Path(__file__).resolve().parent.parent
+DESIGN NOTE — why this test does NOT start a server (rewritten 2026-07-14):
+
+The first version booted uvicorn in a thread and ran integration.py against it as
+a subprocess. That was wrong in a way worth recording, because it failed for a
+real reason rather than a flaky one:
+
+It set DOSYNC_CERTIFY=1 inside the serving thread, expecting an in-memory DB. But
+six other test files `import server` too, and Python caches modules — whichever
+imports first builds the hub, with whatever env was set at THAT moment.
+Alphabetically test_composition_kind_endpoint.py wins, so by the time this test
+ran, server.hub was already bound to the real dosync.db. The suite then fired real
+intents at it and wrote to its audit log, which is how CI surfaced
+`I04 audit chain intact — audit_integrity=False`: concurrent writers on a shared
+DB. The test could corrupt a developer's database — exactly the hazard behind the
+project rule that DOSYNC_CERTIFY must use :memory:, never a real DB.
+
+The fix is not to fight the import cache; it is to test the right thing here. This
+file pins integration.py's LOGIC — outcome classification and report shape — which
+is deterministic, fast, and touches nothing. Whether integration.py actually drives
+devices is validated by running it against a live deployment, which is what the
+tool is for; a CI runner has no devices, so simulating them proves nothing about
+the real thing.
+"""
+
+import json
+
+import integration
 
 
-def _serve(port, ready):
-    import os
-    os.environ["DOSYNC_CERTIFY"] = "1"
-    os.environ["DOSYNC_AUTH"] = "false"
-    import uvicorn, server
-    ready.set()
-    uvicorn.run(server.app, host="127.0.0.1", port=port, log_level="error")
+# ── Outcome classification ───────────────────────────────────────────────────
+
+def test_classify_full_success():
+    outcome, detail = integration._classify(
+        {"status": "completed", "actions_taken": 12, "failed_devices": []})
+    assert outcome == "executed"
+    assert "12 action(s) executed" in detail
 
 
-def test_integration_runs_and_classifies(tmp_path):
-    port = 47261
-    ready = threading.Event()
-    t = threading.Thread(target=_serve, args=(port, ready), daemon=True)
-    t.start()
-    ready.wait(timeout=5)
-    time.sleep(2.5)
+def test_classify_counts_failed_actions_not_devices():
+    """The wording fix: failed_devices lists a device_id PER FAILED ACTION and is
+    not deduplicated. A WiZ bulb exposes several actuators, so one powered-off
+    bulb contributes several entries. Reporting len(failed) as 'devices failed'
+    read as '11 dead bulbs' when it was 11 actions across ~4 bulbs."""
+    poll = {
+        "status": "completed",
+        "actions_taken": 25,
+        "failed_devices": ["wiz-a", "wiz-a", "wiz-a",
+                           "wiz-b", "wiz-b", "wiz-b",
+                           "wiz-c", "wiz-c", "wiz-c",
+                           "wiz-d", "wiz-d"],
+    }
+    outcome, detail = integration._classify(poll)
+    assert outcome == "partial"
+    assert "11 action(s) failed" in detail, detail
+    assert "across 4 device(s)" in detail, detail
+    assert "11 device(s) failed" not in detail      # the misleading phrasing
 
-    base = f"http://127.0.0.1:{port}"
-    # register one emergency-capable actuator so I01 can execute
-    import urllib.request, json
-    req = urllib.request.Request(
-        base + "/v1/devices/register",
-        data=json.dumps({
-            "device_id": "int-suite-01", "device_name": "S", "manufacturer": "t",
-            "model": "t", "firmware": "1", "category": "actuator",
-            "tags": ["light", "emergency"],
-            "actuators": [{"id": "p", "type": "turn_on", "description": "on"}],
-            "emergency_capable": True, "cert_tier": "emergency",
-        }).encode(),
-        headers={"Content-Type": "application/json"}, method="POST")
-    urllib.request.urlopen(req, timeout=5)
 
-    out_json = tmp_path / "integ.json"
-    r = subprocess.run(
-        [sys.executable, "integration.py", "--host", "127.0.0.1",
-         "--port", str(port), "--json", str(out_json)],
-        cwd=str(REPO), capture_output=True, text=True, timeout=120)
+def test_classify_no_op_when_nothing_executed():
+    outcome, _ = integration._classify(
+        {"status": "failed", "actions_taken": 0, "failed_devices": []})
+    assert outcome == "no-op"
 
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert "NOT a protocol conformance run" in r.stdout
-    assert out_json.exists()
-    report = json.loads(out_json.read_text())
-    assert report["kind"] == "physical-execution"       # distinct from a cert
-    assert "dosync_integration_version" in report
-    # I01 (ensure_safety on a registered emergency actuator) should have executed
-    i01 = next(x for x in report["results"] if x["name"].startswith("I01"))
-    assert i01["outcome"] in ("executed", "partial"), i01
-    # audit check always structural
-    i04 = next(x for x in report["results"] if x["name"].startswith("I04"))
-    assert i04["outcome"] == "executed"
+
+def test_classify_zero_actions_resolved():
+    outcome, detail = integration._classify(
+        {"status": "completed", "actions_taken": 0, "failed_devices": []})
+    assert outcome == "no-op"
+    assert "zero actions" in detail
+
+
+def test_classify_timeout_is_error():
+    outcome, _ = integration._classify(
+        {"status": "timeout", "actions_taken": 0, "failed_devices": []})
+    assert outcome == "error"
+
+
+# ── Report shape ─────────────────────────────────────────────────────────────
+
+def test_report_is_marked_as_physical_execution_not_a_cert():
+    """An integration report must never be mistakable for a conformance cert."""
+    report = integration.IntegrationReport("10.0.0.1", 47200)
+    report.add(integration.IntegrationResult("I01 something", "executed", "3 actions"))
+    report.add(integration.IntegrationResult("I02 other", "no-op", ""))
+    doc = report.to_dict()
+
+    assert doc["kind"] == "physical-execution"
+    assert "dosync_integration_version" in doc
+    assert "conformance" in doc["note"].lower()      # states what it is NOT
+    assert doc["summary"] == {"executed": 1, "no-op": 1}
+    assert len(doc["results"]) == 2
+    json.dumps(doc)                                   # must be serializable
+
+
+def test_report_summary_counts_every_outcome():
+    report = integration.IntegrationReport("h", 1)
+    for outcome in ("executed", "executed", "partial", "no-op", "error"):
+        report.add(integration.IntegrationResult(f"t-{outcome}", outcome))
+    assert report.to_dict()["summary"] == {
+        "executed": 2, "partial": 1, "no-op": 1, "error": 1}
+
+
+# ── Separation from conformance ──────────────────────────────────────────────
+
+def test_integration_reuses_certify_plumbing_not_a_second_copy():
+    """One source of truth for HTTP/reporting."""
+    import certify
+    assert integration.request is certify.request
+    assert integration.fire_intent is certify.fire_intent
+
+
+def test_certify_remains_conformance_only():
+    """certify.py must not acquire polling execution: conformance stays
+    deterministic and hardware-free (docs/CONFORMANCE-VS-INTEGRATION.md).
+
+    Uses the AST rather than grep: a substring search matches the module
+    docstring and the `def fire_intent` line, which are not calls. Asserting on
+    real call nodes is the difference between testing the invariant and testing
+    the text that happens to describe it.
+    """
+    import ast
+    import pathlib
+    src = (pathlib.Path(__file__).resolve().parent.parent / "certify.py").read_text()
+    tree = ast.parse(src)
+
+    called = {
+        node.func.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert "fire_intent_conformance" in called, \
+        "certify.py must fire intents in acceptance mode"
+    assert "fire_intent" not in called, \
+        "certify.py calls the polling helper — conformance must not wait on hardware"
