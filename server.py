@@ -480,20 +480,41 @@ async def lifespan(app: FastAPI):
         log.error("Startup recovery failed: %s", _recovery_e)
 
     # ── Background state refresher ──────────────────────────────────────────
-    # Periodically queries device state via get_state() to keep the cache fresh.
-    # Only runs if the resolver is StateAwareResolver and executor is AdapterExecutor.
+    # Periodically queries device state via get_state() — active health probing.
+    # Hub-owned, so it runs under ANY resolver (it was gated on the resolver
+    # being StateAwareResolver, which production never is: it never ran).
     _refresh_task = None
     try:
         from dosync.adapters import AdapterExecutor
-        if isinstance(hub.resolver, __import__('dosync.hub', fromlist=['StateAwareResolver']).StateAwareResolver)                 and isinstance(_adapter_executor, AdapterExecutor):
+        # The refresher is HUB-owned and must run under ANY resolver. It used to
+        # be gated on `isinstance(hub.resolver, StateAwareResolver)`, which is
+        # always False in production (ExternalResolver) — so it never ran, and
+        # said so only at debug level. The only real requirement is an
+        # AdapterExecutor, which is what sources the adapters to probe.
+        if isinstance(_adapter_executor, AdapterExecutor):
             _refresh_task = asyncio.create_task(
-                hub.resolver.start_background_refresh(_adapter_executor)
+                hub.start_state_refresh(_adapter_executor)
             )
-            log.info("Background state refresher started")
+            log.info("Background state refresher started (hub-owned, active health probing)")
         else:
-            log.debug("Background state refresher not started (resolver or executor not compatible)")
+            log.warning("Background state refresher NOT started: executor is %s, "
+                        "not an AdapterExecutor — device health will be passive only",
+                        type(_adapter_executor).__name__)
     except Exception as _refresh_e:
         log.warning("Failed to start background state refresher: %s", _refresh_e)
+
+    # Purge old terminal operations. clear_old_snapshots was wired here and
+    # clear_old_operations never was, so the operations table grew forever.
+    # Own try/except on purpose: a failure here must be reported as itself, not
+    # swallowed by an unrelated handler. Active (non-terminal) operations are
+    # never purged by age — a long-running op is exactly what must survive for
+    # reconciliation.
+    try:
+        _purged_ops = hub.db.clear_old_operations(max_age_hours=24)
+        if _purged_ops:
+            log.info("Purged %d terminal operation(s) older than 24h", _purged_ops)
+    except Exception as _ops_purge_e:
+        log.warning("Failed to purge old operations: %s", _ops_purge_e)
 
     # Purge expired rate limit events from DB (prevents unbounded table growth)
     try:

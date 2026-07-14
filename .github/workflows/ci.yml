@@ -38,6 +38,9 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
+          # Test-only deps: the suite step below runs every test file via pytest,
+          # including ones that use fixtures and cannot run as bare scripts.
+          pip install pytest pytest-asyncio
 
       # ── Step 1: Syntax check ─────────────────────────────────────────────
       # Catches syntax errors before any test runs.
@@ -371,6 +374,18 @@ jobs:
       # ── Step 6: Policy engine smoke test ────────────────────────────────
       # Verifies that BlockIntentPolicy correctly refuses emergency bypass
       # and that bypass_on_emergency defaults are correct on all policies.
+      # ── Full suite ────────────────────────────────────────────────────────
+      # The individual steps above run test files as scripts, from a list kept by
+      # hand. That list silently misses new files: every test written in the
+      # 2026-07 hardening session (resolution wiring, resolver semantics, audit
+      # backup, integration suite, device health, wiring audit) was absent from
+      # it — the regressions guarding those bugs never ran in CI. This step runs
+      # the WHOLE suite via pytest, so a new test file is covered the moment it
+      # lands, with no list to update and forget.
+      - name: Full test suite (pytest — every test file, no manual list)
+        run: |
+          PYTHONPATH=. python3 -m pytest tests/ -q
+
       - name: Policy engine — emergency bypass invariants
         run: |
           PYTHONPATH=. python3 - << 'EOF'

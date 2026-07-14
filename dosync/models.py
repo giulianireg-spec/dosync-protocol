@@ -456,3 +456,42 @@ class FamilyProfile:
             "routine_bedtime":   action_list(self.routine_bedtime),
             "routine_away":      action_list(self.routine_away),
         }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "FamilyProfile":
+        """Rebuild a FamilyProfile from to_dict() output — the missing round-trip.
+
+        Added 2026-07-14: the profile was persisted by set_family_profile() but
+        NEVER restored on startup (db.load_family_profile() existed and nothing
+        called it), so every hub restart silently dropped it — even though
+        _restore_from_db's docstring promised the profile survives restarts.
+
+        Note the asymmetry this must absorb: to_dict serializes bedtime as an
+        "HH:MM" string, so it is parsed back into hour/minute here.
+        """
+        def action_list(items):
+            return [
+                RoutineAction(
+                    tag=a["tag"],
+                    action_type=a["action_type"],
+                    params=a.get("params", {}) or {},
+                    description=a.get("description", ""),
+                )
+                for a in (items or [])
+            ]
+
+        bedtime = data.get("bedtime", "21:30")
+        try:
+            _bh, _bm = (int(x) for x in str(bedtime).split(":", 1))
+        except (ValueError, AttributeError):
+            _bh, _bm = 21, 30
+
+        return cls(
+            family_name=data.get("family_name", ""),
+            routine_morning=action_list(data.get("routine_morning")),
+            routine_bedtime=action_list(data.get("routine_bedtime")),
+            routine_away=action_list(data.get("routine_away")),
+            bedtime_hour=_bh,
+            bedtime_minute=_bm,
+            timezone=data.get("timezone", "America/Argentina/Cordoba"),
+        )

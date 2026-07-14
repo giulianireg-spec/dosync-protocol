@@ -39,12 +39,21 @@ answering precisely "how many environmental sensors vs device-state readings". N
 Validation: a report_status can be scoped; metrics can separate the two sensor kinds.
 
 
-## DEVICE-HEALTH-ACTIVE — Active health probing / device heartbeat (panel 2026-07-14) · effort M
-v1 device health (shipped 2026-07-14) is PASSIVE: reachability and success-rate are derived
-from real action outcomes at the execution chokepoint (_TimedExecutor). It only knows a device
-is unreachable AFTER an action is attempted — there is no active probing. Future work:
-  (a) periodic lightweight probe (ping/status poll) so health is known without acting,
-  (b) optional device-initiated heartbeat (a device reports its own health proactively),
-  (c) distinguish "powered off" from "network-unreachable" where the transport allows it.
-Panel (DoSync-Panel-DeviceHealth) scoped v1 to passive on purpose; this is the active follow-up.
-Validation: health reflects device state without a preceding action; heartbeat path tested.
+## DEVICE-HEALTH-ACTIVE — Device heartbeat + cause attribution · effort M
+PARTIALLY DELIVERED 2026-07-14. The wiring audit found that active probing already existed:
+a background refresher polling get_state() every 60s. It had never run in production because
+server.py gated it on `isinstance(hub.resolver, StateAwareResolver)` — always False under the
+ExternalResolver production runs — and said so only at debug level. It is now hub-owned
+(DoSyncHub.start_state_refresh), runs under any resolver, and marks devices reachable on a
+successful probe, so recovery is detected within one interval WITHOUT executing any action.
+
+  DONE (a) periodic lightweight probe so health is known without acting.
+  TODO (b) device-initiated heartbeat (a device reports its own health proactively) — needs a
+           protocol surface (endpoint + spec), not just wiring.
+  TODO (c) distinguish "powered off" from "network-unreachable" where the transport allows it.
+
+Note the deliberate asymmetry, preserved from the original design: the probe is POSITIVE-SIGNAL
+ONLY. A device that fails get_state() is skipped, never marked unreachable — a failing probe is
+weaker evidence than an action timing out (adapters implement get_state unevenly), and marking
+on weak evidence would manufacture false "dead device" reports. Only real action timeouts mark
+a device unreachable.
