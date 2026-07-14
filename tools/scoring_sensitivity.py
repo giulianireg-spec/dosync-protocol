@@ -1,4 +1,11 @@
 """
+DEPRECATED (2026-07-12) — do not use. This tool carried a FROZEN copy of the
+resolver and a resolution map over intents that no longer exist; its
+"recall 0.49" is invalid (see docs/BENCHMARK-RECALL.md). Replaced by
+tools/recall_benchmark.py, which imports the LIVE resolver. Retained for
+historical reference only.
+"""
+"""
 DoSync — Scoring weights sensitivity analysis
 Varies each weight ±50% and measures precision/recall impact
 over the 15 scenarios from the IEEE paper (Table 3).
