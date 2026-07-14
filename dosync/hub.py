@@ -9,6 +9,7 @@ import hashlib
 import json
 import logging
 import os
+import threading
 import time
 try:
     from dosync import metrics as _M
@@ -981,8 +982,9 @@ class _TimedExecutor:
 
     _dosync_timed = True
 
-    def __init__(self, inner):
+    def __init__(self, inner, hub=None):
         self._inner = inner
+        self._hub = hub
 
     def __getattr__(self, name):
         return getattr(self._inner, name)
@@ -990,15 +992,135 @@ class _TimedExecutor:
     async def execute(self, action, urgency):
         _t0 = time.perf_counter()
         result = await self._inner.execute(action, urgency)
+        success = bool(getattr(result, "success", False))
         try:
             if _M is not None:
                 _M.action_execution_seconds.observe(
                     time.perf_counter() - _t0,
-                    {"result": "success" if getattr(result, "success", False) else "failed"},
+                    {"result": "success" if success else "failed"},
                 )
         except Exception:
             pass
+        # Device health: every real action is a health signal, recorded at this
+        # single chokepoint (all execution paths funnel through here) rather than
+        # scattered across parallel/batch/retry paths. Two complementary sinks,
+        # both previously built-but-unwired (no code populated them, so the
+        # /v1/health endpoints returned empty in production):
+        #   1. execution stats (db.device_health) — success-rate history per
+        #      device, feeding /v1/health/devices. record_execution's own
+        #      docstring says "call after each adapter.execute()"; this is it.
+        #   2. passive reachability (hub.health) — reachable/unreachable + TTL.
+        # A failed action records the failure but does NOT immediately mark a
+        # device unreachable (a single command can fail transiently); only
+        # execution-path timeouts do that. A success always refreshes reachable.
+        try:
+            if self._hub is not None and getattr(self._hub, "db", None) is not None:
+                self._hub.db.record_execution(
+                    action.device_id, action.action, success,
+                    error=None if success else getattr(result, "error", None))
+        except Exception:
+            pass
+        try:
+            if self._hub is not None and getattr(self._hub, "health", None) is not None:
+                if success:
+                    self._hub.health.mark_reachable(action.device_id)
+        except Exception:
+            pass
         return result
+
+
+class DeviceHealth:
+    """Passive device health, owned by the HUB (not the resolver).
+
+    Health lived in StateAwareResolver until 2026-07-14, but production runs
+    ExternalResolver (which lacks mark_unreachable), so the hub's
+    `hasattr(resolver, "mark_unreachable")` guards silently no-op'd and NO device
+    was ever marked unreachable in production — a false "everything healthy".
+    Health is a property of the hub: it is populated from the EXECUTION PATH,
+    which runs under any resolver, and persisted via the existing device_state
+    table.
+
+    This is PASSIVE health: it reflects the outcome of the last real interaction
+    with a device (an action executed or timed out), not an active heartbeat. It
+    reports what it knows — last_seen, unreachable_since, until (TTL) — and never
+    asserts "powered off" (it cannot distinguish an off device from a network
+    drop). Active probing is future work (DEVICE-HEALTH-ACTIVE).
+    """
+
+    DEFAULT_TTL_SECONDS = 300
+
+    def __init__(self, hub: "DoSyncHub"):
+        self._hub = hub
+        self._state: dict[str, dict] = {}
+        self._lock = threading.Lock()
+
+    def _persist(self, device_id: str) -> None:
+        try:
+            db = getattr(self._hub, "db", None)
+            if db:
+                db.save_device_state(device_id, self._state[device_id])
+        except Exception as e:
+            log.warning("DeviceHealth: failed to persist state for %s: %s", device_id, e)
+
+    def mark_reachable(self, device_id: str) -> None:
+        """A device responded — record last_seen and clear any unreachable mark."""
+        with self._lock:
+            st = self._state.get(device_id, {})
+            st["last_seen"] = time.time()
+            st.pop("unreachable", None)
+            st.pop("unreachable_since", None)
+            st.pop("unreachable_until", None)
+            self._state[device_id] = st
+            self._persist(device_id)
+
+    def mark_unreachable(self, device_id: str, ttl_seconds: int | None = None) -> None:
+        """A device did not respond to a real action — mark unreachable with TTL."""
+        ttl = ttl_seconds if ttl_seconds is not None else self.DEFAULT_TTL_SECONDS
+        with self._lock:
+            st = self._state.get(device_id, {})
+            now = time.time()
+            st["unreachable"] = True
+            st.setdefault("unreachable_since", now)   # keep the first failure time
+            st["unreachable_until"] = now + ttl
+            self._state[device_id] = st
+            self._persist(device_id)
+
+    def is_unreachable(self, device_id: str) -> bool:
+        """True if marked unreachable and the TTL has not expired."""
+        with self._lock:
+            st = self._state.get(device_id)
+            if not st or not st.get("unreachable"):
+                return False
+            if time.time() >= st.get("unreachable_until", 0):
+                return False   # TTL expired — treat as unknown/recovered
+            return True
+
+    def snapshot(self, device_id: str) -> dict:
+        """Honest per-device health. Never asserts 'off' — only what we observed."""
+        with self._lock:
+            st = dict(self._state.get(device_id, {}))
+        unreachable = bool(st.get("unreachable")) and time.time() < st.get("unreachable_until", 0)
+        return {
+            "device_id": device_id,
+            "reachable": (None if "last_seen" not in st and not unreachable
+                          else (not unreachable)),
+            "last_seen": st.get("last_seen"),
+            "unreachable_since": st.get("unreachable_since") if unreachable else None,
+            "unreachable_until": st.get("unreachable_until") if unreachable else None,
+            "note": ("no interaction recorded yet" if "last_seen" not in st and not unreachable
+                     else ("not responding to actions since the time shown (may be powered off "
+                           "or network-unreachable; passively observed)" if unreachable
+                           else "responded to its last action")),
+        }
+
+    def load_from_db(self) -> None:
+        try:
+            db = getattr(self._hub, "db", None)
+            if db:
+                with self._lock:
+                    self._state = {k: v for k, v in db.load_all_device_states().items()}
+        except Exception as e:
+            log.warning("DeviceHealth: failed to load state from db: %s", e)
 
 
 class DoSyncHub:
@@ -1020,9 +1142,11 @@ class DoSyncHub:
         self._event_handlers: list[Callable] = []
         self.db             = DoSyncDB(db_path)
         self.db.init()
+        self.health         = DeviceHealth(self)   # hub-owned passive device health
         # Load persisted state now that db is ready
         if hasattr(self, "resolver"):
             self.resolver._load_state_from_db()
+        self.health.load_from_db()
         self.audit_log._persist_cb = self.db.append_audit
         self._restore_from_db()
 
@@ -1337,6 +1461,7 @@ class DoSyncHub:
             for fut in pending:
                 action = tasks[fut]
                 log.warning("Timeout: %s/%s after %.1fs", action.device_id, action.action, _t)
+                self.health.mark_unreachable(action.device_id)
                 if hasattr(self.resolver, "mark_unreachable"):
                     self.resolver.mark_unreachable(action.device_id)
                 results.append(ActionResult(device_id=action.device_id, action=action.action,
@@ -1366,6 +1491,7 @@ class DoSyncHub:
             batch_results = [fut.result() for fut in done]
             for fut in pending:
                 a = tasks[fut]
+                self.health.mark_unreachable(a.device_id)
                 if hasattr(self.resolver, "mark_unreachable"):
                     self.resolver.mark_unreachable(a.device_id)
                 batch_results.append(ActionResult(device_id=a.device_id, action=a.action,
@@ -1401,6 +1527,7 @@ class DoSyncHub:
                         return r
                     last = r
                 except asyncio.TimeoutError:
+                    self.health.mark_unreachable(action.device_id)
                     if hasattr(self.resolver, "mark_unreachable"):
                         self.resolver.mark_unreachable(action.device_id)
                     last = ActionResult(device_id=action.device_id, action=action.action,
@@ -1918,7 +2045,7 @@ class DoSyncHub:
         # changes behavior: it awaits the real execute and records the elapsed
         # time by result. Metrics are optional; a failure to record is swallowed.
         if _M is not None and not getattr(executor, "_dosync_timed", False):
-            executor = _TimedExecutor(executor)
+            executor = _TimedExecutor(executor, hub=self)
 
         # ── Composition routing (Level 2) ─────────────────────────────────────
         # A composition intent (declared with composition_kind, e.g. inspect_area

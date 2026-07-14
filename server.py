@@ -824,6 +824,29 @@ async def get_single_device_health(
     return health
 
 
+@app.get("/v1/health/reachability", tags=["health"])
+async def get_reachability(auth=Depends(require_auth)):
+    """Passive reachability of every device the hub has interacted with.
+
+    Complements /v1/health/devices (success-rate history) with the current
+    reachable/unreachable state derived from real actions. This is PASSIVE
+    health — it reflects the last interaction, not an active heartbeat — and it
+    never asserts a device is "powered off" (it cannot tell an off device from a
+    network-unreachable one). Read-only.
+    """
+    snapshots = [hub.health.snapshot(d.device_id) for d in hub.registry.all()]
+    unreachable = [s for s in snapshots if s["reachable"] is False]
+    return {
+        "devices": snapshots,
+        "unreachable": [s["device_id"] for s in unreachable],
+        "total_devices": len(snapshots),
+        "total_unreachable": len(unreachable),
+        "note": ("Passive health from real interactions, not a heartbeat. "
+                 "'unreachable' means the device did not respond to its last "
+                 "action; it may be powered off or network-unreachable."),
+    }
+
+
 @app.get("/v1/devices", tags=["Devices"])
 def list_devices(auth: str = Depends(require_auth)):
     return {

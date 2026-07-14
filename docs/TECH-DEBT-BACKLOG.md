@@ -37,3 +37,14 @@ hiding it would be lying, the TV mistake we rejected), but the MODEL should dist
 This is protocol evolution (touches the spec + adapters that declare sensors) and enables
 answering precisely "how many environmental sensors vs device-state readings". Not urgent.
 Validation: a report_status can be scoped; metrics can separate the two sensor kinds.
+
+
+## DEVICE-HEALTH-ACTIVE — Active health probing / device heartbeat (panel 2026-07-14) · effort M
+v1 device health (shipped 2026-07-14) is PASSIVE: reachability and success-rate are derived
+from real action outcomes at the execution chokepoint (_TimedExecutor). It only knows a device
+is unreachable AFTER an action is attempted — there is no active probing. Future work:
+  (a) periodic lightweight probe (ping/status poll) so health is known without acting,
+  (b) optional device-initiated heartbeat (a device reports its own health proactively),
+  (c) distinguish "powered off" from "network-unreachable" where the transport allows it.
+Panel (DoSync-Panel-DeviceHealth) scoped v1 to passive on purpose; this is the active follow-up.
+Validation: health reflects device state without a preceding action; heartbeat path tested.
