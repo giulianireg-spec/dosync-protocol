@@ -10,6 +10,10 @@ import json
 import logging
 import os
 import time
+try:
+    from dosync import metrics as _M
+except Exception:  # metrics is optional; never let it break the hub
+    _M = None
 from typing import Callable, Optional
 
 from .db import DoSyncDB
@@ -967,6 +971,36 @@ class AuditLog:
 
 # ── DoSync Hub ────────────────────────────────────────────────────────────────
 
+class _TimedExecutor:
+    """Transparent executor wrapper that records per-action execution latency.
+
+    Delegates everything to the wrapped executor; only execute() is timed. Any
+    attribute the caller expects (release_claim, etc.) passes through. This keeps
+    latency instrumentation out of every execution path in the hub.
+    """
+
+    _dosync_timed = True
+
+    def __init__(self, inner):
+        self._inner = inner
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    async def execute(self, action, urgency):
+        _t0 = time.perf_counter()
+        result = await self._inner.execute(action, urgency)
+        try:
+            if _M is not None:
+                _M.action_execution_seconds.observe(
+                    time.perf_counter() - _t0,
+                    {"result": "success" if getattr(result, "success", False) else "failed"},
+                )
+        except Exception:
+            pass
+        return result
+
+
 class DoSyncHub:
     """
     Main entry point for the DoSync protocol.
@@ -1878,6 +1912,14 @@ class DoSyncHub:
     ) -> IntentResult:
         log.info("Executing intent: %s [%s]", intent.intent.value, intent.urgency.value)
 
+        # Wrap the executor once to time every device action regardless of the
+        # execution path (parallel/abort/retry/long-running). A timing wrapper
+        # here means we don't have to instrument each call site — and it never
+        # changes behavior: it awaits the real execute and records the elapsed
+        # time by result. Metrics are optional; a failure to record is swallowed.
+        if _M is not None and not getattr(executor, "_dosync_timed", False):
+            executor = _TimedExecutor(executor)
+
         # ── Composition routing (Level 2) ─────────────────────────────────────
         # A composition intent (declared with composition_kind, e.g. inspect_area
         # -> "perimeter") does NOT resolve to a flat parallel plan. It composes an
@@ -1895,7 +1937,10 @@ class DoSyncHub:
             return await self._route_composite_intent(
                 intent, executor, composition_kind)
 
+        _t0 = time.perf_counter()
         plan = self.resolver.resolve(intent)
+        if _M is not None:
+            _M.intent_resolution_seconds.observe(time.perf_counter() - _t0)
 
         # ── Parameter validation (protocol v0.3) ──────────────────────────────
         # Validate each action's params against its actuator's JSON Schema BEFORE

@@ -80,17 +80,84 @@ class Counter:
         return lines
 
 
+class Histogram:
+    """Cumulative histogram in Prometheus text format. Thread-safe, zero-dep.
+
+    Emits the standard trio: _bucket{le=...} (cumulative counts, including +Inf),
+    _sum, and _count. Buckets are upper bounds in seconds. We hand-roll this
+    rather than take a prometheus_client dependency (DoSync keeps its dep
+    surface minimal); the exposition format is covered exactly by
+    tests/test_metrics.py so the "histograms are fiddly by hand" risk is pinned.
+    """
+
+    def __init__(self, name: str, help_: str, buckets: Sequence[float],
+                 labelnames: Sequence[str] = ()):
+        self.name = name
+        self.help = help_
+        self.labelnames = tuple(labelnames)
+        self._buckets = tuple(sorted(buckets))
+        # per label-key: [counts-per-bucket (len = nbuckets, no +Inf), sum, count]
+        self._data: dict[tuple, list] = {}
+        self._lock = threading.Lock()
+
+    def observe(self, value: float, labels: dict | None = None) -> None:
+        key = tuple(str((labels or {}).get(n, "")) for n in self.labelnames)
+        with self._lock:
+            rec = self._data.get(key)
+            if rec is None:
+                rec = [[0] * len(self._buckets), 0.0, 0]
+                self._data[key] = rec
+            counts, _sum, _count = rec
+            # Record in the single tightest bucket; render() makes it cumulative.
+            for i, ub in enumerate(self._buckets):
+                if value <= ub:
+                    counts[i] += 1
+                    break
+            rec[1] = _sum + value
+            rec[2] = _count + 1
+
+    def render(self) -> list[str]:
+        lines = [f"# HELP {self.name} {self.help}", f"# TYPE {self.name} histogram"]
+        with self._lock:
+            data = {k: [list(v[0]), v[1], v[2]] for k, v in self._data.items()}
+        for key in sorted(data):
+            counts, _sum, _count = data[key]
+            base_labels = list(zip(self.labelnames, key))
+            cumulative = 0
+            for i, ub in enumerate(self._buckets):
+                cumulative += counts[i]
+                le = _num(ub)
+                pairs = base_labels + [("le", le)]
+                labelstr = ",".join(f'{n}="{_escape_label(v)}"' for n, v in pairs)
+                lines.append(f"{self.name}_bucket{{{labelstr}}} {cumulative}")
+            # +Inf bucket == total count
+            inf_pairs = base_labels + [("le", "+Inf")]
+            inf_labelstr = ",".join(f'{n}="{_escape_label(v)}"' for n, v in inf_pairs)
+            lines.append(f"{self.name}_bucket{{{inf_labelstr}}} {_count}")
+            suffix = ("{" + ",".join(f'{n}="{_escape_label(v)}"' for n, v in base_labels) + "}") if base_labels else ""
+            lines.append(f"{self.name}_sum{suffix} {_num(_sum)}")
+            lines.append(f"{self.name}_count{suffix} {_count}")
+        return lines
+
+
 class MetricsRegistry:
     """Holds counters and gauge callbacks; renders the exposition document."""
 
     def __init__(self):
         self._counters: list[Counter] = []
+        self._histograms: list[Histogram] = []
         self._gauges: list[tuple[str, str, Callable]] = []
 
     def counter(self, name: str, help_: str, labelnames: Sequence[str] = ()) -> Counter:
         c = Counter(name, help_, labelnames)
         self._counters.append(c)
         return c
+
+    def histogram(self, name: str, help_: str, buckets: Sequence[float],
+                  labelnames: Sequence[str] = ()) -> Histogram:
+        h = Histogram(name, help_, buckets, labelnames)
+        self._histograms.append(h)
+        return h
 
     def gauge_func(self, name: str, help_: str, fn: Callable) -> None:
         """Register a gauge computed at scrape time.
@@ -106,6 +173,8 @@ class MetricsRegistry:
         lines: list[str] = []
         for c in self._counters:
             lines.extend(c.render())
+        for h in self._histograms:
+            lines.extend(h.render())
         for name, help_, fn in self._gauges:
             try:
                 out = fn()
@@ -156,4 +225,20 @@ emergency_intents_total = REGISTRY.counter(
 device_preemptions_total = REGISTRY.counter(
     "dosync_device_preemptions_total",
     "Lower-urgency actions superseded because the device was claimed by an emergency",
+)
+
+# Latency histograms (REL-1 phase 2). Buckets in seconds, tuned for a hub that
+# targets sub-second intent handling: fine-grained below 100ms, headroom to 5s.
+_LATENCY_BUCKETS = (0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0)
+
+intent_resolution_seconds = REGISTRY.histogram(
+    "dosync_intent_resolution_seconds",
+    "Time for the resolver to turn an intent into an action plan",
+    _LATENCY_BUCKETS,
+)
+action_execution_seconds = REGISTRY.histogram(
+    "dosync_action_execution_seconds",
+    "Time to execute a single device action, by adapter result",
+    _LATENCY_BUCKETS,
+    ("result",),   # success | failed — bounded, safe as a label
 )

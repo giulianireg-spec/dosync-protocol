@@ -73,3 +73,41 @@ def test_module_counters_exist_with_expected_names():
         "dosync_device_preemptions_total",
     ):
         assert name in rendered
+
+
+# ── Histogram (REL-1 phase 2) ────────────────────────────────────────────────
+
+def test_histogram_bucket_cumulative_and_sum_count():
+    reg = metrics_mod.MetricsRegistry()
+    h = reg.histogram("t_latency_seconds", "h", (0.01, 0.1, 1.0))
+    for v in (0.005, 0.05, 0.5, 5.0):   # falls in b0, b1, b2, +Inf
+        h.observe(v)
+    out = reg.render()
+    # cumulative buckets: le=0.01 ->1, le=0.1 ->2, le=1 ->3, +Inf ->4
+    assert 't_latency_seconds_bucket{le="0.01"} 1' in out
+    assert 't_latency_seconds_bucket{le="0.1"} 2' in out
+    assert 't_latency_seconds_bucket{le="1"} 3' in out
+    assert 't_latency_seconds_bucket{le="+Inf"} 4' in out
+    assert "t_latency_seconds_count 4" in out
+    assert "t_latency_seconds_sum 5.555" in out
+
+
+def test_histogram_with_label():
+    reg = metrics_mod.MetricsRegistry()
+    h = reg.histogram("t_exec_seconds", "h", (0.1, 1.0), ("result",))
+    h.observe(0.05, {"result": "success"})
+    h.observe(0.5, {"result": "failed"})
+    out = reg.render()
+    assert 't_exec_seconds_bucket{result="success",le="0.1"} 1' in out
+    assert 't_exec_seconds_bucket{result="failed",le="0.1"} 0' in out
+    assert 't_exec_seconds_bucket{result="failed",le="1"} 1' in out
+    assert 't_exec_seconds_count{result="success"} 1' in out
+    assert 't_exec_seconds_count{result="failed"} 1' in out
+
+
+def test_latency_histograms_registered():
+    importlib.reload(metrics_mod)
+    out = metrics_mod.REGISTRY.render()
+    assert "dosync_intent_resolution_seconds_bucket" in out or \
+           "# TYPE dosync_intent_resolution_seconds histogram" in out
+    assert "# TYPE dosync_action_execution_seconds histogram" in out
