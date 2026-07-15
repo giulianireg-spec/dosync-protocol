@@ -1,0 +1,54 @@
+{
+  "_README": [
+    "DoSync — EXAMPLE deployment policy file (POL-1).",
+    "",
+    "This is YOUR file, not the protocol's. It declares what should and should not",
+    "happen in YOUR building. Copy it, edit it, point the hub at it:",
+    "",
+    "    DOSYNC_POLICIES=/etc/dosync/policies.json python3 server.py",
+    "",
+    "The two policies below are exactly what server.py used to hard-code into the",
+    "reference hub until 2026-07-14 — including the 00:00-06:00 window, which was",
+    "one household's choice that every other hub silently inherited. They are here",
+    "so nothing is lost: if you want that behavior, use this file. If you don't,",
+    "delete them. The reference hub now ships with NO deployment policies, because",
+    "the protocol has no opinion about your house.",
+    "",
+    "A policy that fails to load STOPS THE HUB (unknown type, bad argument, missing",
+    "file). That is deliberate: a policy is usually a restriction, and a typo that",
+    "silently skipped one would leave you believing you are protected when you are",
+    "not.",
+    "",
+    "Available types: never_after_hours, require_confirmation, device_exclusion,",
+    "block_intent, geofence, manual_control_active."
+  ],
+
+  "version": 1,
+
+  "policies": [
+    {
+      "_why": "Was hard-coded in server.py. One house's overnight window, inherited by every hub running the reference implementation.",
+      "type": "never_after_hours",
+      "actuator_types": ["unlock", "alarm"],
+      "blocked_hours_start": 0,
+      "blocked_hours_end": 6,
+      "reason": "Security policy: no remote unlocking between 00:00 and 06:00"
+    },
+    {
+      "_why": "Was hard-coded in server.py.",
+      "type": "require_confirmation",
+      "actuator_types": ["alarm"],
+      "reason": "Alarm activation requires explicit confirmation"
+    },
+    {
+      "_why": "The mechanism for operator preference, from the QA-1b benchmark: a TV is genuinely display-capable (its manifest says so, truthfully) but this operator does not want screens involved in notifications. Capabilities are declared with the truth; preferences are expressed HERE. Never mutilate a tag to express a preference.",
+      "type": "device_exclusion",
+      "intent_classes": ["notify", "ensure_safety"],
+      "excluded_device_ids": [
+        "ha-media_player-tv_philips",
+        "ha-media_player-75_qled_qn75q7faagcfv"
+      ],
+      "reason": "Operator preference: screens do not participate in notifications or emergencies"
+    }
+  ]
+}

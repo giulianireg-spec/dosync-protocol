@@ -139,10 +139,17 @@ else:
         executor = SimulatedExecutor(failure_rate=0.0)
 
 # ── Policy Engine ────────────────────────────────────────────────────────────
+# Imported out here: the handler below must be able to name it, and a broken
+# deployment policy file has to stop the hub rather than be caught by the generic
+# handler and downgraded to a warning.
+from dosync.policy_config import PolicyConfigError
+
 try:
+    # Only infrastructure policies are constructed here. The deployment-specific
+    # ones (NeverAfterHours, RequireConfirmation, DeviceExclusion, Geofence...)
+    # are built by policy_config from the deployer's file — see below.
     from dosync.policies import (
-        PolicyEngine, NeverAfterHoursPolicy, RequireConfirmationPolicy,
-        DeviceExclusionPolicy, IntentRateLimitPolicy, DeviceActuatorRateLimitPolicy,
+        PolicyEngine, IntentRateLimitPolicy, DeviceActuatorRateLimitPolicy,
     )
     policy_engine = PolicyEngine()
     from dosync.policies import ConflictResolutionPolicy, ContextualWeightingPolicy
@@ -152,16 +159,37 @@ try:
     policy_engine.add(_device_rate_policy)              # priority 5 — per-device rate limit
     policy_engine.add(ContextualWeightingPolicy())
     policy_engine.add(ConflictResolutionPolicy(hub))
-    policy_engine.add(NeverAfterHoursPolicy(
-        actuator_types=["unlock", "alarm"],
-        blocked_hours_start=0,
-        blocked_hours_end=6,
-        reason="Security policy: no remote unlocking between 00:00 and 06:00"
-    ))
-    policy_engine.add(RequireConfirmationPolicy(
-        actuator_types=["alarm"],
-        reason="Alarm activation requires explicit confirmation"
-    ))
+
+    # ── Deployment policies (POL-1) ──────────────────────────────────────────
+    # Everything above is INFRASTRUCTURE: rate limiting, conflict resolution and
+    # contextual weighting carry no deployment values — they are part of what the
+    # reference hub is, and every hub wants them.
+    #
+    # What used to sit HERE was not: a NeverAfterHoursPolicy blocking unlock
+    # between 00:00 and 06:00, and a RequireConfirmationPolicy on alarms. Real
+    # preferences of one house, baked into the reference implementation that
+    # everyone else runs. Per the 2026-07-12 panel, device preferences are
+    # DEPLOYMENT configuration: the protocol defines how intent maps to
+    # capability; what should act in YOUR building is yours to declare.
+    #
+    # They now live in a file the deployer owns (see examples/policies.deployment.json,
+    # which contains exactly those two, ready to use):
+    #
+    #     DOSYNC_POLICIES=/etc/dosync/policies.json
+    #
+    # No file configured = no deployment policies. That is a legitimate state, not
+    # a degraded one: the protocol has no opinion about your house. A file that is
+    # configured but broken raises and stops the hub — see policy_config for why a
+    # policy must never fail quietly.
+    from dosync import policy_config
+    _policies_path = policy_config.configured_path()
+    if _policies_path:
+        _loaded = policy_config.load_into(policy_engine, _policies_path, hub=hub)
+        log.info("Deployment policies loaded from %s: %s",
+                 _policies_path, ", ".join(p.name for p in _loaded) or "(none declared)")
+    else:
+        log.info("No deployment policies configured (DOSYNC_POLICIES unset) — "
+                 "running with infrastructure policies only")
     # Metrics: count policy decisions without touching policies.py (same wrap
     # pattern used below for audit_log.append).
     _original_policy_evaluate = policy_engine.evaluate
@@ -175,7 +203,20 @@ try:
     policy_engine.evaluate = _metered_policy_evaluate
     hub.policy_engine = policy_engine
     logging.getLogger("dosync.server").info("PolicyEngine initialized with %d policies", len(policy_engine.list_policies()))
+except PolicyConfigError:
+    # NEVER degrade a broken policy file into "no policies". The deployer
+    # explicitly declared restrictions; if they cannot be honored, the only safe
+    # answer is to refuse to start. Reaching the generic handler below would log a
+    # warning and run the hub UNPROTECTED — with the operator believing otherwise.
+    # (2026-07-14: the loader was written to fail loudly and this outer
+    # `except Exception` silently defeated it. The hub started, minus the policies.)
+    raise
 except Exception as _e:
+    # NOTE (tech debt): this swallows ANY failure while building the policy engine
+    # and continues with whatever was registered so far — i.e. a bug in policy
+    # setup silently yields a hub with fewer restrictions than intended, behind one
+    # warning line. Narrowing this is tracked as POL-2; it predates POL-1 and
+    # changing it is a behavior change beyond this scope.
     logging.getLogger("dosync.server").warning("PolicyEngine init failed: %s", _e)
 
 # ── Notification adapter ──────────────────────────────────────────────────────
