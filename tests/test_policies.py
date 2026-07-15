@@ -494,6 +494,90 @@ def test_intent_rate_limit_separate_windows_per_source():
 
 # ── Runner ────────────────────────────────────────────────────────────────────
 
+# ── Non-bypassable MODIFY at EMERGENCY (2026-07-14) ──────────────────────────
+
+def _excl_hub():
+    from dosync.hub import DoSyncHub
+    from dosync.models import ActuatorSpec, CapabilityManifest, DeviceCategory
+    hub = DoSyncHub(db_path=":memory:")
+    for did, tags, atype in (("tv-x", ["communication", "display", "emergency"], "notify"),
+                             ("siren-x", ["alarm", "emergency"], "alarm")):
+        hub.registry.register(CapabilityManifest(
+            device_id=did, device_name=did, manufacturer="t", model="t", firmware="1",
+            category=DeviceCategory.ACTUATOR, tags=tags, sensors=[], events=[],
+            actuators=[ActuatorSpec(id="a", type=atype, description="")],
+            emergency_capable=True, cert_tier="standard"))
+    return hub
+
+
+def _emergency_devices(hub, policy):
+    from dosync.models import Intent, IntentClass, Urgency
+    engine = PolicyEngine()
+    engine.add(policy)
+    intent = Intent(intent_id="t", intent=IntentClass("ensure_safety"),
+                    urgency=Urgency.EMERGENCY, context={})
+    plan = hub.resolver.resolve(intent)
+    result = engine.evaluate(intent, plan)
+    if result and result.decision == PolicyDecision.MODIFY:
+        return {a.device_id for a in result.modified_actions}
+    return {a.device_id for a in plan.actions}
+
+
+def test_device_exclusion_bypasses_emergency_by_default():
+    """Historical behavior, preserved: in a fire, use everything that helps."""
+    hub = _excl_hub()
+    devices = _emergency_devices(hub, DeviceExclusionPolicy(
+        intent_classes=["ensure_safety"], excluded_device_ids=["tv-x"]))
+    assert "tv-x" in devices, "default must stay bypass_on_emergency=True"
+
+
+def test_non_bypassable_exclusion_is_honored_at_emergency():
+    """The gap found 2026-07-14: the EMERGENCY branch evaluated non-bypassable
+    policies but acted only on BLOCK — a MODIFY was received and silently thrown
+    away on the way to allow('emergency_bypass'). It never surfaced because every
+    MODIFY policy in the tree was bypassable, until an operator needed 'these
+    devices must not act, not even in an emergency'. A policy declared
+    non-bypassable must have its decision honored, whatever the decision is."""
+    hub = _excl_hub()
+    devices = _emergency_devices(hub, DeviceExclusionPolicy(
+        intent_classes=["ensure_safety"], excluded_device_ids=["tv-x"],
+        bypass_on_emergency=False))
+    assert "tv-x" not in devices, "absolute exclusion ignored during an emergency"
+    assert "siren-x" in devices, "the exclusion must not remove anything else"
+
+
+def test_non_bypassable_block_still_blocks_at_emergency():
+    """Pre-existing behavior must not regress: operator blocks stay absolute."""
+    from dosync.models import Intent, IntentClass, Urgency
+    hub = _excl_hub()
+    engine = PolicyEngine()
+    engine.add(BlockIntentPolicy(intent_classes=["ensure_safety"],
+                                 reason="operator prohibited"))
+    intent = Intent(intent_id="t", intent=IntentClass("ensure_safety"),
+                    urgency=Urgency.EMERGENCY, context={})
+    plan = hub.resolver.resolve(intent)
+    result = engine.evaluate(intent, plan)
+    assert result.decision == PolicyDecision.BLOCK
+
+
+def test_multiple_non_bypassable_modifies_apply_cumulatively():
+    hub = _excl_hub()
+    from dosync.models import Intent, IntentClass, Urgency
+    engine = PolicyEngine()
+    engine.add(DeviceExclusionPolicy(intent_classes=["ensure_safety"],
+                                     excluded_device_ids=["tv-x"],
+                                     bypass_on_emergency=False))
+    engine.add(DeviceExclusionPolicy(intent_classes=["ensure_safety"],
+                                     excluded_device_ids=["siren-x"],
+                                     bypass_on_emergency=False))
+    intent = Intent(intent_id="t", intent=IntentClass("ensure_safety"),
+                    urgency=Urgency.EMERGENCY, context={})
+    plan = hub.resolver.resolve(intent)
+    result = engine.evaluate(intent, plan)
+    assert result.decision == PolicyDecision.MODIFY
+    assert {a.device_id for a in result.modified_actions} == set()
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     passed = 0

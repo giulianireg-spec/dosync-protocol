@@ -296,10 +296,31 @@ class DeviceExclusionPolicy(BasePolicy):
         intent_classes: list[str],
         excluded_device_ids: list[str],
         reason: str = "",
+        bypass_on_emergency: bool = True,
     ):
+        """
+        Args:
+            bypass_on_emergency: whether EMERGENCY urgency ignores this exclusion.
+
+                True (default, and the historical behavior) suits an exclusion
+                that expresses convenience: in a fire, use everything that helps.
+
+                False makes the exclusion ABSOLUTE. That is a real deployment
+                need, not an edge case: an operator may exclude a device because
+                involving it is USELESS or HARMFUL, and an emergency does not
+                change that — screens that nobody will read while evacuating, or
+                a ward where lights must never come on because of a
+                photosensitive patient. Whether an exclusion is advisory or
+                absolute is the DEPLOYER's judgement about their building, which
+                is precisely the kind of decision the protocol must not make for
+                them (2026-07-12 panel). Added 2026-07-14, when the first
+                operator ground truth ("screens must not act in an emergency")
+                turned out to be inexpressible.
+        """
         self._intents  = set(intent_classes)
         self._excluded = set(excluded_device_ids)
         self._reason   = reason or f"Devices excluded by policy"
+        self._bypass_on_emergency = bypass_on_emergency
 
     @property
     def name(self) -> str:
@@ -308,6 +329,10 @@ class DeviceExclusionPolicy(BasePolicy):
     @property
     def priority(self) -> int:
         return 30
+
+    @property
+    def bypass_on_emergency(self) -> bool:
+        return self._bypass_on_emergency
 
     def evaluate(self, intent: "Intent", plan: "ActionPlan") -> PolicyResult | None:
         if intent.intent.value not in self._intents:
@@ -654,23 +679,55 @@ class PolicyEngine:
         # (e.g. BlockIntentPolicy — operator blocks are absolute).
         if intent.urgency == Urgency.EMERGENCY:
             non_bypassable = [p for p in self._policies if not p.bypass_on_emergency]
+            emergency_plan = plan
+            emergency_modified: list[str] = []
             if non_bypassable:
                 for policy in non_bypassable:
                     try:
-                        result = policy.evaluate(intent, plan)
+                        result = policy.evaluate(intent, emergency_plan)
                     except Exception as e:
                         log.error("Policy '%s' raised an exception: %s", policy.name, e)
                         continue
-                    if result is not None and result.decision == PolicyDecision.BLOCK:
+                    if result is None:
+                        continue
+                    if result.decision == PolicyDecision.BLOCK:
                         log.info(
                             "PolicyEngine: EMERGENCY intent blocked by non-bypassable policy '%s': %s",
                             policy.name, result.reason,
                         )
                         return result
+                    if result.decision == PolicyDecision.MODIFY:
+                        # A non-bypassable policy's decision is honored WHATEVER it
+                        # is — not only BLOCK. Until 2026-07-14 this branch
+                        # evaluated the policy, received its MODIFY, and silently
+                        # discarded it on the way to allow("emergency_bypass"): the
+                        # deployer declared an absolute restriction, the engine
+                        # asked the policy, got the answer, and threw it away.
+                        # Nobody noticed because every MODIFY policy in the tree was
+                        # bypassable, so the case never arose until an operator
+                        # needed "these devices must not act, not even in an
+                        # emergency" (a ward where lights must never come on, a
+                        # screen nobody will read while evacuating).
+                        from .models import ActionPlan
+                        emergency_plan = ActionPlan(
+                            intent_id=plan.intent_id,
+                            actions=result.modified_actions,
+                            urgency=plan.urgency,
+                        )
+                        emergency_modified.append(policy.name)
             log.info(
                 "PolicyEngine: EMERGENCY intent — %d/%d policies bypassed",
                 len(self._policies) - len(non_bypassable), len(self._policies),
             )
+            if emergency_modified:
+                log.info("PolicyEngine: EMERGENCY plan modified by non-bypassable %s",
+                         emergency_modified)
+                return PolicyResult(
+                    decision=PolicyDecision.MODIFY,
+                    policy_name=", ".join(emergency_modified),
+                    reason="Plan modified by non-bypassable policies",
+                    modified_actions=emergency_plan.actions,
+                )
             return PolicyResult.allow("emergency_bypass")
 
         current_plan = plan

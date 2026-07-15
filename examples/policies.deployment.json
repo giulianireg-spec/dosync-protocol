@@ -22,14 +22,15 @@
     "Available types: never_after_hours, require_confirmation, device_exclusion,",
     "block_intent, geofence, manual_control_active."
   ],
-
   "version": 1,
-
   "policies": [
     {
       "_why": "Was hard-coded in server.py. One house's overnight window, inherited by every hub running the reference implementation.",
       "type": "never_after_hours",
-      "actuator_types": ["unlock", "alarm"],
+      "actuator_types": [
+        "unlock",
+        "alarm"
+      ],
       "blocked_hours_start": 0,
       "blocked_hours_end": 6,
       "reason": "Security policy: no remote unlocking between 00:00 and 06:00"
@@ -37,18 +38,25 @@
     {
       "_why": "Was hard-coded in server.py.",
       "type": "require_confirmation",
-      "actuator_types": ["alarm"],
+      "actuator_types": [
+        "alarm"
+      ],
       "reason": "Alarm activation requires explicit confirmation"
     },
     {
-      "_why": "The mechanism for operator preference, from the QA-1b benchmark: a TV is genuinely display-capable (its manifest says so, truthfully) but this operator does not want screens involved in notifications. Capabilities are declared with the truth; preferences are expressed HERE. Never mutilate a tag to express a preference.",
+      "_why": "The mechanism for operator preference, from the QA-1b benchmark: a TV is genuinely display-capable (its manifest says so, truthfully) but this operator does not want screens involved. Capabilities are declared with the truth; preferences are expressed HERE. Never mutilate a tag to express one.",
       "type": "device_exclusion",
-      "intent_classes": ["notify", "ensure_safety"],
+      "intent_classes": [
+        "notify",
+        "ensure_safety"
+      ],
       "excluded_device_ids": [
         "ha-media_player-tv_philips",
         "ha-media_player-75_qled_qn75q7faagcfv"
       ],
-      "reason": "Operator preference: screens do not participate in notifications or emergencies"
+      "reason": "Operator preference: screens do not participate in notifications or emergencies",
+      "_why_absolute": "bypass_on_emergency=false makes this ABSOLUTE. The default (true) would drop the exclusion during an emergency — reasonable when an exclusion is about convenience, wrong here: this operator's judgement is that a screen nobody will read adds nothing to an emergency. Set it to true if you would rather have every capable device act when it matters most. It is your building.",
+      "bypass_on_emergency": false
     }
   ]
 }
