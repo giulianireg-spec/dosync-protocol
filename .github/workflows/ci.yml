@@ -433,6 +433,55 @@ jobs:
           EOF
 
   # ── Certify dry-run (structural validation only) ──────────────────────────
+  floor:
+    name: Declared floor — lowest supported dependency versions
+    runs-on: ubuntu-latest
+
+    # A declared version range that nobody tests is a claim the project cannot
+    # keep. requirements.txt used to say fastapi>=0.100.0 with pydantic>=2.0.0 —
+    # a combination pip cannot even resolve (ResolutionImpossible). It said so for
+    # months, undetected, because CI only ever installed the LATEST resolution.
+    # This job installs the floor the file declares and runs the whole suite on it,
+    # so the range stays honest by construction rather than by good intentions.
+    env:
+      DOSYNC_DB: ":memory:"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install the DECLARED floor (derived from requirements.txt)
+        run: |
+          pip install --upgrade pip
+          # Derive the floor from the declared ranges instead of repeating them:
+          # a hard-coded list here would drift from requirements.txt and this job
+          # would quietly stop testing what the file actually claims.
+          python3 - << 'EOF' > /tmp/floor.txt
+          import re
+          for line in open("requirements.txt"):
+              line = line.strip()
+              if not line or line.startswith("#"):
+                  continue
+              m = re.match(r"^([A-Za-z0-9_.\-]+)\s*>=\s*([0-9][0-9A-Za-z.\-]*)", line)
+              if m:
+                  print(f"{m.group(1)}=={m.group(2)}")
+          EOF
+          echo "Declared floor:"; cat /tmp/floor.txt
+          pip install -r /tmp/floor.txt
+          # Both test-client backends: starlette <1.0 uses httpx, >=1.0 uses httpx2.
+          # The floor pulls the older starlette, so requirements-dev.txt (which
+          # declares httpx2 for the current resolution) is not sufficient here.
+          pip install pytest pytest-asyncio httpx httpx2
+
+      - name: Full suite on the declared floor
+        run: |
+          PYTHONPATH=. python3 -m pytest tests/ -q
+
   certify-structure:
     name: Certification suite — structural validation
     runs-on: ubuntu-latest

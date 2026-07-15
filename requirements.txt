@@ -18,14 +18,32 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Core — required for the hub to run ───────────────────────────────────────
-fastapi>=0.100.0
-uvicorn>=0.23.0
-pydantic>=2.0.0
+#
+# These ranges are VERIFIED, not aspirational (corrected 2026-07-14). The previous
+# floors (fastapi>=0.100.0 with pydantic>=2.0.0) were not merely untested — that
+# combination is UNINSTALLABLE: pip reports ResolutionImpossible, because those two
+# versions have conflicting requirements. The file declared a compatibility contract
+# that could not exist. The floors below are the lowest combination that actually
+# resolves AND passes the full suite, checked together rather than one at a time.
+#
+# Upper bounds are not distrust of upstream: they mean "nobody has run the suite
+# against that major version yet". Raise them by testing, not by hoping.
+#
+# NOTE they do not bound TRANSITIVE deps: starlette 1.3.1 arrived through fastapi
+# despite a fastapi ceiling and moved its TestClient to httpx2 — which is why test
+# dependencies are declared explicitly in requirements-dev.txt.
+#
+# Verified 2026-07-14 — floor (fastapi 0.115.0 / uvicorn 0.23.0 / pydantic 2.7.0 /
+# jsonschema 4.18) and current (fastapi 0.139.0 / pydantic 2.13.4 / starlette 1.3.1)
+# each pass 548/548. CI checks both legs on every push.
+fastapi>=0.115.0,<1.0
+uvicorn>=0.23.0,<1.0
+pydantic>=2.7.0,<3.0
 
 # ── Schema validation — params_schema is JSON Schema draft 2020-12 (protocol 0.3)
 # Strongly recommended: without it, schema validation degrades gracefully
 # (skipped with a warning). The certification suite requires it.
-jsonschema>=4.18
+jsonschema>=4.18,<5.0
 
 # ── Optional — device adapters ───────────────────────────────────────────────
 # Each line is needed ONLY if you use that adapter. The hub runs without them;
