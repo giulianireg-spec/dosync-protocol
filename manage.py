@@ -367,7 +367,14 @@ def db_audit_backup(args):
     db = get_db(args.db)
     entries = db.load_audit_log()
     out = args.out or f"audit_backup_{int(time.time())}.json"
-    manifest = audit_backup.write_backup(entries, out)
+    try:
+        manifest = audit_backup.write_backup(entries, out)
+    except OSError as e:
+        # This runs unattended from a systemd timer: a Python traceback in the
+        # journal tells an operator nothing actionable. Say what failed and why.
+        print(f"Audit backup — FAILED\n  Cannot write {out}: {e.strerror}")
+        print("  Check the directory exists and is writable by this user.")
+        sys.exit(1)
     ok = manifest["chain_valid_at_backup"]
     print("Audit backup")
     print(f"  Entries:       {manifest['count']}")

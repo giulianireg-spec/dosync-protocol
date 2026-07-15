@@ -4,7 +4,6 @@
 # own accumulation — prune with a tmpfiles rule or cron if desired).
 #
 # INSTALL (on the Pi):
-#   sudo mkdir -p /var/backups/dosync
 #   sudo cp config/dosync-audit-backup.{service,timer} /etc/systemd/system/
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now dosync-audit-backup.timer
@@ -20,7 +19,21 @@ After=dosync.service
 [Service]
 Type=oneshot
 User=rgiuliani
+Group=rgiuliani
+
+# 0027 -> backup files land as 0640, not world-readable. A backup IS the complete
+# tamper-evident audit record: who asked for what, when, and what the hub did. It
+# must not be readable by every account on the box.
+UMask=0027
+
 WorkingDirectory=/home/rgiuliani/dosync-protocol
+
+# The unit declares its own requirement rather than relying on a README step that
+# the next person will skip (2026-07-14: the documented `sudo mkdir` created the
+# directory as root:root 755, so the backup — running as User= — died with
+# PermissionError, and the audit backup silently never happened). The '+' prefix
+# runs this as root regardless of User=; `install -d` is idempotent.
+ExecStartPre=+/usr/bin/install -d -o rgiuliani -g rgiuliani -m 0750 /var/backups/dosync
 # --db points at the hub's production DB; the backup is read-only w.r.t. the log.
 ExecStart=/bin/sh -c '/home/rgiuliani/dosync-protocol/venv/bin/python3 \
   /home/rgiuliani/dosync-protocol/manage.py \

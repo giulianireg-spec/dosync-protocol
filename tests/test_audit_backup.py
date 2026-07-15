@@ -92,3 +92,34 @@ def test_cli_backup_verify_restore_cycle(tmp_path):
                         "audit-restore", "--file", str(bak)],
                        cwd=str(repo), capture_output=True, text=True)
     assert r.returncode == 0 and "Chain valid: yes" in r.stdout, r.stdout + r.stderr
+
+
+def test_backup_reports_write_failure_cleanly(tmp_path):
+    """A systemd timer runs this unattended: an OSError must produce an
+    actionable message and exit 1, not a Python traceback in the journal.
+
+    Found 2026-07-14 the hard way — the daily backup timer died with a raw
+    PermissionError traceback because the documented install steps created
+    /var/backups/dosync as root while the unit runs as a normal user.
+    """
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parent.parent
+    db = tmp_path / "t.db"
+    sys.path.insert(0, str(repo))
+    from dosync.db import DoSyncDB
+    from dosync.hub import AuditLog
+    d = DoSyncDB(str(db)); d.init()
+    log = AuditLog(); log._persist_cb = d.append_audit
+    log.append({"action": "test"})
+
+    r = subprocess.run(
+        [sys.executable, "manage.py", "--db", str(db), "db", "audit-backup",
+         "--out", "/nonexistent-dir-for-tests/x.json"],
+        cwd=str(repo), capture_output=True, text=True)
+
+    assert r.returncode == 1, "must exit non-zero so systemd marks the failure"
+    assert "Traceback" not in (r.stdout + r.stderr), "raw traceback in an unattended tool"
+    assert "FAILED" in r.stdout and "Cannot write" in r.stdout, r.stdout
