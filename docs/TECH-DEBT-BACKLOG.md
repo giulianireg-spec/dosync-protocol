@@ -72,7 +72,7 @@ on weak evidence would manufacture false "dead device" reports. Only real action
 a device unreachable.
 
 
-## POL-2 — server.py swallows PolicyEngine build failures · effort S
+## POL-2 — server.py swallows PolicyEngine build failures — CLOSED 2026-07-15 (by incident) · effort S
 `server.py` wraps the whole policy-engine setup in a bare `except Exception` that logs one
 warning and continues. Any failure while registering policies therefore yields a RUNNING hub
 with fewer restrictions than intended — silently, behind a warning nobody reads. Found while
@@ -83,3 +83,14 @@ but the general smell remains: a hub that cannot build its safety policies is no
 Work: narrow the handler to what it actually means to tolerate (a missing optional module),
 and decide whether any other policy-setup failure should be fatal.
 Validation: a forced failure in policy setup does not produce a silently-unprotected hub.
+
+**CLOSED 2026-07-15 — the smell stopped being theoretical within a day.** A NameError in the
+policy setup block (a log call before `log` existed) was swallowed by this exact handler,
+right before `hub.policy_engine = policy_engine`: the engine was built and all seven policies
+registered — and the hub never attached to it. Production ran with hub.policy_engine=None (no
+deployment policies, no rate limits, no conflict resolution) while an emergency intent drove
+devices the operator had absolutely excluded. The handler is now fatal: nothing in that block
+has environmental failure modes (core imports, in-memory construction; the deployment file is
+already fatal via PolicyConfigError), so any failure there means a hub without its policy
+layer — and that hub must not run. Regression pinned on the RIGHT object
+(server.hub.policy_engine, not the module-level variable the original validation checked).

@@ -234,3 +234,65 @@ def test_valid_policy_file_starts_the_hub(tmp_path):
         {"type": "require_confirmation", "actuator_types": ["alarm"]}]})
     r = _run_server_import(tmp_path, p)
     assert r.returncode == 0, r.stdout + r.stderr
+
+def _hub_wiring_probe(tmp_path, policies_path=None):
+    """Run `import server` in a subprocess and report on server.HUB.policy_engine —
+    the object the hub actually consults, NOT the module-level `policy_engine`."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parent.parent
+    env = {**os.environ, "DOSYNC_DB": ":memory:", "DOSYNC_AUTH": "false",
+           "PYTHONPATH": str(repo)}
+    env.pop("DOSYNC_POLICIES", None)
+    if policies_path is not None:
+        env["DOSYNC_POLICIES"] = str(policies_path)
+    code = (
+        "import server, sys\n"
+        "pe = server.hub.policy_engine\n"
+        "sys.exit(3 if pe is None else 0) if True else None\n"
+        "\n"
+    )
+    code = (
+        "import server, sys\n"
+        "pe = server.hub.policy_engine\n"
+        "if pe is None: sys.exit(3)\n"
+        "print('POLICIES=' + ','.join(sorted(p.name for p in pe._policies)))\n"
+    )
+    return subprocess.run([sys.executable, "-c", code],
+                          cwd=str(repo), capture_output=True, text=True, env=env)
+
+
+def test_hub_policy_engine_is_actually_wired_with_deployment_file(tmp_path):
+    """The 2026-07-15 production incident, pinned on the RIGHT object.
+
+    A NameError inside the policy setup block (a log call before `log` existed)
+    was swallowed by the then-generic `except Exception` — right before the
+    `hub.policy_engine = policy_engine` line. The engine existed, all seven
+    policies registered and logged... and the hub never attached to it:
+    production ran with hub.policy_engine=None and an emergency intent drove
+    devices the operator had absolutely excluded.
+
+    The validation at the time checked `server.policy_engine` — the module-level
+    variable, which looked perfect — instead of `server.hub.policy_engine`, the
+    object execute_intent consults. This test asserts on the hub's."""
+    p = _write(tmp_path, {"version": 1, "policies": [
+        {"type": "device_exclusion", "intent_classes": ["ensure_safety"],
+         "excluded_device_ids": ["tv-x"], "bypass_on_emergency": False}]})
+    r = _hub_wiring_probe(tmp_path, p)
+    assert r.returncode == 0, (
+        "hub.policy_engine is None — the hub is not attached to its policy engine\n"
+        + r.stdout + r.stderr)
+    assert "device_exclusion" in r.stdout, r.stdout
+
+
+def test_hub_policy_engine_is_wired_even_without_deployment_file(tmp_path):
+    """No DOSYNC_POLICIES is a legitimate state — but the INFRASTRUCTURE policies
+    (rate limits, conflict resolution) must still reach the hub. The incident also
+    silently dropped these."""
+    r = _hub_wiring_probe(tmp_path, policies_path=None)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "intent_rate_limit" in r.stdout, r.stdout
+

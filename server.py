@@ -185,11 +185,13 @@ try:
     _policies_path = policy_config.configured_path()
     if _policies_path:
         _loaded = policy_config.load_into(policy_engine, _policies_path, hub=hub)
-        log.info("Deployment policies loaded from %s: %s",
-                 _policies_path, ", ".join(p.name for p in _loaded) or "(none declared)")
+        logging.getLogger("dosync.server").info(
+            "Deployment policies loaded from %s: %s",
+            _policies_path, ", ".join(p.name for p in _loaded) or "(none declared)")
     else:
-        log.info("No deployment policies configured (DOSYNC_POLICIES unset) — "
-                 "running with infrastructure policies only")
+        logging.getLogger("dosync.server").info(
+            "No deployment policies configured (DOSYNC_POLICIES unset) — "
+            "running with infrastructure policies only")
     # Metrics: count policy decisions without touching policies.py (same wrap
     # pattern used below for audit_log.append).
     _original_policy_evaluate = policy_engine.evaluate
@@ -211,13 +213,22 @@ except PolicyConfigError:
     # (2026-07-14: the loader was written to fail loudly and this outer
     # `except Exception` silently defeated it. The hub started, minus the policies.)
     raise
-except Exception as _e:
-    # NOTE (tech debt): this swallows ANY failure while building the policy engine
-    # and continues with whatever was registered so far — i.e. a bug in policy
-    # setup silently yields a hub with fewer restrictions than intended, behind one
-    # warning line. Narrowing this is tracked as POL-2; it predates POL-1 and
-    # changing it is a behavior change beyond this scope.
-    logging.getLogger("dosync.server").warning("PolicyEngine init failed: %s", _e)
+except Exception:
+    # POL-2, closed 2026-07-15 — by incident, not by argument. This handler used
+    # to log one warning and continue. Then a NameError in the setup block (a
+    # log call before `log` existed) was swallowed right before the
+    # `hub.policy_engine = policy_engine` line: the engine was built, all seven
+    # policies registered and logged, and the hub NEVER ATTACHED to it. Production
+    # ran with hub.policy_engine=None — no deployment policies, no rate limits,
+    # no conflict resolution — while an emergency intent drove devices the
+    # operator had absolutely excluded. Nothing in this block has environmental
+    # failure modes (core imports, in-memory construction; the deployment file is
+    # already fatal via PolicyConfigError above), so any failure here means the
+    # hub would run without its policy layer. That hub must not run.
+    logging.getLogger("dosync.server").critical(
+        "PolicyEngine setup failed — refusing to start without the policy layer",
+        exc_info=True)
+    raise
 
 # ── Notification adapter ──────────────────────────────────────────────────────
 try:
