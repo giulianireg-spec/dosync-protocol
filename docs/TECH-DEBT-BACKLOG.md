@@ -29,12 +29,19 @@ says its own docstring) previously could not be registered at all without forkin
 Remaining: (a) the post-policy benchmark mode below is now unblocked; (b) POL-2 (the bare
 `except Exception` around policy setup) was found while doing this.
 
-## QA-benchmark-postpolicy — Post-policy benchmark mode · effort S (after POL-1)
+## QA-benchmark-postpolicy — Post-policy benchmark mode — DONE 2026-07-17 · effort S
 `tools/recall_benchmark.py` measures the resolver PRE-policy (a protocol property,
 recall 1.0). Once POL-1 lands, add a mode that applies the PolicyEngine so the tool
 can also report the configured-deployment precision (an operator property). Both
 numbers are honest; they measure different layers (see docs/BENCHMARK-RECALL.md).
 
+**DELIVERED 2026-07-17.** `--policies <file>` scores every case pre- AND post-policy at its
+ground-truth urgency, reporting per-case decision (allow/modify/block), the exact devices
+removed, and the mean delta. Only deployment policies load (rate limiting would measure the
+benchmark itself). Fail-loudly inherited from the loader: a typo'd policy file raises instead
+of silently scoring as "no policies". Both honest directions pinned by tests: post-precision
+RISES when the operator GT agrees with the exclusion, post-recall DROPS when a policy removes
+a device the GT expects. Production numbers live in docs/BENCHMARK-RECALL.md.
 
 ## SENSOR-KIND — Distinguish environment sensors from device state (panel 2026-07-14) · effort M
 `report_status` (empty-resolution read-only branch) reads every device that declares ANY

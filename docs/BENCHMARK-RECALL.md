@@ -166,5 +166,39 @@ Artifacts: `benchmarks/fixtures/prod_ground_truth_operator.json` (the operator g
 labeled synthetic fixture (`benchmarks/fixtures/recall_registry.json`, scores 1.0/1.0/1.0 as
 a wiring self-test) are also included.
 
+## Post-policy mode (2026-07-17) — the operative number
+
+POL-1 made the policy layer configuration (`DOSYNC_POLICIES`), which unblocked measuring
+what a deployment ACTUALLY EXECUTES, not just what the resolver proposes:
+
+```
+PYTHONPATH=. python3 tools/recall_benchmark.py \
+  --registry benchmarks/fixtures/prod_registry.json \
+  --truth    benchmarks/fixtures/prod_ground_truth_operator.json \
+  --policies /etc/dosync/policies.json \
+  --json     benchmarks/recall-prod-postpolicy-<date>.json
+```
+
+Every case is scored twice — on the resolver's raw plan (pre) and on that plan after
+`PolicyEngine.evaluate()` with the deployment's own policy file (post), at the case's
+ground-truth urgency so `bypass_on_emergency` semantics are measured exactly as they run.
+Only deployment policies are loaded (rate limiting would block later cases and measure the
+benchmark itself; conflict resolution needs live intent state).
+
+**The two numbers answer different questions, and neither replaces the other:**
+
+* **Pre-policy** measures the SEMANTIC LAYER against truthfully-declared capabilities. A TV
+  that is genuinely display-capable and resolves for `notify` is a *correct* resolution even
+  if this operator doesn't want it — precision 0.685 against the operator ground truth is the
+  honest cost of refusing to mutilate capability declarations to encode preferences.
+* **Post-policy** measures THE DEPLOYMENT: resolver plus the operator's own declared
+  preferences. This is the number an evaluator should read as "what this installation does".
+
+Quoting one as the other is how the 0.49 mistake happened; the report carries both plus the
+per-case policy decision (`allow`/`modify`/`block`) and exactly which devices the policy
+removed, so the delta is attributable line by line. When a policy contradicts the ground
+truth (removes a device the GT expects), post-recall DROPS — the tool does not paper over an
+operator whose policies fight their own expectations.
+
 *The old `tools/scoring_sensitivity.py` is retained only for historical reference and is
 bitrotten; do not use it. `tools/recall_benchmark.py` replaces it.*
