@@ -200,5 +200,54 @@ removed, so the delta is attributable line by line. When a policy contradicts th
 truth (removes a device the GT expects), post-recall DROPS — the tool does not paper over an
 operator whose policies fight their own expectations.
 
+### Production run 2026-07-17 — the first post-policy numbers
+
+Live registry export + operator ground truth + the deployment's real policy file
+(`/etc/dosync/policies.json`: never_after_hours, require_confirmation, and an ABSOLUTE
+device_exclusion of both TVs for notify/ensure_safety):
+
+| intent | urgency | precision | →post | recall | →post | policy | removed |
+|---|---|---|---|---|---|---|---|
+| ensure_safety | emergency | 0.800 | **0.923** | 1.0 | 1.0 | modify | both TVs |
+| alert_anomaly | alert | 0.294 | 0.294 | 1.0 | 1.0 | allow | — |
+| control_access | alert | 1.000 | 1.000 | 1.0 | 1.0 | allow | — |
+| report_status | info | 0.500 | 0.500 | 1.0 | 1.0 | allow | — |
+| notify | info | 0.333 | **1.000** | 1.0 | 1.0 | modify | both TVs |
+| **MEAN** | | **0.585** | **0.743** | **1.0** | **1.0** | | |
+
+**Policy effect: precision +0.158 at zero recall cost** — the operator's declared preferences
+removed exactly the devices their ground truth never expected, and nothing else. The absolute
+exclusion is visible in the emergency row: TVs out at EMERGENCY urgency, measured.
+
+**Every remaining tenth has a name.** The gap from 0.743 to 1.0 is fully attributed, and the
+four causes are different in kind:
+
+1. **`ensure_safety` → `rpi-pir-01`** (1 device). The resolver reads the motion sensor during
+   a safety event; the operator GT did not list it. A read-only action with a defensible
+   rationale (situational awareness) — this is a GT-vs-preference judgement for the operator:
+   either the GT gains the PIR, or a policy excludes it. Not a bug on either side.
+2. **`alert_anomaly` → both TVs** (2). The deployment's exclusion covers
+   `["notify", "ensure_safety"]` only — `alert_anomaly` is not in the list. If the operator's
+   preference is universal, the fix is one line in THEIR policy file. This is the mechanism
+   working as designed: the number tells the operator exactly where their own declared scope
+   ends.
+3. **`alert_anomaly` → 10 HA housekeeping entities** (sun_next_* ×6, backup_* ×4). Home
+   Assistant internals (sunrise times, backup status) registered as DoSync devices and
+   resolving for anomaly monitoring. A registry-hygiene question for the deployment: these
+   arguably should not be registered at all (HA-bridge import filter), or excluded by policy.
+4. **`report_status` → 14 device-state readers** (10 WiZ bulbs, Ambilight, a TV switch, both
+   TVs). Exactly the SENSOR-KIND finding: `report_status` reads every device declaring ANY
+   sensor, and lamps truthfully declare brightness/state. The designed fix is
+   `SensorSpec.kind` (environment vs device_state) with a scoped `report_status` — protocol
+   evolution, backlogged, NOT to be faked by mutilating declarations.
+
+**A note on drift, for honesty:** the 2026-07-12 pre-policy mean was 0.685; today's is 0.585
+over the same ground truth. The registry is a LIVE deployment — ghost devices were
+deregistered and HA-bridge mappings corrected between the two runs — so pre-policy numbers
+are dated snapshots, not a fixed property. (The per-case artifact of the 07-12 run was
+caught by the later `.gitignore` rule for per-run artifacts and never committed, so the
+drift is not diffable per-case from the repo.) The comparable pair is always pre vs post of
+the SAME run: **+0.158 precision, ±0.0 recall.**
+
 *The old `tools/scoring_sensitivity.py` is retained only for historical reference and is
 bitrotten; do not use it. `tools/recall_benchmark.py` replaces it.*
