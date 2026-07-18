@@ -116,3 +116,17 @@ has environmental failure modes (core imports, in-memory construction; the deplo
 already fatal via PolicyConfigError), so any failure there means a hub without its policy
 layer — and that hub must not run. Regression pinned on the RIGHT object
 (server.hub.policy_engine, not the module-level variable the original validation checked).
+
+## HA-BRIDGE-HYGIENE — Housekeeping entities imported as devices · effort S
+The HA bridge imports EVERY entity in mapped domains, including Home Assistant's own
+housekeeping: sun.sun times (sun_next_* ×6) and backup status (backup_* ×4) become DoSync
+"devices" and resolve for alert_anomaly (benchmark cause #3 — the largest remaining
+precision gap, alert_anomaly at 0.294). This is bridge-standard behavior, not one
+deployment's quirk: every HA deployment has these entities, and none of them are devices in
+any meaningful sense. Frontier ruling (operator, 2026-07-17): causes #1 (PIR in the GT) and
+#2 (TVs in alert_anomaly scope) are deployment decisions and stay in the operator's files;
+THIS one belongs to the bridge. Design question to settle before implementing: skip-list of
+HA integration sources by default (sun, backup — with an opt-in to import them), vs a
+configurable entity/domain exclusion in the bridge config. Either way the default should
+not register housekeeping as devices. Validation: fresh HA import registers no sun/backup
+entities; alert_anomaly precision moves accordingly in the production benchmark.
