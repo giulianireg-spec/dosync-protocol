@@ -43,7 +43,7 @@ of silently scoring as "no policies". Both honest directions pinned by tests: po
 RISES when the operator GT agrees with the exclusion, post-recall DROPS when a policy removes
 a device the GT expects. Production numbers live in docs/BENCHMARK-RECALL.md.
 
-## SENSOR-KIND — Distinguish environment sensors from device state (panel 2026-07-14) · effort M
+## SENSOR-KIND — Distinguish environment sensors from device state — DONE 2026-07-17 · effort M
 `report_status` (empty-resolution read-only branch) reads every device that declares ANY
 sensor. WiZ bulbs declare brightness+state as SensorSpec, so a status query over the home
 reads 28 devices — 20 of them lamp brightness/on-off, not environmental sensing. The number
@@ -56,6 +56,21 @@ hiding it would be lying, the TV mistake we rejected), but the MODEL should dist
       environment only) — protocol distinguishes, deployment decides.
 This is protocol evolution (touches the spec + adapters that declare sensors) and enables
 answering precisely "how many environmental sensors vs device-state readings". Not urgent.
+
+**DELIVERED 2026-07-17, exactly as paneled.** `SensorSpec.kind` ("environment" |
+"device_state", default environment — every existing manifest stays byte-for-byte valid,
+grain PER SENSOR: a thermostat's current_temp measures the room while its target_temp is a
+setpoint). `report_status` scope: intent.context["scope"] wins per-query, else
+DOSYNC_STATUS_SCOPE (deployment config), else "all" (unchanged behavior — the protocol
+gained a distinction, not an opinion). Adapters declare truthfully: WiZ brightness/state →
+device_state; HA_DOMAIN_MAP per-sensor kinds across 8 domains (sensor/binary_sensor stay
+environment). Field documented in spec/DoSync-SPEC-v0.1.md §5.1. Serialization round-trips
+all four reconstruction paths (to_dict via __dict__, hub restore, register endpoint,
+benchmark load_registry) with legacy manifests defaulting. Migration note: persisted
+manifests carry no kind until devices re-register (WiZ --register, HA bridge re-import).
+EXPECTED effect once the deployment re-registers and opts in (DOSYNC_STATUS_SCOPE=environment):
+report_status 28→14 reads, precision 0.5→1.0, post-policy mean 0.743→~0.843 — numbers to be
+CONFIRMED by the production benchmark, not assumed; this line gets updated when they exist.
 Validation: a report_status can be scoped; metrics can separate the two sensor kinds.
 
 

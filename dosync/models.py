@@ -131,6 +131,22 @@ class SensorSpec:
     unit: Optional[str] = None
     range: Optional[list[float]] = None
     poll_interval_ms: int = 30_000
+    # ── SENSOR-KIND (panel 2026-07-14, shipped 2026-07-17) ───────────────────
+    # Not all sensors are alike, and collapsing them made report_status
+    # genuinely ambiguous: a DHT measuring the room and a lamp reporting its own
+    # brightness both "sense", but "read the environment" and "read every
+    # device's self-state" are different questions. The kind distinguishes them
+    # WITHOUT hiding anything — a lamp's brightness is real telemetry and stays
+    # declared (hiding it would be the TV mistake: mutilating truth to encode a
+    # preference).
+    #   "environment"  — measures the world: temperature, motion, humidity, sun.
+    #   "device_state" — reports the device's own condition: brightness, on/off,
+    #                    position, a setpoint.
+    # Default "environment" keeps every existing manifest byte-for-byte valid.
+    # The grain is PER SENSOR, deliberately: a thermostat's current_temp
+    # measures the room (environment) while its target_temp is a setpoint
+    # (device_state) — a per-device rule would misclassify one of them.
+    kind: str = "environment"
 
 @dataclass
 class ActuatorSpec:

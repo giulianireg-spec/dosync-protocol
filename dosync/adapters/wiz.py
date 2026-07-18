@@ -94,8 +94,13 @@ def wiz_manifest(
         category=DeviceCategory.ACTUATOR,
         tags=list(set(base_tags)),
         sensors=[
-            SensorSpec("brightness", "integer", "Brillo actual", unit="%"),
-            SensorSpec("state",      "boolean", "Encendida/apagada"),
+            # kind="device_state": these describe the LAMP, not the room. Real
+            # telemetry, truthfully declared — but "read the environment" should
+            # not sweep them (SENSOR-KIND, 2026-07-17).
+            SensorSpec("brightness", "integer", "Brillo actual", unit="%",
+                       kind="device_state"),
+            SensorSpec("state",      "boolean", "Encendida/apagada",
+                       kind="device_state"),
         ],
         actuators=[
             ActuatorSpec("turn_on",         "turn_on",         "Encender"),

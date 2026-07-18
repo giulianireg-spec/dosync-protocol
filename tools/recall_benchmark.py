@@ -80,7 +80,8 @@ def load_registry(path: Path, hub: DoSyncHub) -> None:
             category=DeviceCategory(d.get("category", "actuator")),
             tags=list(d.get("tags", [])),
             sensors=[SensorSpec(id=sn["id"], type=sn["type"],
-                                description=sn.get("description", ""))
+                                description=sn.get("description", ""),
+                                kind=sn.get("kind", "environment"))
                      for sn in sensors_raw],
             actuators=[ActuatorSpec(id=a["id"], type=a["type"],
                                     description=a.get("description", ""))

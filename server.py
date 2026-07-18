@@ -418,6 +418,9 @@ class SensorIn(BaseModel):
     description: str = ""
     unit: Optional[str] = None
     poll_interval_ms: int = 30000
+    # SENSOR-KIND: "environment" (measures the world) | "device_state" (reports
+    # the device's own condition). Default keeps every existing client valid.
+    kind: str = "environment"
 
 class ActuatorIn(BaseModel):
     id: str
@@ -758,7 +761,8 @@ def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth
             category=DeviceCategory(req.category),
             tags=req.tags,
             sensors=[SensorSpec(s.id, s.type, s.description, s.unit,
-                                poll_interval_ms=s.poll_interval_ms)
+                                poll_interval_ms=s.poll_interval_ms,
+                                kind=s.kind)
                      for s in req.sensors],
             actuators=[ActuatorSpec(a.id, a.type, a.description, a.params_schema)
                        for a in req.actuators],

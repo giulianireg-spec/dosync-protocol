@@ -182,12 +182,14 @@ Every DoSync device broadcasts a **Capability Manifest** upon joining the networ
       {
         "id": "compressor_status",
         "type": "boolean",
-        "description": "Compressor running state"
+        "description": "Compressor running state",
+        "kind": "device_state"
       },
       {
         "id": "door_open",
         "type": "boolean",
-        "description": "Door open/closed"
+        "description": "Door open/closed",
+        "kind": "device_state"
       }
     ],
     "actuators": [],
@@ -208,6 +210,18 @@ Every DoSync device broadcasts a **Capability Manifest** upon joining the networ
   "emergency_capable": false
 }
 ```
+
+**Sensor `kind`** (optional, since 0.3.1; default `"environment"`): distinguishes what a
+sensor *measures*, not which device owns it. `"environment"` — measures the world
+(temperature of a space, motion, humidity); `"device_state"` — reports the device's own
+condition (a compressor's running state, a door's position, a lamp's brightness, a
+setpoint). The grain is per sensor, deliberately: in the example above, `temp_internal`
+measures the air in the compartment (environment, the default) while `compressor_status`
+and `door_open` describe the appliance itself. Hubs MAY use the kind to scope status
+queries ("read the environment" vs "read every device's self-state"); the protocol
+distinguishes the two questions and takes no position on which one a deployment's bare
+status query should mean. Manifests that omit the field remain valid: absent means
+`"environment"`.
 
 ### 5.2 Device categories (taxonomy v0.1)
 

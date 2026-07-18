@@ -78,8 +78,8 @@ HA_DOMAIN_MAP = {
                           "required": ["kelvin"]}),
         ],
         "sensors": [
-            SensorSpec("state",      "boolean",  "Encendida/apagada"),
-            SensorSpec("brightness", "integer",  "Brillo actual", unit="%"),
+            SensorSpec("state",      "boolean",  "Encendida/apagada", kind="device_state"),
+            SensorSpec("brightness", "integer",  "Brillo actual", unit="%", kind="device_state"),
         ],
         # Bridged devices reach DoSync through the HA hop: an emergency response
         # should rely on natively-integrated devices, not on a bridge dependency.
@@ -97,7 +97,7 @@ HA_DOMAIN_MAP = {
             ActuatorSpec("turn_on",  "turn_on",  "Encender"),
             ActuatorSpec("turn_off", "turn_off", "Apagar"),
         ],
-        "sensors": [SensorSpec("state", "boolean", "Estado")],
+        "sensors": [SensorSpec("state", "boolean", "Estado", kind="device_state")],
         "emergency_capable": False,
     },
     "climate": {
@@ -111,8 +111,12 @@ HA_DOMAIN_MAP = {
             ActuatorSpec("turn_off",        "turn_off",        "Apagar clima"),
         ],
         "sensors": [
+            # The per-sensor grain earning its keep: current_temp MEASURES THE
+            # ROOM (environment — a thermostat is also a thermometer); target_temp
+            # is the setpoint, the device's own configuration (device_state).
             SensorSpec("current_temp", "temperature", "Temperatura actual", unit="celsius"),
-            SensorSpec("target_temp",  "temperature", "Temperatura objetivo", unit="celsius"),
+            SensorSpec("target_temp",  "temperature", "Temperatura objetivo", unit="celsius",
+                       kind="device_state"),
         ],
         "emergency_capable": False,
     },
@@ -127,7 +131,8 @@ HA_DOMAIN_MAP = {
             ActuatorSpec("turn_on",  "turn_on",  "Abrir"),
             ActuatorSpec("turn_off", "turn_off", "Cerrar"),
         ],
-        "sensors": [SensorSpec("position", "integer", "Posición actual", unit="%")],
+        "sensors": [SensorSpec("position", "integer", "Posición actual", unit="%",
+                                kind="device_state")],
         "emergency_capable": False,
     },
     "lock": {
@@ -137,7 +142,8 @@ HA_DOMAIN_MAP = {
             ActuatorSpec("unlock", "unlock", "Desbloquear"),
             ActuatorSpec("lock",   "lock",   "Bloquear"),
         ],
-        "sensors": [SensorSpec("state", "boolean", "Bloqueado/desbloqueado")],
+        "sensors": [SensorSpec("state", "boolean", "Bloqueado/desbloqueado",
+                                kind="device_state")],
         "emergency_capable": True,
     },
     "binary_sensor": {
@@ -161,7 +167,7 @@ HA_DOMAIN_MAP = {
             ActuatorSpec("record", "record", "Iniciar grabación"),
             ActuatorSpec("stream", "stream", "Activar streaming"),
         ],
-        "sensors":   [SensorSpec("state", "boolean", "Activa")],
+        "sensors":   [SensorSpec("state", "boolean", "Activa", kind="device_state")],
         "emergency_capable": True,
     },
     "alarm_control_panel": {
@@ -171,7 +177,8 @@ HA_DOMAIN_MAP = {
             ActuatorSpec("arm",   "arm",   "Armar"),
             ActuatorSpec("alarm", "alarm", "Activar alarma"),
         ],
-        "sensors":   [SensorSpec("state", "string", "Estado de alarma")],
+        "sensors":   [SensorSpec("state", "string", "Estado de alarma",
+                                  kind="device_state")],
         "emergency_capable": True,
     },
     "media_player": {
@@ -182,7 +189,7 @@ HA_DOMAIN_MAP = {
             ActuatorSpec("turn_off", "turn_off", "Apagar"),
             ActuatorSpec("display",  "display",  "Mostrar mensaje"),
         ],
-        "sensors":   [SensorSpec("state", "string", "Estado")],
+        "sensors":   [SensorSpec("state", "string", "Estado", kind="device_state")],
         "emergency_capable": False,
     },
 }

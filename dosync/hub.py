@@ -640,14 +640,44 @@ class CapabilityMatchingResolver(BaseResolver):
             # a status query. Note: before this, the "all devices as candidates"
             # branch was dead code — every candidate scored 0 and was dropped, so
             # report_status had never produced a single action in production.
-            read_actions = [
-                DeviceAction(
-                    device_id=d.device_id,
-                    action="read_sensors",
-                    params={"sensor_ids": [sn.id for sn in d.sensors]},
-                )
-                for d in self.registry.all() if d.sensors
-            ]
+            # SENSOR-KIND scope (2026-07-17): "read the environment" and "read
+            # every device's self-state" are different status questions, and the
+            # protocol now distinguishes them (SensorSpec.kind) while the
+            # DEPLOYMENT decides which one a bare status query means:
+            #   * intent.context["scope"] wins per-query: "all" | "environment"
+            #   * otherwise DOSYNC_STATUS_SCOPE (deployment config, same place
+            #     the deployment declares its other preferences)
+            #   * otherwise "all" — today's behavior, so nothing changes for a
+            #     deployment that has expressed no preference. The protocol has
+            #     no opinion; it only makes the question expressible.
+            # Invalid values warn and fall back rather than fail: a status query
+            # is read-only and harmless, and refusing it over a typo'd
+            # preference would be disproportionate.
+            scope = (intent.context or {}).get("scope")
+            if scope is not None and scope not in ("all", "environment"):
+                log.warning("status scope %r unknown — using deployment default", scope)
+                scope = None
+            if scope is None:
+                scope = os.environ.get("DOSYNC_STATUS_SCOPE", "all")
+                if scope not in ("all", "environment"):
+                    log.warning("DOSYNC_STATUS_SCOPE=%r invalid — using 'all'", scope)
+                    scope = "all"
+
+            read_actions = []
+            for d in self.registry.all():
+                if not d.sensors:
+                    continue
+                sensor_ids = [
+                    sn.id for sn in d.sensors
+                    if scope == "all"
+                    or getattr(sn, "kind", "environment") == "environment"
+                ]
+                if sensor_ids:    # a device with only device_state sensors drops out
+                    read_actions.append(DeviceAction(
+                        device_id=d.device_id,
+                        action="read_sensors",
+                        params={"sensor_ids": sensor_ids},
+                    ))
             return ActionPlan(
                 intent_id=intent.intent_id,
                 actions=read_actions,
@@ -1210,6 +1240,7 @@ class DoSyncHub:
                         description=s.get("description", ""),
                         unit=s.get("unit"),
                         poll_interval_ms=s.get("poll_interval_ms", 30000),
+                        kind=s.get("kind", "environment"),   # legacy manifests default
                     )
                     for s in caps.get("sensors", [])
                 ]
