@@ -150,3 +150,82 @@ def test_ha_domain_map_kinds():
                                 "target_temp": "device_state"}
     assert kinds("sensor") == {"value": "environment"}
     assert kinds("binary_sensor") == {"state": "environment"}
+
+
+# ── The data migration (manage.py db migrate-sensor-kind) ────────────────────
+
+def _legacy(device_id, adapter, manufacturer, sensors, **kw):
+    return {"device_id": device_id, "device_name": device_id, "manufacturer": manufacturer,
+            "model": "m", "firmware": "1", "category": kw.get("category", "actuator"),
+            "tags": kw.get("tags", []), "emergency_capable": False, "cert_tier": "basic",
+            "adapter": adapter, "adapter_config": kw.get("adapter_config", {}),
+            "capabilities": {"sensors": sensors, "actuators": [], "events": []}}
+
+
+def test_migration_patches_come_from_the_adapters():
+    """The kind rules are the adapters' declarations, not a duplicated table.
+    WiZ brightness/state -> device_state; HA per HA_DOMAIN_MAP (climate keeps
+    current_temp as environment — it measures the room); unknown devices and
+    already-correct sensors untouched."""
+    from manage import _sensor_kind_patches
+
+    wiz = _legacy("wiz-cocina-01", "wiz", "Philips WiZ",
+                  [{"id": "brightness", "type": "integer"},
+                   {"id": "state", "type": "boolean"}])
+    assert sorted(_sensor_kind_patches(wiz)) == [
+        ("brightness", "environment", "device_state"),
+        ("state", "environment", "device_state")]
+
+    ha_climate = _legacy("ha-climate-living", "homeassistant", "HA",
+                         [{"id": "current_temp", "type": "temperature"},
+                          {"id": "target_temp", "type": "temperature"}])
+    assert _sensor_kind_patches(ha_climate) == [
+        ("target_temp", "environment", "device_state")]     # current_temp stays
+
+    ha_binary = _legacy("ha-binary_sensor-x", "homeassistant", "HA",
+                        [{"id": "state", "type": "boolean"}], category="sensor")
+    assert _sensor_kind_patches(ha_binary) == []            # environment already
+
+    dht = _legacy("rpi-dht22-01", "gpio", "custom",
+                  [{"id": "temperature", "type": "temperature"}], category="sensor")
+    assert _sensor_kind_patches(dht) == []                  # not ours to touch
+
+
+def test_migration_end_to_end_only_adds_kind(tmp_path):
+    """Apply against a real DB: kinds land, everything else — adapter_config
+    with the lamp IP above all (the API path strips it, which is WHY this is a
+    data migration) — survives byte-for-byte. And it is idempotent."""
+    import copy
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    from dosync.db import DoSyncDB
+
+    repo = Path(__file__).resolve().parent.parent
+    dbp = tmp_path / "mig.db"
+    db = DoSyncDB(str(dbp)); db.init()
+    wiz = _legacy("wiz-cocina-01", "wiz", "Philips WiZ",
+                  [{"id": "brightness", "type": "integer", "unit": "%"},
+                   {"id": "state", "type": "boolean"}],
+                  tags=["light", "cocina", "emergency"],
+                  adapter_config={"ip": "192.168.100.12", "port": 38899})
+    db.save_device(wiz["device_id"], copy.deepcopy(wiz))
+
+    r = subprocess.run([sys.executable, "manage.py", "--db", str(dbp),
+                        "db", "migrate-sensor-kind", "--apply"],
+                       cwd=str(repo), capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+    db2 = DoSyncDB(str(dbp)); db2.init()
+    m = db2.load_devices()[0]
+    kinds = {s["id"]: s["kind"] for s in m["capabilities"]["sensors"]}
+    assert kinds == {"brightness": "device_state", "state": "device_state"}
+    assert m["adapter_config"] == {"ip": "192.168.100.12", "port": 38899}
+    assert m["tags"] == ["light", "cocina", "emergency"]
+    assert m["capabilities"]["sensors"][0]["unit"] == "%"
+
+    r2 = subprocess.run([sys.executable, "manage.py", "--db", str(dbp),
+                         "db", "migrate-sensor-kind"],
+                        cwd=str(repo), capture_output=True, text=True)
+    assert "Nothing to do" in r2.stdout, "the migration must be idempotent"

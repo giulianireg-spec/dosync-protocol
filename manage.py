@@ -310,6 +310,12 @@ Examples:
     p_arst.add_argument("--file", required=True, help="Backup file to restore from")
     p_arst.add_argument("--force", action="store_true", help="Overwrite a non-empty audit log")
 
+    p_mig = db_sub.add_parser(
+        "migrate-sensor-kind",
+        help="Add SensorSpec.kind to persisted manifests (dry-run; --apply with the hub STOPPED)")
+    p_mig.add_argument("--apply", action="store_true",
+                       help="Write the patches (stop the hub first)")
+
     # ── certs subcommand ───────────────────────────────────────────────────────
     certs_parser = sub.add_parser("certs", help="TLS certificate management")
     certs_sub    = certs_parser.add_subparsers(dest="command")
@@ -348,6 +354,7 @@ Examples:
         elif args.command == "clean":       db_clean(args)
         elif args.command == "audit-reset":   db_audit_reset(args)
         elif args.command == "audit-backup":  db_audit_backup(args)
+        elif args.command == "migrate-sensor-kind": db_migrate_sensor_kind(args)
         elif args.command == "audit-verify":  db_audit_verify(args)
         elif args.command == "audit-restore": db_audit_restore(args)
 
@@ -359,6 +366,103 @@ Examples:
 
     else:
         parser.print_help()
+
+
+def _sensor_kind_patches(manifest: dict) -> list[tuple[str, str, str]]:
+    """Compute the kind patches one persisted manifest needs.
+
+    Returns [(sensor_id, old_kind, new_kind), ...] — empty if nothing to change.
+
+    The rules come from the ADAPTERS, the single source of truth for what each
+    sensor kind should be — not from a table duplicated here that would drift:
+      * WiZ bulbs (adapter "wiz" / manufacturer "Philips WiZ"): brightness and
+        state describe the lamp → device_state.
+      * HA bridge entities (device_id "ha-<domain>-…"): per-sensor kinds exactly
+        as HA_DOMAIN_MAP now declares them (climate keeps current_temp as
+        environment — it measures the room).
+      * Everything else: untouched. This migration only ADDS "kind" keys; it
+        never removes or rewrites anything an operator declared.
+    """
+    caps = manifest.get("capabilities", {})
+    sensors = caps.get("sensors", [])
+    if not sensors:
+        return []
+
+    device_id = manifest.get("device_id", "")
+    wanted: dict[str, str] = {}
+
+    if manifest.get("adapter") == "wiz" or manifest.get("manufacturer") == "Philips WiZ":
+        wanted = {"brightness": "device_state", "state": "device_state"}
+    elif device_id.startswith("ha-"):
+        from dosync.adapters.homeassistant import HA_DOMAIN_MAP
+        domain = device_id.split("-", 2)[1] if device_id.count("-") >= 2 else ""
+        spec = HA_DOMAIN_MAP.get(domain)
+        if spec:
+            wanted = {sn.id: sn.kind for sn in spec["sensors"]}
+
+    patches = []
+    for sn in sensors:
+        new = wanted.get(sn.get("id"))
+        old = sn.get("kind", "environment")
+        if new and old != new:
+            patches.append((sn["id"], old, new))
+    return patches
+
+
+def db_migrate_sensor_kind(args):
+    """SENSOR-KIND data migration (2026-07-17).
+
+    Persisted manifests predate SensorSpec.kind, so on restore every sensor
+    defaults to "environment" — including a lamp's brightness. Re-registration
+    through the adapters would fix it, but the API path is LOSSY by design
+    (GET /v1/devices strips adapter_config, which holds the lamp IPs), and
+    discovery generates wiz-auto-<ip> ids that would duplicate room-named
+    devices. This is a data migration, so it is done as one: hub stopped, the
+    manifest_json patched in place — only ADDING "kind" keys, everything else
+    byte-for-byte intact — hub restarted.
+
+    Dry-run by default; --apply writes. STOP THE HUB FIRST for --apply: SQLite
+    has one writer, and the hub's in-memory registry would diverge from the DB
+    until restart anyway.
+    """
+    db = get_db(args.db)
+    manifests = db.load_devices()
+
+    plan = []
+    for m in manifests:
+        patches = _sensor_kind_patches(m)
+        if patches:
+            plan.append((m, patches))
+
+    if not plan:
+        print("Sensor-kind migration\n  Nothing to do — every manifest already declares its kinds.")
+        return
+
+    total = sum(len(p) for _, p in plan)
+    print(f"Sensor-kind migration — {len(plan)} device(s), {total} sensor(s) to patch\n")
+    for m, patches in plan:
+        print(f"  {m['device_id']}")
+        for sid, old, new in patches:
+            print(f"      {sid}: {old} -> {new}")
+
+    if not args.apply:
+        print("\nDry run — nothing written. Re-run with --apply (WITH THE HUB STOPPED) to write.")
+        return
+
+    import copy
+    with db._cursor() as cur:
+        for m, patches in plan:
+            patched = copy.deepcopy(m)
+            wanted = {sid: new for sid, _, new in patches}
+            for sn in patched["capabilities"]["sensors"]:
+                if sn.get("id") in wanted:
+                    sn["kind"] = wanted[sn["id"]]
+            cur.execute(
+                "UPDATE devices SET manifest_json = ? WHERE device_id = ?",
+                (json.dumps(patched), patched["device_id"]),
+            )
+    print(f"\nApplied. Restart the hub; then re-run this command — it must report "
+          f"'Nothing to do' (the migration is idempotent).")
 
 
 def db_audit_backup(args):
