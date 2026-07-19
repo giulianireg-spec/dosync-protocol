@@ -149,7 +149,11 @@ devices, deciding policy, the policy's OWN declared reason (the engine used to c
 into a generic phrase — the operator's words now travel to the chain), and the SHA-256 of
 the exact policy file bytes that were loaded (hashed at read time, not re-read from disk).
 Reconstructibility pinned by test: the care-facility decision recovers from the chain alone.
-Production validation pending — this line updates when the drill runs.
+**CONFIRMED in production 2026-07-18** (drill int-1784426941-211fc0): `policy_modified` in
+the live chain with both TVs removed, the operator's own declared reason carried verbatim,
+and the fingerprint matching the SHA-256 of the live /etc/dosync/policies.json. Chain valid
+over 24,022 entries. Shipped, deployed and production-validated the same day as the public
+commitment in the dev.to reply.
 
 ## EMERGENCY-UNSAT-ESCALATION — A silent no-op emergency is the worst state — SHIPPED 2026-07-18 · effort S
 Origin: same review. Verified: stacked absolute exclusions can empty an emergency plan
@@ -168,7 +172,10 @@ execute — refusing to obey the operator is not the fix; silence was). Emptied 
 plans stay quiet: a preference doing its job is not an incident. (b)
 `lint_emergency_satisfiability` runs at policy load against the live registry through a
 THROWAWAY engine (linting must not consume production rate-limit state) and warns the day
-the rule is written. Production validation pending.
+the rule is written. **CONFIRMED in production 2026-07-18:** the lint ran at startup and
+stayed correctly silent (the deployment's rules are survivable — the siren remains); the
+loud path is pinned by tests. Note for the radar: the live chain reached 24,022 entries
+(~12.6k on Jul 14) — the audit archiving item keeps growing more relevant.
 
 ## INDEPENDENT-OBSERVATION — Device ack ≠ observed reality · design exploration · effort M/L
 Origin: same review. Completion is confirmed (never assumed) and vehicles are supervised
