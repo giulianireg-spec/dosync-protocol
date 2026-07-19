@@ -188,6 +188,10 @@ try:
         logging.getLogger("dosync.server").info(
             "Deployment policies loaded from %s: %s",
             _policies_path, ", ".join(p.name for p in _loaded) or "(none declared)")
+        # EMERGENCY-UNSAT part b: tell the operator NOW if these rules would
+        # empty an emergency for the current registry — not the night it fires.
+        for _w in policy_config.lint_emergency_satisfiability(hub, _loaded):
+            logging.getLogger("dosync.server").warning("POLICY LINT: %s", _w)
     else:
         logging.getLogger("dosync.server").info(
             "No deployment policies configured (DOSYNC_POLICIES unset) — "

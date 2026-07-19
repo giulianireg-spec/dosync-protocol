@@ -2207,7 +2207,58 @@ class DoSyncHub:
                 })
                 return IntentResult(intent_id=intent.intent_id, success=False, results=[], failed_devices=[])
             elif policy_result.decision == PolicyDecision.MODIFY:
+                # ── AUDIT-PROVENANCE (2026-07-18, from external review) ──────
+                # Until today a MODIFY left its trace in the runtime log and
+                # NOWHERE in the tamper-evident chain: BLOCK and CONFIRM were
+                # chain-bound, but the most common policy decision — "the plan
+                # ran, minus these devices" — was reconstructible only from a
+                # rotating journal. The chain must bind the DECISION, not just
+                # the commands sent: what was proposed, what was removed, which
+                # policy decided, and the fingerprint of the exact policy file
+                # that was loaded (the file on disk may change; the hash of
+                # what this hub enforced does not).
+                _pre_devices  = sorted({a.device_id for a in plan.actions})
+                _post_devices = sorted({a.device_id for a in policy_result.modified_actions})
+                self.audit_log.append({
+                    "type":          "policy_modified",
+                    "intent_id":     intent.intent_id,
+                    "intent":        intent.intent.value,
+                    "urgency":       intent.urgency.value,
+                    "source":        getattr(intent, "source", "api"),
+                    "policy":        policy_result.policy_name,
+                    "reason":        policy_result.reason,
+                    "pre_policy_devices":  _pre_devices,
+                    "post_policy_devices": _post_devices,
+                    "removed_devices":     sorted(set(_pre_devices) - set(_post_devices)),
+                    "policies_fingerprint": getattr(self.policy_engine, "policies_fingerprint", None),
+                })
                 plan = _AP(intent_id=plan.intent_id, actions=policy_result.modified_actions, urgency=plan.urgency)
+
+                # ── EMERGENCY-UNSAT-ESCALATION (same review) ─────────────────
+                # Stacked absolute exclusions CAN empty an emergency plan. The
+                # wrong fix is rejecting the plan — that would override the
+                # operator's declared judgment, which is precisely what this
+                # layer refuses to do. The failure mode is not obedience, it is
+                # SILENCE: until today this executed zero actions with status
+                # "completed" and nobody was told. Honor the rules; say so
+                # loudly; leave a dedicated chain entry.
+                if (intent.urgency == Urgency.EMERGENCY
+                        and _pre_devices and not plan.actions):
+                    log.critical(
+                        "EMERGENCY intent %s is UNSATISFIABLE: %d device(s) resolved, "
+                        "0 remain after policy filtering. Your standing rules made this "
+                        "emergency a no-op — review the deployment policy file.",
+                        intent.intent.value, len(_pre_devices),
+                    )
+                    self.audit_log.append({
+                        "type":       "emergency_unsatisfiable",
+                        "intent_id":  intent.intent_id,
+                        "intent":     intent.intent.value,
+                        "source":     getattr(intent, "source", "api"),
+                        "resolved_devices": _pre_devices,
+                        "policy":     policy_result.policy_name,
+                        "policies_fingerprint": getattr(self.policy_engine, "policies_fingerprint", None),
+                    })
 
         # Register active intent for conflict detection
         from .policies import get_intent_priority

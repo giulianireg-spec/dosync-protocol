@@ -681,6 +681,7 @@ class PolicyEngine:
             non_bypassable = [p for p in self._policies if not p.bypass_on_emergency]
             emergency_plan = plan
             emergency_modified: list[str] = []
+            emergency_reasons: list[str] = []
             if non_bypassable:
                 for policy in non_bypassable:
                     try:
@@ -715,6 +716,7 @@ class PolicyEngine:
                             urgency=plan.urgency,
                         )
                         emergency_modified.append(policy.name)
+                        emergency_reasons.append(f"{policy.name}: {result.reason}")
             log.info(
                 "PolicyEngine: EMERGENCY intent — %d/%d policies bypassed",
                 len(self._policies) - len(non_bypassable), len(self._policies),
@@ -725,13 +727,18 @@ class PolicyEngine:
                 return PolicyResult(
                     decision=PolicyDecision.MODIFY,
                     policy_name=", ".join(emergency_modified),
-                    reason="Plan modified by non-bypassable policies",
+                    # Carry each policy's OWN declared reason: for audit
+                    # provenance, "why was this removed" is the operator's
+                    # words, not this engine's generic phrasing.
+                    reason="; ".join(emergency_reasons)
+                           or "Plan modified by non-bypassable policies",
                     modified_actions=emergency_plan.actions,
                 )
             return PolicyResult.allow("emergency_bypass")
 
         current_plan = plan
         modify_applied = []
+        modify_reasons: list[str] = []
 
         for policy in self._policies:
             try:
@@ -758,13 +765,14 @@ class PolicyEngine:
                     urgency=plan.urgency,
                 )
                 modify_applied.append(policy.name)
+                modify_reasons.append(f"{policy.name}: {result.reason}")
 
         if modify_applied:
             log.info("PolicyEngine: MODIFY applied by %s", modify_applied)
             return PolicyResult(
                 decision=PolicyDecision.MODIFY,
                 policy_name=", ".join(modify_applied),
-                reason="Plan modified by policies",
+                reason="; ".join(modify_reasons) or "Plan modified by policies",
                 modified_actions=current_plan.actions,
             )
 

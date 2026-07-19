@@ -131,7 +131,7 @@ configurable entity/domain exclusion in the bridge config. Either way the defaul
 not register housekeeping as devices. Validation: fresh HA import registers no sun/backup
 entities; alert_anomaly precision moves accordingly in the production benchmark.
 
-## AUDIT-PROVENANCE — Chain must bind decisions, not only commands · effort M
+## AUDIT-PROVENANCE — Chain must bind decisions, not only commands — SHIPPED 2026-07-18 · effort M
 Origin: external dev.to review (2026-07-18). Verified: BLOCK and CONFIRM leave chain
 entries; a policy MODIFY leaves NONE — hub.py replaces the plan and `intent_executed`
 records only the post-policy action count. The device removals live in the runtime log
@@ -143,7 +143,15 @@ policy, and the decision; attach sensor evidence where the domain already produc
 (vehicle telemetry). Validation: the care-facility scenario (absolute exclusion at
 emergency) is fully reconstructible from the chain alone, with `audit-verify` green.
 
-## EMERGENCY-UNSAT-ESCALATION — A silent no-op emergency is the worst state · effort S
+**SHIPPED 2026-07-18** (same day as the public commitment in the dev.to reply). A MODIFY now
+leaves a `policy_modified` chain entry binding: pre-policy plan, post-policy plan, removed
+devices, deciding policy, the policy's OWN declared reason (the engine used to collapse it
+into a generic phrase — the operator's words now travel to the chain), and the SHA-256 of
+the exact policy file bytes that were loaded (hashed at read time, not re-read from disk).
+Reconstructibility pinned by test: the care-facility decision recovers from the chain alone.
+Production validation pending — this line updates when the drill runs.
+
+## EMERGENCY-UNSAT-ESCALATION — A silent no-op emergency is the worst state — SHIPPED 2026-07-18 · effort S
 Origin: same review. Verified: stacked absolute exclusions can empty an emergency plan
 and today that executes zero actions silently (status completed). Rejecting the plan is
 the WRONG fix — it would override the operator's declared judgment, which this layer
@@ -153,6 +161,14 @@ notification ("emergency fired, 0 actions after policy filtering — your standi
 made this intent unsatisfiable"); (b) config-load lint against the live registry warning
 when declared exclusions can empty an emergency-class intent. Validation: the drill
 produces the loud path, and the lint fires the day the rule is written.
+
+**SHIPPED 2026-07-18.** (a) An emptied EMERGENCY plan now leaves a dedicated
+`emergency_unsatisfiable` chain entry + log.critical; the rules are still honored (0 actions
+execute — refusing to obey the operator is not the fix; silence was). Emptied non-emergency
+plans stay quiet: a preference doing its job is not an incident. (b)
+`lint_emergency_satisfiability` runs at policy load against the live registry through a
+THROWAWAY engine (linting must not consume production rate-limit state) and warns the day
+the rule is written. Production validation pending.
 
 ## INDEPENDENT-OBSERVATION — Device ack ≠ observed reality · design exploration · effort M/L
 Origin: same review. Completion is confirmed (never assumed) and vehicles are supervised

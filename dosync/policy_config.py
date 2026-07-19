@@ -57,6 +57,7 @@ file.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -142,10 +143,20 @@ def load_policies(path: str | Path, hub: "DoSyncHub | None" = None) -> list[Base
             "exist; refusing to start unprotected."
         )
 
+    raw = path.read_text()
     try:
-        doc = json.loads(path.read_text())
+        doc = json.loads(raw)
     except json.JSONDecodeError as e:
         raise PolicyConfigError(f"{path}: invalid JSON — {e}") from e
+
+    # AUDIT-PROVENANCE (2026-07-18): fingerprint of the BYTES THAT WERE LOADED,
+    # computed here — at read time — and nowhere else. Hashing the file again
+    # later would fingerprint whatever is on disk THEN, which may not be what
+    # this hub is enforcing. The hash exists so an audit entry can answer
+    # "which exact policy file decided this?" months later, even if the file
+    # has since been edited.
+    global _last_loaded_fingerprint
+    _last_loaded_fingerprint = hashlib.sha256(raw.encode()).hexdigest()
 
     if not isinstance(doc, dict):
         raise PolicyConfigError(f"{path}: expected a JSON object at the top level")
@@ -167,12 +178,68 @@ def load_policies(path: str | Path, hub: "DoSyncHub | None" = None) -> list[Base
     return policies
 
 
+_last_loaded_fingerprint: str | None = None
+
+
 def load_into(engine, path: str | Path, hub: "DoSyncHub | None" = None) -> list[BasePolicy]:
-    """Load a policy file and register every policy on the engine."""
+    """Load a policy file and register every policy on the engine.
+
+    Also stamps the engine with the SHA-256 of the loaded file
+    (engine.policies_fingerprint), so audit entries can bind decisions to the
+    exact configuration that made them.
+    """
     policies = load_policies(path, hub=hub)
     for p in policies:
         engine.add(p)
+    engine.policies_fingerprint = _last_loaded_fingerprint
+    engine.policies_path = str(path)
     return policies
+
+
+def lint_emergency_satisfiability(hub, policies: list) -> list[str]:
+    """Config-load lint (EMERGENCY-UNSAT part b): warn the operator the day they
+    write the rule, not the night of the fire.
+
+    Checks whether the DECLARED deployment policies, applied at EMERGENCY
+    urgency, would empty the plan for the canonical emergency intent
+    (ensure_safety) against the CURRENT registry. Returns human-readable
+    warnings; empty list means satisfiable (or nothing resolvable to begin
+    with — an empty registry is not the policies' fault).
+
+    Deliberately evaluates through a THROWAWAY engine containing only the
+    deployment policies: running a synthetic intent through the production
+    engine would consume rate-limit state just for linting.
+    """
+    from .models import Intent, IntentClass, Urgency
+    from .policies import PolicyDecision, PolicyEngine
+
+    warnings: list[str] = []
+    probe = PolicyEngine()
+    for pol in policies:
+        probe.add(pol)
+
+    intent = Intent(intent_id="lint-emergency-satisfiability",
+                    intent=IntentClass("ensure_safety"),
+                    urgency=Urgency.EMERGENCY, context={})
+    try:
+        plan = hub.resolver.resolve(intent)
+    except Exception as e:                         # lint must never block startup
+        log.warning("satisfiability lint skipped: resolver raised %s", e)
+        return warnings
+
+    pre = sorted({a.device_id for a in plan.actions})
+    if not pre:
+        return warnings                            # nothing to empty — not a policy problem
+
+    result = probe.evaluate(intent, plan)
+    if result and result.decision == PolicyDecision.MODIFY and not result.modified_actions:
+        warnings.append(
+            f"declared policies make EMERGENCY intent 'ensure_safety' UNSATISFIABLE for the "
+            f"current registry: {len(pre)} device(s) resolve, 0 survive policy filtering "
+            f"(deciding: {result.policy_name}). The rules will be honored — an emergency "
+            f"would execute nothing. If that is not what you meant, review the exclusions."
+        )
+    return warnings
 
 
 def configured_path() -> str | None:
