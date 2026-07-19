@@ -139,9 +139,14 @@ via `DOSYNC_HA_IMPORT_HOUSEKEEPING=true`, plus deployment-declared extra exclusi
 updated with the same logic — if they are not devices, they cannot be expected devices
 (report_status expected 14→4). Found along the way: a pre-existing test bypassed __init__
 with `__new__` and broke the day the constructor gained state — now uses the real
-constructor (which does no I/O). EXPECTED after deregistering the 10 live entities:
-alert_anomaly precision 0.294→~0.714 (the 2 TVs remain — operator decision #2 pending),
-post-policy mean 0.743→~0.927. To be CONFIRMED by the production benchmark.
+constructor (which does no I/O). **CONFIRMED in production 2026-07-19:** the 10 live entities deregistered (all
+"unregistered"), registry at 20 devices with zero housekeeping, and a fresh HA import
+brings none back. Measured: alert_anomaly precision 0.294→0.714 (the predicted number,
+exactly — the remaining gap is the 2 TVs, operator decision #2 pending), report_status
+1.0/1.0 against the updated GT (4 expected, 4 read), post-policy mean 0.743→0.927
+(predicted ~0.927), recall 1.0 throughout. With this, every benchmark cause that belonged
+to the STANDARD is closed and measured; the distance from 0.927 to 1.0 is entirely
+operator decisions (#1 PIR in ensure_safety, #2 alert_anomaly in the exclusion scope).
 
 ## AUDIT-PROVENANCE — Chain must bind decisions, not only commands — SHIPPED 2026-07-18 · effort M
 Origin: external dev.to review (2026-07-18). Verified: BLOCK and CONFIRM leave chain

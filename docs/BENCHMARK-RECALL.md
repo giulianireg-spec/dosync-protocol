@@ -249,5 +249,28 @@ caught by the later `.gitignore` rule for per-run artifacts and never committed,
 drift is not diffable per-case from the repo.) The comparable pair is always pre vs post of
 the SAME run: **+0.158 precision, ±0.0 recall.**
 
+### Production run 2026-07-19 (third, post HA-BRIDGE-HYGIENE)
+
+After deregistering the 10 HA housekeeping entities (cause #3) and updating the operator
+GT with the same frontier logic (if they are not devices, they cannot be expected
+devices — report_status expected 14→4):
+
+| intent | urgency | precision | →post | recall | →post |
+|---|---|---|---|---|---|
+| ensure_safety | emergency | 0.800 | 0.923 | 1.0 | 1.0 |
+| **alert_anomaly** | alert | **0.714** | **0.714** | 1.0 | 1.0 |
+| control_access | alert | 1.000 | 1.000 | 1.0 | 1.0 |
+| report_status | info | 1.000 | 1.000 | 1.0 | 1.0 |
+| notify | info | 0.333 | 1.000 | 1.0 | 1.0 |
+| **MEAN** | | **0.769** | **0.927** | **1.0** | **1.0** |
+
+Causes #3 (housekeeping) and #4 (SENSOR-KIND) are now both closed, measured, and both
+landed on their predicted numbers. Every remaining tenth is an OPERATOR decision, not
+protocol work: cause #1 (the PIR in ensure_safety — GT or policy, the operator's call)
+and cause #2 (the TVs in alert_anomaly — one line in the deployment's own policy file,
+which would take alert_anomaly to ~1.0 and the mean to ~0.985). The benchmark has done
+its job: the gap between what the layer proposes and a perfect score is now fully
+enumerated in the operator's own vocabulary.
+
 *The old `tools/scoring_sensitivity.py` is retained only for historical reference and is
 bitrotten; do not use it. `tools/recall_benchmark.py` replaces it.*
