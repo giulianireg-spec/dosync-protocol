@@ -286,6 +286,7 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
     <a href="/concepts">Concepts</a>
     <a href="#demo">Demo</a>
     <a href="#certification">Certification</a>
+    <a href="#mcp">MCP</a>
     <a href="https://github.com/giulianireg-spec/dosync-protocol">GitHub ↗</a>
     <button class="nav-cta" onclick="window.location='#quickstart'">Get started</button>
   </div>
@@ -900,6 +901,37 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
         <div style="background:#0F1A16;border:0.5px solid #1E3A2E;border-radius:var(--radius-lg);padding:16px 18px">
           <p style="font-size:13px;font-weight:500;color:#5DCAA5;margin-bottom:6px">When it doesn't</p>
           <p style="font-size:13px;color:#888780;line-height:1.6">For everyday automation — "porch light when I get home" — you don't need DoSync. HA's automations and its MCP cover that completely. The extra layer is for the narrow set of cases that need auditable coordination.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MCP positioning — the canonical answer to a question people already search -->
+<section id="mcp" style="padding:72px 40px;border-top:0.5px solid var(--border)">
+  <div class="section-inner">
+    <p class="section-eyebrow">Speaks MCP natively</p>
+    <h2 class="section-title">What's the difference between MCP and DoSync?</h2>
+    <p class="section-sub">They're not rivals — they're different layers, and one literally speaks the other. MCP (the Model Context Protocol) standardizes how an AI discovers and calls tools; DoSync is one of those tools — the one that turns a goal into coordinated, supervised, recorded physical action. DoSync ships as an MCP server, so every MCP-speaking AI is already a DoSync client. The AI thinks, MCP connects, DoSync acts with judgment.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:36px;align-items:start">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">MCP connects your AI to tools</p>
+          <p style="font-size:13px;color:#888780;line-height:1.6">One protocol instead of bespoke integrations: the model discovers what tools exist and invokes them. It moves the request and the result, faithfully, in both directions — <em>transport isn't judgment</em>, and that's not a flaw, it's the design.</p>
+        </div>
+        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">DoSync turns goals into supervised action</p>
+          <p style="font-size:13px;color:#888780;line-height:1.6">One intent — <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">ensure_safety</code> — becomes a coordinated plan over declared capabilities, filtered by the operator's own standing rules, with a tamper-evident record of what was proposed, what the rules decided, and what actually ran.</p>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;padding-top:0">
+        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">Each makes the other worth more</p>
+          <p style="font-size:13px;color:#888780;line-height:1.6">Without something like DoSync, an MCP agent touching the physical world needs a tool per device per action and brings no judgment to it. Without MCP, DoSync would need a bespoke integration per model — instead, MCP gave it its entire front door for free.</p>
+        </div>
+        <div style="background:#0F1A16;border:0.5px solid #1E3A2E;border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:#5DCAA5;margin-bottom:6px">When MCP alone is enough</p>
+          <p style="font-size:13px;color:#888780;line-height:1.6">For email, calendars, code, files, databases — MCP is complete, full stop. Even casual device commands don't need DoSync. The extra layer earns its place only when coordination, the operator's rules, and a trustworthy record matter at once.</p>
         </div>
       </div>
     </div>
