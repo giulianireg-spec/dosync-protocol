@@ -130,3 +130,38 @@ HA integration sources by default (sun, backup — with an opt-in to import them
 configurable entity/domain exclusion in the bridge config. Either way the default should
 not register housekeeping as devices. Validation: fresh HA import registers no sun/backup
 entities; alert_anomaly precision moves accordingly in the production benchmark.
+
+## AUDIT-PROVENANCE — Chain must bind decisions, not only commands · effort M
+Origin: external dev.to review (2026-07-18). Verified: BLOCK and CONFIRM leave chain
+entries; a policy MODIFY leaves NONE — hub.py replaces the plan and `intent_executed`
+records only the post-policy action count. The device removals live in the runtime log
+(rotating, not tamper-evident), so the public claim "the record shows what was proposed
+and what the rules decided" is currently ahead of what the hash chain binds. Work: a
+`policy_modified` chain entry (or fields on `intent_executed`) binding the SHA-256 of the
+active policy file, the pre-policy plan (device_ids), the removed devices and deciding
+policy, and the decision; attach sensor evidence where the domain already produces it
+(vehicle telemetry). Validation: the care-facility scenario (absolute exclusion at
+emergency) is fully reconstructible from the chain alone, with `audit-verify` green.
+
+## EMERGENCY-UNSAT-ESCALATION — A silent no-op emergency is the worst state · effort S
+Origin: same review. Verified: stacked absolute exclusions can empty an emergency plan
+and today that executes zero actions silently (status completed). Rejecting the plan is
+the WRONG fix — it would override the operator's declared judgment, which this layer
+refuses to do; the failure is silence, not obedience. Work: (a) executing an EMERGENCY
+intent whose post-policy plan is empty emits a dedicated audit entry + operator
+notification ("emergency fired, 0 actions after policy filtering — your standing rules
+made this intent unsatisfiable"); (b) config-load lint against the live registry warning
+when declared exclusions can empty an emergency-class intent. Validation: the drill
+produces the loud path, and the lint fires the day the rule is written.
+
+## INDEPENDENT-OBSERVATION — Device ack ≠ observed reality · design exploration · effort M/L
+Origin: same review. Completion is confirmed (never assumed) and vehicles are supervised
+against reconciled telemetry, but systematic cross-verification against an independent
+sensor ("the lock says locked AND the door sensor agrees") is not expressible in the
+protocol. Explore: an optional `verify_with` binding on consequential actions (sensor id +
+expected reading + deadline), feeding partial/failure states. Position recorded on the
+saga framing: COMPENSATION does not transfer cleanly from transactions to the physical
+world (you cannot un-notify a person; compensating half an emergency can be harmful — the
+codebase already overrides ABORT to CONTINUE for emergencies). Compensation, if ever, is
+deployment-declared policy, never protocol-automatic. Manual escalation as a formal state
+is the undefended gap and belongs to EMERGENCY-UNSAT-ESCALATION's family.
