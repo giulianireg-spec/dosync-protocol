@@ -153,8 +153,10 @@ def test_ha_bridge_skips_all_wiz_entities():
     Every WiZ entity must be skipped; devices with a native adapter are never
     re-imported through the bridge."""
     from dosync.adapters.homeassistant import HABridge
-    bridge = HABridge.__new__(HABridge)  # no I/O; we only exercise _state_to_manifest
-    bridge._url = "http://localhost:8123"  # referenced when building a manifest
+    # The real constructor does no I/O (the aiohttp session is lazy), so use it:
+    # a __new__ hack here broke the day the constructor gained hygiene state
+    # (2026-07-19) — bypassing __init__ means silently missing every new field.
+    bridge = HABridge("http://localhost:8123", "test-token", hub=None)
     for eid in ("light.wiz_rgbw_tunable_ca6528",
                 "sensor.wiz_rgbw_tunable_ca6528_power",
                 "switch.wiz_plug_living"):

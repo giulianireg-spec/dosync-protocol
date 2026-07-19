@@ -117,7 +117,7 @@ already fatal via PolicyConfigError), so any failure there means a hub without i
 layer — and that hub must not run. Regression pinned on the RIGHT object
 (server.hub.policy_engine, not the module-level variable the original validation checked).
 
-## HA-BRIDGE-HYGIENE — Housekeeping entities imported as devices · effort S
+## HA-BRIDGE-HYGIENE — Housekeeping entities imported as devices — SHIPPED 2026-07-19 · effort S
 The HA bridge imports EVERY entity in mapped domains, including Home Assistant's own
 housekeeping: sun.sun times (sun_next_* ×6) and backup status (backup_* ×4) become DoSync
 "devices" and resolve for alert_anomaly (benchmark cause #3 — the largest remaining
@@ -130,6 +130,18 @@ HA integration sources by default (sun, backup — with an opt-in to import them
 configurable entity/domain exclusion in the bridge config. Either way the default should
 not register housekeeping as devices. Validation: fresh HA import registers no sun/backup
 entities; alert_anomaly precision moves accordingly in the production benchmark.
+
+**SHIPPED 2026-07-19.** Design resolved per the frontier ruling: skip-list by DEFAULT
+(`HA_HOUSEKEEPING_PREFIXES = ("sun_", "backup_")` — deliberately minimal, only integrations
+we KNOW; the trailing underscore protects real sensors like `sunroom_temperature`), opt-in
+via `DOSYNC_HA_IMPORT_HOUSEKEEPING=true`, plus deployment-declared extra exclusions via
+`DOSYNC_HA_EXCLUDE_ENTITIES` (comma-separated prefixes). The operator ground truth was
+updated with the same logic — if they are not devices, they cannot be expected devices
+(report_status expected 14→4). Found along the way: a pre-existing test bypassed __init__
+with `__new__` and broke the day the constructor gained state — now uses the real
+constructor (which does no I/O). EXPECTED after deregistering the 10 live entities:
+alert_anomaly precision 0.294→~0.714 (the 2 TVs remain — operator decision #2 pending),
+post-policy mean 0.743→~0.927. To be CONFIRMED by the production benchmark.
 
 ## AUDIT-PROVENANCE — Chain must bind decisions, not only commands — SHIPPED 2026-07-18 · effort M
 Origin: external dev.to review (2026-07-18). Verified: BLOCK and CONFIRM leave chain

@@ -195,6 +195,18 @@ HA_DOMAIN_MAP = {
 }
 
 # Dominios que ignoramos (no tienen sentido como gadgets DoSync)
+# ── HA housekeeping (HA-BRIDGE-HYGIENE, 2026-07-19) ──────────────────────────
+# Home Assistant's own internals — sunrise/sunset times from the `sun`
+# integration, backup status from `backup` — surface as sensor.* entities and
+# used to be imported as DoSync "devices". They are not devices in any
+# meaningful sense: nothing about a building is being sensed, and every HA
+# deployment has them (this is bridge-standard behavior, not one deployment's
+# quirk — benchmark cause #3, the largest remaining precision gap). Skipped by
+# DEFAULT; a deployment that genuinely wants them opts in with
+# DOSYNC_HA_IMPORT_HOUSEKEEPING=true. The trailing underscore matters:
+# "sun_" must not match a real sensor named "sunroom_temperature".
+HA_HOUSEKEEPING_PREFIXES = ("sun_", "backup_")
+
 HA_IGNORED_DOMAINS = {
     "automation", "script", "scene", "group",
     "input_boolean", "input_number", "input_select",
@@ -275,6 +287,8 @@ class HABridge(DoSyncAdapter):
         ha_token: str,
         hub: "DoSyncHub",
         simulated: bool = False,
+        import_housekeeping: bool | None = None,
+        exclude_prefixes: list[str] | None = None,
     ):
         """
         Args:
@@ -288,6 +302,18 @@ class HABridge(DoSyncAdapter):
         self._hub       = hub
         self._simulated = simulated
         self._session   = None
+        # HA-BRIDGE-HYGIENE: both are deployment configuration (env), exposed as
+        # constructor params so tests need no environment.
+        import os as _os
+        self._import_housekeeping = (
+            import_housekeeping if import_housekeeping is not None
+            else _os.environ.get("DOSYNC_HA_IMPORT_HOUSEKEEPING", "").lower()
+                 in ("1", "true", "yes"))
+        raw_excludes = (exclude_prefixes if exclude_prefixes is not None
+                        else [p.strip() for p in
+                              _os.environ.get("DOSYNC_HA_EXCLUDE_ENTITIES", "").split(",")
+                              if p.strip()])
+        self._exclude_prefixes = tuple(raw_excludes)
 
     @property
     def adapter_name(self) -> str:
@@ -399,6 +425,21 @@ class HABridge(DoSyncAdapter):
         # with a native DoSync adapter must not be re-imported through the bridge.
         if "wiz" in entity_id.lower():
             log.debug("Skipping WiZ entity (already registered via WiZAdapter): %s", entity_id)
+            return None
+
+        # HA housekeeping (sun times, backup status) is not a device. Skipped by
+        # default; DOSYNC_HA_IMPORT_HOUSEKEEPING=true opts back in. See the
+        # module-level note for the reasoning.
+        name_part = entity_id.split(".", 1)[1] if "." in entity_id else entity_id
+        if (not self._import_housekeeping
+                and name_part.startswith(HA_HOUSEKEEPING_PREFIXES)):
+            log.debug("Skipping HA housekeeping entity: %s", entity_id)
+            return None
+
+        # Deployment-declared exclusions (DOSYNC_HA_EXCLUDE_ENTITIES): matched as
+        # prefixes of the entity name, same rule as housekeeping.
+        if self._exclude_prefixes and name_part.startswith(self._exclude_prefixes):
+            log.debug("Skipping HA entity excluded by deployment config: %s", entity_id)
             return None
 
         mapping = HA_DOMAIN_MAP[domain]
