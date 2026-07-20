@@ -40,14 +40,23 @@ def _canonical(entries: list[dict]) -> str:
     return json.dumps(entries, sort_keys=True, separators=(",", ":"))
 
 
-def verify_entries(entries: list[dict]) -> bool:
+GENESIS = "0" * 64
+
+
+def verify_entries(entries: list[dict], anchor_prev_hash: str = GENESIS) -> bool:
     """Re-run the live AuditLog SHA-256 chain check over a list of entries.
 
     Imported from hub to guarantee identical semantics; falls back to an inline
     equivalent only if the import shape ever changes (kept byte-for-byte the
     same as AuditLog.verify).
+
+    AUDIT-ARCHIVE (2026-07-19): a chain no longer necessarily starts at the
+    genesis hash. When older entries have been archived to a segment file, the
+    live chain's first entry links to the LAST ARCHIVED entry — that hash is
+    the anchor, and verification starts from it. Genesis is just the anchor of
+    a chain that has never been archived.
     """
-    prev = "0" * 64
+    prev = anchor_prev_hash
     for entry in entries:
         entry = dict(entry)
         stored_hash = entry.pop("hash", None)
@@ -61,29 +70,97 @@ def verify_entries(entries: list[dict]) -> bool:
     return True
 
 
-def build_backup(entries: list[dict]) -> dict[str, Any]:
-    """Build the backup document (manifest + entries) for a list of entries."""
+def build_backup(entries: list[dict],
+                 anchor_prev_hash: str = GENESIS) -> dict[str, Any]:
+    """Build the backup document (manifest + entries) for a list of entries.
+
+    An archived chain does not start at genesis; the backup records the anchor
+    it verifies from, so the file stays self-contained: `verify --file` needs
+    nothing but the file."""
     canonical = _canonical(entries)
     return {
         "format_version": BACKUP_FORMAT_VERSION,
+        "anchor_prev_hash": anchor_prev_hash,
         "manifest": {
             "count": len(entries),
             "first_timestamp": entries[0].get("timestamp") if entries else None,
             "last_timestamp": entries[-1].get("timestamp") if entries else None,
             "payload_sha256": hashlib.sha256(canonical.encode()).hexdigest(),
-            "chain_valid_at_backup": verify_entries(entries),
+            "chain_valid_at_backup": verify_entries(entries, anchor_prev_hash),
             "backed_up_at": time.time(),
         },
         "entries": entries,
     }
 
 
-def write_backup(entries: list[dict], path: str) -> dict[str, Any]:
+def write_backup(entries: list[dict], path: str,
+                 anchor_prev_hash: str = GENESIS) -> dict[str, Any]:
     """Serialize a backup to disk. Returns the manifest."""
-    doc = build_backup(entries)
+    doc = build_backup(entries, anchor_prev_hash)
     with open(path, "w") as f:
         json.dump(doc, f, indent=2, sort_keys=True)
     return doc["manifest"]
+
+
+SEGMENT_FORMAT_VERSION = "dosync-audit-segment/v1"
+
+
+def write_segment(entries: list[dict], path: str, anchor_prev_hash: str,
+                  generation: int) -> dict[str, Any]:
+    """Write an ARCHIVE SEGMENT: a slice of the chain moved out of the live DB.
+
+    The segment is self-describing and independently verifiable: it records the
+    anchor it chains FROM (the previous segment's last hash, or genesis for the
+    first generation), so `verify_entries(seg["entries"], seg["anchor_prev_hash"])`
+    proves its integrity standalone — and consecutive generations interlock:
+    segment N+1's anchor MUST equal segment N's last_hash. The full history is
+    verifiable end to end by walking the segments in order, then the live DB.
+    """
+    if not entries:
+        raise ValueError("refusing to write an empty segment")
+    canonical = _canonical(entries)
+    doc = {
+        "format_version": SEGMENT_FORMAT_VERSION,
+        "manifest": {
+            "generation": generation,
+            "anchor_prev_hash": anchor_prev_hash,
+            "first_hash": entries[0].get("hash"),
+            "last_hash": entries[-1].get("hash"),
+            "count": len(entries),
+            "first_timestamp": entries[0].get("timestamp"),
+            "last_timestamp": entries[-1].get("timestamp"),
+            "payload_sha256": hashlib.sha256(canonical.encode()).hexdigest(),
+            "archived_at": time.time(),
+        },
+        "entries": entries,
+    }
+    with open(path, "w") as f:
+        json.dump(doc, f, indent=2, sort_keys=True)
+    return doc["manifest"]
+
+
+def read_segment(path: str) -> dict[str, Any]:
+    """Load and integrity-check an archive segment file."""
+    with open(path) as f:
+        doc = json.load(f)
+    if doc.get("format_version") != SEGMENT_FORMAT_VERSION:
+        raise ValueError(f"Not an audit segment file: {doc.get('format_version')}")
+    entries = doc.get("entries", [])
+    expected = doc["manifest"]["payload_sha256"]
+    actual = hashlib.sha256(_canonical(entries).encode()).hexdigest()
+    if actual != expected:
+        raise ValueError("Segment payload checksum mismatch — the file was altered after writing")
+    return doc
+
+
+def file_sha256(path: str) -> str:
+    """SHA-256 of the file bytes as written — the fingerprint the live chain's
+    `audit_archived` entry binds, so the segment cannot be silently swapped."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def read_backup(path: str) -> dict[str, Any]:

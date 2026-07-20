@@ -13,7 +13,9 @@ Uso:
 """
 
 import argparse
+import hashlib
 import json
+import os
 import sqlite3
 import sys
 import time
@@ -304,11 +306,21 @@ Examples:
     db_sub.add_parser("audit-reset", help="Reset broken audit log chain (creates backup first)")
     p_abak = db_sub.add_parser("audit-backup", help="Back up the audit log to a JSON file (does not modify the log)")
     p_abak.add_argument("--out", default=None, help="Backup file path (default: audit_backup_<ts>.json)")
-    p_aver = db_sub.add_parser("audit-verify", help="Verify the audit log SHA-256 chain (live DB or a backup file)")
+    p_aver = db_sub.add_parser("audit-verify", help="Verify the audit log SHA-256 chain (live DB, a backup file, or an archive segment)")
     p_aver.add_argument("--file", default=None, help="Verify a backup file instead of the live DB")
+    p_aver.add_argument("--segment", default=None, help="Verify an archive segment file standalone (prints its sha256 for cross-checking against the live chain's audit_archived entry)")
     p_arst = db_sub.add_parser("audit-restore", help="Restore the audit log from a backup file")
     p_arst.add_argument("--file", required=True, help="Backup file to restore from")
     p_arst.add_argument("--force", action="store_true", help="Overwrite a non-empty audit log")
+
+    p_arc = db_sub.add_parser(
+        "audit-archive",
+        help="Archive the oldest chain entries to an anchored segment file (dry-run; --apply with the hub STOPPED)")
+    p_arc.add_argument("--keep", type=int, default=2000,
+                       help="How many recent entries stay in the live DB (default 2000)")
+    p_arc.add_argument("--out", help="Segment file path (default: audit_segment_g<N>_<ts>.json)")
+    p_arc.add_argument("--apply", action="store_true",
+                       help="Write the archive (stop the hub first)")
 
     p_mig = db_sub.add_parser(
         "migrate-sensor-kind",
@@ -355,6 +367,7 @@ Examples:
         elif args.command == "audit-reset":   db_audit_reset(args)
         elif args.command == "audit-backup":  db_audit_backup(args)
         elif args.command == "migrate-sensor-kind": db_migrate_sensor_kind(args)
+        elif args.command == "audit-archive":  db_audit_archive(args)
         elif args.command == "audit-verify":  db_audit_verify(args)
         elif args.command == "audit-restore": db_audit_restore(args)
 
@@ -465,14 +478,123 @@ def db_migrate_sensor_kind(args):
           f"'Nothing to do' (the migration is idempotent).")
 
 
+def db_audit_archive(args):
+    """AUDIT-ARCHIVE (2026-07-19): segment the chain with a hash anchor.
+
+    The live chain grows without bound (24k entries and roughly doubling every
+    few days at the reference deployment), all of it reloaded into memory at
+    every hub start. Archiving moves the oldest entries to a self-describing
+    SEGMENT file while keeping the cryptography honest end to end:
+
+      * the segment records the anchor it chains FROM, so it verifies standalone;
+      * the DB stores the new anchor (last archived hash), so the live chain
+        verifies from there instead of genesis;
+      * and the act of archiving leaves its OWN `audit_archived` entry in the
+        live chain, binding the segment file's SHA-256 — the same philosophy as
+        policy_modified binding the policy file: an operation this consequential
+        must itself be tamper-evident. A silently swapped archive file would
+        contradict the hash the chain remembers.
+
+    Consecutive generations interlock (segment N+1's anchor == segment N's
+    last_hash), so the FULL history remains verifiable by walking the segments
+    in order and then the live DB. Dry-run by default; --apply writes.
+    RUN WITH THE HUB STOPPED: the hub's in-memory chain would diverge until
+    restart, and SQLite has one writer.
+    """
+    from dosync import audit_backup as ab
+
+    keep = args.keep
+    if keep < 1:
+        print("audit-archive — --keep must be >= 1 (the chain head stays live)")
+        sys.exit(1)
+
+    db = get_db(args.db)
+    anchor = db.get_audit_anchor() or {}
+    start_anchor = anchor.get("anchor_prev_hash", ab.GENESIS)
+    generation = anchor.get("generations", 0) + 1
+
+    with db._cursor() as cur:
+        cur.execute("SELECT id, entry_json FROM audit_log ORDER BY timestamp, id")
+        rows = cur.fetchall()
+    entries = [json.loads(r[1]) for r in rows]
+
+    # Fail-loudly: refuse to archive a chain that does not verify. Archiving
+    # would freeze the corruption into a "trusted" segment.
+    if not ab.verify_entries(entries, start_anchor):
+        print("audit-archive — REFUSED\n  The live chain does not verify from its anchor. "
+              "Investigate before archiving; archiving now would enshrine the corruption.")
+        sys.exit(1)
+
+    if len(entries) <= keep:
+        print(f"audit-archive\n  Nothing to do — {len(entries)} entries, keep={keep}.")
+        return
+
+    cut = len(entries) - keep
+    archived, remaining = entries[:cut], entries[cut:]
+    out = args.out or f"audit_segment_g{generation}_{int(time.time())}.json"
+
+    print(f"audit-archive — generation {generation}")
+    print(f"  Live entries:  {len(entries)}")
+    print(f"  To archive:    {len(archived)}  (through hash {archived[-1]['hash'][:16]}...)")
+    print(f"  To keep live:  {len(remaining)}")
+    print(f"  Segment file:  {out}")
+    if not args.apply:
+        print("\nDry run — nothing written. Re-run with --apply (WITH THE HUB STOPPED) to archive.")
+        return
+
+    manifest = ab.write_segment(archived, out, start_anchor, generation)
+    seg_sha = ab.file_sha256(out)
+
+    # The archival is itself a chain event: append audit_archived at the tail,
+    # computed EXACTLY like AuditLog.append (prev_hash, timestamp, sorted-json
+    # sha256) so the live chain stays verifiable.
+    tail_hash = remaining[-1]["hash"]
+    arch_entry = {
+        "type": "audit_archived",
+        "generation": generation,
+        "archived_count": len(archived),
+        "segment_first_hash": manifest["first_hash"],
+        "segment_last_hash": manifest["last_hash"],
+        "segment_file": os.path.basename(out),
+        "segment_sha256": seg_sha,
+        "prev_hash": tail_hash,
+        "timestamp": time.time(),
+    }
+    raw = json.dumps(arch_entry, sort_keys=True)
+    arch_entry["hash"] = hashlib.sha256(raw.encode()).hexdigest()
+
+    archived_ids = [r[0] for r in rows[:cut]]
+    with db._cursor() as cur:
+        cur.executemany("DELETE FROM audit_log WHERE id = ?",
+                        [(i,) for i in archived_ids])
+        cur.execute("INSERT INTO audit_log (entry_json, hash, timestamp) VALUES (?, ?, ?)",
+                    (json.dumps(arch_entry), arch_entry["hash"], arch_entry["timestamp"]))
+    db.set_audit_anchor({
+        "anchor_prev_hash": manifest["last_hash"],
+        "generations": generation,
+        "archived_total": anchor.get("archived_total", 0) + len(archived),
+        "last_archive_file": out,
+        "last_archive_sha256": seg_sha,
+        "archived_at": time.time(),
+    })
+
+    print(f"\nArchived. Segment sha256: {seg_sha[:32]}...")
+    print(f"  The live chain now anchors at {manifest['last_hash'][:16]}... and carries an")
+    print(f"  audit_archived entry binding the segment file. Restart the hub; then run")
+    print(f"  'db audit-verify' (live) and 'db audit-verify --segment {out}' to confirm both.")
+
+
 def db_audit_backup(args):
     """Back up the audit log to a self-describing JSON file. Read-only."""
     from dosync import audit_backup
     db = get_db(args.db)
     entries = db.load_audit_log()
     out = args.out or f"audit_backup_{int(time.time())}.json"
+    _anchor = db.get_audit_anchor()
     try:
-        manifest = audit_backup.write_backup(entries, out)
+        manifest = audit_backup.write_backup(
+            entries, out,
+            anchor_prev_hash=(_anchor or {}).get("anchor_prev_hash", audit_backup.GENESIS))
     except OSError as e:
         # This runs unattended from a systemd timer: a Python traceback in the
         # journal tells an operator nothing actionable. Say what failed and why.
@@ -492,22 +614,46 @@ def db_audit_backup(args):
 def db_audit_verify(args):
     """Verify the SHA-256 chain of the live audit log, or of a backup file."""
     from dosync import audit_backup
-    if args.file:
+    anchor_prev = audit_backup.GENESIS
+    anchor_note = ""
+    if getattr(args, "segment", None):
+        try:
+            doc = audit_backup.read_segment(args.segment)
+        except ValueError as e:
+            print(f"Audit verify — FAILED\n  {e}")
+            sys.exit(1)
+        entries = doc["entries"]
+        m = doc["manifest"]
+        anchor_prev = m["anchor_prev_hash"]
+        source = f"archive segment {args.segment} (generation {m['generation']})"
+        anchor_note = (f"  Anchors from: {anchor_prev[:16]}...\n"
+                       f"  File sha256:  {audit_backup.file_sha256(args.segment)[:32]}... "
+                       f"(cross-check against the audit_archived entry in the live chain)")
+    elif args.file:
         try:
             doc = audit_backup.read_backup(args.file)   # also checks file-level checksum
         except ValueError as e:
             print(f"Audit verify — FAILED\n  {e}")
             sys.exit(1)
         entries = doc["entries"]
+        anchor_prev = doc.get("anchor_prev_hash", audit_backup.GENESIS)
         source = f"backup file {args.file}"
     else:
         db = get_db(args.db)
         entries = db.load_audit_log()
+        db_anchor = db.get_audit_anchor()
+        if db_anchor:
+            anchor_prev = db_anchor.get("anchor_prev_hash", audit_backup.GENESIS)
+            anchor_note = (f"  Anchored:    generation {db_anchor.get('generations')}, "
+                           f"{db_anchor.get('archived_total')} entries archived "
+                           f"(latest: {db_anchor.get('last_archive_file')})")
         source = "live database"
-    ok = audit_backup.verify_entries(entries)
+    ok = audit_backup.verify_entries(entries, anchor_prev)
     print("Audit verify")
     print(f"  Source:      {source}")
     print(f"  Entries:     {len(entries)}")
+    if anchor_note:
+        print(anchor_note)
     print(f"  Chain valid: {'yes ✓' if ok else 'NO ✗ — tamper or corruption detected'}")
     sys.exit(0 if ok else 1)
 

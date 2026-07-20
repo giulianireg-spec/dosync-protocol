@@ -39,6 +39,15 @@ CREATE TABLE IF NOT EXISTS audit_log (
     timestamp       REAL NOT NULL
 );
 
+-- AUDIT-ARCHIVE (2026-07-19): metadata for chain segmentation. When older
+-- entries are archived to a segment file, the live chain no longer starts at
+-- genesis — it starts at the ANCHOR (the last archived entry's hash), stored
+-- here so verification and hub restore know where the chain begins.
+CREATE TABLE IF NOT EXISTS audit_meta (
+    key             TEXT PRIMARY KEY,
+    value_json      TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS presence_signals (
     device_id       TEXT PRIMARY KEY,
     signal_json     TEXT NOT NULL,
@@ -267,6 +276,20 @@ class DoSyncDB:
                 entry.get("hash", ""),
                 entry.get("timestamp", time.time()),
             ))
+
+    def get_audit_anchor(self) -> dict | None:
+        """The archive anchor, or None if the chain has never been archived."""
+        with self._cursor() as cur:
+            cur.execute("SELECT value_json FROM audit_meta WHERE key = 'archive_anchor'")
+            row = cur.fetchone()
+        return json.loads(row[0]) if row else None
+
+    def set_audit_anchor(self, anchor: dict) -> None:
+        with self._cursor() as cur:
+            cur.execute("""
+                INSERT INTO audit_meta (key, value_json) VALUES ('archive_anchor', ?)
+                ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json
+            """, (json.dumps(anchor),))
 
     def load_audit_log(self) -> list[dict]:
         """Carga el audit log completo ordenado por timestamp."""

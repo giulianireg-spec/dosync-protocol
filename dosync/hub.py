@@ -901,6 +901,10 @@ class AuditLog:
         self._entries: list[dict] = []
         self._prev_hash = "0" * 64
         self._persist_cb = None   # set by DoSyncHub after db.init()
+        # AUDIT-ARCHIVE: where THIS chain begins. Genesis for a chain that has
+        # never been archived; the last archived entry's hash otherwise (set at
+        # restore from audit_meta). Verification starts here, not at genesis.
+        self.anchor_prev_hash = "0" * 64
 
     def append(self, entry: dict) -> str:
         entry["prev_hash"] = self._prev_hash
@@ -915,7 +919,7 @@ class AuditLog:
         return entry_hash
 
     def verify(self) -> bool:
-        prev = "0" * 64
+        prev = self.anchor_prev_hash
         for entry in self._entries:
             stored_hash = entry.pop("hash")
             raw = json.dumps(entry, sort_keys=True)
@@ -1292,7 +1296,14 @@ class DoSyncHub:
                 log.warning("Could not restore device %s: %s",
                             manifest_dict.get("device_id", "?"), e)
 
-        # Restore audit log
+        # Restore audit log. If older entries were archived to a segment file,
+        # the chain starts at the stored anchor, not at genesis — both the
+        # append continuity (_prev_hash) and verification (anchor_prev_hash)
+        # must honor it.
+        _anchor = self.db.get_audit_anchor()
+        if _anchor:
+            self.audit_log.anchor_prev_hash = _anchor.get("anchor_prev_hash", "0" * 64)
+            self.audit_log._prev_hash = self.audit_log.anchor_prev_hash
         for entry in self.db.load_audit_log():
             self.audit_log._entries.append(entry)
             self.audit_log._prev_hash = entry.get("hash", "0" * 64)
