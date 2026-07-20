@@ -206,7 +206,7 @@ codebase already overrides ABORT to CONTINUE for emergencies). Compensation, if 
 deployment-declared policy, never protocol-automatic. Manual escalation as a formal state
 is the undefended gap and belongs to EMERGENCY-UNSAT-ESCALATION's family.
 
-## AUDIT-ARCHIVE — Segment the chain with a hash anchor — SHIPPED 2026-07-19 · effort M
+## AUDIT-ARCHIVE — Segment the chain with a hash anchor — CONFIRMED 2026-07-20 · effort M
 The live chain grew without bound (24,022 entries at the reference deployment, roughly
 doubling every few days), all reloaded into memory at every hub start. Design: anchored
 segments. `manage.py db audit-archive --keep N --out FILE` (dry-run default, --apply with
@@ -220,5 +220,9 @@ policy_modified binding the policy file: a silently swapped archive would contra
 hash the chain remembers. Fail-loudly: refuses to archive a chain that does not verify
 (archiving would enshrine the corruption). Backups are now self-contained (carry their
 anchor). Pinned by tests: standalone segment verification, restart continuity, generation
-interlock, tamper detection on both sides, broken-chain refusal. Production validation
-pending — the reference deployment's 24k entries await their first archive.
+interlock, tamper detection on both sides, broken-chain refusal. **CONFIRMED in production 2026-07-20** (generation 1): 28,189 live entries → 26,189 archived
+to a segment (sha256 2a8841ae…), 2,000 kept live. Live DB verifies anchored (`generation 1,
+26189 archived`, Chain valid ✓); the segment verifies standalone (Chain valid ✓); the
+audit_archived entry binds the segment's sha256. The operational win landed as designed:
+the hub restored 2,001 entries instead of 28,189 — the chain no longer reloads unbounded
+history into memory at every start, with zero loss of end-to-end verifiability.
