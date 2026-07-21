@@ -288,3 +288,18 @@ and SMS fired, 16 lamps are off" instead of a blind failure. (The poll landed af
 execution finished, so it returned the terminal `partial` rather than the pending
 `partial` block — the pending block is the shorter-deadline path, exercised by the MCP
 client's own timeout and pinned by the HTTP test.)
+
+## RADAR-v11 — "Local fallback in WiZ/Shelly adapters" — WILL NOT IMPLEMENT (by design) · 2026-07-21
+Reviewed against DESIGN-PRINCIPLES.md §"On adapter-side fallback". This radar item, as
+worded, describes adapter autonomy — an adapter acting on a device when the hub is
+unavailable — which the project has ALREADY decided against, deliberately and in writing:
+"A protocol cannot have a 'mode without the protocol.'" Adapter-side bypass would break the
+tamper-evident audit chain (actions with no chained entry), the policy engine (the TVs
+WOULD act in an emergency — the exact thing the care-facility example forbids), and the
+semantic model (actions become commands again). The correct resilience model is hub
+availability, not adapter autonomy: FailurePolicy.RETRY for transient failures, emergency
+snapshots re-firing on restart, StateAwareResolver TTL for temporary unavailability, and
+systemd Restart=always. Closing this item rather than implementing it. Note: the 16 WiZ
+timeouts in drill int-1784606153-18aebe are NOT a fallback problem — the lamps were
+powered off; no local fallback can command a lamp with no power. That is DEVICE-HEALTH-ACTIVE
+(c) territory (distinguish powered-off from network-unreachable), not v11.
