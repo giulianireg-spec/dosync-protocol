@@ -264,7 +264,7 @@ artifacts, as predicted). The signed report is third-party-verifiable without hu
 (`certify.py --verify`) — independent proof of protocol conformance for the IEEE paper and
 any grant.
 
-## MCP-V13 — Partial response before the global timeout — SHIPPED 2026-07-21 · effort M
+## MCP-V13 — Partial response before the global timeout — CONFIRMED 2026-07-21 · effort M
 Radar v0.3 item, and the fix for the known gap "MCP tool reports failure when the intent
 executes correctly but devices are physically off". Before: a poll of a still-executing
 intent returned an opaque {status: pending}, and the MCP tool on timeout said only "still
@@ -279,4 +279,12 @@ of a blind message. The callback is best-effort — a raising progress_cb is swa
 observer cannot break the observed). Found along the way: the main execution path called the
 new cb-wrapper WITHOUT passing progress_cb (silent no-op) — caught by the smoke test, not by
 reasoning; fixed and pinned. 627/627; the HTTP partial exposure verified to fail with the
-bug reintroduced. Production validation pending.
+bug reintroduced. **CONFIRMED in production 2026-07-21** (drill int-1784606153-18aebe): a
+real emergency over the live registry executed 23 actions — the responsive devices recorded
+success (both living lamps on at brightness 100, the SMS sent, the alarm activated, the PIR
+read) while 16 powered-off WiZ bulbs timed out at 5.0s. This is precisely the case v13
+exists for: the successful actions survive the others' timeouts, so a caller learns "siren
+and SMS fired, 16 lamps are off" instead of a blind failure. (The poll landed after
+execution finished, so it returned the terminal `partial` rather than the pending
+`partial` block — the pending block is the shorter-deadline path, exercised by the MCP
+client's own timeout and pinned by the HTTP test.)
