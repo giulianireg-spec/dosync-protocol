@@ -324,3 +324,31 @@ evaluated / 17 included with coherent, decomposable scores (notifier-sms-01=42 =
 30 + notify actuator 12; WiZ bulbs=34), all now sourced from the single _score_breakdown
 the resolver decides with. Internal refactor, no wire-format change; the explain endpoint's
 numbers can no longer diverge from the decision.
+
+## RADAR-v8 — "Consistency model for simultaneous intents" — ALREADY IMPLEMENTED · reviewed 2026-07-21
+Reviewed before treating as pending work — and it is not pending. A consistency model for
+concurrent intents already exists and is validated:
+
+- **`dosync/device_arbiter.py`** (270 lines): per-device claims arbitrated by URGENCY rank.
+  An emergency action asserts an open-ended claim on the devices it touches; a lower-urgency
+  action targeting a claimed device yields. Claims are NOT fixed-duration locks (an earlier
+  30s-TTL design was explicitly rejected for lingering after emergencies resolved) — a claim
+  is HELD while the emergency intent is active, RELEASED on completion with a short `grace`
+  window for straggler commands, and capped by `max_hold` so a wiring bug can never lock a
+  device forever. Serialization is per-device; different devices stay fully parallel.
+- **Same-urgency conflicts are deliberately the PolicyEngine's job, pre-dispatch** — a
+  documented design decision, not a gap. Urgency is the arbitration axis at the executor
+  boundary; class-priority arbitration belongs earlier in the pipeline.
+- **`hub._active_intents` / `_active_intent_devices`**: active-intent registry for conflict
+  detection, wired into execute_intent (claim asserted at dispatch, released in `finally`
+  with a rank guard so a lower-urgency intent finishing first cannot start the grace on a
+  higher-urgency claim).
+- **Coverage: `tests/test_emergency_preemption.py` (12 tests)** — emergency-wins-over-routine
+  in all orderings (before/during/after in-flight), claim held-until-released, grace
+  expiry, max_hold cap, per-device isolation, both-routines-coexist (same-urgency), audit
+  supersede hook, and the rank-guard release. All green.
+- **`docs/BENCHMARK-CONCURRENT.md`**: zero timeouts at N=10 simultaneous intents on the Pi 5,
+  CPU <15% — the event loop handles concurrent independent tasks without starvation.
+
+Closing as already-satisfied. Any future work here is refinement (e.g. formal TLA+-style
+model of the claim state machine for the paper), not missing capability.
