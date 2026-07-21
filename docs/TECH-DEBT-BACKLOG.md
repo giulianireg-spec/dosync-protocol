@@ -108,7 +108,12 @@ successful probe, so recovery is detected within one interval WITHOUT executing 
            unreachable device in /v1/health/reachability `assessments`; documented spec §7.4.
            Answers the panel's operator question (#2, Delgado): "is this something I need to
            go fix?" — network_or_app yes, likely_powered_off check the power. 6 tests pin the
-           calibration incl. the honest indeterminate case. Production validation pending.
+           calibration incl. the honest indeterminate case. **CONFIRMED in production
+           2026-07-21:** an emergency drill left 4 powered-off WiZ bulbs (comedor-01/02,
+           living1-01/02) unreachable; each reported `indeterminate (low)` — "device never
+           sent a heartbeat, so power and network cannot be distinguished" — which is the
+           correct, honest verdict: those bulbs never used heartbeat, so the UDP transport
+           genuinely cannot tell, and the system says so rather than guessing.
 
 Note the deliberate asymmetry, preserved from the original design: the probe is POSITIVE-SIGNAL
 ONLY. A device that fails get_state() is skipped, never marked unreachable — a failing probe is
