@@ -10,13 +10,16 @@
 
 DoSync uses a self-certification model. Any developer or manufacturer can certify their implementation independently using the official certification CLI. No third-party review is required to claim certification — the signed JSON report is the certificate.
 
-The certification suite has three tiers. Each tier is cumulative: Standard includes all Basic tests, Emergency includes all Standard tests.
+The certification suite has four tiers. Each tier is cumulative: Standard includes all Basic tests, Emergency includes all Standard tests, Conformance includes all Emergency tests.
 
 | Tier | Tests | What it validates |
 |---|---|---|
 | **Basic** | 10 | Connectivity, authentication, device registration, manifest structure |
-| **Standard** | 32 | All Basic + intent processing, event handling, error codes, privacy, async polling |
-| **Emergency** | 35 | All Standard + emergency override, audit log integrity, firmware re-registration |
+| **Standard** | 33 | All Basic + intent processing, event handling, error codes, privacy, async polling |
+| **Emergency** | 44 | All Standard + emergency override, audit log integrity, firmware re-registration |
+| **Conformance** | 52 | All Emergency + v0.4 protocol features: sensor-kind declarations, policy-modification provenance in the audit chain, policy fingerprinting, and archive-preserving chain integrity |
+
+**Conformance tier note.** The C-series tests verify the guarantees added in the 0.4 cycle over the wire against a running hub. Several are strongest when the hub runs a deployment policy that *modifies* plans (C04–C06 look for `policy_modified` chain entries with full provenance); run the tier against a hub with a real `DOSYNC_POLICIES` file, and exercise at least one intent that a policy modifies, for a complete result. C08 passes whether or not the chain has been archived — it verifies that segmentation preserves the tamper-evident guarantee when archiving *is* in use.
 
 ---
 

@@ -1717,6 +1717,10 @@ def get_status():
         "devices":         len(hub.registry.all()),
         "audit_entries":   len(hub.audit_log.entries()),
         "audit_integrity": hub.audit_log.verify(),
+        # AUDIT-ARCHIVE: surface whether the chain is anchored (segmented) so a
+        # conformance test can verify the anchor is honored end to end.
+        "audit_anchored":  hub.audit_log.anchor_prev_hash != "0" * 64,
+        "audit_anchor_prefix": hub.audit_log.anchor_prev_hash[:16],
         "occupied":        occupancy.occupied,
         "ws_connections":  ws_manager.active_connections,
         "db":              db_stats,

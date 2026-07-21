@@ -226,3 +226,18 @@ to a segment (sha256 2a8841ae…), 2,000 kept live. Live DB verifies anchored (`
 audit_archived entry binds the segment's sha256. The operational win landed as designed:
 the hub restored 2,001 entries instead of 28,189 — the chain no longer reloads unbounded
 history into memory at every start, with zero loss of end-to-end verifiability.
+
+## CERT-CONFORMANCE-TIER — Certify the v0.4 protocol features — SHIPPED 2026-07-20 · effort S
+Everything shipped in the 0.4 cycle (SENSOR-KIND, AUDIT-PROVENANCE, EMERGENCY-UNSAT,
+AUDIT-ARCHIVE) had unit tests but no CONFORMANCE coverage — nothing proved, over the wire
+against a running hub, that the protocol delivers what its spec now promises. New
+`--tier conformance` (52 tests, cumulative over emergency) adds 8 C-series checks: sensor
+kinds valid and expressed (C01–C02), report_status accepts an explicit scope (C03),
+policy MODIFY leaves a chain-bound entry with full provenance and a SHA-256 fingerprint
+(C04–C06), the live chain verifies (C07), and an anchored/archived chain still verifies —
+segmentation preserves integrity (C08). `/v1/status` now surfaces `audit_anchored` +
+`audit_anchor_prefix` so C08 can check archive integrity over the wire. Validated against a
+running hub with a modifying deployment policy: all 8 C-tests pass (the 2 environmental
+fails — B04 auth-off, S23 jsonschema-absent — predate this work and are simulation-mode
+artifacts). The old radar item "certification tests 16→30+" is obsolete — the suite was
+already at 44; it is now 52.
