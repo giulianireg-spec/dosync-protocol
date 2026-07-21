@@ -353,7 +353,7 @@ concurrent intents already exists and is validated:
 Closing as already-satisfied. Any future work here is refinement (e.g. formal TLA+-style
 model of the claim state machine for the paper), not missing capability.
 
-## PANEL-POLISH-2026-07-21 — Four "effort S" items from the technical review — SHIPPED 2026-07-21
+## PANEL-POLISH-2026-07-21 — Four "effort S" items from the technical review — CONFIRMED 2026-07-21
 Closed in-session, while the debt was fresh, per the panel's own recommendation.
 - **#1 Heartbeat report size limit (Sosa).** POST /v1/heartbeat's `report` is now bounded:
   ≤32 keys, ≤4096 bytes serialized, rejected 422 otherwise. "No position on contents" is not
@@ -369,7 +369,9 @@ Closed in-session, while the debt was fresh, per the panel's own recommendation.
 - **#7 progress_cb failure counter (Paredes).** A failing progress callback is still
   swallowed (an observer can't break execution) but now counted (hub.progress_cb_failures),
   logged at WARNING not DEBUG, and surfaced in /v1/status — swallowed is no longer invisible.
-All 637 tests green; #1 and #7 verified to fail with the bug reintroduced. The remaining
+All 637 tests green; #1 and #7 verified to fail with the bug reintroduced.
+**CONFIRMED in production 2026-07-21:** normal heartbeat → 200, abusive 5000-byte report →
+422, /v1/status reports progress_cb_failures: 0. The remaining
 panel items (device-health (c), formal claim model for the paper, online archiving, light
 heartbeat mode, third-party certification, end-user UI) are M/L or future-scope, tracked
 separately.
