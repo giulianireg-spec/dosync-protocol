@@ -526,7 +526,18 @@ telemetry about one device, not a data channel. Reports exceeding either bound a
 with `422`.
 
 A heartbeat is **positive signal only**: it marks the device reachable and
-records `last_heartbeat`, and it never marks a device unreachable. A device that
+records `last_heartbeat`, and it never marks a device unreachable.
+
+**Cause attribution for unreachable devices.** A command timeout on a UDP device
+(e.g. WiZ) is identical whether the device lost power or lost network — the
+transport carries no ACK to separate them. Rather than guess, `GET
+/v1/health/reachability` cross-references the heartbeat signal and reports, per
+unreachable device, a cause with its evidence and confidence:
+`network_or_app` (heartbeat within the last ~90 s but unresponsive to actions —
+alive just now, so not a power loss), `likely_powered_off` (long heartbeat
+silence and unresponsive), or `indeterminate` (never heartbeat'd, so power and
+network cannot be distinguished — stated plainly rather than guessed). The
+attribution never claims certainty the transport cannot provide. A device that
 stops sending heartbeats is simply one the hub has not heard from — weaker
 evidence than an action timing out, so it does not by itself produce an
 "unreachable" verdict. The optional `report` is stored verbatim and surfaced in

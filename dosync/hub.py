@@ -1147,6 +1147,49 @@ class DeviceHealth:
                                  else "responded to its last action"))),
         }
 
+    # DEVICE-HEALTH-ACTIVE (c) — powered-off vs network-unreachable.
+    # The honest core: for a UDP device (WiZ), a command timeout looks identical
+    # whether the bulb has no power or its wifi dropped — UDP has no connection
+    # ACK to tell them apart. So (c) does NOT guess the cause from the timeout
+    # alone (that would be a workaround). It CROSS-REFERENCES the independent
+    # signal we already collect — the device-initiated heartbeat (part b) — and
+    # returns a verdict CALIBRATED WITH ITS EVIDENCE, admitting "indeterminate"
+    # when the transport genuinely cannot tell. A device that heartbeat'd seconds
+    # ago but ignores a command was alive just now (network/app issue, not
+    # power); one silent for a long time AND unresponsive is more likely off; one
+    # that never heartbeats at all leaves us honestly unable to say.
+    _HEARTBEAT_FRESH_S = 90.0   # a heartbeat this recent means "was alive just now"
+
+    def reachability_assessment(self, device_id: str, now: float | None = None) -> dict:
+        """Best available attribution for an unreachable device, with its
+        evidence and a confidence level — never a bare guess."""
+        now = now if now is not None else time.time()
+        snap = self.snapshot(device_id)
+        if snap["reachable"] is not False:
+            return {"cause": "reachable", "confidence": "n/a",
+                    "evidence": "device is responding", "device_id": device_id}
+
+        last_hb = snap.get("last_heartbeat")
+        hb_age = (now - last_hb) if last_hb else None
+
+        if hb_age is not None and hb_age < self._HEARTBEAT_FRESH_S:
+            cause, conf, why = ("network_or_app", "high",
+                f"heartbeat {hb_age:.0f}s ago but not responding to actions — the device "
+                f"was alive just now, so this is a network or application fault, not power")
+        elif last_hb is not None:
+            cause, conf, why = ("likely_powered_off", "medium",
+                f"no heartbeat for {hb_age:.0f}s and unresponsive — the device stopped "
+                f"reaching out, consistent with loss of power (but a prolonged network "
+                f"outage cannot be fully excluded)")
+        else:
+            cause, conf, why = ("indeterminate", "low",
+                "device never sent a heartbeat, so power and network cannot be "
+                "distinguished from a command timeout alone (transport limitation)")
+        return {"cause": cause, "confidence": conf, "evidence": why,
+                "device_id": device_id,
+                "last_heartbeat_age_s": round(hb_age, 1) if hb_age is not None else None,
+                "unreachable_since": snap.get("unreachable_since")}
+
     def load_from_db(self) -> None:
         try:
             db = getattr(self._hub, "db", None)

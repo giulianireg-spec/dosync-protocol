@@ -963,14 +963,23 @@ async def get_reachability(auth=Depends(require_auth)):
     """
     snapshots = [hub.health.snapshot(d.device_id) for d in hub.registry.all()]
     unreachable = [s for s in snapshots if s["reachable"] is False]
+    # DEVICE-HEALTH-ACTIVE (c): for each unreachable device, cross-reference the
+    # heartbeat signal to attribute a cause WITH its evidence and confidence —
+    # actionable for the operator ("is this something I need to go fix?") without
+    # pretending to certainty the transport cannot provide.
+    assessments = {s["device_id"]: hub.health.reachability_assessment(s["device_id"])
+                   for s in unreachable}
     return {
         "devices": snapshots,
         "unreachable": [s["device_id"] for s in unreachable],
+        "assessments": assessments,
         "total_devices": len(snapshots),
         "total_unreachable": len(unreachable),
-        "note": ("Passive health from real interactions, not a heartbeat. "
-                 "'unreachable' means the device did not respond to its last "
-                 "action; it may be powered off or network-unreachable."),
+        "note": ("Passive + active health. 'unreachable' means no response to the last "
+                 "action. For each unreachable device, `assessments` attributes a likely "
+                 "cause (network_or_app / likely_powered_off / indeterminate) with its "
+                 "evidence and confidence, cross-referenced against heartbeats — never a "
+                 "bare guess."),
     }
 
 

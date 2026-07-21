@@ -97,7 +97,18 @@ successful probe, so recovery is detected within one interval WITHOUT executing 
            rpi-dht22-01 acknowledged; /v1/health/reachability shows last_heartbeat stamped,
            note "last confirmed by a device-initiated heartbeat", and the self-report
            {uptime_s, firmware} stored verbatim.
-  TODO (c) distinguish "powered off" from "network-unreachable" where the transport allows it.
+  DONE (c) distinguish "powered off" from "network-unreachable" — SHIPPED 2026-07-21. The
+           honest design: a UDP command timeout (WiZ) is identical for power loss and network
+           loss, so (c) does NOT guess from the timeout (that would be a workaround). It
+           cross-references the independent heartbeat signal (part b) via
+           DeviceHealth.reachability_assessment and returns a cause WITH evidence and
+           confidence — network_or_app (heartbeat <90s ago but unresponsive: alive just now),
+           likely_powered_off (long heartbeat silence + unresponsive), or indeterminate
+           (never heartbeat'd: transport genuinely cannot tell, stated plainly). Exposed per
+           unreachable device in /v1/health/reachability `assessments`; documented spec §7.4.
+           Answers the panel's operator question (#2, Delgado): "is this something I need to
+           go fix?" — network_or_app yes, likely_powered_off check the power. 6 tests pin the
+           calibration incl. the honest indeterminate case. Production validation pending.
 
 Note the deliberate asymmetry, preserved from the original design: the probe is POSITIVE-SIGNAL
 ONLY. A device that fails get_state() is skipped, never marked unreachable — a failing probe is
