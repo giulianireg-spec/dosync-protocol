@@ -350,8 +350,8 @@ concurrent intents already exists and is validated:
 - **`docs/BENCHMARK-CONCURRENT.md`**: zero timeouts at N=10 simultaneous intents on the Pi 5,
   CPU <15% — the event loop handles concurrent independent tasks without starvation.
 
-Closing as already-satisfied. Any future work here is refinement (e.g. formal TLA+-style
-model of the claim state machine for the paper), not missing capability.
+Closing as already-satisfied. The one piece of refinement it named — a formal model of the
+claim state machine for the paper — was DELIVERED 2026-07-21 (see CLAIM-STATE-MACHINE below).
 
 ## PANEL-POLISH-2026-07-21 — Four "effort S" items from the technical review — CONFIRMED 2026-07-21
 Closed in-session, while the debt was fresh, per the panel's own recommendation.
@@ -375,3 +375,17 @@ All 637 tests green; #1 and #7 verified to fail with the bug reintroduced.
 panel items (device-health (c), formal claim model for the paper, online archiving, light
 heartbeat mode, third-party certification, end-user UI) are M/L or future-scope, tracked
 separately.
+
+
+## CLAIM-STATE-MACHINE — Formal model of the arbiter claim FSM — SHIPPED 2026-07-21 · effort M
+Panel #5 (parada técnica, Aguirre): the arbiter worked and was tested, but "works on my Pi"
+needs a formal model to become "probably correct" — the difference that matters for the IEEE
+paper. Delivered as spec §3.1 "Claim state machine (formal model)": four states
+(ABSENT/HELD/RELEASING/EXPIRED) defined by predicates over the claim record, a full
+transition table, and six invariants I1–I6 each annotated with the test that would fail if
+violated. Crucially it is not prose-only: tests/test_claim_state_machine.py (8 tests) pins
+the FSM directly against _Claim.is_active/release AND a meta-test verifies every invariant
+the spec cites is backed by a real, present test — the formal model cannot drift from the
+code or cite phantom tests (both verified to fail when a citation or a predicate is broken).
+The two-emergencies-same-device open edge (Benítez #6) is recorded in the spec as future
+work rather than silently omitted. 645/645.

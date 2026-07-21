@@ -63,6 +63,77 @@ The window in which the emergency remains device-final is **bounded by the overl
 
 This guarantee is enforced at the **execution layer** (the device arbiter), not the pre-dispatch policy layer, because a pre-dispatch policy cannot retract or reorder actions from a plan that is already in flight. It applies to instant actions only; preemption of a long-running operation (e.g., a drone mid-maneuver) is governed by the operation lifecycle (the `INTERRUPTED` state), not this section.
 
+### 3.1 Claim state machine (formal model)
+
+The overlap guarantee of §3 is enforced by a per-device *claim* whose lifecycle is a finite
+state machine. This section states it formally so the guarantee can be checked against the
+implementation rather than trusted. Every device is in exactly one claim state at any time.
+
+**States.**
+
+| State | Predicate (in terms of the claim record) | Meaning |
+|---|---|---|
+| `ABSENT` | no claim record for the device | no emergency owns the device; actions apply by normal urligibility |
+| `HELD` | `released_at = ⊥` ∧ `now < set_at + max_hold` | an active emergency owns the device, open-ended |
+| `RELEASING` | `released_at ≠ ⊥` ∧ `now < released_at + grace` | the emergency completed; a short grace still covers dispatch skew |
+| `EXPIRED` | (`released_at = ⊥` ∧ `now ≥ set_at + max_hold`) ∨ (`released_at ≠ ⊥` ∧ `now ≥ released_at + grace`) | the claim no longer owns the device; treated as `ABSENT` on next access |
+
+Where `⊥` denotes “unset”, `set_at` is the time the claim was asserted, `grace` =
+`DOSYNC_EMERGENCY_CLAIM_GRACE` (default 3 s), and `max_hold` =
+`DOSYNC_EMERGENCY_CLAIM_MAX_HOLD` (safety cap).
+
+**Transitions.**
+
+| From | Event | To | Guard |
+|---|---|---|---|
+| `ABSENT` | an emergency action targets the device | `HELD` | — |
+| `HELD` | an emergency action of equal/higher rank targets the device | `HELD` | refreshes `set_at` |
+| `HELD` | `release_claim()` by the owning rank | `RELEASING` | sets `released_at := now` |
+| `HELD` | `now` reaches `set_at + max_hold` | `EXPIRED` | safety cap — no external event needed |
+| `RELEASING` | `now` reaches `released_at + grace` | `EXPIRED` | grace elapsed |
+| `RELEASING` | a *new* emergency action targets the device | `HELD` | a fresh claim replaces the releasing one |
+| `EXPIRED` | any access | `ABSENT` | lazily reclaimed |
+
+Note there is **no transition** from `HELD` or `RELEASING` to `ABSENT` driven by a
+*lower*-rank release: `release_claim(rank=r)` is guarded so that a lower-urgency intent
+finishing first cannot start the grace countdown on a higher-urgency claim (see
+`test_lower_urgency_release_does_not_free_emergency_claim`).
+
+**Invariants** (each maps to a test that would fail if violated):
+
+- **I1 — Emergency-final on overlap.** While a device is `HELD` or `RELEASING` by an
+  emergency-rank claim, no action of strictly lower rank is applied to it; such an action is
+  dropped and audited `action_superseded_by_priority`.
+  *(test_emergency_before_routine_blocks_routine, test_emergency_during_inflight_routine)*
+- **I2 — No permanent lock.** A claim cannot keep a device out of `ABSENT` forever: from
+  `HELD`, `EXPIRED` is reached no later than `set_at + max_hold` even with no release event.
+  *(test_max_hold_safety_cap)*
+- **I3 — Bounded ownership, not fixed duration.** After `release_claim`, ownership persists
+  for exactly `grace`, not a fixed wall-clock window from `set_at`.
+  *(test_grace_expires_after_release)*
+- **I4 — Per-device isolation.** The state of one device's claim never constrains actions on
+  another device; different devices are independent state machines executing in parallel.
+  *(test_claim_is_per_device)*
+- **I5 — Rank-guarded release.** A `release_claim(rank=r)` only affects claims of rank ≤ r;
+  a lower-rank release is a no-op on a higher-rank claim.
+  *(test_lower_urgency_release_does_not_free_emergency_claim)*
+- **I6 — Equal-rank coexistence.** Two claims of the same non-emergency rank do not supersede
+  each other — same-priority conflicts are resolved pre-dispatch (§2), not by the arbiter.
+  *(test_no_claim_both_routines_apply)*
+
+**Correspondence to the implementation.** The predicates above are exactly
+`_Claim.is_active(now)` in `dosync/device_arbiter.py`: `released_at is None → now < set_at +
+max_hold` (HELD), else `now < released_at + grace` (RELEASING); `release()` sets
+`released_at` once (idempotent, so a second release cannot extend the grace). The FSM has no
+hidden state — a claim is fully described by `(rank, set_at, released_at, grace, max_hold)`.
+
+**A known open edge (recorded, not yet closed).** Two emergencies dispatched concurrently at
+the *same* rank against the same device do not arbitrate against each other (I1 governs
+strictly-lower rank; §2 handles same-rank pre-dispatch, but concurrently-dispatched
+emergencies were not seen together pre-dispatch). The device receives both writes; the later
+write is final (§7 cache convergence applies). Formalizing and bounding this two-emergency
+case is future work (panel 2026-07-21, Benítez).
+
 ### 4. Device-level conflict resolution
 
 Two cases, resolved at two different layers:
