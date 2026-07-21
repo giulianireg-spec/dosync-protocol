@@ -304,7 +304,7 @@ timeouts in drill int-1784606153-18aebe are NOT a fallback problem — the lamps
 powered off; no local fallback can command a lamp with no power. That is DEVICE-HEALTH-ACTIVE
 (c) territory (distinguish powered-off from network-unreachable), not v11.
 
-## RESOLVER-SCORING-VALIDATION — One scoring source, validated (radar v9) — SHIPPED 2026-07-21 · effort S
+## RESOLVER-SCORING-VALIDATION — One scoring source, validated (radar v9) — CONFIRMED 2026-07-21 · effort S
 The relevance scoring was computed in two places: `_relevance_score` (what the resolver
 DECIDES with) and `explain()` (which recomputed the same arithmetic to tell the story),
 with a comment promising they "must mirror exactly" — unenforced by the language. If one
@@ -319,5 +319,8 @@ explain==decision property is pinned, PLUS absolute-value tests (siren=52, locat
 that anchor behavior to concrete numbers — the self-consistency check alone became
 tautological once both paths read one source (caught by testing: a broken weight passed the
 coincidence test but failed the absolute tests, which is the real regression guard).
-Production validation optional — this is an internal refactor with no wire-format change;
-S11 (explainability) in the cert suite already exercises the endpoint.
+**CONFIRMED in production 2026-07-21:** /v1/intents/ensure_safety/explain returns 20
+evaluated / 17 included with coherent, decomposable scores (notifier-sms-01=42 = emergency
+30 + notify actuator 12; WiZ bulbs=34), all now sourced from the single _score_breakdown
+the resolver decides with. Internal refactor, no wire-format change; the explain endpoint's
+numbers can no longer diverge from the decision.
