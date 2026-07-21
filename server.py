@@ -477,6 +477,14 @@ class EventRequest(BaseModel):
     data: dict[str, Any] = {}
 
 
+class HeartbeatRequest(BaseModel):
+    device_id: str
+    # A device MAY volunteer a structured self-report (battery %, rssi, firmware,
+    # uptime…). Optional and free-form: the hub stores it verbatim and takes no
+    # position on its contents — it is the device's own word about itself.
+    report: dict[str, Any] = {}
+
+
 # ── App ───────────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
@@ -1366,6 +1374,31 @@ async def receive_event(req: EventRequest, auth: str = Depends(require_auth)):
         "device_id": req.device_id,
         "event_id":  req.event_id,
         "severity":  req.severity,
+    }
+
+
+@app.post("/v1/heartbeat", tags=["Devices"])
+async def receive_heartbeat(req: HeartbeatRequest, auth: str = Depends(require_auth)):
+    """DEVICE-HEALTH-ACTIVE (b): a device proactively reports it is alive.
+
+    Complements the hub's periodic pull-probe with device-initiated push, which
+    is the only liveness signal available for devices the hub cannot poll
+    (behind NAT, sleeping, inbound-blocked). Positive signal only: it marks the
+    device reachable and stamps last_heartbeat; it never marks a device
+    unreachable. Unknown devices are rejected — a heartbeat is an assertion of
+    identity and must come from a registered device.
+    """
+    if not hub.registry.get(req.device_id):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Device '{req.device_id}' not registered. Register it first.")
+    hub.health.record_heartbeat(req.device_id, req.report or None)
+    snap = hub.health.snapshot(req.device_id)
+    return {
+        "status":         "acknowledged",
+        "device_id":      req.device_id,
+        "last_heartbeat": snap["last_heartbeat"],
+        "reachable":      snap["reachable"],
     }
 
 

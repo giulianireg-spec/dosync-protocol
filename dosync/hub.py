@@ -1037,6 +1037,35 @@ class DeviceHealth:
             self._state[device_id] = st
             self._persist(device_id)
 
+    def record_heartbeat(self, device_id: str, reported: dict | None = None) -> None:
+        """DEVICE-HEALTH-ACTIVE (b): a device proactively reported its own health.
+
+        This is PUSH health, complementing the hub's PULL probe. It matters for
+        devices the hub cannot poll — behind NAT, sleeping, on networks that
+        forbid inbound connections to the device — which can still assert
+        liveness by reaching out. A heartbeat is POSITIVE SIGNAL, exactly like a
+        successful probe or action: it marks the device reachable (clears any
+        stale unreachable mark) and stamps last_heartbeat. It never marks a
+        device unreachable — a device that stops sending heartbeats is simply a
+        device we have not heard from, which is weaker evidence than an action
+        timing out (the same asymmetry the passive path already preserves).
+        """
+        with self._lock:
+            st = self._state.get(device_id, {})
+            now = time.time()
+            st["last_seen"] = now
+            st["last_heartbeat"] = now
+            if reported:
+                # A device may volunteer structured self-report (battery, rssi,
+                # firmware…). Stored verbatim under a namespaced key; the hub
+                # takes no position on its contents — it is the device's word.
+                st["heartbeat_report"] = reported
+            st.pop("unreachable", None)
+            st.pop("unreachable_since", None)
+            st.pop("unreachable_until", None)
+            self._state[device_id] = st
+            self._persist(device_id)
+
     def mark_unreachable(self, device_id: str, ttl_seconds: int | None = None) -> None:
         """A device did not respond to a real action — mark unreachable with TTL."""
         ttl = ttl_seconds if ttl_seconds is not None else self.DEFAULT_TTL_SECONDS
@@ -1069,12 +1098,16 @@ class DeviceHealth:
             "reachable": (None if "last_seen" not in st and not unreachable
                           else (not unreachable)),
             "last_seen": st.get("last_seen"),
+            "last_heartbeat": st.get("last_heartbeat"),
+            "heartbeat_report": st.get("heartbeat_report"),
             "unreachable_since": st.get("unreachable_since") if unreachable else None,
             "unreachable_until": st.get("unreachable_until") if unreachable else None,
             "note": ("no interaction recorded yet" if "last_seen" not in st and not unreachable
                      else ("not responding to actions since the time shown (may be powered off "
                            "or network-unreachable; passively observed)" if unreachable
-                           else "responded to its last action")),
+                           else ("last confirmed by a device-initiated heartbeat"
+                                 if st.get("last_heartbeat") == st.get("last_seen")
+                                 else "responded to its last action"))),
         }
 
     def load_from_db(self) -> None:

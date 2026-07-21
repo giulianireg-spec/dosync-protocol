@@ -74,7 +74,7 @@ CONFIRMED by the production benchmark, not assumed; this line gets updated when 
 Validation: a report_status can be scoped; metrics can separate the two sensor kinds.
 
 
-## DEVICE-HEALTH-ACTIVE — Device heartbeat + cause attribution · effort M
+## DEVICE-HEALTH-ACTIVE — Device heartbeat + cause attribution — (b) SHIPPED 2026-07-21 · effort M
 PARTIALLY DELIVERED 2026-07-14. The wiring audit found that active probing already existed:
 a background refresher polling get_state() every 60s. It had never run in production because
 server.py gated it on `isinstance(hub.resolver, StateAwareResolver)` — always False under the
@@ -83,8 +83,17 @@ ExternalResolver production runs — and said so only at debug level. It is now 
 successful probe, so recovery is detected within one interval WITHOUT executing any action.
 
   DONE (a) periodic lightweight probe so health is known without acting.
-  TODO (b) device-initiated heartbeat (a device reports its own health proactively) — needs a
-           protocol surface (endpoint + spec), not just wiring.
+  DONE (b) device-initiated heartbeat — SHIPPED 2026-07-21. New protocol surface
+           `POST /v1/heartbeat` (spec §7.4): a device the hub CANNOT poll (behind NAT,
+           sleeping, inbound-blocked) asserts liveness by reaching out. Feeds the SAME
+           DeviceHealth.mark path as the probe (record_heartbeat), stamps last_heartbeat,
+           stores an optional free-form self-report verbatim, surfaces in
+           /v1/health/reachability with a note distinguishing the signal source. Preserves
+           the positive-signal-only asymmetry: a heartbeat clears a stale unreachable mark
+           but never CREATES one — absence of heartbeats is weaker evidence than an action
+           timing out. Unknown devices rejected 404 (a heartbeat asserts identity). Tests
+           pin the asymmetry and verify the clear-on-recovery; validated end to end against
+           a running hub. Production validation pending.
   TODO (c) distinguish "powered off" from "network-unreachable" where the transport allows it.
 
 Note the deliberate asymmetry, preserved from the original design: the probe is POSITIVE-SIGNAL

@@ -469,6 +469,41 @@ POST /v1/event  (device → Hub → AI)
 }
 ```
 
+### 7.4 Device heartbeat (device → Hub)
+
+The hub tracks device health from two independent signals. **Passive** health
+comes from the execution path: an action that completes marks a device
+reachable, an action that times out marks it unreachable (for
+`DOSYNC_UNREACHABLE_TTL`). **Active pull** is an optional periodic lightweight
+probe. Both require the hub to be able to *reach* the device.
+
+A **heartbeat** is the **active push** signal, for devices the hub cannot poll —
+behind NAT, sleeping on a schedule, or on networks that forbid inbound
+connections to the device. Such a device asserts its own liveness by reaching
+out:
+
+```
+POST /v1/heartbeat  (device → Hub)
+
+{
+  "device_id": "sensor-remote-04",
+  "report": {                     // OPTIONAL, free-form self-report
+    "battery_pct": 82,
+    "rssi": -67,
+    "firmware": "2.1.4"
+  }
+}
+```
+
+A heartbeat is **positive signal only**: it marks the device reachable and
+records `last_heartbeat`, and it never marks a device unreachable. A device that
+stops sending heartbeats is simply one the hub has not heard from — weaker
+evidence than an action timing out, so it does not by itself produce an
+"unreachable" verdict. The optional `report` is stored verbatim and surfaced in
+`GET /v1/health/devices/{id}`; the hub takes no position on its contents — it is
+the device's own word about itself. Unknown devices are rejected with `404`: a
+heartbeat is an assertion of identity and must come from a registered device.
+
 ---
 
 ## 8. Certification
