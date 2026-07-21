@@ -227,7 +227,7 @@ audit_archived entry binds the segment's sha256. The operational win landed as d
 the hub restored 2,001 entries instead of 28,189 — the chain no longer reloads unbounded
 history into memory at every start, with zero loss of end-to-end verifiability.
 
-## CERT-CONFORMANCE-TIER — Certify the v0.4 protocol features — SHIPPED 2026-07-20 · effort S
+## CERT-CONFORMANCE-TIER — Certify the v0.4 protocol features — CONFIRMED 2026-07-20 · effort S
 Everything shipped in the 0.4 cycle (SENSOR-KIND, AUDIT-PROVENANCE, EMERGENCY-UNSAT,
 AUDIT-ARCHIVE) had unit tests but no CONFORMANCE coverage — nothing proved, over the wire
 against a running hub, that the protocol delivers what its spec now promises. New
@@ -241,3 +241,13 @@ running hub with a modifying deployment policy: all 8 C-tests pass (the 2 enviro
 fails — B04 auth-off, S23 jsonschema-absent — predate this work and are simulation-mode
 artifacts). The old radar item "certification tests 16→30+" is obsolete — the suite was
 already at 44; it is now 52.
+
+**CONFIRMED in production 2026-07-20** — full conformance tier against the live Pi hub over
+mTLS: **52/52, ✓ CERTIFIED**, Ed25519-signed report (fingerprint a41aa0bc…, key 17b987f4…).
+The C-series numbers narrate the whole 0.4 cycle at once: C01 32 sensors all valid, C02 25
+device_state (SENSOR-KIND), C04–C06 5 policy_modified entries with the live fingerprint
+f379fb95… (AUDIT-PROVENANCE), C08 anchored=True from 9a546cd5… — the chain is archived AND
+still verifies (AUDIT-ARCHIVE). B04/S23 pass in production (they were simulation-mode
+artifacts, as predicted). The signed report is third-party-verifiable without hub access
+(`certify.py --verify`) — independent proof of protocol conformance for the IEEE paper and
+any grant.
