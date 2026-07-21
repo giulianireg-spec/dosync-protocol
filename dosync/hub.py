@@ -18,6 +18,7 @@ except Exception:  # metrics is optional; never let it break the hub
 from typing import Callable, Optional
 
 from .db import DoSyncDB
+from dataclasses import dataclass, field
 from .models import (
     ActionPlan, ActionResult, ActuatorSpec, CapabilityManifest,
     ContextSignalType, DeviceAction, DeviceEvent, FamilyProfile,
@@ -131,6 +132,41 @@ class CapabilityRegistry:
 
 
 # ── Resolver interface ────────────────────────────────────────────────────────
+
+@dataclass
+class ScoreBreakdown:
+    """v9: the structured result of ONE scoring computation, shared by the
+    decision path (resolve uses .total) and the explanation path (explain reads
+    the components). Because both consume this, the explanation cannot diverge
+    from the decision — the class that used to be two copies is now one."""
+    matched_tags: list
+    tag_component: float
+    location_component: float
+    emergency_component: float
+    matched_actuators: list
+    actuator_component: float
+    hard_filtered: bool
+    required_specific_tags: list
+    device_tags: list
+    had_any_tag_overlap: bool
+
+    @property
+    def total(self) -> float:
+        # The hard filter zeroes the score outright: an all-specific resolution
+        # with no overlap is OUT, bonuses notwithstanding (F3b).
+        if self.hard_filtered:
+            return 0.0
+        return (self.tag_component + self.location_component
+                + self.emergency_component + self.actuator_component)
+
+    def exclusion_reason(self) -> str:
+        if self.hard_filtered:
+            return (f"required specific tags {self.required_specific_tags} not in "
+                    f"device tags {self.device_tags} (hard filter — bonuses do not apply)")
+        if not self.had_any_tag_overlap:
+            return "no tag overlap with intent resolution tags"
+        return "score = 0"
+
 
 class BaseResolver:
     """
@@ -332,46 +368,69 @@ class CapabilityMatchingResolver(BaseResolver):
     def __init__(self, registry: CapabilityRegistry):
         self.registry = registry
 
+    # v9 (2026-07-21): scoring weights, named once. Previously these five
+    # constants were duplicated between _relevance_score (the decision) and
+    # explain (the story), with a comment promising they "must mirror exactly"
+    # — a promise the language did not enforce. Now there is one source.
+    _W_TAG        = 10.0   # per overlapping tag
+    _W_LOCATION   = 15.0   # context location matches a device tag
+    _W_EMERGENCY  = 30.0   # emergency urgency + emergency_capable device
+    _W_ACTUATOR   = 12.0   # per matching actuator type
+    _FORCED_SCORE = 50.0   # emergency force-inclusion floor (mirrors resolve())
+
+    def _score_breakdown(
+        self,
+        device: CapabilityManifest,
+        intent: Intent,
+        resolution: dict,
+    ) -> "ScoreBreakdown":
+        """The ONE scoring computation. Returns a structured breakdown whose
+        .total is the relevance score. Both the decision path (resolve, which
+        uses .total) and the explanation path (explain, which reads the parts)
+        consume THIS — they can no longer disagree, because there is nothing to
+        keep in sync."""
+        target_tags   = set(resolution.get("tags", []))
+        device_tags   = set(device.tags)
+        generic_tags  = {"light", "climate", "communication", "sensor", "appliance", "display"}
+        specific_tags = target_tags - generic_tags
+        resolution_is_all_specific = bool(specific_tags) and not (target_tags & generic_tags)
+
+        matched_tags = target_tags & device_tags
+        # Hard-filter semantics (2026-07-11 panel decision, F3b): only when the
+        # resolution is ALL specific tags are those tags a requirement; mixed
+        # resolutions treat specific tags as boost, not gate.
+        hard_filtered = resolution_is_all_specific and not (specific_tags & device_tags)
+
+        location = intent.context.get("location", "")
+        location_hit = bool(location) and location in device_tags
+
+        emergency_hit = (intent.urgency == Urgency.EMERGENCY and device.emergency_capable)
+
+        target_actuators = set(resolution.get("actuators", []))
+        device_actuators = {a.type for a in device.actuators}
+        matched_actuators = target_actuators & device_actuators
+
+        return ScoreBreakdown(
+            matched_tags=sorted(matched_tags),
+            tag_component=len(matched_tags) * self._W_TAG,
+            location_component=self._W_LOCATION if location_hit else 0.0,
+            emergency_component=self._W_EMERGENCY if emergency_hit else 0.0,
+            matched_actuators=sorted(matched_actuators),
+            actuator_component=len(matched_actuators) * self._W_ACTUATOR,
+            hard_filtered=hard_filtered,
+            required_specific_tags=sorted(specific_tags) if hard_filtered else [],
+            device_tags=sorted(device_tags),
+            had_any_tag_overlap=bool(matched_tags),
+        )
+
     def _relevance_score(
         self,
         device: CapabilityManifest,
         intent: Intent,
         resolution: dict,
     ) -> float:
-        score = 0.0
-
-        # Tag overlap
-        target_tags = set(resolution.get("tags", []))
-        device_tags = set(device.tags)
-        # Hard-filter semantics (2026-07-11 panel decision, F3b):
-        # - Resolution with ONLY specific (non-generic) tags -> the specific tags
-        #   are a requirement: no overlap means the device is out (score 0).
-        # - MIXED resolution (generic + specific) -> the generic tags define who
-        #   is invited; specific tags are a boost, not a gate. The previous
-        #   behavior gated mixed resolutions too, which made alert_anomaly
-        #   exclude the very sensors/displays its own generic tags invited.
-        generic_tags = {"light", "climate", "communication", "sensor", "appliance", "display"}
-        specific_tags = target_tags - generic_tags
-        resolution_is_all_specific = bool(specific_tags) and not (target_tags & generic_tags)
-        if resolution_is_all_specific and not (specific_tags & device_tags):
-            return 0.0
-        score += len(target_tags & device_tags) * 10.0
-
-        # Location match (if context has location, prefer devices with matching tag)
-        location = intent.context.get("location", "")
-        if location and location in device_tags:
-            score += 15.0
-
-        # Emergency bonus
-        if intent.urgency == Urgency.EMERGENCY and device.emergency_capable:
-            score += 30.0
-
-        # Actuator match
-        target_actuators = set(resolution.get("actuators", []))
-        device_actuators = {a.type for a in device.actuators}
-        score += len(target_actuators & device_actuators) * 12.0
-
-        return score
+        """Back-compat thin wrapper: the score is the breakdown's total."""
+        return self._score_breakdown(device, intent, resolution).total
 
     def explain(self, intent: Intent) -> dict:
         """
@@ -428,47 +487,25 @@ class CapabilityMatchingResolver(BaseResolver):
             }
 
         for device in self.registry.all():
-            device_tags      = set(device.tags)
-            device_actuators = {a.type for a in device.actuators}
-
-            # Build score breakdown for explanation
-            tag_overlap_tags = target_tags & device_tags
-            tag_overlap      = len(tag_overlap_tags) * 10.0
-            location_bonus   = 15.0 if (location and location in device_tags) else 0.0
-            emergency_bonus  = 30.0 if (intent.urgency == Urgency.EMERGENCY and device.emergency_capable) else 0.0
-            actuator_matched = target_actuators & device_actuators
-            actuator_bonus   = len(actuator_matched) * 12.0
-            score            = tag_overlap + location_bonus + emergency_bonus + actuator_bonus
-
-            # HARD FILTER — must mirror _relevance_score exactly (F3b semantics):
-            # the gate applies only when the resolution has ONLY specific tags;
-            # mixed resolutions treat specific tags as boost, not requirement.
-            resolution_is_all_specific = bool(specific_tags) and not (target_tags & generic_tags)
-            hard_filtered = resolution_is_all_specific and not (specific_tags & device_tags)
-            if hard_filtered:
-                score = 0.0
+            # v9: consume the SAME breakdown resolve() decides with. No recompute,
+            # nothing to keep in sync — the explanation IS the decision, narrated.
+            bd = self._score_breakdown(device, intent, resolution)
+            score = bd.total
 
             # Emergency force-inclusion — mirrors resolve() (F2b): emergency_capable
-            # devices always participate in an emergency response, with their full
-            # capability set, even when tags/actuators match nothing.
+            # devices always participate in an emergency response, even when
+            # tags/actuators match nothing.
             forced_emergency = (score == 0.0 and intent.urgency == Urgency.EMERGENCY
                                 and device.emergency_capable)
             if forced_emergency:
-                score = 50.0
+                score = self._FORCED_SCORE
 
-            # Exclusion reason when score == 0
             if score == 0:
-                if hard_filtered:
-                    reason = f"required specific tags {sorted(specific_tags)} not in device tags {sorted(device_tags)} (hard filter — bonuses do not apply)"
-                elif not (target_tags & device_tags):
-                    reason = "no tag overlap with intent resolution tags"
-                else:
-                    reason = "score = 0"
                 excluded.append({
                     "device_id":   device.device_id,
                     "device_name": device.device_name,
                     "device_tags": sorted(device.tags),
-                    "reason":      reason,
+                    "reason":      bd.exclusion_reason(),
                     "included":    False,
                 })
             else:
@@ -478,12 +515,12 @@ class CapabilityMatchingResolver(BaseResolver):
                     "device_tags": sorted(device.tags),
                     "score":       score,
                     "score_breakdown": {
-                        "tag_overlap":      tag_overlap,
-                        "matched_tags":     sorted(tag_overlap_tags),
-                        "location_bonus":   location_bonus,
-                        "emergency_bonus":  emergency_bonus,
-                        "actuator_match":   actuator_bonus,
-                        "matched_actuators": sorted(actuator_matched),
+                        "tag_overlap":      bd.tag_component,
+                        "matched_tags":     bd.matched_tags,
+                        "location_bonus":   bd.location_component,
+                        "emergency_bonus":  bd.emergency_component,
+                        "actuator_match":   bd.actuator_component,
+                        "matched_actuators": bd.matched_actuators,
                         "forced_emergency": forced_emergency,
                     },
                     "emergency_capable": device.emergency_capable,

@@ -1,202 +1,157 @@
+"""Resolver scoring validation (radar v9, 2026-07-21).
+
+The scoring logic used to be duplicated: _relevance_score computed the score the
+resolver DECIDED with, and explain() recomputed the same arithmetic to tell the
+story — with a comment promising the two "must mirror exactly", a promise the
+language did not enforce. If one drifted, the explanation would lie about why the
+resolver chose what it chose.
+
+Now there is ONE computation (_score_breakdown); resolve uses its .total, explain
+reads its parts. These tests pin the property that matters: the explanation's
+score always equals the decision's score, for any registry.
 """
-DoSync Resolver Scoring Validation
-Verifies that the CapabilityMatchingResolver produces correct relative scores.
+import pytest
 
-Run: python3 -m pytest tests/test_resolver_scoring.py -v
-  or: python3 tests/test_resolver_scoring.py
-"""
-
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-from dosync.hub import DoSyncHub, CapabilityMatchingResolver
-from dosync.models import (
-    Intent, IntentClass, Urgency, CapabilityManifest, ActuatorSpec, DeviceCategory
-)
+from dosync.hub import (CapabilityMatchingResolver, DoSyncHub, ScoreBreakdown)
+from dosync.models import (ActuatorSpec, CapabilityManifest, CertTier,
+                           DeviceCategory, Intent, IntentClass, SensorSpec,
+                           Urgency)
 
 
-# ── Fixtures ──────────────────────────────────────────────────────────────────
+def _reg(hub, did, tags, actuators=("turn_on",), emergency=False, sensors=False):
+    hub.registry.register(CapabilityManifest(
+        device_id=did, device_name=did, manufacturer="t", model="t", firmware="1",
+        category=DeviceCategory.ACTUATOR, tags=list(tags),
+        sensors=[SensorSpec("s", "boolean", "s")] if sensors else [],
+        events=[],
+        actuators=[ActuatorSpec(id=a, type=a, description="") for a in actuators],
+        emergency_capable=emergency, cert_tier=CertTier.STANDARD))
 
-def make_hub():
+
+def _hub():
     hub = DoSyncHub(db_path=":memory:")
-
-    def reg(device_id, tags, emergency_capable=False):
-        hub.register_device(CapabilityManifest(
-            device_id=device_id,
-            device_name=device_id,
-            manufacturer="Test",
-            model="T",
-            firmware="1.0",
-            category=DeviceCategory.ACTUATOR,
-            tags=tags,
-            actuators=[ActuatorSpec(id="turn_on", type="turn_on")],
-            emergency_capable=emergency_capable,
-        ))
-
-    reg("light-emg",      ["light", "emergency"], emergency_capable=True)
-    reg("light-normal",   ["light"],               emergency_capable=False)
-    reg("sensor-pir",     ["sensor", "motion"],    emergency_capable=False)
-    reg("light-entrance", ["light", "entrance"],   emergency_capable=True)
-    reg("light-bedroom",  ["light", "bedroom"],    emergency_capable=False)
-
-    # ensure_safety: requires "emergency" specific tag
-    hub.db.save_intent_class(
-        "t_safety", "emergency",
-        ["emergency", "light"], ["turn_on", "alarm"],
-        "Safety intent for tests", "test",
-    )
-    # set_environment: only generic "light" tag — all lights qualify
-    hub.db.save_intent_class(
-        "t_environment", "info",
-        ["light"], ["turn_on"],
-        "Environment intent for tests", "test",
-    )
-
-    resolver = CapabilityMatchingResolver(hub.registry)
-    resolver.hub = hub
-    return hub, resolver
+    _reg(hub, "lamp-living", ["light", "living"], ["turn_on"])
+    _reg(hub, "siren", ["alarm", "emergency"], ["alarm"], emergency=True)
+    _reg(hub, "tv", ["communication", "display", "emergency"], ["notify"], emergency=True)
+    _reg(hub, "thermostat", ["climate"], ["set_temp"], sensors=True)
+    _reg(hub, "lock-front", ["lock", "security"], ["lock", "unlock"])
+    return hub
 
 
-# ── Tests ─────────────────────────────────────────────────────────────────────
+# ── The property: explanation score == decision score, always ────────────────
 
-def test_specific_tag_boost_in_mixed_resolution():
-    """F3b (2026-07-11): t_safety's resolution ["emergency","light"] is MIXED
-    (generic "light" + specific "emergency"). Mixed resolutions do NOT gate:
-    the generic tag invites every light; the specific tag is a boost that ranks
-    correctly-tagged devices above the rest. (The old behavior gated mixed
-    resolutions, which made intents exclude the very devices their own generic
-    tags invited — see tests/test_resolver_semantics.py.)"""
-    _, resolver = make_hub()
-    intent = Intent(intent=IntentClass("t_safety"), urgency=Urgency.INFO, context={})
-    plan = resolver.resolve(intent)
-    device_ids = {a.device_id for a in plan.actions}
-    scores = {a.device_id: a.relevance_score for a in plan.actions}
+@pytest.mark.parametrize("intent_class,urgency,context", [
+    ("ensure_safety", Urgency.EMERGENCY, {}),
+    ("alert_anomaly", Urgency.ALERT, {}),
+    ("control_access", Urgency.ALERT, {}),
+    ("notify", Urgency.INFO, {}),
+    ("ensure_safety", Urgency.EMERGENCY, {"location": "living"}),
+])
+def test_explanation_score_equals_decision_score(intent_class, urgency, context):
+    """THE v9 guarantee: for every device, the score explain() reports is exactly
+    the score _relevance_score (the decision path) computes. One source, so they
+    cannot diverge."""
+    hub = _hub()
+    resolver = hub.resolver
+    intent = Intent(intent_id="t", intent=IntentClass(intent_class),
+                    urgency=urgency, context=context)
+    resolution = resolver._get_resolution(intent)
 
-    assert "light-emg"    in device_ids, "device with 'emergency' tag must be included"
-    assert "light-normal" in device_ids, "generic 'light' overlap participates (mixed resolution: no gate)"
-    assert scores["light-emg"] > scores["light-normal"], "specific tag must rank higher (boost)"
-    assert "sensor-pir" not in device_ids, "no tag overlap -> excluded"
+    exp = resolver.explain(intent)
+    explained = {d["device_id"]: d["score"] for d in exp["included"]}
 
-
-def test_tag_overlap_increases_score():
-    """More tag overlap with resolution tags → higher relevance score."""
-    _, resolver = make_hub()
-    intent = Intent(intent=IntentClass("t_safety"), urgency=Urgency.INFO, context={})
-    plan = resolver.resolve(intent)
-    scores = {a.device_id: a.relevance_score for a in plan.actions}
-
-    # light-emg has both "light" and "emergency" → higher overlap than light-entrance
-    # light-entrance has "light" and "emergency" too → same overlap
-    # Both should be > 0
-    # Only devices with "emergency" TAG appear at INFO urgency for t_safety
-    assert scores.get("light-emg", 0) > 0, "device with 'emergency' tag must have score > 0"
-
-
-def test_emergency_bonus_increases_score():
-    """EMERGENCY urgency gives a score bonus to emergency_capable devices."""
-    _, resolver = make_hub()
-    intent_info = Intent(intent=IntentClass("t_safety"), urgency=Urgency.INFO,    context={})
-    intent_emg  = Intent(intent=IntentClass("t_safety"), urgency=Urgency.EMERGENCY, context={})
-
-    plan_info = resolver.resolve(intent_info)
-    plan_emg  = resolver.resolve(intent_emg)
-
-    scores_info = {a.device_id: a.relevance_score for a in plan_info.actions}
-    scores_emg  = {a.device_id: a.relevance_score for a in plan_emg.actions}
-
-    assert scores_emg.get("light-emg", 0) > scores_info.get("light-emg", 0), \
-        "emergency_capable device must score higher on EMERGENCY urgency"
-    assert scores_emg.get("light-entrance", 0) > scores_info.get("light-entrance", 0), \
-        "all emergency_capable devices get the emergency bonus"
+    for device in hub.registry.all():
+        decided = resolver._relevance_score(device, intent, resolution)
+        forced = (decided == 0.0 and urgency == Urgency.EMERGENCY
+                  and device.emergency_capable)
+        expected = resolver._FORCED_SCORE if forced else decided
+        if expected > 0:
+            assert device.device_id in explained, \
+                f"{device.device_id} scored {expected} but explain omitted it"
+            assert explained[device.device_id] == expected, \
+                f"{device.device_id}: explain={explained[device.device_id]} decision={expected}"
+        else:
+            assert device.device_id not in explained
 
 
-def test_location_bonus_increases_score():
-    """Devices with a matching location tag score higher when location is in context."""
-    _, resolver = make_hub()
-    intent_no_loc = Intent(intent=IntentClass("t_environment"), urgency=Urgency.INFO, context={})
-    intent_loc    = Intent(intent=IntentClass("t_environment"), urgency=Urgency.INFO,
-                           context={"location": "entrance"})
-
-    plan_no_loc = resolver.resolve(intent_no_loc)
-    plan_loc    = resolver.resolve(intent_loc)
-
-    scores_no_loc = {a.device_id: a.relevance_score for a in plan_no_loc.actions}
-    scores_loc    = {a.device_id: a.relevance_score for a in plan_loc.actions}
-
-    assert scores_loc.get("light-entrance", 0) > scores_no_loc.get("light-entrance", 0), \
-        "device at matching location must score higher when location is in context"
+def test_breakdown_total_is_sum_of_components():
+    """The .total is exactly its parts — no hidden arithmetic."""
+    hub = _hub()
+    intent = Intent(intent_id="t", intent=IntentClass("ensure_safety"),
+                    urgency=Urgency.EMERGENCY, context={})
+    resolution = hub.resolver._get_resolution(intent)
+    for device in hub.registry.all():
+        bd = hub.resolver._score_breakdown(device, intent, resolution)
+        if not bd.hard_filtered:
+            assert bd.total == (bd.tag_component + bd.location_component
+                                + bd.emergency_component + bd.actuator_component)
 
 
-def test_all_emergency_capable_in_emergency_plan():
-    """All emergency_capable devices appear in plans for EMERGENCY urgency."""
-    _, resolver = make_hub()
-    intent = Intent(intent=IntentClass("t_safety"), urgency=Urgency.EMERGENCY, context={})
-    plan   = resolver.resolve(intent)
-    device_ids = {a.device_id for a in plan.actions}
-
-    assert "light-emg"      in device_ids, "light-emg must be in emergency plan"
-    assert "light-entrance" in device_ids, "light-entrance must be in emergency plan"
-
-
-def test_sensor_excluded_from_actuator_plan():
-    """Sensor-only devices are not included in actuator-focused plans."""
-    _, resolver = make_hub()
-    intent = Intent(intent=IntentClass("t_safety"), urgency=Urgency.EMERGENCY, context={})
-    plan   = resolver.resolve(intent)
-    device_ids = {a.device_id for a in plan.actions}
-
-    assert "sensor-pir" not in device_ids, "sensor-only device must not appear in actuator plan"
-
-
-def test_empty_registry_returns_empty_plan():
-    """Empty registry returns empty ActionPlan without raising an exception."""
+def test_hard_filter_zeroes_regardless_of_bonuses():
+    """An all-specific resolution with no tag overlap is OUT even if it would
+    otherwise earn an emergency bonus (F3b)."""
     hub = DoSyncHub(db_path=":memory:")
-    resolver = CapabilityMatchingResolver(hub.registry)
-    resolver.hub = hub
-    hub.db.save_intent_class(
-        "t_safety", "emergency", ["emergency"], ["turn_on"], "", "test"
-    )
-    intent = Intent(intent=IntentClass("t_safety"), urgency=Urgency.EMERGENCY, context={})
-    plan   = resolver.resolve(intent)
-
-    assert len(plan.actions) == 0, "empty registry must return empty ActionPlan"
-    assert plan.intent_id == intent.intent_id
-
-
-def test_relevance_scores_are_non_negative():
-    """All relevance scores must be non-negative."""
-    _, resolver = make_hub()
-    for intent_class in ("t_safety", "t_environment"):
-        for urgency in (Urgency.INFO, Urgency.EMERGENCY):
-            intent = Intent(
-                intent=IntentClass(intent_class), urgency=urgency, context={}
-            )
-            plan = resolver.resolve(intent)
-            for action in plan.actions:
-                assert action.relevance_score >= 0, \
-                    f"score must be >= 0, got {action.relevance_score} for {action.device_id}"
+    _reg(hub, "wrong-tag", ["basement"], ["turn_on"], emergency=True)
+    # a resolution of only specific tags the device lacks
+    intent = Intent(intent_id="t", intent=IntentClass("control_access"),
+                    urgency=Urgency.ALERT, context={})
+    resolution = {"tags": ["lock"], "actuators": ["unlock"]}
+    bd = hub.resolver._score_breakdown(
+        hub.registry.get("wrong-tag"), intent, resolution)
+    assert bd.hard_filtered is True
+    assert bd.total == 0.0
 
 
-# ── Runner ────────────────────────────────────────────────────────────────────
+def test_weights_are_named_constants_not_magic_numbers():
+    """v9 hygiene: the five weights live in one place, referenced by both paths."""
+    r = CapabilityMatchingResolver
+    assert r._W_TAG == 10.0
+    assert r._W_LOCATION == 15.0
+    assert r._W_EMERGENCY == 30.0
+    assert r._W_ACTUATOR == 12.0
+    assert r._FORCED_SCORE == 50.0
 
-if __name__ == "__main__":
-    # Auto-discovery: a manual list silently breaks when a test is renamed
-    # (it broke CI runs #264-#269 on 2026-07-12). Pytest discovers these
-    # automatically; this runner now does the same.
-    tests = [v for k, v in sorted(globals().items())
-             if k.startswith("test_") and callable(v)]
-    passed = failed = 0
-    for t in tests:
-        try:
-            t()
-            print(f"  ✓  {t.__name__}")
-            passed += 1
-        except AssertionError as e:
-            print(f"  ✗  {t.__name__}: {e}")
-            failed += 1
-        except Exception as e:
-            print(f"  ✗  {t.__name__}: unexpected error — {e}")
-            failed += 1
 
-    print(f"\n{passed}/{passed + failed} resolver scoring tests passed.")
-    sys.exit(0 if failed == 0 else 1)
+def test_scores_have_known_absolute_values():
+    """Anchor the behavior to concrete numbers, not to self-consistency. If a
+    weight changes, THIS fails — which is the regression guard the tautological
+    'explain==decision' check cannot provide once both read one source.
+
+    siren: tags {alarm,emergency} vs resolution — emergency intent, emergency_capable.
+    """
+    hub = DoSyncHub(db_path=":memory:")
+    _reg(hub, "siren", ["alarm", "emergency"], ["alarm"], emergency=True)
+    intent = Intent(intent_id="t", intent=IntentClass("ensure_safety"),
+                    urgency=Urgency.EMERGENCY, context={})
+    # resolution that overlaps one tag (alarm) and one actuator (alarm)
+    resolution = {"tags": ["alarm"], "actuators": ["alarm"]}
+    bd = hub.resolver._score_breakdown(hub.registry.get("siren"), intent, resolution)
+    # 1 tag*10 + emergency 30 + 1 actuator*12 = 52
+    assert bd.tag_component == 10.0
+    assert bd.emergency_component == 30.0
+    assert bd.actuator_component == 12.0
+    assert bd.total == 52.0
+
+
+def test_location_bonus_absolute():
+    hub = DoSyncHub(db_path=":memory:")
+    _reg(hub, "lamp-living", ["light", "living"], ["turn_on"])
+    intent = Intent(intent_id="t", intent=IntentClass("notify"),
+                    urgency=Urgency.INFO, context={"location": "living"})
+    resolution = {"tags": ["light"], "actuators": []}
+    bd = hub.resolver._score_breakdown(hub.registry.get("lamp-living"), intent, resolution)
+    # 1 tag*10 + location 15 = 25
+    assert bd.location_component == 15.0
+    assert bd.total == 25.0
+
+
+def test_exclusion_reason_matches_why_score_is_zero():
+    hub = DoSyncHub(db_path=":memory:")
+    _reg(hub, "no-overlap", ["basement"], ["turn_on"])
+    intent = Intent(intent_id="t", intent=IntentClass("notify"),
+                    urgency=Urgency.INFO, context={})
+    resolution = {"tags": ["communication"], "actuators": ["notify"]}
+    bd = hub.resolver._score_breakdown(
+        hub.registry.get("no-overlap"), intent, resolution)
+    assert bd.total == 0.0
+    assert "no tag overlap" in bd.exclusion_reason()

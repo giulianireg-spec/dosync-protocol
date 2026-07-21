@@ -303,3 +303,21 @@ systemd Restart=always. Closing this item rather than implementing it. Note: the
 timeouts in drill int-1784606153-18aebe are NOT a fallback problem — the lamps were
 powered off; no local fallback can command a lamp with no power. That is DEVICE-HEALTH-ACTIVE
 (c) territory (distinguish powered-off from network-unreachable), not v11.
+
+## RESOLVER-SCORING-VALIDATION — One scoring source, validated (radar v9) — SHIPPED 2026-07-21 · effort S
+The relevance scoring was computed in two places: `_relevance_score` (what the resolver
+DECIDES with) and `explain()` (which recomputed the same arithmetic to tell the story),
+with a comment promising they "must mirror exactly" — unenforced by the language. If one
+drifted, the /v1/intents/{class}/explain endpoint would lie about why the resolver chose
+what it chose: the worst failure for a transparency feature. Refactor: one computation,
+`_score_breakdown`, returning a structured `ScoreBreakdown` whose `.total` is the score.
+resolve() uses `.total` (via a thin `_relevance_score` wrapper — call sites unchanged);
+explain() reads the components. The five weights are named constants referenced by both,
+not magic numbers duplicated. Behavior is byte-for-byte unchanged (628→ full suite green,
+including benchmark and resolution tests that depend on exact scores). Validation: the
+explain==decision property is pinned, PLUS absolute-value tests (siren=52, location=25)
+that anchor behavior to concrete numbers — the self-consistency check alone became
+tautological once both paths read one source (caught by testing: a broken weight passed the
+coincidence test but failed the absolute tests, which is the real regression guard).
+Production validation optional — this is an internal refactor with no wire-format change;
+S11 (explainability) in the cert suite already exercises the endpoint.
