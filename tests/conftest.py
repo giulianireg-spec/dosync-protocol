@@ -23,3 +23,24 @@ The project rule this enforces: tests never touch a real database.
 import os
 
 os.environ.setdefault("DOSYNC_DB", ":memory:")
+
+
+# ── Automatic test taxonomy (parada técnica 2026-07-21, Morales) ─────────────
+# Rather than tag 54 test files by hand (and let the tags rot), classify each
+# test by what its SOURCE uses: a test that constructs a TestClient exercises
+# the HTTP layer end to end (e2e); everything else is unit. This keeps the
+# taxonomy honest — it is derived from the code, not asserted alongside it.
+import inspect
+
+
+def pytest_collection_modifyitems(config, items):
+    import pytest
+    for item in items:
+        try:
+            src = inspect.getsource(item.function)
+        except (OSError, TypeError):
+            src = ""
+        if "TestClient" in src or "TestClient" in (item.module.__dict__.get("__doc__") or ""):
+            item.add_marker(pytest.mark.e2e)
+        else:
+            item.add_marker(pytest.mark.unit)

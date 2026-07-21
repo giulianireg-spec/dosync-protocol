@@ -352,3 +352,24 @@ concurrent intents already exists and is validated:
 
 Closing as already-satisfied. Any future work here is refinement (e.g. formal TLA+-style
 model of the claim state machine for the paper), not missing capability.
+
+## PANEL-POLISH-2026-07-21 — Four "effort S" items from the technical review — SHIPPED 2026-07-21
+Closed in-session, while the debt was fresh, per the panel's own recommendation.
+- **#1 Heartbeat report size limit (Sosa).** POST /v1/heartbeat's `report` is now bounded:
+  ≤32 keys, ≤4096 bytes serialized, rejected 422 otherwise. "No position on contents" is not
+  "unbounded input" — a compromised device could otherwise persist a multi-MB report per
+  heartbeat. Documented in spec §7.4. (Trap found: Pydantic v2 turns a `_`-prefixed class
+  attribute into a ModelPrivateAttr, not an int — bounds live at module level.)
+- **#3 Health endpoint cross-reference (Torres).** The three /v1/health/* endpoints now
+  document which question each answers (historical success rate vs current reachability +
+  heartbeat), so an integrator — or the team itself, which got it wrong once — picks right.
+- **#4 Test taxonomy (Morales).** pytest.ini registers unit/e2e/asyncio markers; conftest
+  auto-applies them by inspecting each test's source (TestClient → e2e, else unit) — no
+  per-file tags to rot. 26 e2e / 604 unit, runnable as subsets (`pytest -m "not e2e"`).
+- **#7 progress_cb failure counter (Paredes).** A failing progress callback is still
+  swallowed (an observer can't break execution) but now counted (hub.progress_cb_failures),
+  logged at WARNING not DEBUG, and surfaced in /v1/status — swallowed is no longer invisible.
+All 637 tests green; #1 and #7 verified to fail with the bug reintroduced. The remaining
+panel items (device-health (c), formal claim model for the paper, online archiving, light
+heartbeat mode, third-party certification, end-user UI) are M/L or future-scope, tracked
+separately.

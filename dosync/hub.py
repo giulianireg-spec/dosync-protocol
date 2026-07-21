@@ -1170,6 +1170,11 @@ class DoSyncHub:
         self.policy_engine  = None  # set via hub.policy_engine = PolicyEngine()
         self._active_intents: dict[str, int] = {}  # intent_value -> priority
         self._active_intent_devices: dict[str, set] = {}  # intent_value -> device_ids
+        # v13 hygiene (parada técnica 2026-07-21, Paredes): progress_cb failures
+        # are swallowed so an observer can't break execution — but swallowed !=
+        # invisible. Count them so a real callback bug surfaces in /v1/status
+        # instead of hiding in debug logs forever.
+        self.progress_cb_failures: int = 0
         self.audit_log      = AuditLog()
         self.occupancy      = OccupancyEngine()
         self.family_profile: FamilyProfile | None = None
@@ -1591,6 +1596,7 @@ class DoSyncHub:
         affect execution (an observer cannot break the observed)."""
         if progress_cb is not None:
             _inner = executor
+            _hub = self
 
             class _ProgressExecutor:
                 def __getattr__(self, n): return getattr(_inner, n)
@@ -1599,7 +1605,9 @@ class DoSyncHub:
                     try:
                         progress_cb(r)
                     except Exception as _cb_e:
-                        log.debug("progress_cb raised (ignored): %s", _cb_e)
+                        _hub.progress_cb_failures += 1
+                        log.warning("progress_cb raised (ignored, count=%d): %s",
+                                    _hub.progress_cb_failures, _cb_e)
                     return r
             executor = _ProgressExecutor()
         return await self._execute_with_policy(plan, executor, intent)

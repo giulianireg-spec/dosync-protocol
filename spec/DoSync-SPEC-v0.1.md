@@ -520,6 +520,11 @@ POST /v1/heartbeat  (device → Hub)
 }
 ```
 
+The optional `report` is bounded: at most **32 keys** and **4096 bytes** serialized.
+"The hub takes no position on the contents" does not mean unbounded input — a report is
+telemetry about one device, not a data channel. Reports exceeding either bound are rejected
+with `422`.
+
 A heartbeat is **positive signal only**: it marks the device reachable and
 records `last_heartbeat`, and it never marks a device unreachable. A device that
 stops sending heartbeats is simply one the hub has not heard from — weaker

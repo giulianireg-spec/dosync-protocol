@@ -14,7 +14,7 @@ import re
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from dosync.hub import DoSyncHub
 from dosync import metrics as M
@@ -477,12 +477,39 @@ class EventRequest(BaseModel):
     data: dict[str, Any] = {}
 
 
+# Heartbeat report bounds (parada técnica 2026-07-21, Sosa). Module-level, not
+# class attributes: in Pydantic v2 a name starting with "_" inside a BaseModel
+# becomes a ModelPrivateAttr, not an int. Bounds fit a generous real self-report
+# (battery, rssi, firmware, uptime, a few custom fields) with wide margin while
+# making abuse impossible — a report is telemetry about ONE device, not a data
+# channel.
+_HEARTBEAT_MAX_REPORT_KEYS  = 32
+_HEARTBEAT_MAX_REPORT_BYTES = 4096
+
+
 class HeartbeatRequest(BaseModel):
     device_id: str
     # A device MAY volunteer a structured self-report (battery %, rssi, firmware,
     # uptime…). Optional and free-form: the hub stores it verbatim and takes no
-    # position on its contents — it is the device's own word about itself.
+    # position on its CONTENTS — but it does bound its SIZE. "No position on the
+    # contents" is not "accepts unbounded input": a compromised or buggy device
+    # could otherwise push a multi-megabyte report on every heartbeat, persisted.
     report: dict[str, Any] = {}
+
+    @field_validator("report")
+    @classmethod
+    def _bound_report(cls, v: dict) -> dict:
+        if len(v) > _HEARTBEAT_MAX_REPORT_KEYS:
+            raise ValueError(
+                f"heartbeat report has {len(v)} keys; max {_HEARTBEAT_MAX_REPORT_KEYS}")
+        try:
+            size = len(json.dumps(v).encode("utf-8"))
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"heartbeat report is not JSON-serializable: {e}") from e
+        if size > _HEARTBEAT_MAX_REPORT_BYTES:
+            raise ValueError(
+                f"heartbeat report is {size} bytes; max {_HEARTBEAT_MAX_REPORT_BYTES}")
+        return v
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -879,13 +906,20 @@ async def get_device_health(
     auth=Depends(require_auth),
 ):
     """
-    Device Health Monitor — estadísticas de ejecución por dispositivo.
+    Device Health Monitor — execution success-rate statistics per device.
 
-    Retorna la tasa de éxito de cada dispositivo basada en las últimas `last_n` ejecuciones.
-    Los dispositivos con tasa por debajo de `threshold` aparecen en `alerts`.
+    Returns each device's success rate over the last `last_n` executions; devices
+    below `threshold` appear in `alerts`. Use this to find devices that FAIL
+    OFTEN and need attention. The decision of what to do is always the operator's.
 
-    Usar para detectar dispositivos que fallan frecuentemente y requieren atención.
-    La decisión de qué hacer con esa información es siempre del operador humano.
+    ── Which health endpoint do I want? ─────────────────────────────────────────
+      * /v1/health/devices        (this one) — HISTORICAL success rate of actions.
+                                   "Has this device been failing lately?"
+      * /v1/health/reachability   — CURRENT reachable/unreachable state, including
+                                   device-initiated heartbeats. "Is this device
+                                   responding right now, and how do I know?"
+    They answer different questions; a device can be reachable now yet have a poor
+    historical success rate, or vice versa.
     """
     all_health = hub.db.get_all_health(last_n=last_n)
     alerts     = hub.db.get_health_alerts(threshold=threshold, last_n=last_n)
@@ -906,7 +940,9 @@ async def get_single_device_health(
     last_n: int = 100,
     auth=Depends(require_auth),
 ):
-    """Estadísticas de salud de un dispositivo específico."""
+    """Historical execution success-rate for one device (see /v1/health/devices
+    for the full note on which health endpoint answers which question; for
+    current reachability + heartbeat state use /v1/health/reachability)."""
     health = hub.db.get_device_health(device_id, last_n=last_n)
     if health["total"] == 0:
         raise HTTPException(status_code=404, detail=f"No execution history for device '{device_id}'")
@@ -915,12 +951,14 @@ async def get_single_device_health(
 
 @app.get("/v1/health/reachability", tags=["health"])
 async def get_reachability(auth=Depends(require_auth)):
-    """Passive reachability of every device the hub has interacted with.
+    """Current reachability of every device the hub has interacted with.
 
-    Complements /v1/health/devices (success-rate history) with the current
-    reachable/unreachable state derived from real actions. This is PASSIVE
-    health — it reflects the last interaction, not an active heartbeat — and it
-    never asserts a device is "powered off" (it cannot tell an off device from a
+    Complements /v1/health/devices (historical success rate) with the CURRENT
+    reachable/unreachable state. Two signals feed it: PASSIVE (derived from real
+    actions — the last interaction) and ACTIVE PUSH (device-initiated heartbeats,
+    POST /v1/heartbeat — see the `last_heartbeat` field and the per-device
+    `note`). It never asserts a device is "powered off" (it cannot tell an off
+    device from a
     network-unreachable one). Read-only.
     """
     snapshots = [hub.health.snapshot(d.device_id) for d in hub.registry.all()]
@@ -1775,6 +1813,10 @@ def get_status():
         # conformance test can verify the anchor is honored end to end.
         "audit_anchored":  hub.audit_log.anchor_prev_hash != "0" * 64,
         "audit_anchor_prefix": hub.audit_log.anchor_prev_hash[:16],
+        # v13 hygiene: nonzero means a progress callback has been failing —
+        # swallowed so it never breaks execution, but surfaced here so a real
+        # bug is visible instead of hidden in logs.
+        "progress_cb_failures": getattr(hub, "progress_cb_failures", 0),
         "occupied":        occupancy.occupied,
         "ws_connections":  ws_manager.active_connections,
         "db":              db_stats,
