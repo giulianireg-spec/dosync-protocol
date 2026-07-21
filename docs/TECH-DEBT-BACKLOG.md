@@ -74,7 +74,7 @@ CONFIRMED by the production benchmark, not assumed; this line gets updated when 
 Validation: a report_status can be scoped; metrics can separate the two sensor kinds.
 
 
-## DEVICE-HEALTH-ACTIVE — Device heartbeat + cause attribution — (b) SHIPPED 2026-07-21 · effort M
+## DEVICE-HEALTH-ACTIVE — Device heartbeat + cause attribution — (b) CONFIRMED 2026-07-21 · effort M
 PARTIALLY DELIVERED 2026-07-14. The wiring audit found that active probing already existed:
 a background refresher polling get_state() every 60s. It had never run in production because
 server.py gated it on `isinstance(hub.resolver, StateAwareResolver)` — always False under the
@@ -93,7 +93,10 @@ successful probe, so recovery is detected within one interval WITHOUT executing 
            but never CREATES one — absence of heartbeats is weaker evidence than an action
            timing out. Unknown devices rejected 404 (a heartbeat asserts identity). Tests
            pin the asymmetry and verify the clear-on-recovery; validated end to end against
-           a running hub. Production validation pending.
+           a running hub. **CONFIRMED in production 2026-07-21:** POST /v1/heartbeat for
+           rpi-dht22-01 acknowledged; /v1/health/reachability shows last_heartbeat stamped,
+           note "last confirmed by a device-initiated heartbeat", and the self-report
+           {uptime_s, firmware} stored verbatim.
   TODO (c) distinguish "powered off" from "network-unreachable" where the transport allows it.
 
 Note the deliberate asymmetry, preserved from the original design: the probe is POSITIVE-SIGNAL
