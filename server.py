@@ -1276,10 +1276,23 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
         "created_at": _time.time(),
         "intent":     req.intent,
         "urgency":    req.urgency,
+        # MCP-V13: live partial progress, updated as each action completes, so a
+        # poll of a still-pending intent can report what has ALREADY happened
+        # instead of an opaque "still processing". Total planned count is filled
+        # in once resolution is done (below); until then it is None.
+        "progress":   {"completed": [], "planned": None},
     }
 
+    def _on_action(r):
+        prog = _intent_store.get(intent.intent_id, {}).get("progress")
+        if prog is not None:
+            prog["completed"].append({
+                "device_id": r.device_id, "action": r.action,
+                "success": bool(getattr(r, "success", False)),
+            })
+
     async def _run_intent():
-        result = await hub.execute_intent(intent, executor)
+        result = await hub.execute_intent(intent, executor, progress_cb=_on_action)
         _snap_intents = {"ensure_safety", "notify_family", "alert_anomaly"}
         if req.intent in _snap_intents or req.urgency in ("emergency", "alert"):
             try:
@@ -1343,8 +1356,16 @@ async def get_intent_result(intent_id: str, auth: str = Depends(require_auth)):
     if not entry:
         raise HTTPException(status_code=404, detail=f"Intent '{intent_id}' not found")
     if entry["status"] == "pending":
+        prog = entry.get("progress") or {}
+        completed = prog.get("completed", [])
         return {"intent_id": intent_id, "status": "pending",
-                "intent": entry.get("intent"), "urgency": entry.get("urgency")}
+                "intent": entry.get("intent"), "urgency": entry.get("urgency"),
+                # MCP-V13: partial progress so far — never an opaque pending.
+                "partial": {
+                    "actions_completed": len(completed),
+                    "actions_planned":   prog.get("planned"),
+                    "results":           completed,
+                }}
     return {"intent_id": intent_id, "status": entry["status"], **entry["result"]}
 
 

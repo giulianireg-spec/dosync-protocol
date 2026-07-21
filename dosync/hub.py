@@ -1546,6 +1546,27 @@ class DoSyncHub:
 
     # ── FailurePolicy execution strategies ────────────────────────────────────
 
+    async def _execute_with_policy_cb(self, plan, executor, intent, progress_cb=None):
+        """MCP-V13: wrap the executor so each completed action can be published as
+        partial progress WITHOUT changing any strategy signature. The wrapper
+        fires progress_cb(result) as each action resolves; the strategies below
+        are untouched. progress_cb is best-effort — a failing callback must never
+        affect execution (an observer cannot break the observed)."""
+        if progress_cb is not None:
+            _inner = executor
+
+            class _ProgressExecutor:
+                def __getattr__(self, n): return getattr(_inner, n)
+                async def execute(self, action, urgency):
+                    r = await _inner.execute(action, urgency)
+                    try:
+                        progress_cb(r)
+                    except Exception as _cb_e:
+                        log.debug("progress_cb raised (ignored): %s", _cb_e)
+                    return r
+            executor = _ProgressExecutor()
+        return await self._execute_with_policy(plan, executor, intent)
+
     async def _execute_with_policy(self, plan, executor, intent):
         """Dispatch to the correct execution strategy based on failure_policy.
         Emergency intents always force CONTINUE — protocol-level guarantee."""
@@ -2158,6 +2179,7 @@ class DoSyncHub:
         self,
         intent: Intent,
         executor: "DeviceExecutor",
+        progress_cb=None,
     ) -> IntentResult:
         log.info("Executing intent: %s [%s]", intent.intent.value, intent.urgency.value)
 
@@ -2330,8 +2352,8 @@ class DoSyncHub:
         # Execute with the plan's FailurePolicy
         results, failed, aborted, policy_applied = [], [], [], "continue"
         try:
-            results, failed, aborted, policy_applied = await self._execute_with_policy(
-                plan, executor, intent
+            results, failed, aborted, policy_applied = await self._execute_with_policy_cb(
+                plan, executor, intent, progress_cb=progress_cb
             )
         finally:
             _claim_devices = self._active_intent_devices.get(intent_value, set())

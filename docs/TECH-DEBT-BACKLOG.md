@@ -263,3 +263,20 @@ still verifies (AUDIT-ARCHIVE). B04/S23 pass in production (they were simulation
 artifacts, as predicted). The signed report is third-party-verifiable without hub access
 (`certify.py --verify`) — independent proof of protocol conformance for the IEEE paper and
 any grant.
+
+## MCP-V13 — Partial response before the global timeout — SHIPPED 2026-07-21 · effort M
+Radar v0.3 item, and the fix for the known gap "MCP tool reports failure when the intent
+executes correctly but devices are physically off". Before: a poll of a still-executing
+intent returned an opaque {status: pending}, and the MCP tool on timeout said only "still
+processing — check the audit log", losing every action that had ALREADY fired. Now the hub
+publishes progress as each action completes — via an OPTIONAL progress_cb threaded through
+execute_intent and injected by a thin executor wrapper, so the three execution strategies
+(_execute_abort/_execute_retry/_execute_parallel) are untouched and the no-callback path is
+byte-for-byte the old behavior. GET /v1/intent/{id} on a pending intent now carries a
+`partial` block (actions_completed + per-action results), documented in spec §7.2; the MCP
+tool reads it on timeout and reports "N actions succeeded so far, M still pending" instead
+of a blind message. The callback is best-effort — a raising progress_cb is swallowed (an
+observer cannot break the observed). Found along the way: the main execution path called the
+new cb-wrapper WITHOUT passing progress_cb (silent no-op) — caught by the smoke test, not by
+reasoning; fixed and pinned. 627/627; the HTTP partial exposure verified to fail with the
+bug reintroduced. Production validation pending.

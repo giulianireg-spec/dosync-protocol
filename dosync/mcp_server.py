@@ -432,12 +432,31 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
                     result = final_poll
                     break
 
-        # Still no result — hub is taking unusually long
+        # Still no result before the deadline — but "no final result" is NOT "no
+        # information". MCP-V13: read the partial progress the hub has been
+        # publishing and report what ALREADY happened, instead of an opaque
+        # "still processing". In an emergency, "8 actions already executed, 2
+        # devices still pending" is the difference between a useful answer and a
+        # blind one.
         if result is None:
-            text  = f"⚠️ Intent '{intent}' [{urgency}] accepted and executing\n"
-            text += f"  The hub is still processing (>{poll_timeout + 4.5:.0f}s elapsed).\n"
-            text += f"  This usually means many devices timed out waiting for a response.\n"
-            text += f"  Intent ID: {intent_id} — check GET /v1/intent/{{id}} or the audit log for final result.\n"
+            last = await hub_request("GET", f"/v1/intent/{intent_id}")
+            partial = (last or {}).get("partial") or {}
+            done = partial.get("results", [])
+            n_done = partial.get("actions_completed", len(done))
+            ok_done = [r for r in done if r.get("success")]
+
+            text  = f"⏳ Intent '{intent}' [{urgency}] accepted — still executing after "
+            text += f"{poll_timeout + 4.5:.0f}s, partial result below\n"
+            if n_done:
+                text += f"  Already completed: {len(ok_done)}/{n_done} action(s) succeeded so far\n"
+                for r in ok_done[:8]:
+                    text += f"    ✓ {r.get('device_id')} — {r.get('action')}\n"
+                slow = [r for r in done if not r.get("success")]
+                if slow:
+                    text += f"  Still pending / unreachable: {len(slow)} device(s)\n"
+            else:
+                text += f"  No actions have completed yet — the hub is still resolving or every device is slow.\n"
+            text += f"  Intent ID: {intent_id} — poll GET /v1/intent/{{id}} for the final result.\n"
             return [types.TextContent(type="text", text=text)]
 
         actions      = result.get("actions_taken", 0)

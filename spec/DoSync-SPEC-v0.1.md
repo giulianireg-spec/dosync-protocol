@@ -450,6 +450,31 @@ Content-Type: application/json
 
 > **Note:** `/v1/intent` (without `/async`) is also accepted and redirects via HTTP 308 to `/v1/intent/async`. Clients that do not follow redirects should use `/v1/intent/async` directly.
 
+**Polling with partial progress.** `POST /v1/intent/async` returns an `intent_id`
+immediately; clients poll `GET /v1/intent/{intent_id}`. While the intent is still
+executing, the poll returns `status: "pending"` **with a `partial` block** reporting the
+actions that have ALREADY completed:
+
+```
+GET /v1/intent/{intent_id}   →   (while executing)
+
+{
+  "intent_id": "int-...",
+  "status": "pending",
+  "partial": {
+    "actions_completed": 8,
+    "actions_planned": null,
+    "results": [ {"device_id": "siren-1", "action": "alarm", "success": true}, ... ]
+  }
+}
+```
+
+This exists so a caller whose own deadline expires before the hub finishes — an MCP client,
+typically — can report what already happened ("8 actions succeeded, 2 devices still
+pending") instead of an opaque "still processing". A slow or unreachable device never hides
+the actions that already succeeded. Once execution finishes, the poll returns the terminal
+`status` and the full result.
+
 ### 7.3 Event subscription (device → AI)
 
 Devices can push events to the AI without being polled:
