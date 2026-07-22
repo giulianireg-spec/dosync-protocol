@@ -224,7 +224,7 @@ class ShellyAdapter(DoSyncAdapter):
             if gen == 1:
                 client = _ShellyGen1(ip)
                 raw = await _asyncio.wait_for(
-                    _asyncio.get_event_loop().run_in_executor(None, client.get_status),
+                    _asyncio.get_running_loop().run_in_executor(None, client.get_status),
                     timeout=3.0,
                 )
                 relays = raw.get("relays", [])
@@ -238,7 +238,7 @@ class ShellyAdapter(DoSyncAdapter):
             else:
                 client = _ShellyGen2(ip)
                 raw = await _asyncio.wait_for(
-                    _asyncio.get_event_loop().run_in_executor(None, client.get_status),
+                    _asyncio.get_running_loop().run_in_executor(None, client.get_status),
                     timeout=3.0,
                 )
                 switches = raw.get("result", {}).get("switch:0", {})
@@ -344,5 +344,5 @@ class ShellyAdapter(DoSyncAdapter):
 
             return {"status": "unknown_action", "action": action.action}
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _sync_call)

@@ -521,3 +521,32 @@ The strongest remaining threat to credibility: one implementation in one languag
 program, not a protocol. A genuinely independent second implementation — ideally not in
 Python, ideally not by the same author — is what would demonstrate that the specification is
 actually a specification.
+
+
+## LOOP-MIGRATION — get_event_loop() retirement, and a dead security alert it uncovered — SHIPPED 2026-07-21 · effort S
+Started as hygiene: `asyncio.get_event_loop()` is deprecated since Python 3.10 and scheduled
+to raise when no loop is running. Classified all 9 call sites with AST (not grep): 6 sat
+inside `async def` (harmless today, `get_running_loop()` is simply the correct call) and 3
+sat in sync functions, where the deprecation actually bites. All migrated; a structural test
+(AST) now fails if any `get_event_loop()` CALL reappears in the package or the server. The
+long-standing DeprecationWarning on every test run is gone.
+
+**What it uncovered — a security alert that had never fired.** `register_device` raises an
+`alert_anomaly` intent when a device's capabilities change WITHOUT a firmware version bump
+("may indicate compromise"). It called `self.execute_intent(alert_intent)` — but
+`execute_intent` requires an `executor` argument. Every single invocation raised TypeError,
+and the whole block sat inside `except Exception: pass`. The anomaly was always written to
+the audit chain, so the evidence existed; the alert dispatch was simply dead, silently, for
+as long as the code has been there. This is POL-2's lesson verbatim: a bare except hiding a
+broken path. It only surfaced because removing the silent `pass` let the TypeError speak.
+
+**Fix.** `DoSyncHub.default_executor` (wired by the server to the fully-wrapped executor, so
+hub-initiated intents run through the SAME arbitration and auditing as any other intent —
+not a side channel). When it is absent the hub logs that the alert was NOT dispatched
+instead of failing quietly; when present, the alert genuinely executes. Failures in the
+detached task are reported via a done-callback rather than vanishing. Registration is still
+never blocked — best-effort stayed best-effort, it just stopped being silent.
+
+667/667. Pinned by tests for: dispatch with and without a running loop, failure reported not
+swallowed, missing-executor reported, the positive dispatch path that was dead, and the AST
+guard. Verified to fail with each bug reintroduced. Production validation pending.

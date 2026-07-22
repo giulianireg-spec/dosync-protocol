@@ -1291,6 +1291,11 @@ class DoSyncHub:
         # invisible. Count them so a real callback bug surfaces in /v1/status
         # instead of hiding in debug logs forever.
         self.progress_cb_failures: int = 0
+        # Executor for HUB-INITIATED intents — those the hub raises on its own
+        # (e.g. the capability-anomaly security alert), which have no caller to
+        # supply one. Wired by the server at startup. If it is None the hub
+        # cannot dispatch such an intent, and says so rather than failing quietly.
+        self.default_executor = None
         self.audit_log      = AuditLog()
         self.occupancy      = OccupancyEngine()
         self.family_profile: FamilyProfile | None = None
@@ -1677,14 +1682,60 @@ class DoSyncHub:
                 },
                 source="hub",
             )
+            # Fire the alert intent. This is a SECURITY path (capabilities changed
+            # without a firmware bump), so "best-effort" must not mean "silent":
+            # registration is never blocked, but a failure to raise the alert is
+            # logged loudly rather than swallowed.
+            #
+            # asyncio.get_event_loop() was deprecated in 3.10 and is scheduled to
+            # raise when no loop is running. Under the old code that would have
+            # made the no-loop branch unreachable and dropped the alert into a
+            # bare `except: pass` — the POL-2 failure mode (a silent except
+            # hiding a broken security path). Both cases are now explicit.
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    asyncio.ensure_future(self.execute_intent(alert_intent))
-                else:
-                    loop.run_until_complete(self.execute_intent(alert_intent))
-            except Exception:
-                pass  # Intent fire is best-effort — never block registration
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            # The alert needs an executor. Until 2026-07-21 this call passed none
+            # and raised TypeError on EVERY anomaly — swallowed whole by a bare
+            # `except Exception: pass`, so this security alert had never once
+            # fired. The anomaly itself was always audited (above); only the
+            # dispatch was dead. Missing executor is now reported, not hidden.
+            if self.default_executor is None:
+                log.error(
+                    "Capability-anomaly alert for %s NOT dispatched: no default_executor "
+                    "wired on the hub. The anomaly is recorded in the audit chain, but no "
+                    "intent was raised.", manifest.device_id)
+                loop = None
+                alert_intent = None
+
+            if alert_intent is not None and loop is not None:
+                # Inside a running loop (normal server path): schedule it without
+                # blocking registration, but attach a callback so a failure in the
+                # detached task is reported instead of vanishing.
+                task = asyncio.ensure_future(
+                    self.execute_intent(alert_intent, self.default_executor))
+
+                def _report_alert_outcome(t: "asyncio.Future") -> None:
+                    if t.cancelled():
+                        log.warning("Capability-anomaly alert for %s was cancelled",
+                                    manifest.device_id)
+                        return
+                    exc = t.exception()
+                    if exc is not None:
+                        log.error("Capability-anomaly alert for %s FAILED to execute: %s",
+                                  manifest.device_id, exc)
+
+                task.add_done_callback(_report_alert_outcome)
+            elif alert_intent is not None:
+                # No running loop (CLI, migration scripts, sync tests): run it to
+                # completion, as the previous run_until_complete branch did.
+                try:
+                    asyncio.run(self.execute_intent(alert_intent, self.default_executor))
+                except Exception as e:
+                    log.error("Capability-anomaly alert for %s FAILED to execute: %s",
+                              manifest.device_id, e)
         else:
             self.audit_log.append({
                 "type":        "device_updated" if caps_changed else "device_firmware_updated",

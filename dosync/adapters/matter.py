@@ -195,7 +195,7 @@ class MatterAdapter(DoSyncAdapter):
             return None
         try:
             import asyncio as _asyncio
-            raw = await _asyncio.get_event_loop().run_in_executor(
+            raw = await _asyncio.get_running_loop().run_in_executor(
                 None, lambda: self._client.get_state(entity_id)
             )
             state_str = raw.get("state", "")
@@ -238,7 +238,7 @@ class MatterAdapter(DoSyncAdapter):
 
         try:
             import asyncio
-            response = await asyncio.get_event_loop().run_in_executor(
+            response = await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: self._call_ha(device_type, action, entity_id)
             )

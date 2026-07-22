@@ -279,6 +279,11 @@ else:
 from dosync.device_arbiter import DeviceArbiter
 _adapter_executor = executor
 executor = DeviceArbiter(executor, audit_hook=hub.audit_log.append)
+
+# Hub-initiated intents (the capability-anomaly security alert) have no caller to
+# supply an executor. Wire the fully-wrapped one so those alerts run through the
+# SAME arbitration and auditing as any other intent — not a side channel.
+hub.default_executor = executor
 logging.getLogger("dosync.server").info("DeviceArbiter active — emergency preemption enabled")
 
 # ── External Resolver (optional) ─────────────────────────────────────────────
@@ -395,12 +400,20 @@ def _patched_audit_append(entry: dict) -> str:
     import asyncio
     entry_type = entry.get("type", "")
     if entry_type in ("intent_executed", "phase_executed", "presence_updated"):
+        # WebSocket fan-out is genuinely optional: no subscriber, nothing to do,
+        # and a broadcast failure must never affect the audit append that just
+        # succeeded. get_running_loop() replaces the deprecated get_event_loop()
+        # and states the requirement directly — this only makes sense with a loop.
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None:
+            try:
                 loop.create_task(ws_manager.broadcast(entry_type, entry))
-        except Exception:
-            pass
+            except Exception as e:
+                logging.getLogger("dosync.server").debug(
+                    "WebSocket broadcast of %s not scheduled: %s", entry_type, e)
     return result
 
 hub.audit_log.append = _patched_audit_append

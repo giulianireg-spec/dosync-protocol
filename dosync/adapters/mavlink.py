@@ -532,11 +532,15 @@ class MAVLinkAdapter(DoSyncAdapter):
         runs on the event-loop thread — the only place the DB is touched."""
         if self._consumer_running:
             return
+        # get_running_loop() states the requirement directly: this consumer only
+        # makes sense on a running loop. It also replaces the deprecated
+        # get_event_loop() — and since it returns ONLY a running loop, the old
+        # `not loop.is_running()` check is now redundant.
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
         except RuntimeError:
             loop = None
-        if loop is None or not loop.is_running():
+        if loop is None:
             # No running loop (e.g. some test contexts). The consumer can be driven
             # manually via drain_telemetry_once() instead.
             return

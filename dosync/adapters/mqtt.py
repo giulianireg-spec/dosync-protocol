@@ -109,7 +109,7 @@ class MQTTAdapter(DoSyncAdapter):
             log.warning("MQTTAdapter: paho-mqtt not installed — skipping connect")
             return
 
-        self._loop = asyncio.get_event_loop()
+        self._loop = asyncio.get_running_loop()
 
         client_id = f"dosync-hub-{int(time.time()) % 10000}"
         self._client = _mqtt.Client(

@@ -47,7 +47,10 @@ def _entries(hub, etype):
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    # asyncio.run() creates and cleans up its own loop. The old
+    # get_event_loop().run_until_complete() emitted a DeprecationWarning (there is
+    # no current event loop) and is scheduled to raise in a future Python.
+    return asyncio.run(coro)
 
 
 # ── policy_modified is chain-bound ───────────────────────────────────────────
