@@ -165,6 +165,13 @@ class ActuatorSpec:
     supports_progress: bool = False    # hub can query intermediate progress
     supports_cancel: bool = False      # the operation can be cancelled
     emits_telemetry: bool = False      # device streams telemetry → enables sub-states + reconciliation
+    # ── INDEPENDENT-OBSERVATION (panel design 2026-07-21) ─────────────────────
+    # The manufacturer's NATURAL pairing: which sensor confirms this actuator's
+    # effect (e.g. a lock's own bolt_position). Optional — most actuators declare
+    # none. A deployment can add or override a CROSS-DEVICE binding on the intent
+    # (the lock from vendor A verified by vendor B's door sensor), which wins:
+    # the manufacturer cannot know sensors it does not ship with.
+    verify_with: Optional["VerifyBinding"] = None
 
 @dataclass
 class EventSpec:
@@ -338,12 +345,49 @@ class DeviceEvent:
 
 # ── Action plan (Layer 4 output) ──────────────────────────────────────────────
 
+class VerificationStatus(str, Enum):
+    """INDEPENDENT-OBSERVATION (panel design 2026-07-21). Separate from success:
+    success answers "did the device accept the command?"; verification answers
+    "did an independent sensor confirm the effect happened?"."""
+    UNVERIFIED   = "unverified"    # no check ran (opt-in absent, or check pending)
+    VERIFIED     = "verified"      # sensor agreed with expected_reading in time
+    CONTRADICTED = "contradicted"  # device said OK but the sensor disagreed
+    UNVERIFIABLE = "unverifiable"  # the verifying sensor itself did not answer in time
+
+
+@dataclass
+class VerifyBinding:
+    """Opt-in, declarative (NOT a rule language — panel decision, Sosa): one
+    sensor, one expected reading, one deadline. Declared on the manifest (the
+    manufacturer's natural pairing) and/or on the intent (deployment cross-link,
+    which overrides)."""
+    sensor_id: str
+    expected_reading: Any
+    deadline_s: float = 5.0
+
+
+@dataclass
+class VerificationResult:
+    status: "VerificationStatus"
+    sensor_id: str
+    expected: Any
+    observed: Any = None
+    # Grade of independence (panel decision, Benítez): a sensor on a DIFFERENT
+    # device_id than the actuator is genuine independent observation; the same
+    # firmware reporting twice is weaker evidence. Recorded so an auditor knows
+    # what "verified" actually means.
+    independence: str = "independent_device"   # or "same_device"
+    checked_at: float = field(default_factory=time.time)
+
+
 @dataclass
 class DeviceAction:
     device_id: str
     action: str
     params: dict[str, Any]            = field(default_factory=dict)
     relevance_score: float            = 0.0
+    # INDEPENDENT-OBSERVATION: opt-in. None → behaves exactly as before.
+    verify_with: Optional["VerifyBinding"] = None
 
 @dataclass
 class ActionPlan:
@@ -365,6 +409,11 @@ class ActionResult:
     executed_at: float                = field(default_factory=time.time)
     aborted: bool                     = False  # True if cancelled by ABORT policy
     retries: int                      = 0      # retries attempted before final result
+    # INDEPENDENT-OBSERVATION: separate from success (panel decision, Morales).
+    # None when the action declared no verify_with. success=True with
+    # verification.status=CONTRADICTED is a real, valuable state: the device
+    # accepted the command but the world did not change.
+    verification: Optional["VerificationResult"] = None
 
 @dataclass
 class IntentResult:

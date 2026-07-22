@@ -1027,7 +1027,80 @@ class _TimedExecutor:
                     self._hub.health.mark_reachable(action.device_id)
         except Exception:
             pass
+
+        # INDEPENDENT-OBSERVATION (panel design 2026-07-21): if the action
+        # declared a verify_with binding and it was ACCEPTED (success), read the
+        # independent sensor and compare against the expected reading. This is
+        # the difference between "the device accepted the command" (success) and
+        # "an independent sensor confirms the effect happened" (verification).
+        # Opt-in: no binding → result unchanged. Never affects success itself.
+        binding = getattr(action, "verify_with", None)
+        if binding is not None and success and self._hub is not None:
+            try:
+                result.verification = await self._verify_action(action, binding)
+            except Exception as _ve:
+                log.warning("verification raised for %s (recorded unverifiable): %s",
+                            action.device_id, _ve)
+                from .models import VerificationResult, VerificationStatus
+                result.verification = VerificationResult(
+                    status=VerificationStatus.UNVERIFIABLE, sensor_id=binding.sensor_id,
+                    expected=binding.expected_reading, observed=None,
+                    independence=("same_device" if binding.sensor_id.split(":")[0]
+                                  == action.device_id else "independent_device"))
         return result
+
+    async def _verify_action(self, action, binding):
+        """Read the verifying sensor and grade the outcome. Returns a
+        VerificationResult with one of verified/contradicted/unverifiable."""
+        import asyncio as _asyncio
+        from .models import VerificationResult, VerificationStatus
+
+        from .adapters import AdapterExecutor
+
+        # sensor_id: "device_id:local_sensor" (cross-device) or "device_id".
+        # A sensor on a DIFFERENT device than the actuator is genuine independent
+        # observation (panel, Benítez); same-device is weaker evidence.
+        if ":" in binding.sensor_id:
+            sensor_device, sensor_key = binding.sensor_id.split(":", 1)
+        else:
+            sensor_device, sensor_key = binding.sensor_id, None
+        independence = ("same_device" if sensor_device == action.device_id
+                        else "independent_device")
+
+        def _result(status, observed):
+            return VerificationResult(
+                status=status, sensor_id=binding.sensor_id,
+                expected=binding.expected_reading, observed=observed,
+                independence=independence)
+
+        # Read the verifying sensor through its adapter's get_state — the same
+        # path the active probe uses. If we cannot reach one, the honest verdict
+        # is UNVERIFIABLE (we could not look), NOT contradiction.
+        inner = self._inner
+        if not isinstance(inner, AdapterExecutor):
+            return _result(VerificationStatus.UNVERIFIABLE, None)
+
+        device = self._hub.registry.get(sensor_device) if self._hub else None
+        adapter = inner.get_adapter(device.adapter) if device else None
+        if adapter is None or not hasattr(adapter, "get_state"):
+            return _result(VerificationStatus.UNVERIFIABLE, None)
+
+        try:
+            state = await _asyncio.wait_for(
+                adapter.get_state(sensor_device), timeout=binding.deadline_s)
+        except Exception:
+            state = None
+
+        if state is None:
+            return _result(VerificationStatus.UNVERIFIABLE, None)
+
+        observed = state.get(sensor_key) if (sensor_key and isinstance(state, dict)) else state
+        if observed == binding.expected_reading:
+            return _result(VerificationStatus.VERIFIED, observed)
+        if sensor_key is None and isinstance(state, dict) \
+                and binding.expected_reading in state.values():
+            return _result(VerificationStatus.VERIFIED, state)
+        return _result(VerificationStatus.CONTRADICTED, observed)
 
 
 class DeviceHealth:
@@ -2263,6 +2336,50 @@ class DoSyncHub:
             failed_devices=[], status=final_state.value,
         )
 
+    def _resolve_verify_bindings(self, plan, intent) -> None:
+        """INDEPENDENT-OBSERVATION (panel D1): fill in each action's verify_with
+        from the manifest (the manufacturer's natural pairing) and/or the intent
+        context (a deployment cross-device binding, which overrides).
+
+        Intent context format:
+            context["verify_with"] = {
+              "lock-front": {"sensor_id": "door-sensor:bolt",
+                             "expected_reading": "locked", "deadline_s": 5},
+              "lock-front:unlock": {...}          # optional per-action override
+            }
+        Keys are matched most-specific-first: "device:action", then "device".
+        Anything malformed is IGNORED with a warning — a bad binding must never
+        break dispatch (verification is an observation, not a gate).
+        """
+        from .models import VerifyBinding
+
+        ctx = (intent.context or {}).get("verify_with") or {}
+        for action in plan.actions:
+            binding = None
+
+            # 1. Manifest: the actuator's own declared pairing, if any.
+            device = self.registry.get(action.device_id)
+            if device:
+                for act in getattr(device, "actuators", []):
+                    if act.type == action.action or act.id == action.action:
+                        binding = getattr(act, "verify_with", None)
+                        break
+
+            # 2. Intent context overrides (most specific key wins).
+            raw = ctx.get(f"{action.device_id}:{action.action}") or ctx.get(action.device_id)
+            if raw is not None:
+                try:
+                    binding = raw if isinstance(raw, VerifyBinding) else VerifyBinding(
+                        sensor_id=raw["sensor_id"],
+                        expected_reading=raw["expected_reading"],
+                        deadline_s=float(raw.get("deadline_s", 5.0)))
+                except Exception as e:
+                    log.warning("Ignoring malformed verify_with for %s/%s: %s",
+                                action.device_id, action.action, e)
+
+            if binding is not None:
+                action.verify_with = binding
+
     async def execute_intent(
         self,
         intent: Intent,
@@ -2437,6 +2554,14 @@ class DoSyncHub:
                           urgency=plan.urgency,
                           failure_policy=getattr(plan, "failure_policy", None))
 
+        # INDEPENDENT-OBSERVATION: resolve each action's verify_with binding
+        # before dispatch. Manifest declares the manufacturer's natural pairing;
+        # the intent context can add or OVERRIDE a cross-device binding, and wins
+        # (panel decision D1 — the manufacturer cannot know sensors it does not
+        # ship with). Opt-in throughout: an action with no binding from either
+        # source stays verify_with=None and behaves exactly as before.
+        self._resolve_verify_bindings(plan, intent)
+
         # Execute with the plan's FailurePolicy
         results, failed, aborted, policy_applied = [], [], [], "continue"
         try:
@@ -2459,6 +2584,36 @@ class DoSyncHub:
                     _release(_claim_devices, _rank)
                 except Exception:
                     pass
+
+        # INDEPENDENT-OBSERVATION (panel design 2026-07-21): a verification result
+        # that CONTRADICTS or is UNVERIFIABLE is a first-class audit event, with
+        # expected/observed/sensor/independence. The protocol REPORTS honestly and
+        # does NOT act (no auto-retry, no auto-escalation — panel decision D2):
+        # the response is deployment policy, never protocol-automatic. `success`
+        # is untouched — the device accepted the command; verification answers the
+        # separate question of whether the effect was independently observed.
+        from .models import VerificationStatus as _VS
+        for _r in results:
+            _v = getattr(_r, "verification", None)
+            if _v is None or _v.status in (_VS.VERIFIED, _VS.UNVERIFIED):
+                continue
+            _ev = ("action_contradicted" if _v.status == _VS.CONTRADICTED
+                   else "action_unverifiable")
+            self.audit_log.append({
+                "type":         _ev,
+                "intent_id":    intent.intent_id,
+                "device_id":    _r.device_id,
+                "action":       _r.action,
+                "sensor_id":    _v.sensor_id,
+                "expected":     _v.expected,
+                "observed":     _v.observed,
+                "independence": _v.independence,
+            })
+            if _v.status == _VS.CONTRADICTED:
+                log.warning("Action %s on %s reported success but sensor %s CONTRADICTS: "
+                            "expected=%r observed=%r (%s) — reporting, not acting (policy decides)",
+                            _r.action, _r.device_id, _v.sensor_id, _v.expected,
+                            _v.observed, _v.independence)
 
         # Rejected-by-validation actions count against full success: the plan did
         # not do everything the mind asked. Per the panel, this resolves to

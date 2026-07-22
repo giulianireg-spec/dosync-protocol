@@ -222,7 +222,7 @@ stayed correctly silent (the deployment's rules are survivable — the siren rem
 loud path is pinned by tests. Note for the radar: the live chain reached 24,022 entries
 (~12.6k on Jul 14) — the audit archiving item keeps growing more relevant.
 
-## INDEPENDENT-OBSERVATION — Device ack ≠ observed reality · design exploration · effort M/L
+## INDEPENDENT-OBSERVATION — Device ack ≠ observed reality — SHIPPED 2026-07-21 · effort M/L
 Origin: same review. Completion is confirmed (never assumed) and vehicles are supervised
 against reconciled telemetry, but systematic cross-verification against an independent
 sensor ("the lock says locked AND the door sensor agrees") is not expressible in the
@@ -405,3 +405,38 @@ the spec cites is backed by a real, present test — the formal model cannot dri
 code or cite phantom tests (both verified to fail when a citation or a predicate is broken).
 The two-emergencies-same-device open edge (Benítez #6) is recorded in the spec as future
 work rather than silently omitted. 645/645.
+
+
+## INDEPENDENT-OBSERVATION implementation notes — 2026-07-21
+Designed by the expert panel in session (see DoSync-Panel-Diseno-IndependentObservation),
+then built to that design.
+
+**Panel decisions honored.** (D1) The binding is declarable in BOTH places — manifest for the
+manufacturer's natural pairing, intent context for the deployment cross-device link, intent
+wins (a manufacturer cannot know sensors it does not ship with). Structure stays declarative
+and simple — one sensor, one expected reading, one deadline — explicitly NOT a rule language,
+which would re-implement the policy engine inside verification. (D2) On `contradicted` the
+protocol REPORTS and does not act: a first-class `action_contradicted` chain entry with
+expected/observed/sensor/independence, no auto-retry (retrying can worsen an unseen physical
+state) and no auto-escalation (a discrepancy is not an unsatisfiable emergency). The response
+is deployment policy — consistent with the already-recorded no-automatic-compensation
+position. (D3) Opt-in throughout; `verification` is a field SEPARATE from `success` (two
+different questions: "accepted?" vs "did the effect happen?"); four states including
+`unverifiable`, distinct from `contradicted` — the world did not disagree, we could not look.
+Independence is graded (`independent_device` / `same_device`) so an auditor knows what
+"verified" is worth.
+
+**Two real bugs found and fixed during the work, both worth recording:**
+1. A stray `@dataclass` decorator landed on the new `VerificationStatus` enum (an insertion
+   split a decorator from the class it decorated). Dataclass then generated an `__eq__` that
+   compared zero fields — so EVERY status compared equal to every other, and the type became
+   unhashable. `contradicted == verified` was `True`. This is the exact class of silent
+   failure the project most fears: the feature's core distinction, broken invisibly.
+2. `pytest.ini` had no `asyncio_mode`, so pytest-asyncio in strict mode counted coroutine
+   tests as passed WITHOUT RUNNING THEM. Every async test in the suite was a false green
+   (6 tests across 3 files). Fixed with `asyncio_mode = auto`; all now genuinely execute.
+Bug 1 was only exposed BECAUSE bug 2 was fixed and the tests started actually running — and
+even then only surfaced when the "does the test fail with the bug reintroduced?" check kept
+coming back green against expectation. The discipline caught what the green suite hid.
+
+661/661. Spec §7.5. Production validation pending.

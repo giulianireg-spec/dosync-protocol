@@ -545,6 +545,59 @@ evidence than an action timing out, so it does not by itself produce an
 the device's own word about itself. Unknown devices are rejected with `404`: a
 heartbeat is an assertion of identity and must come from a registered device.
 
+### 7.5 Independent observation (`verify_with`)
+
+`ActionResult.success` answers one question: **did the device accept the command?**
+It does not answer whether the physical effect occurred. A lock can report
+"locked" because its firmware received the command while the bolt never moved.
+
+An action MAY declare an optional `verify_with` binding. After the action is
+accepted, the hub reads the named sensor and compares it against the expected
+reading, producing a `verification` result **separate from** `success`:
+
+```
+DeviceAction.verify_with = {
+  "sensor_id":        "door-sensor:bolt",   // "device_id:sensor" or "device_id"
+  "expected_reading": "locked",
+  "deadline_s":       5.0
+}
+```
+
+**Where it is declared.** The manifest may declare an actuator's natural pairing
+(a lock's own bolt sensor). The intent context may add or override a
+cross-device binding — the common real case, where the lock and the sensor that
+confirms it come from different vendors — and the intent wins, because a
+manufacturer cannot know sensors it does not ship with.
+
+**States.** `verification.status` is one of:
+
+| Status | Meaning |
+|---|---|
+| `verified` | the sensor agreed with `expected_reading` within the deadline |
+| `contradicted` | the device accepted the command but the sensor DISAGREES |
+| `unverifiable` | the verifying sensor itself did not answer — we could not look |
+| `unverified` | no check ran (no binding declared) |
+
+`unverifiable` is deliberately distinct from `contradicted`: the world did not
+disagree; the hub simply could not observe. The result also records
+`independence` — `independent_device` when the sensor lives on a different
+device than the actuator, `same_device` otherwise — because the same firmware
+reporting twice is weaker evidence than a genuinely independent observation.
+
+**Behavior on contradiction.** The protocol REPORTS and does NOT act. A
+`contradicted` (or `unverifiable`) result appends a first-class
+`action_contradicted` / `action_unverifiable` entry to the tamper-evident audit
+chain carrying the expected value, the observed value, the sensor, and the
+independence grade. There is **no automatic retry and no automatic escalation**:
+retrying an action whose effect was contradicted can worsen a physical state the
+protocol cannot see, and a discrepancy is not an unsatisfiable emergency. What to
+do about it is deployment-declared policy, never protocol-automatic — the same
+position that governs compensation, which does not transfer cleanly from
+transactions to the physical world.
+
+**Opt-in.** An action with no `verify_with` is unchanged in every respect:
+`verification` is absent and `success` means exactly what it always meant.
+
 ---
 
 ## 8. Certification
