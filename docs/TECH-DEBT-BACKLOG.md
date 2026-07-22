@@ -439,4 +439,22 @@ Bug 1 was only exposed BECAUSE bug 2 was fixed and the tests started actually ru
 even then only surfaced when the "does the test fail with the bug reintroduced?" check kept
 coming back green against expectation. The discipline caught what the green suite hid.
 
-661/661. Spec §7.5. Production validation pending.
+661/661. Spec §7.5.
+
+**CONFIRMED in production 2026-07-21** (intent int-1784683484-82f1c0): a cross-device binding
+declared in the intent context (WiZ bulb verified against the DHT22, deliberately impossible
+expected value) resolved onto the actions, ran, and appended 4 first-class chain entries —
+`action_unverifiable | wiz-living2-01 / turn_on | sensor: rpi-dht22-01:temperature |
+expected: impossible-value | observed: None | independent_device`. Binding resolution,
+verification execution, audit provenance, and the independence grading all work end to end.
+
+**Named gap found by that drill — verifier reachability.** The result was `unverifiable`
+rather than `contradicted` because verification reads the verifying sensor via
+`adapter.get_state`, and the DHT22 arrives over a PUSH-ONLY path whose adapter does not
+implement it (mqtt.py has no get_state; ble/ha/matter/mavlink/shelly/wiz do). So a push-only
+sensor cannot serve as a verifier today: the hub cannot poll it on demand, and correctly
+refuses to claim anything it could not observe. Possible follow-up (NOT decided — it is a
+design question worth the panel): fall back to the hub's last-known reading for push-only
+sensors, bounded by a freshness window. That raises a real question — is a cached reading
+"independent observation"? — which is exactly the kind of thing to decide deliberately
+rather than default into.
