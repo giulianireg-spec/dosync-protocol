@@ -523,7 +523,7 @@ Python, ideally not by the same author — is what would demonstrate that the sp
 actually a specification.
 
 
-## LOOP-MIGRATION — get_event_loop() retirement, and a dead security alert it uncovered — SHIPPED 2026-07-21 · effort S
+## LOOP-MIGRATION — get_event_loop() retirement, and a dead security alert it uncovered — CONFIRMED 2026-07-22 · effort S
 Started as hygiene: `asyncio.get_event_loop()` is deprecated since Python 3.10 and scheduled
 to raise when no loop is running. Classified all 9 call sites with AST (not grep): 6 sat
 inside `async def` (harmless today, `get_running_loop()` is simply the correct call) and 3
@@ -549,4 +549,13 @@ never blocked — best-effort stayed best-effort, it just stopped being silent.
 
 667/667. Pinned by tests for: dispatch with and without a running loop, failure reported not
 swallowed, missing-executor reported, the positive dispatch path that was dead, and the AST
-guard. Verified to fail with each bug reintroduced. Production validation pending.
+guard. Verified to fail with each bug reintroduced.
+
+**CONFIRMED in production 2026-07-22.** A probe device was registered, then re-registered
+with a DIFFERENT actuator set under the SAME firmware version. The audit chain shows the
+causal pair, in order: `device_capability_anomaly | anomaly-probe-01 | Capabilities changed
+without firmware version change...` immediately followed by `intent_executed | alert_anomaly`.
+The journal confirms execution end to end — `Executing intent: alert_anomaly [alert]` then
+`Intent 'alert_anomaly' resolved to 7 actions across 7 devices` — and no `NOT dispatched`
+line appears, so default_executor is wired. That second entry is an event this hub had never
+produced before: the alert fired for the first time since the code was written.
