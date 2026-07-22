@@ -389,8 +389,9 @@ All 637 tests green; #1 and #7 verified to fail with the bug reintroduced.
 **CONFIRMED in production 2026-07-21:** normal heartbeat → 200, abusive 5000-byte report →
 422, /v1/status reports progress_cb_failures: 0. The remaining
 panel items (device-health (c), formal claim model for the paper, online archiving, light
-heartbeat mode, third-party certification, end-user UI) are M/L or future-scope, tracked
-separately.
+heartbeat mode, third-party certification, end-user UI) are M/L or future-scope; they are now tracked in the HORIZON section at the end of
+this file. They previously were not tracked anywhere in the repo — only inside a
+meeting document outside it, which is this project's own recurring failure mode.
 
 
 ## CLAIM-STATE-MACHINE — Formal model of the arbiter claim FSM — SHIPPED 2026-07-21 · effort M
@@ -458,3 +459,65 @@ design question worth the panel): fall back to the hub's last-known reading for 
 sensors, bounded by a freshness window. That raises a real question — is a cached reading
 "independent observation"? — which is exactly the kind of thing to decide deliberately
 rather than default into.
+
+
+---
+
+# HORIZON — raised, understood, not yet scheduled
+
+Items that are real but deliberately not in flight. Recorded here because they were
+previously "tracked" only inside a meeting document outside the repo — something declared
+that nobody verified, which is the exact pattern this project keeps catching elsewhere. An
+item here is not a promise; it is a decision to postpone WITH the reason attached, so a
+future session inherits the thinking instead of rediscovering it.
+
+## H1 — Two concurrent same-rank emergencies on one device
+*Raised by Benítez (panel 2026-07-21). Also recorded in spec §3.1 as a known open edge.*
+The claim FSM arbitrates strictly-lower rank (I1) and same-rank conflicts are resolved
+pre-dispatch (§2) — but two emergencies DISPATCHED concurrently were never seen together
+pre-dispatch, so they do not arbitrate against each other. The device takes both writes; the
+last write is final. Rare in a home, less rare in a hospital or plant with multiple alarm
+sources. Closing it means first deciding what "correct" even means when two equally urgent
+truths target one device — a modeling question before a coding one.
+
+## H2 — Verification via push-only sensors
+*Found by the 2026-07-21 verify_with drill.*
+Verification reads the verifier through `adapter.get_state`; adapters that only PUSH (mqtt,
+and the GPIO path) cannot be polled on demand, so a push-only sensor cannot serve as a
+verifier and the hub honestly returns `unverifiable`. A freshness-bounded fallback to the
+hub's last-known reading would close it — but first someone must answer whether a CACHED
+reading is "independent observation" at all, and what freshness bound keeps that honest.
+A panel question, not a default to slide into.
+
+## H3 — Online audit archiving (without stopping the hub)
+*Raised by Sosa (panel 2026-07-21).*
+`audit-archive` requires the hub stopped: fine at 28k entries, wrong at millions. Not a bug —
+a named scaling limit. Closing it means safe concurrent segmentation under a single SQLite
+writer.
+
+## H4 — Lightweight heartbeat for TLS-incapable hardware
+*Raised by Kim (panel 2026-07-21).*
+`POST /v1/heartbeat` requires bearer auth over mTLS. An 8-bit MCU with 32KB of RAM cannot do
+TLS, so today's hardware floor is "TLS-capable" — which excludes the cheapest tier of IoT.
+The options (a pre-signed token over UDP, an aggregating gateway) all trade security for
+reach; that trade should be chosen deliberately, not defaulted into.
+
+## H5 — Third-party certification / public registry
+*Raised by Nakamura (panel 2026-07-21).*
+Certification is self-administered: an implementer runs certify.py and signs the report with
+their own key. Cryptographically sound, but it attests "I ran the tests", not "an independent
+authority verified me". A public registry of certified implementations, or a neutral
+certifying party, is the v1.0-scale answer.
+
+## H6 — End-user interface (FamilyOS)
+*Raised by Ferreyra (panel 2026-07-21).*
+Everything reachable today is curl, tokens and JSON. The protocol layer is the right place to
+have spent the effort, but the stated destination — a private generational AI for the home —
+has no front door yet. Out of scope for the protocol; in scope for what the protocol is for.
+
+## H7 — Second independent implementation + language-independent wire format
+*Standing item, predates the panel.*
+The strongest remaining threat to credibility: one implementation in one language is a
+program, not a protocol. A genuinely independent second implementation — ideally not in
+Python, ideally not by the same author — is what would demonstrate that the specification is
+actually a specification.
