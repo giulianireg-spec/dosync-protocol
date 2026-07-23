@@ -7,6 +7,29 @@ this implementation of it.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-07-22
+
+First published release. `pip install dosync`.
+
+### Fixed
+- **The container lost its database on every restart.** `Dockerfile` and
+  `docker-compose.yml` set `DOSYNC_DB_PATH`; the hub reads `DOSYNC_DB`. Nothing
+  failed and nothing warned — the database was simply written inside the image
+  instead of the mounted volume, so `docker compose down` destroyed the audit
+  chain each time. The compose files now use the correct name, the hub accepts
+  the old one as a deprecated alias (with a warning) so existing deployments
+  keep their data, and a structural test now fails if any deployment file sets a
+  `DOSYNC_*` variable no code reads.
+- **The version was declared in three places that disagreed.**
+  `dosync/__init__.py` said `0.1.0`, `server.py` hardcoded `0.4.0` four times,
+  and `pyproject.toml` carried its own copy — so `import dosync;
+  dosync.__version__` reported a number three releases stale. `__init__.py` is
+  now the single source; pyproject reads it and the server imports it.
+- The startup log announced port 47200 no matter where the hub was listening.
+  It now reports the real port and the database path — an installed
+  `dosync-hub` writes to the current directory by default, which surprises
+  people who run it from different places.
+
 ## [Unreleased]
 
 ### Added

@@ -9,7 +9,10 @@ services:
       - dosync-data:/data
     environment:
       - DOSYNC_AUTH=true
-      - DOSYNC_DB_PATH=/data/dosync.db
+      # DOSYNC_DB, not DOSYNC_DB_PATH: the hub reads this name. With the old
+      # name the database was written inside the image instead of this volume,
+      # so the audit chain did not survive `docker compose down`.
+      - DOSYNC_DB=/data/dosync.db
       # Demo token — change before any non-local deployment
       - DOSYNC_DEMO_TOKEN=dosync-demo-token
     healthcheck:

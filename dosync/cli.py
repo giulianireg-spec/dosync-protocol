@@ -47,6 +47,12 @@ def hub(argv=None) -> None:
     except ImportError:  # pragma: no cover - install-time problem, not runtime
         sys.exit("uvicorn is required to run the hub: pip install 'dosync'")
 
+    # Publish the real values so the application can report them accurately: the
+    # startup log used to announce a hardcoded 47200 no matter where the hub was
+    # actually listening.
+    os.environ["DOSYNC_PORT"] = str(args.port)
+    os.environ["DOSYNC_HOST"] = args.host
+
     uvicorn.run("dosync.server:app", host=args.host, port=args.port,
                 reload=args.reload, log_level=args.log_level)
 

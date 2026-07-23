@@ -21,7 +21,10 @@ RUN mkdir -p /data
 # no TLS. A real deployment sets DOSYNC_AUTH=true, provides DOSYNC_TOKEN, and
 # terminates TLS (see the deployment guide).
 ENV DOSYNC_AUTH=false
-ENV DOSYNC_DB_PATH=/data/dosync.db
+# DOSYNC_DB — the name the hub actually reads. This said DOSYNC_DB_PATH until
+# 2026-07-22, which the hub ignored: the database landed in /app instead of
+# the mounted volume and every container recreation destroyed the audit chain.
+ENV DOSYNC_DB=/data/dosync.db
 
 EXPOSE 47200
 

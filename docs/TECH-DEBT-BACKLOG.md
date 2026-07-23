@@ -595,3 +595,28 @@ exists for the first time.
 
 **Not done here, deliberately:** publishing to PyPI is the author's action (it needs an
 account and an API token). The package is built and verified; the upload is one command.
+
+## PACKAGING-FIXES — Three bugs the first install exposed — SHIPPED 2026-07-22 · effort S
+Publishing to TestPyPI and installing the result as a stranger would is itself a test, and it
+failed three things nothing else had:
+
+1. **Docker data loss.** `Dockerfile` and `docker-compose.yml` set `DOSYNC_DB_PATH`; the hub
+   reads `DOSYNC_DB`. No error, no warning — the database was written inside the image rather
+   than the mounted `/data` volume, so every `docker compose down` silently destroyed the
+   audit chain. The tamper-evident record, the project's central claim, did not survive a
+   container restart in the shipped deployment. Compose files corrected; the hub accepts the
+   old name as a deprecated alias WITH a warning, so a deployment already carrying it keeps
+   its data instead of quietly falling back to the default path.
+2. **Version declared three ways.** `dosync/__init__.py` said 0.1.0, `server.py` hardcoded
+   0.4.0 in four places, `pyproject.toml` had its own copy. `import dosync; __version__`
+   reported a number three releases stale. `__init__.py` is now the single source.
+3. **The startup log lied about the port**, always announcing 47200. It now reports the real
+   port and the database path (an installed `dosync-hub` defaults to the CURRENT DIRECTORY,
+   which surprised even the author during the install test).
+
+Pinned by `tests/test_deployment_env_contract.py` (7 tests), including a structural check
+that every `DOSYNC_*` variable set in a deployment file is actually read somewhere in the
+package — the test that would have caught #1 the day it was introduced. Verified to fail with
+the old variable name restored. 674/674.
+
+Version bumped to **0.4.1**: 0.4.0 was consumed on TestPyPI and carried the data-loss bug.

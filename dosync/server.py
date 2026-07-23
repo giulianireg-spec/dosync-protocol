@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 
+from dosync import __version__
 from dosync.hub import DoSyncHub
 from dosync import metrics as M
 from dosync.executor import SimulatedExecutor
@@ -33,10 +34,35 @@ logging.basicConfig(
 )
 
 _certify_mode = os.environ.get("DOSYNC_CERTIFY", "").lower() in ("1", "true", "yes")
+
+
+def _resolve_db_path() -> str:
+    """Where the hub stores its data.
+
+    DOSYNC_DB is the name the hub reads. DOSYNC_DB_PATH is accepted as an alias
+    because the shipped Dockerfile and docker-compose.yml set THAT name — and
+    the hub never read it, so a container wrote its database to the image's
+    working directory instead of the mounted volume, and every `docker compose
+    down` silently destroyed the audit chain. Found and fixed 2026-07-22: the
+    compose files now use DOSYNC_DB, and this alias keeps any deployment still
+    carrying the old variable working rather than quietly losing its data.
+    """
+    explicit = os.environ.get("DOSYNC_DB")
+    alias = os.environ.get("DOSYNC_DB_PATH")
+    if explicit:
+        return explicit
+    if alias:
+        logging.getLogger("dosync.server").warning(
+            "DOSYNC_DB_PATH is a deprecated alias for DOSYNC_DB — using %s. "
+            "Rename the variable to DOSYNC_DB.", alias)
+        return alias
+    return "dosync.db"
+
+
 # ── Estado global del hub ─────────────────────────────────────────────────────
 
 hub      = DoSyncHub(
-    db_path=":memory:" if _certify_mode else os.environ.get("DOSYNC_DB", "dosync.db")
+    db_path=":memory:" if _certify_mode else _resolve_db_path()
 )
 
 # ── Async intent store ────────────────────────────────────────────────────────
@@ -530,7 +556,14 @@ class HeartbeatRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log = logging.getLogger("dosync.server")
-    log.info("DoSync Hub started on port 47200")
+    # The port was hardcoded here and lied whenever the hub ran anywhere else
+    # (`dosync-hub --port 8080` still announced 47200). Report what is actually
+    # in use. The database path is logged too: an installed `dosync-hub` writes
+    # to the CURRENT DIRECTORY by default, which surprises people who run it
+    # from different places and wonder where their devices went.
+    log.info("DoSync Hub started — port %s, database %s",
+             os.environ.get("DOSYNC_PORT", "47200"),
+             ":memory: (certify mode)" if _certify_mode else _resolve_db_path())
     first_token = _auth_manager.ensure_default_key()
     if first_token:
         print("\n" + "="*60)
@@ -664,7 +697,7 @@ app = FastAPI(
         "El hub central que conecta la IA con los gadgets del hogar.\n"
         "Protocolo abierto · Apache 2.0 · github.com/dosync/protocol"
     ),
-    version="0.4.0",
+    version=__version__,
     lifespan=lifespan,
 )
 
@@ -716,7 +749,7 @@ async def websocket_endpoint(ws: WebSocket):
             "type": "connected",
             "data": {
                 "devices":    len(hub.registry.all()),
-                "hub_version": "0.4.0",
+                "hub_version": __version__,
                 "protocol":   f"dosync/{DOSYNC_PROTOCOL_VERSION}",
             }
         }))
@@ -750,7 +783,7 @@ def dashboard():
 def root():
     return {
         "name": "DoSync Hub",
-        "version": "0.4.0",
+        "version": __version__,
         "protocol": f"dosync/{DOSYNC_PROTOCOL_VERSION}",
         "status": "running",
         "devices_registered": len(hub.registry.all()),
@@ -1822,7 +1855,7 @@ def get_status():
     occupancy = hub.get_occupancy()
     return {
         "name":            "DoSync Hub",
-        "version":         "0.4.0",
+        "version":         __version__,
         "protocol":        f"dosync/{DOSYNC_PROTOCOL_VERSION}",
         "status":          "running",
         "certify_mode":    _certify_mode,

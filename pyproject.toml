@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dosync"
-version = "0.4.0"
+dynamic = ["version"]
 description = "The semantic layer between AI agents and physical devices"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -68,6 +68,9 @@ Issues        = "https://github.com/giulianireg-spec/dosync-protocol/issues"
 dosync-hub     = "dosync.cli:hub"
 dosync-manage  = "dosync.manage:main"
 dosync-certify = "dosync.certify:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "dosync.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["dosync*"]
