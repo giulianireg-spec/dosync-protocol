@@ -25,6 +25,9 @@ First published release. `pip install dosync`.
   and `pyproject.toml` carried its own copy — so `import dosync;
   dosync.__version__` reported a number three releases stale. `__init__.py` is
   now the single source; pyproject reads it and the server imports it.
+- License metadata moved to an SPDX expression (`license = "Apache-2.0"` plus
+  `license-files`), removing three setuptools deprecation warnings whose builds
+  stop being supported in February 2027.
 - The startup log announced port 47200 no matter where the hub was listening.
   It now reports the real port and the database path — an installed
   `dosync-hub` writes to the current directory by default, which surprises
