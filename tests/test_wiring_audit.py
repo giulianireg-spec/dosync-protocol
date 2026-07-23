@@ -73,7 +73,10 @@ def test_server_startup_purges_operations():
     """The wiring itself: server.py must call clear_old_operations at startup
     (it called clear_old_snapshots and not this one — hence unbounded growth)."""
     import pathlib
-    src = (pathlib.Path(__file__).resolve().parent.parent / "server.py").read_text()
+    # The application lives in the package (moved 2026-07-22 so it ships with
+    # `pip install dosync`); the repo-root server.py is only a shim.
+    src = (pathlib.Path(__file__).resolve().parent.parent
+           / "dosync" / "server.py").read_text()
     assert "clear_old_operations" in src, "operations cleanup is not wired in server.py"
 
 

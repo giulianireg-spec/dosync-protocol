@@ -559,3 +559,39 @@ The journal confirms execution end to end — `Executing intent: alert_anomaly [
 `Intent 'alert_anomaly' resolved to 7 actions across 7 devices` — and no `NOT dispatched`
 line appears, so default_executor is wired. That second entry is an event this hub had never
 produced before: the alert fired for the first time since the code was written.
+## PACKAGING — `pip install dosync` — SHIPPED 2026-07-22 · effort M
+The audit's unanimous first recommendation, and the cheapest one: the project was not
+installable. No `pyproject.toml`, nothing on PyPI. Evaluating DoSync meant cloning a repo,
+resolving dependencies by hand and setting PYTHONPATH — the largest friction sitting at the
+very first step, exactly where an evaluator decides whether it is worth their time.
+
+Delivered: `pyproject.toml` (name `dosync`, verified from PyPI as available), core deps
+mirroring the audited floors in requirements.txt, optional extras per adapter so a core
+install never pulls libraries for hardware the user does not own, and three console scripts —
+`dosync-hub`, `dosync-manage`, `dosync-certify`.
+
+For those scripts to exist after an install, the application had to live inside the package:
+`server.py`, `manage.py` and `certify.py` moved to `dosync/`. The repo-root names remain as
+module ALIASES (`sys.modules[__name__] = _impl`) rather than partial re-exports, because
+several tests and repo scripts import symbols from them and one test mutates
+`server.executor` — a re-export would have created a second module object whose mutations the
+application never sees, which is the silent-divergence class this project refuses. So
+`uvicorn server:app`, existing systemd units, `import server` and `python3 manage.py …` all
+keep working unchanged.
+
+Found while moving: two structural tests read implementation source BY PATH and were happily
+reading the shims instead; repointed at the package.
+
+Validated the way that actually matters — built the wheel and installed it into a clean
+venv, as a third party would: `import dosync` works, the three console scripts exist,
+`dosync-hub` serves `/v1/status` (DoSync Hub 0.4.0, protocol dosync/0.4), a device registers
+(200), an intent is accepted, and the audit chain records it. 667/667.
+
+Also: the Dockerfile now builds and installs the wheel instead of copying loose scripts (the
+image runs exactly what a user's install produces), the README quickstart leads with
+`pip install dosync` and a five-minute no-hardware walkthrough ending in the explain and
+audit endpoints, badges corrected (certification said 44/44; it is 52/52), and a CHANGELOG
+exists for the first time.
+
+**Not done here, deliberately:** publishing to PyPI is the author's action (it needs an
+account and an API token). The package is built and verified; the upload is one command.

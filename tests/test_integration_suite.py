@@ -122,7 +122,9 @@ def test_certify_remains_conformance_only():
     """
     import ast
     import pathlib
-    src = (pathlib.Path(__file__).resolve().parent.parent / "certify.py").read_text()
+    # Implementation lives in the package; repo-root certify.py is a shim.
+    src = (pathlib.Path(__file__).resolve().parent.parent
+           / "dosync" / "certify.py").read_text()
     tree = ast.parse(src)
 
     called = {

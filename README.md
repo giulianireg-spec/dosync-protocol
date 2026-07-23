@@ -4,9 +4,10 @@
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Protocol](https://img.shields.io/badge/protocol-v0.4-green.svg)](spec/DoSync-SPEC-v0.1.md)
-[![Version](https://img.shields.io/badge/hub-v0.4.0-blue.svg)](server.py)
+[![PyPI](https://img.shields.io/pypi/v/dosync.svg)](https://pypi.org/project/dosync/)
+[![Python](https://img.shields.io/pypi/pyversions/dosync.svg)](https://pypi.org/project/dosync/)
 [![CI](https://github.com/giulianireg-spec/dosync-protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/giulianireg-spec/dosync-protocol/actions/workflows/ci.yml)
-[![Certification](https://img.shields.io/badge/certification-Standard%2033%2F33%20·%20Emergency%2044%2F44-orange.svg)](certify.py)
+[![Certification](https://img.shields.io/badge/certification-Conformance%2052%2F52-orange.svg)](dosync/certify.py)
 [![MCP](https://img.shields.io/badge/MCP-compatible-purple.svg)](dosync/mcp_server.py)
 
 ---
@@ -129,24 +130,73 @@ Benchmark (Raspberry Pi 5, Python 3.11.2):
 
 ## Quick start
 
-### Option A — Docker (no setup required)
+### Install and run — five minutes, no hardware
 
 ```bash
-git clone https://github.com/giulianireg-spec/dosync-protocol
-cd dosync-protocol
+pip install dosync
+dosync-hub
+```
+
+That is a working hub on `http://127.0.0.1:47200`. It starts with a simulated
+executor, so you can drive the whole protocol — register devices, fire intents,
+read the audit chain — before you own a single smart device.
+
+Register something and give it a goal:
+
+```bash
+# 1. A device declares what it CAN DO (not what commands it takes)
+curl -X POST http://127.0.0.1:47200/v1/devices/register \
+  -H 'Content-Type: application/json' -d '{
+    "device_id": "siren-hall", "device_name": "Hall Siren",
+    "manufacturer": "acme", "model": "S1", "firmware": "1.0",
+    "category": "actuator", "tags": ["alarm", "emergency"],
+    "emergency_capable": true, "cert_tier": "basic",
+    "sensors": [], "actuators": [{"id": "alarm", "type": "alarm",
+                                  "description": "audible alarm"}]}'
+
+# 2. An AI expresses a GOAL — not a command, and it names no device
+curl -X POST http://127.0.0.1:47200/v1/intent/async \
+  -H 'Content-Type: application/json' \
+  -d '{"intent": "ensure_safety", "urgency": "emergency", "context": {}}'
+
+# 3. Ask WHY those devices were chosen
+curl http://127.0.0.1:47200/v1/intents/ensure_safety/explain
+
+# 4. Read the tamper-evident record of what happened
+curl http://127.0.0.1:47200/v1/audit?limit=10
+```
+
+Step 3 is the one worth pausing on: the hub tells you which devices it
+evaluated, which it included, and the score breakdown behind each decision.
+Step 4 is the other: every action leaves a SHA-256-chained entry, so what the
+system did is provable after the fact rather than merely logged.
+
+Install only the adapters you need:
+
+```bash
+pip install 'dosync[wiz]'      # Philips WiZ bulbs
+pip install 'dosync[ha]'       # Home Assistant bridge
+pip install 'dosync[mqtt]'     # MQTT devices
+pip install 'dosync[all]'      # everything
+```
+
+### Docker
+
+```bash
+docker run -p 47200:47200 dosync/hub        # published image
+# or, from a clone:
 docker compose up
 ```
 
-Dashboard live at **http://localhost:47200**. No hardware required.
-
-### Option B — Local Python
+### From source (development)
 
 ```bash
 git clone https://github.com/giulianireg-spec/dosync-protocol
 cd dosync-protocol
 python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-PYTHONPATH=. uvicorn server:app --host 0.0.0.0 --port 47200 --reload
+pip install -e '.[dev]'
+pytest                                  # 667 tests
+dosync-hub --reload
 ```
 
 ---
