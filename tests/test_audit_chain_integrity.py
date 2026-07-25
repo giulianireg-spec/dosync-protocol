@@ -524,9 +524,12 @@ def test_runbook_marks_the_schedule_as_deployment_not_protocol():
 
 
 def test_spec_separates_normative_mechanism_from_deployment_routine():
+    """The distinction must survive rewording: what a conforming hub MUST do is
+    protocol; what an operator chooses is not. Asserts the substance rather than
+    one sentence, since the wording has already changed once."""
     spec = (REPO / "spec" / "DoSync-SPEC-v0.1.md").read_text()
     assert "**Normative:**" in spec
-    assert "Not normative — deployment configuration" in spec
+    assert "Not normative" in spec
     assert "cannot\nverify that an operator uses it" in spec or \
            "cannot verify that an operator uses it" in spec
 
@@ -655,3 +658,63 @@ def test_the_default_is_enabled_and_daily(monkeypatch, tmp_path):
     # and the number is where an implementer would look for it
     src = inspect.getsource(hub.start_checkpoint_scheduler)
     assert '"86400"' in src
+
+
+# ── Export is a standard configuration point (2026-07-25) ───────────────────
+# The destination cannot have a universal default — but its ABSENCE must not be
+# silent, because a hub quietly producing artifacts nobody collects is the
+# failure mode this whole layer exists to prevent.
+
+def test_missing_export_is_reported_not_silent(tmp_path, monkeypatch, caplog):
+    import logging
+    monkeypatch.delenv("DOSYNC_CHECKPOINT_EXPORT_DIR", raising=False)
+    hub = DoSyncHub(db_path=str(tmp_path / "a.db"))
+    hub.audit_log.append({"type": "a"})
+
+    with caplog.at_level(logging.WARNING):
+        hub.write_checkpoint(directory=str(tmp_path / "cps"))
+
+    assert hub._checkpoint_export_state == "not_configured"
+    assert any("NOT exported" in str(r.msg) for r in caplog.records), \
+        "a hub that is not exporting must say so"
+
+
+def test_configured_export_copies_the_artifact(tmp_path, monkeypatch):
+    remote = tmp_path / "remote"
+    monkeypatch.setenv("DOSYNC_CHECKPOINT_EXPORT_DIR", str(remote))
+    hub = DoSyncHub(db_path=str(tmp_path / "a.db"))
+    hub.audit_log.append({"type": "a"})
+
+    path = hub.write_checkpoint(directory=str(tmp_path / "cps"))
+    assert path
+    copied = list(remote.glob("cp-*.json"))
+    assert copied, "the checkpoint must reach the configured destination"
+    assert copied[0].read_text() == Path(path).read_text(), \
+        "the exported copy must be identical, or it attests to something else"
+    assert hub._checkpoint_export_state == "ok"
+
+
+def test_failed_export_is_an_error_not_a_shrug(tmp_path, monkeypatch, caplog):
+    """A silent export failure leaves an operator believing they have evidence
+    they do not have — worse than not exporting at all."""
+    import logging
+    # a path that cannot be created: a file where a directory must go
+    blocker = tmp_path / "blocked"
+    blocker.write_text("not a directory")
+    monkeypatch.setenv("DOSYNC_CHECKPOINT_EXPORT_DIR", str(blocker / "sub"))
+
+    hub = DoSyncHub(db_path=str(tmp_path / "a.db"))
+    hub.audit_log.append({"type": "a"})
+    with caplog.at_level(logging.ERROR):
+        path = hub.write_checkpoint(directory=str(tmp_path / "cps"))
+
+    assert path, "a failed export must not lose the local checkpoint"
+    assert hub._checkpoint_export_state == "failed"
+    assert any("FAILED" in str(r.msg) for r in caplog.records)
+
+
+def test_spec_documents_the_export_configuration_point():
+    spec = (REPO / "spec" / "DoSync-SPEC-v0.1.md").read_text()
+    assert "DOSYNC_CHECKPOINT_EXPORT_DIR" in spec
+    assert "no default value" in spec
+    assert "MUST warn" in spec

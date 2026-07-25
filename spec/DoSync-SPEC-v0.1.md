@@ -668,10 +668,23 @@ it. Daily is chosen as a default because it bounds that window at one day
 without meaningful cost — signing is roughly 1.4 s of CPU per checkpoint on
 modest hardware, negligible once a day and wasteful once a minute.
 
-**Not normative — deployment configuration:** where checkpoints are stored, HOW
-they are exported, and how long they are retained. The hub cannot perform the
-export itself, and that is the point: a checkpoint on the hub protects nothing
-against an adversary who controls the hub.
+**Normative configuration point:** `DOSYNC_CHECKPOINT_EXPORT_DIR` names a
+location the hub copies each checkpoint to. It has **no default value**, because
+no destination is universally correct — but its ABSENCE is not silent: a hub with
+it unset MUST warn, at startup and on every checkpoint, that the artifact is not
+leaving the host and the chain's tamper-evidence is therefore incomplete. The
+warning is the standardised part; the path is yours.
+
+How much an export buys depends on the destination, and implementations SHOULD
+NOT blur the difference:
+
+| Destination | What it protects against |
+|---|---|
+| Unset | Nothing beyond local corruption |
+| A directory this hub can write to (typically a network mount) | Loss of the local database; a remote filesystem keeping snapshots may hold history the hub cannot reach — but root here can usually delete there |
+| Pull-based transfer, the hub holding no credentials to the far side | A host-level adversary. Only here is "the hub cannot reach it" literally true |
+
+**Not normative:** the destination itself, and how long checkpoints are retained.
 
 Consequently, conformance testing can verify that the MECHANISM works; it cannot
 verify that an operator uses it. Implementations MUST NOT describe the chain as

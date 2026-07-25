@@ -799,3 +799,26 @@ DEFAULT, which was the entire point of the change. Fixed with a test that calls 
 scheduler with no configuration and asserts the interval it actually uses. Worth recording
 plainly: the rule is easy to state and hard to apply to the test one is writing at that
 moment, because the passing test always feels like evidence. 714/714.
+
+## CHECKPOINT-EXPORT-STANDARD — Where checkpoints go is a protocol setting — SHIPPED 2026-07-25
+Operator's follow-up to CHECKPOINT-BY-DEFAULT, and the same argument applied one level out:
+if generating checkpoints deserves a default, then WHERE they go deserves a standard
+configuration point rather than a sentence in a runbook telling each operator to invent one.
+
+The destination cannot have a universal default — no path is right everywhere. But its
+ABSENCE is not neutral, and that is the part the protocol can standardise:
+`DOSYNC_CHECKPOINT_EXPORT_DIR` is now the configuration point, the hub copies every
+checkpoint there, and leaving it unset produces a warning at STARTUP (not only when the
+first checkpoint lands a day later) and on every checkpoint, plus
+`checkpoint_export: not_configured` in `/v1/status`. A hub quietly producing artifacts
+nobody collects is the exact failure this layer exists to prevent.
+
+Export failures are errors, not shrugs: a silent failure leaves an operator believing they
+hold evidence they do not have, which is worse than not exporting at all. The local
+checkpoint survives a failed export.
+
+Spec §7.6 states the gradation instead of implying that any export is equivalent: unset
+protects nothing beyond local corruption; a directory the hub can write to survives loss of
+the database and may benefit from remote snapshots, but root here can usually delete there;
+only a pull-based transfer where the hub holds no credentials makes "the hub cannot reach
+it" literally true. 718/718.

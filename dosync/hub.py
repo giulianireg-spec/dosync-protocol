@@ -1393,6 +1393,8 @@ class DoSyncHub:
         # EXPORTED, but it can say when it last produced one.
         self._last_checkpoint_at: float | None = None
         self._last_checkpoint_path: str | None = None
+        self._checkpoint_export_state: str = "unknown"
+        self._last_checkpoint_export_at: float | None = None
         # Executor for HUB-INITIATED intents — those the hub raises on its own
         # (e.g. the capability-anomaly security alert), which have no caller to
         # supply one. Wired by the server at startup. If it is None the hub
@@ -1454,9 +1456,19 @@ class DoSyncHub:
         if directory is None:
             directory = os.environ.get("DOSYNC_CHECKPOINT_DIR", "checkpoints")
 
-        log.info("Audit checkpoints scheduled every %.0fs → %s "
-                 "(copy them off this host; one kept here proves nothing)",
-                 interval, directory)
+        _export = os.environ.get("DOSYNC_CHECKPOINT_EXPORT_DIR")
+        log.info("Audit checkpoints scheduled every %.0fs → %s", interval, directory)
+        if _export:
+            log.info("Audit checkpoints will be exported to %s", _export)
+        else:
+            # Said at STARTUP, not only when the first checkpoint is written a
+            # day later: an operator who is going to configure this should learn
+            # it now, not after a day of producing artifacts nobody collects.
+            log.warning(
+                "DOSYNC_CHECKPOINT_EXPORT_DIR is unset — checkpoints will stay on this "
+                "host, where they prove nothing against anyone who controls it. Set it "
+                "to a location this hub does not own (a mounted share, removable media) "
+                "to make the audit chain's tamper-evidence complete.")
 
         while True:
             try:
@@ -1496,7 +1508,53 @@ class DoSyncHub:
         self._last_checkpoint_path = path
         log.info("Audit checkpoint written: %s (%d entries, head %s…)",
                  path, doc["entry_count"], doc["head_hash"][:16])
+
+        self._export_checkpoint(path)
         return path
+
+    def _export_checkpoint(self, path: str) -> None:
+        """Copy a checkpoint to `DOSYNC_CHECKPOINT_EXPORT_DIR`, if configured.
+
+        A checkpoint that never leaves this host proves nothing against anyone
+        who controls this host — so "where does it go" is not an afterthought,
+        it is the step that turns the artifact into evidence. The DESTINATION is
+        deployment-specific (a mounted share, a synced folder, removable media),
+        but the CONFIGURATION POINT is part of the protocol, and so is what
+        happens when it is absent: the hub says so, loudly and repeatedly,
+        instead of writing files nobody collects.
+
+        Honest about how much this buys, because the gradation matters:
+
+          * **Not configured** — no protection against a compromised host.
+          * **A directory this hub can write to** (typically a network mount) —
+            better: the copy survives destruction of the local database, and a
+            remote filesystem that keeps snapshots or versions may hold history
+            the hub cannot reach. But an attacker with root here can generally
+            delete there too.
+          * **Pull-based transfer**, where the remote side fetches and the hub
+            holds no credentials to it — the strongest arrangement, and the only
+            one where "the hub cannot reach it" is literally true. The protocol
+            cannot implement this side of it; it is your infrastructure.
+        """
+        target = os.environ.get("DOSYNC_CHECKPOINT_EXPORT_DIR")
+        if not target:
+            self._checkpoint_export_state = "not_configured"
+            log.warning(
+                "Audit checkpoint NOT exported: DOSYNC_CHECKPOINT_EXPORT_DIR is unset. "
+                "A checkpoint kept only on this host does not detect a rewritten "
+                "history — the artifact has to live where this hub cannot reach it.")
+            return
+        try:
+            import shutil
+            os.makedirs(target, exist_ok=True)
+            shutil.copy2(path, os.path.join(target, os.path.basename(path)))
+            self._checkpoint_export_state = "ok"
+            self._last_checkpoint_export_at = time.time()
+            log.info("Audit checkpoint exported to %s", target)
+        except Exception as e:
+            self._checkpoint_export_state = "failed"
+            log.error("Audit checkpoint export to %s FAILED: %s — the checkpoint "
+                      "exists locally but is not yet evidence.", target, e)
 
     async def start_state_refresh(
         self,

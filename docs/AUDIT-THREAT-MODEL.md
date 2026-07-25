@@ -124,7 +124,7 @@ conforming.
 | Decision | Who decides | Why the protocol stays out of it |
 |---|---|---|
 | How often to checkpoint | You, but a default exists | The hub generates them **daily by default** (`DOSYNC_CHECKPOINT_INTERVAL`, 86400s). Frequency IS the window an attacker can still edit, so shorten it if your devices warrant it — but the default is not "none", because a guarantee requiring opt-in is one most installations lack |
-| Where to store checkpoints | You | The only requirement is "somewhere this hub cannot write to". Whether that is an object store, a backup host, a mailbox or a printed page is your environment's business |
+| Where to store checkpoints | You, through a standard setting | `DOSYNC_CHECKPOINT_EXPORT_DIR` is the configuration point and the hub copies each checkpoint there. It has no default — no destination is universally right — but leaving it unset is **not silent**: the hub warns at startup and on every checkpoint, and `/v1/status` reports `checkpoint_export: not_configured` |
 | How to automate it | You | systemd, cron, a Kubernetes CronJob, or a person with a calendar reminder are all valid |
 | How long to keep them | You | Retention is a compliance question your regulator answers, not the protocol |
 
@@ -147,9 +147,21 @@ machine**.
 run. You do not need a timer for that part, and `/v1/status` reports
 `checkpoint_age_s` so monitoring can catch a scheduler that has stopped.
 
-**Export is not, and cannot be.** The hub cannot copy a file somewhere it has no
-reach — which is exactly the property that makes the copy meaningful. That part
-is yours, and the units below are **one worked example** of it.
+**Export has a standard setting, but no default destination.** Point
+`DOSYNC_CHECKPOINT_EXPORT_DIR` at a location and the hub copies every checkpoint
+there. Leave it unset and the hub says so, repeatedly — a hub quietly producing
+artifacts nobody collects is the failure this whole layer exists to prevent.
+
+How much that buys depends on where you point it, and the difference is worth
+being precise about:
+
+| Destination | What it protects against |
+|---|---|
+| Unset | Nothing beyond local corruption |
+| A directory this hub can write to (usually a network mount) | Loss of the local database; a remote filesystem keeping snapshots may hold history the hub cannot reach — but root here can usually delete there too |
+| Pull-based transfer, where the far side fetches and the hub holds no credentials to it | A host-level adversary. Only here is "the hub cannot reach it" literally true |
+
+The units below are **one worked example** of the third arrangement.
 
 ```ini
 # /etc/systemd/system/dosync-checkpoint.service

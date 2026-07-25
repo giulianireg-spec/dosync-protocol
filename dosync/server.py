@@ -1995,6 +1995,10 @@ def get_status():
         # that has quietly stopped is visible to monitoring instead of being
         # discovered during an audit.
         "last_checkpoint_at": getattr(hub, "_last_checkpoint_at", None),
+        # Whether the artifact actually leaves this host. "not_configured" means
+        # the chain's tamper-evidence is incomplete — visible to monitoring
+        # rather than only in a log line nobody re-reads.
+        "checkpoint_export": getattr(hub, "_checkpoint_export_state", "unknown"),
         "checkpoint_age_s": (
             round(_time.time() - hub._last_checkpoint_at)
             if getattr(hub, "_last_checkpoint_at", None) else None),
