@@ -714,7 +714,52 @@ def test_failed_export_is_an_error_not_a_shrug(tmp_path, monkeypatch, caplog):
 
 
 def test_spec_documents_the_export_configuration_point():
+    """Both settings must be in the spec: an implementer reading it has to learn
+    that pull is supported, or they will reproduce the bug where the warning
+    fires loudest at the strongest arrangement."""
     spec = (REPO / "spec" / "DoSync-SPEC-v0.1.md").read_text()
     assert "DOSYNC_CHECKPOINT_EXPORT_DIR" in spec
-    assert "no default value" in spec
+    assert "DOSYNC_CHECKPOINT_EXPORT_EXTERNAL" in spec
+    # The substance, not one phrasing: neither setting has a default, and the
+    # absence of both is required to be loud.
+    assert "has a default" in spec or "no default" in spec
     assert "MUST warn" in spec
+
+
+def test_external_collection_is_a_declarable_arrangement(tmp_path, monkeypatch, caplog):
+    """Pull — something outside fetching checkpoints from the hub — is the
+    STRONGEST arrangement, and in it DOSYNC_CHECKPOINT_EXPORT_DIR is correctly
+    unset: pointing it at a mount the hub can write to would be a downgrade. So
+    'unset' alone cannot mean 'misconfigured', or the warning fires loudest at
+    the best setup and teaches operators to ignore warnings."""
+    import logging
+
+    monkeypatch.delenv("DOSYNC_CHECKPOINT_EXPORT_DIR", raising=False)
+    monkeypatch.setenv("DOSYNC_CHECKPOINT_EXPORT_EXTERNAL", "true")
+
+    hub = DoSyncHub(db_path=str(tmp_path / "a.db"))
+    hub.audit_log.append({"type": "a"})
+    with caplog.at_level(logging.WARNING):
+        path = hub.write_checkpoint(directory=str(tmp_path / "cps"))
+
+    assert path, "the checkpoint is still written — something else collects it"
+    assert hub._checkpoint_export_state == "external"
+    assert not [r for r in caplog.records if "NOT exported" in str(r.msg)], \
+        "a declared pull arrangement must not be warned about"
+
+
+def test_neither_setting_still_warns(tmp_path, monkeypatch, caplog):
+    """The declaration is a statement of fact, not a way to silence the check:
+    with neither set, the warning stands."""
+    import logging
+
+    monkeypatch.delenv("DOSYNC_CHECKPOINT_EXPORT_DIR", raising=False)
+    monkeypatch.delenv("DOSYNC_CHECKPOINT_EXPORT_EXTERNAL", raising=False)
+
+    hub = DoSyncHub(db_path=str(tmp_path / "a.db"))
+    hub.audit_log.append({"type": "a"})
+    with caplog.at_level(logging.WARNING):
+        hub.write_checkpoint(directory=str(tmp_path / "cps"))
+
+    assert hub._checkpoint_export_state == "not_configured"
+    assert any("NOT exported" in str(r.msg) for r in caplog.records)

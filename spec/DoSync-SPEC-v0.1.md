@@ -668,12 +668,25 @@ it. Daily is chosen as a default because it bounds that window at one day
 without meaningful cost — signing is roughly 1.4 s of CPU per checkpoint on
 modest hardware, negligible once a day and wasteful once a minute.
 
-**Normative configuration point:** `DOSYNC_CHECKPOINT_EXPORT_DIR` names a
-location the hub copies each checkpoint to. It has **no default value**, because
-no destination is universally correct — but its ABSENCE is not silent: a hub with
-it unset MUST warn, at startup and on every checkpoint, that the artifact is not
-leaving the host and the chain's tamper-evidence is therefore incomplete. The
-warning is the standardised part; the path is yours.
+**Normative configuration point.** A hub MUST provide two settings and MUST warn
+when neither is present:
+
+- `DOSYNC_CHECKPOINT_EXPORT_DIR` — a location the hub copies each checkpoint to
+  (push).
+- `DOSYNC_CHECKPOINT_EXPORT_EXTERNAL` — a declaration that something outside
+  collects checkpoints from the hub (pull).
+
+Neither has a default, because no destination is universally correct. What is
+standardised is that **silence about export is not permitted**: with neither set,
+the hub MUST warn at startup and on every checkpoint that the chain's
+tamper-evidence is incomplete.
+
+The second setting exists because **pull is the stronger arrangement and looks
+identical to a misconfiguration**: in it, `DOSYNC_CHECKPOINT_EXPORT_DIR` is
+correctly unset, since pointing it at a mount the hub can write to would be a
+downgrade. A warning that fires loudest at the best configuration teaches
+operators to ignore warnings, so the protocol lets the operator say which case
+this is rather than inferring it wrongly.
 
 How much an export buys depends on the destination, and implementations SHOULD
 NOT blur the difference:

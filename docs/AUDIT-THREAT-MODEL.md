@@ -161,6 +161,8 @@ being precise about:
 | A directory this hub can write to (usually a network mount) | Loss of the local database; a remote filesystem keeping snapshots may hold history the hub cannot reach — but root here can usually delete there too |
 | Pull-based transfer, where the far side fetches and the hub holds no credentials to it | A host-level adversary. Only here is "the hub cannot reach it" literally true |
 
+In a pull arrangement, `DOSYNC_CHECKPOINT_EXPORT_DIR` stays **unset** — pointing it at a mount the hub can write to would be a downgrade. Declare it with `DOSYNC_CHECKPOINT_EXPORT_EXTERNAL=true` so the hub stops warning about a configuration that is in fact the strongest one.
+
 The units below are **one worked example** of the third arrangement.
 
 ```ini

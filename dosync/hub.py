@@ -1458,8 +1458,14 @@ class DoSyncHub:
 
         _export = os.environ.get("DOSYNC_CHECKPOINT_EXPORT_DIR")
         log.info("Audit checkpoints scheduled every %.0fs → %s", interval, directory)
+        _external = os.environ.get("DOSYNC_CHECKPOINT_EXPORT_EXTERNAL", "").lower() in (
+            "1", "true", "yes")
         if _export:
             log.info("Audit checkpoints will be exported to %s", _export)
+        elif _external:
+            log.info("Audit checkpoints are collected externally "
+                     "(DOSYNC_CHECKPOINT_EXPORT_EXTERNAL) — this hub keeps no copy "
+                     "elsewhere and holds no credentials to the collector.")
         else:
             # Said at STARTUP, not only when the first checkpoint is written a
             # day later: an operator who is going to configure this should learn
@@ -1536,13 +1542,28 @@ class DoSyncHub:
             one where "the hub cannot reach it" is literally true. The protocol
             cannot implement this side of it; it is your infrastructure.
         """
+        # A PULL arrangement — something outside fetching checkpoints from here —
+        # is the STRONGEST option in the table above, and in it this variable is
+        # correctly unset: pointing it at a mount the hub can write to would be a
+        # downgrade. So "unset" alone cannot mean "misconfigured", or the warning
+        # fires loudest at the best setup. The operator declares which it is.
+        if os.environ.get("DOSYNC_CHECKPOINT_EXPORT_EXTERNAL", "").lower() in (
+                "1", "true", "yes"):
+            self._checkpoint_export_state = "external"
+            log.info("Audit checkpoint retained for external collection "
+                     "(DOSYNC_CHECKPOINT_EXPORT_EXTERNAL): %s", path)
+            return
+
         target = os.environ.get("DOSYNC_CHECKPOINT_EXPORT_DIR")
         if not target:
             self._checkpoint_export_state = "not_configured"
             log.warning(
-                "Audit checkpoint NOT exported: DOSYNC_CHECKPOINT_EXPORT_DIR is unset. "
-                "A checkpoint kept only on this host does not detect a rewritten "
-                "history — the artifact has to live where this hub cannot reach it.")
+                "Audit checkpoint NOT exported: neither DOSYNC_CHECKPOINT_EXPORT_DIR nor "
+                "DOSYNC_CHECKPOINT_EXPORT_EXTERNAL is set. A checkpoint kept only on this "
+                "host does not detect a rewritten history. Set the first to push copies "
+                "somewhere, or the second to declare that something else collects them "
+                "from here — which is the stronger arrangement, and the reason 'unset' "
+                "is not assumed to be a mistake.")
             return
         try:
             import shutil

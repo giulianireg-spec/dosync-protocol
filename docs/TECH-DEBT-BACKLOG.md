@@ -822,3 +822,23 @@ protects nothing beyond local corruption; a directory the hub can write to survi
 the database and may benefit from remote snapshots, but root here can usually delete there;
 only a pull-based transfer where the hub holds no credentials makes "the hub cannot reach
 it" literally true. 718/718.
+
+## CHECKPOINT-EXPORT-PULL — The warning fired loudest at the best configuration — SHIPPED 2026-07-25
+Raised by the operator asking a plain question: "I don't know where to configure the
+export, can I leave it as is?" — which exposed that the answer for HIS deployment was yes,
+and that the warning was wrong about it.
+
+The strongest arrangement in the spec's own table is PULL: something outside fetches
+checkpoints and the hub holds no credentials to it. In that arrangement
+`DOSYNC_CHECKPOINT_EXPORT_DIR` is correctly unset — pointing it at a mount the hub can
+write to would be a DOWNGRADE. So the warning shipped one release earlier fired hardest at
+the best possible setup, which is how operators learn to ignore warnings.
+
+Added `DOSYNC_CHECKPOINT_EXPORT_EXTERNAL`: a declaration that collection happens elsewhere.
+The hub then logs the arrangement instead of warning, and reports
+`checkpoint_export: external`. With NEITHER setting the warning stands — the declaration is
+a statement of fact, not a mute button.
+
+Spec §7.6 now defines both settings and states why the second exists: a protocol that
+cannot distinguish "nobody collects these" from "someone else collects these" will
+mis-advise every deployment that got it right.
