@@ -123,7 +123,7 @@ conforming.
 
 | Decision | Who decides | Why the protocol stays out of it |
 |---|---|---|
-| How often to checkpoint | You | It is a risk trade-off, not a technical one: frequency IS the window an attacker can still edit, and how large a window is acceptable depends on what your devices do |
+| How often to checkpoint | You, but a default exists | The hub generates them **daily by default** (`DOSYNC_CHECKPOINT_INTERVAL`, 86400s). Frequency IS the window an attacker can still edit, so shorten it if your devices warrant it — but the default is not "none", because a guarantee requiring opt-in is one most installations lack |
 | Where to store checkpoints | You | The only requirement is "somewhere this hub cannot write to". Whether that is an object store, a backup host, a mailbox or a printed page is your environment's business |
 | How to automate it | You | systemd, cron, a Kubernetes CronJob, or a person with a calendar reminder are all valid |
 | How long to keep them | You | Retention is a compliance question your regulator answers, not the protocol |
@@ -139,7 +139,17 @@ Raspberry Pi with systemd. Adapt freely; only two things are load-bearing:
 **the filename must be unique per run**, and **the artifact must leave the
 machine**.
 
-### Daily, automated (example)
+### Daily, automated
+
+**Generation is already automatic.** The hub writes a signed checkpoint every
+`DOSYNC_CHECKPOINT_INTERVAL` seconds (default 86400) into
+`DOSYNC_CHECKPOINT_DIR` (default `checkpoints/`), with a filename unique per
+run. You do not need a timer for that part, and `/v1/status` reports
+`checkpoint_age_s` so monitoring can catch a scheduler that has stopped.
+
+**Export is not, and cannot be.** The hub cannot copy a file somewhere it has no
+reach — which is exactly the property that makes the copy meaningful. That part
+is yours, and the units below are **one worked example** of it.
 
 ```ini
 # /etc/systemd/system/dosync-checkpoint.service

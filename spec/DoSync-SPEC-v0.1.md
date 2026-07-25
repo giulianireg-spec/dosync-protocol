@@ -654,12 +654,24 @@ chain head, and MUST be able to verify a chain against one. The checkpoint
 document format and the meaning of the verification are part of this
 specification.
 
-**Not normative — deployment configuration:** how often checkpoints are taken,
-where they are stored, how they are exported, and how long they are retained.
-These are risk trade-offs specific to a deployment, and the protocol takes no
-position on them. Checkpoint frequency IS the window an attacker could still
-edit, so the choice is consequential — but it belongs to whoever bears that
-risk, not to the protocol.
+**Normative default:** a hub SHOULD generate checkpoints automatically. The
+RECOMMENDED interval is **86400 seconds (daily)**, configurable through
+`DOSYNC_CHECKPOINT_INTERVAL`; `0` disables generation. A deployment is free to
+choose otherwise, but the default is not "none": a guarantee that requires
+opt-in is one most installations will not have, and this specification already
+assigns defaults to comparable risk parameters (`DOSYNC_UNREACHABLE_TTL` 1800s,
+`DOSYNC_INTENT_TIMEOUT` 5000/10000ms).
+
+Frequency is a genuine trade-off, because **the interval IS the window an
+attacker could still edit**: events after the last checkpoint are not covered by
+it. Daily is chosen as a default because it bounds that window at one day
+without meaningful cost — signing is roughly 1.4 s of CPU per checkpoint on
+modest hardware, negligible once a day and wasteful once a minute.
+
+**Not normative — deployment configuration:** where checkpoints are stored, HOW
+they are exported, and how long they are retained. The hub cannot perform the
+export itself, and that is the point: a checkpoint on the hub protects nothing
+against an adversary who controls the hub.
 
 Consequently, conformance testing can verify that the MECHANISM works; it cannot
 verify that an operator uses it. Implementations MUST NOT describe the chain as

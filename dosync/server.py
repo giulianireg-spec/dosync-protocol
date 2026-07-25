@@ -651,6 +651,17 @@ async def lifespan(app: FastAPI):
     except Exception as _refresh_e:
         log.warning("Failed to start background state refresher: %s", _refresh_e)
 
+    # Audit checkpoints, on by default. The chain's tamper-evidence has one
+    # limit only a checkpoint closes — a rewrite by someone with full database
+    # access — and a guarantee that requires opt-in is one most installations
+    # will not have. The hub therefore produces them itself; EXPORTING them is
+    # the deployment's job, because it is the one thing the hub cannot do.
+    _checkpoint_task = None
+    try:
+        _checkpoint_task = asyncio.create_task(hub.start_checkpoint_scheduler())
+    except Exception as _cp_e:
+        log.warning("Failed to start the audit checkpoint scheduler: %s", _cp_e)
+
     # Purge old terminal operations. clear_old_snapshots was wired here and
     # clear_old_operations never was, so the operations table grew forever.
     # Own try/except on purpose: a failure here must be reported as itself, not
@@ -696,6 +707,13 @@ async def lifespan(app: FastAPI):
         except Exception:
             pass
 
+    # Persist the head mark before stopping: it is written in batches, so a
+    # shutdown between batches would leave it behind the chain and weaken
+    # truncation detection over the gap.
+    try:
+        hub.audit_log.flush_head()
+    except Exception as _fh_e:
+        log.warning("Could not flush the audit head on shutdown: %s", _fh_e)
     log.info("DoSync Hub shutting down")
 
 app = FastAPI(
@@ -1972,6 +1990,14 @@ def get_status():
         # swallowed so it never breaks execution, but surfaced here so a real
         # bug is visible instead of hidden in logs.
         "progress_cb_failures": getattr(hub, "progress_cb_failures", 0),
+        # The hub cannot see whether checkpoints are EXPORTED — that happens
+        # outside it — but it can report when it last produced one, so a routine
+        # that has quietly stopped is visible to monitoring instead of being
+        # discovered during an audit.
+        "last_checkpoint_at": getattr(hub, "_last_checkpoint_at", None),
+        "checkpoint_age_s": (
+            round(_time.time() - hub._last_checkpoint_at)
+            if getattr(hub, "_last_checkpoint_at", None) else None),
         "occupied":        occupancy.occupied,
         "ws_connections":  ws_manager.active_connections,
         "db":              db_stats,

@@ -163,6 +163,49 @@ def file_sha256(path: str) -> str:
     return h.hexdigest()
 
 
+CHECKPOINT_FORMAT_VERSION = "dosync-audit-checkpoint/v1"
+
+
+def build_checkpoint(entries: list[dict], anchor: dict | None) -> dict[str, Any]:
+    """The attested statement: at this moment the chain held N entries ending in H.
+
+    Shared by the CLI and the hub's scheduler so a checkpoint means the same
+    thing however it was produced — a document whose meaning depended on which
+    code path wrote it would be worthless as evidence.
+
+    `seq` is omitted rather than null for chains written before sequence numbers
+    existed: a signed compliance artifact should not hand an auditor a field to
+    interpret.
+    """
+    if not entries:
+        raise ValueError("refusing to checkpoint an empty chain")
+    last = entries[-1]
+    anchor = anchor or {}
+    doc = {
+        "format_version":   CHECKPOINT_FORMAT_VERSION,
+        "head_hash":        last.get("hash"),
+        "entry_count":      len(entries),
+        "anchor_prev_hash": anchor.get("anchor_prev_hash", GENESIS),
+        "archived_total":   anchor.get("archived_total", 0),
+        "created_at":       time.time(),
+    }
+    if last.get("seq") is not None:
+        doc["seq"] = last["seq"]
+    return doc
+
+
+def checkpoint_filename(now: float | None = None) -> str:
+    """A name unique per run, in UTC.
+
+    Learned from production: a date-only name silently replaced that morning's
+    checkpoint, and the older one — attesting to a longer history — was the more
+    valuable of the two.
+    """
+    import datetime as _dt
+    ts = _dt.datetime.fromtimestamp(now or time.time(), _dt.timezone.utc)
+    return f"cp-{ts.strftime('%Y%m%dT%H%M%SZ')}.json"
+
+
 def read_backup(path: str) -> dict[str, Any]:
     """Load and integrity-check a backup file.
 

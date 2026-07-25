@@ -761,3 +761,41 @@ symptom", committed in the same session the rule was added to DESIGN-PRINCIPLES.
 to scan whole `ini` blocks; both defects now verified to fail when reintroduced. The rule
 works — it just has to be applied to the test one is writing at that moment, which is the
 hard part.
+
+## CHECKPOINT-BY-DEFAULT — The hub generates checkpoints itself — SHIPPED 2026-07-25
+Raised by the operator, and correctly: if a checkpoint is what makes the chain's central
+guarantee real, leaving the schedule entirely to each deployment means most deployments will
+not have it. The earlier position — "frequency is a risk trade-off, so the protocol takes no
+position" — was **inconsistent with this project's own precedent**: the spec already assigns
+defaults to comparable risk parameters (`DOSYNC_UNREACHABLE_TTL` 1800s,
+`DOSYNC_INTENT_TIMEOUT` 5000/10000ms, `IntentRateLimitPolicy` 60/min). "It depends on the
+deployment" was not a reason; it was an inconsistency.
+
+Two things had been conflated. **Generating** a checkpoint is entirely within the hub's
+power. **Exporting** it is the one thing the hub cannot do — and that is precisely what
+makes the copy meaningful. Separated:
+
+- The hub now runs a checkpoint scheduler by default: `DOSYNC_CHECKPOINT_INTERVAL` (86400s,
+  daily), `DOSYNC_CHECKPOINT_DIR` (`checkpoints/`), `0` to disable as a deliberate choice.
+  Filenames are UTC-unique per run.
+- `/v1/status` reports `checkpoint_age_s`, so a scheduler that has quietly stopped is
+  visible to monitoring rather than discovered during an audit.
+- The document builder moved to `audit_backup.build_checkpoint`, shared by the CLI and the
+  scheduler — a checkpoint whose meaning depended on which code path wrote it would be
+  worthless as evidence.
+- Shutdown flushes the head mark, since it is written in batches and a stop between batches
+  would leave it behind the chain.
+- Spec §7.6 states the default with SHOULD language and the rationale: the interval IS the
+  window an attacker can still edit, and daily bounds it at one day for ~1.4s of CPU
+  (measured — Ed25519 signing in pure Python; the same cost makes per-minute checkpoints
+  wasteful at ~2000s/day).
+
+Export remains the deployment's, stated plainly rather than implied.
+
+**And the principle failed a fifth time, on the change that motivated it.** Every test
+written for the scheduler passed `interval=1` explicitly, so hardcoding the default to `0`
+left all of them green — the tests proved the scheduler CAN run, never that it runs BY
+DEFAULT, which was the entire point of the change. Fixed with a test that calls the
+scheduler with no configuration and asserts the interval it actually uses. Worth recording
+plainly: the rule is easy to state and hard to apply to the test one is writing at that
+moment, because the passing test always feels like evidence. 714/714.

@@ -1388,6 +1388,11 @@ class DoSyncHub:
         # invisible. Count them so a real callback bug surfaces in /v1/status
         # instead of hiding in debug logs forever.
         self.progress_cb_failures: int = 0
+        # Surfaced in /v1/status so monitoring can catch a checkpoint routine
+        # that has quietly stopped. The hub cannot see whether checkpoints are
+        # EXPORTED, but it can say when it last produced one.
+        self._last_checkpoint_at: float | None = None
+        self._last_checkpoint_path: str | None = None
         # Executor for HUB-INITIATED intents — those the hub raises on its own
         # (e.g. the capability-anomaly security alert), which have no caller to
         # supply one. Wired by the server at startup. If it is None the hub
@@ -1410,6 +1415,88 @@ class DoSyncHub:
     # ── Family profile ───────────────────────────────────────────────────────
 
     # ── DB restore ──────────────────────────────────────────────────────────
+
+    async def start_checkpoint_scheduler(self, interval: float = None,
+                                         directory: str = None) -> None:
+        """Emit signed audit checkpoints on a schedule, by default.
+
+        The protocol's tamper-evidence has a limit that only a checkpoint can
+        close: an adversary with write access to the whole database can rewrite
+        the chain, recompute every hash, and update the head record to match.
+        Nothing stored on this machine can detect that. An exported checkpoint
+        can, because the attacker never had it.
+
+        Leaving that to a routine each operator invents means most deployments
+        will not have it — a guarantee that requires opt-in is a guarantee most
+        installations lack. So the hub GENERATES checkpoints itself, on a default
+        interval, the same way it already applies default risk parameters like
+        DOSYNC_UNREACHABLE_TTL (1800s) and DOSYNC_INTENT_TIMEOUT.
+
+        What the hub CANNOT do is export them, and that distinction is the whole
+        reason the deployment still has work to do. A checkpoint sitting in this
+        directory protects nothing against anyone who controls this machine; it
+        becomes evidence only once a copy exists somewhere the hub cannot reach.
+        The hub does the part it can and says plainly which part it cannot.
+
+        Args:
+            interval:  seconds between checkpoints. Defaults to
+                       DOSYNC_CHECKPOINT_INTERVAL (86400 = daily). Set to 0 to
+                       disable — a deliberate choice, not a default.
+            directory: where to write them. Defaults to DOSYNC_CHECKPOINT_DIR
+                       ("checkpoints").
+        """
+        if interval is None:
+            interval = float(os.environ.get("DOSYNC_CHECKPOINT_INTERVAL", "86400"))
+        if interval <= 0:
+            log.warning("Audit checkpoints DISABLED (DOSYNC_CHECKPOINT_INTERVAL=%s). "
+                        "A rewritten history will not be detectable.", interval)
+            return
+        if directory is None:
+            directory = os.environ.get("DOSYNC_CHECKPOINT_DIR", "checkpoints")
+
+        log.info("Audit checkpoints scheduled every %.0fs → %s "
+                 "(copy them off this host; one kept here proves nothing)",
+                 interval, directory)
+
+        while True:
+            try:
+                await asyncio.sleep(interval)
+                self.write_checkpoint(directory)
+            except asyncio.CancelledError:
+                log.info("Audit checkpoint scheduler stopped")
+                break
+            except Exception as e:
+                log.warning("Audit checkpoint cycle error: %s", e)
+
+    def write_checkpoint(self, directory: str = None) -> str | None:
+        """Write one signed checkpoint. Returns its path, or None if the chain
+        is empty. Used by the scheduler and available for a manual call."""
+        from . import audit_backup, cert_signing
+
+        if directory is None:
+            directory = os.environ.get("DOSYNC_CHECKPOINT_DIR", "checkpoints")
+
+        # The mark must be current before attesting to it.
+        self.audit_log.flush_head()
+        entries = self.audit_log.entries()
+        if not entries:
+            return None
+
+        doc = audit_backup.build_checkpoint(entries, self.db.get_audit_anchor())
+        signed = cert_signing.sign_report(doc)
+
+        os.makedirs(directory, exist_ok=True)
+        path = os.path.join(directory, audit_backup.checkpoint_filename())
+        if os.path.exists(path):
+            return None          # same second; the previous one already attests
+        with open(path, "w") as f:
+            json.dump(signed, f, indent=2, sort_keys=True)
+
+        self._last_checkpoint_at = time.time()
+        self._last_checkpoint_path = path
+        log.info("Audit checkpoint written: %s (%d entries, head %s…)",
+                 path, doc["entry_count"], doc["head_hash"][:16])
+        return path
 
     async def start_state_refresh(
         self,
