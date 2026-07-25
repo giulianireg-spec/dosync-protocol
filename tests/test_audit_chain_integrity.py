@@ -411,3 +411,38 @@ def test_archiving_advances_the_head_mark(tmp_path):
     con.commit(); con.close()
     r = _manage(dbp, "audit-verify")
     assert "TRUNCATED" in r.stdout, r.stdout
+
+
+def test_checkpoint_of_a_legacy_chain_omits_the_null_sequence(tmp_path):
+    """Production condition at the reference deployment: 16,223 entries written
+    before sequence numbers existed. The checkpoint must still be usable, and a
+    signed compliance artifact must not hand an auditor a null field to
+    interpret — `entry_count` and `head_hash` already identify the attested
+    point, and verification matches on the hash."""
+    import hashlib as _h
+
+    dbp = tmp_path / "legacy.db"
+    hub = DoSyncHub(db_path=str(dbp))
+    prev = "0" * 64
+    for i in range(5):
+        e = {"type": "legacy", "n": i, "prev_hash": prev, "timestamp": time.time()}
+        e["hash"] = _h.sha256(json.dumps(e, sort_keys=True).encode()).hexdigest()
+        prev = e["hash"]
+        hub.db.append_audit(e)
+
+    cp = tmp_path / "cp.json"
+    r = _manage(dbp, "audit-checkpoint", "--out", str(cp))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "predates sequence numbers" in r.stdout
+
+    doc = json.loads(cp.read_text())
+    assert "seq" not in doc, "a signed artifact must not carry a null sequence"
+    assert doc["entry_count"] == 5 and doc["head_hash"]
+
+    # and it still does its job on the chain it attests to
+    good = _manage(dbp, "audit-verify", "--checkpoint", str(cp))
+    assert "attested head found" in good.stdout and good.returncode == 0
+
+    _rewrite_everything(dbp)
+    bad = _manage(dbp, "audit-verify", "--checkpoint", str(cp))
+    assert "NOT PRESENT" in bad.stdout and bad.returncode != 0

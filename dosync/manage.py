@@ -639,15 +639,22 @@ def db_audit_checkpoint(args):
 
     last = entries[-1]
     anchor = db.get_audit_anchor() or {}
+    # `seq` is absent on entries written before sequence numbers existed. A
+    # signed compliance artifact should not carry a null field an auditor has to
+    # interpret, so it is omitted entirely in that case — `entry_count` and
+    # `head_hash` already identify the attested point, and the checkpoint check
+    # matches on the hash.
+    _seq = last.get("seq")
     doc = {
         "format_version": "dosync-audit-checkpoint/v1",
-        "seq":            last.get("seq", (head or {}).get("seq")),
         "head_hash":      last.get("hash"),
         "entry_count":    len(entries),
         "anchor_prev_hash": anchor.get("anchor_prev_hash", "0" * 64),
         "archived_total": anchor.get("archived_total", 0),
         "created_at":     time.time(),
     }
+    if _seq is not None:
+        doc["seq"] = _seq
     signed = cert_signing.sign_report(doc)
 
     out = args.out or f"audit_checkpoint_{int(time.time())}.json"
@@ -655,7 +662,9 @@ def db_audit_checkpoint(args):
         json.dump(signed, f, indent=2, sort_keys=True)
 
     print("audit-checkpoint")
-    print(f"  Entries:    {doc['entry_count']} (seq {doc['seq']})")
+    _seq_note = f" (seq {doc['seq']})" if "seq" in doc else \
+        " (chain predates sequence numbers)"
+    print(f"  Entries:    {doc['entry_count']}{_seq_note}")
     print(f"  Head:       {doc['head_hash'][:32]}...")
     if doc["archived_total"]:
         print(f"  Archived:   {doc['archived_total']} entries in earlier segments")

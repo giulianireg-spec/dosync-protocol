@@ -160,6 +160,64 @@ CA rotation is a deliberate operational event, not an automated one.
 
 ---
 
+## On writing tests: assert the mechanism, not a symptom
+
+A test must fail when the thing it names is broken. Three times in this project a
+test passed while the mechanism it claimed to protect was removed, because it
+asserted an *outcome* that something else also guaranteed:
+
+- **The resolver scoring refactor.** A test compared the score `explain()` reports
+  against the score the resolver decides with. Once both read one source, the
+  comparison could not fail — it compared a value to itself. Fixed by asserting
+  absolute values (a siren scores 52), which a changed weight breaks.
+- **The sequence-gap test.** It edited `seq` on a sealed entry, so verification
+  rejected the chain on the broken **hash**, never reaching the sequence check.
+  Fixed by building entries with valid hashes and a missing number.
+- **The archive head-mark test.** It asserted "no false alarm after archiving" —
+  but the high-water-mark semantics already guarantee that, so deleting the
+  archive-side fix did not fail it. Fixed by asserting what that fix actually
+  buys: the mark **advances**, so a later truncation is still caught.
+
+The pattern is identical each time: the assertion was true for a reason other
+than the one under test. Two habits follow.
+
+**Verify by deletion.** Before trusting a test, remove the code it protects and
+watch it fail. A test that stays green has not been shown to test anything. This
+is already routine here for features; it applies just as much to the tests
+written alongside them.
+
+**Name the mechanism in the assertion.** "Archiving does not raise a false alarm"
+is a property of the system; several mechanisms could provide it. "The head mark
+advances past its previous value" is a property of one mechanism, and only that
+mechanism can satisfy it. When both are worth having, write both — but know which
+one is load-bearing.
+
+A test that cannot fail is worse than no test: it occupies the place where a real
+one would go, and it reports success while the thing it names is gone.
+
+## On recurring operations
+
+Some maintenance is not a task that gets done — it is a rate that has to be
+matched. The audit chain is the clearest case: the reference deployment archived
+28,189 entries on 2026-07-20 and was back to 16,223 five days later, roughly
+2,800 per day. Archiving is not a job completed in July; it is an obligation that
+recurs about weekly, forever, and grows with the deployment.
+
+The same is true of exporting audit checkpoints, rotating credentials, and PKI
+renewal. Each was, at some point, "done".
+
+Two consequences for how this project tracks work:
+
+- **A recurring operation is not closed by doing it once.** It closes by being
+  scheduled, or by being written down as something a human must do on a rhythm,
+  with the rhythm stated. "Archived the chain" is a log entry; "the chain needs
+  archiving weekly at current volume" is the actual finding.
+- **Manual is a valid answer, silence is not.** PKI rotation here is deliberately
+  operator-driven rather than automated, and that is a defensible choice. What is
+  not defensible is a guarantee that quietly depends on someone remembering. If
+  an auditor asks "how often, and who ensures it", the answer must exist before
+  they ask.
+
 ## What the audit log is for
 
 The SHA-256 tamper-evident audit log is not a debugging tool. It is an accountability infrastructure.
@@ -279,13 +337,15 @@ These mechanisms collectively ensure that the hub recovers quickly from failures
 | Principle | What it means in practice |
 |---|---|
 | Deterministic resolver | Same input always produces same output. No autonomous learning. |
-| Tamper-evident audit log | Every action is logged and verifiable. Nothing is hidden. |
+| Tamper-evident audit log | Every action is logged; alteration and removal are detectable. Detecting a **wholesale rewrite** additionally requires a checkpoint exported off the host. The limits are stated in `AUDIT-THREAT-MODEL.md`, not glossed over. |
 | Human decision layer | DoSync informs. Humans decide. AI assists, never replaces. |
 | Policy engine | Safety constraints are explicit, configurable, and auditable. |
 | Domain agnosticism | The protocol works anywhere. Safety configuration is deployment-specific. |
 | AI as observer and actor | AI can use DoSync. It cannot override its safety model. |
 | Unreachable device TTL | Transient failures are excluded temporarily, not permanently. Recovery is automatic. |
 | PKI rotation policy | Hub cert rotates annually. CA rotates only on compromise or expiry. Never automated. |
+| Assert the mechanism | A test must fail when the thing it names is removed. Verify by deletion; an assertion another mechanism also satisfies is not a test of this one. |
+| Recurring operations | Some maintenance is a rate to match, not a task to finish. Schedule it or write down the rhythm — a guarantee must not depend on someone remembering. |
 
 ---
 
