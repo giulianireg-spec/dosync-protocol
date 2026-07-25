@@ -108,9 +108,38 @@ operational lever in this document.
 
 ## Runbook — audit evidence for a regulated deployment
 
-What to run, where to keep it, and what to hand an auditor. Copy-paste, in order.
+### What is the protocol, and what is yours
 
-### Daily, automated
+This distinction matters more here than anywhere else in the document, because
+the guarantee is split across the two.
+
+**The protocol provides the mechanism.** A conforming implementation emits a
+signed checkpoint of the chain head and verifies a chain against one. The
+document format, the signature, and the semantics of the verification are part
+of DoSync and are the same everywhere. If your hub cannot do this, it is not
+conforming.
+
+**The deployment provides everything else, and none of it is standardised:**
+
+| Decision | Who decides | Why the protocol stays out of it |
+|---|---|---|
+| How often to checkpoint | You | It is a risk trade-off, not a technical one: frequency IS the window an attacker can still edit, and how large a window is acceptable depends on what your devices do |
+| Where to store checkpoints | You | The only requirement is "somewhere this hub cannot write to". Whether that is an object store, a backup host, a mailbox or a printed page is your environment's business |
+| How to automate it | You | systemd, cron, a Kubernetes CronJob, or a person with a calendar reminder are all valid |
+| How long to keep them | You | Retention is a compliance question your regulator answers, not the protocol |
+
+So: **the protocol can be certified; your checkpoint routine cannot.** No
+conformance test can tell whether you actually export the artifact, and any
+implementation claiming otherwise is overreaching. What the protocol guarantees
+is that IF you export checkpoints, a rewritten history becomes detectable. The
+"if" is yours.
+
+The units below are **one worked example** — the reference deployment runs a
+Raspberry Pi with systemd. Adapt freely; only two things are load-bearing:
+**the filename must be unique per run**, and **the artifact must leave the
+machine**.
+
+### Daily, automated (example)
 
 ```ini
 # /etc/systemd/system/dosync-checkpoint.service

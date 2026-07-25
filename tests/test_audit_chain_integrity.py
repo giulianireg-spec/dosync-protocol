@@ -508,3 +508,24 @@ def test_runbook_does_not_use_a_template_only_specifier():
             assert "%i" not in line, (
                 "%i expands to nothing outside a template unit, so every run "
                 f"overwrites the same file:\n  {line.strip()}")
+
+
+def test_runbook_marks_the_schedule_as_deployment_not_protocol():
+    """The project's central distinction — protocol vs deployment configuration —
+    applies to this document too. The checkpoint MECHANISM is standardised; the
+    routine that uses it is the operator's. Presenting the example systemd unit
+    as 'copy-paste, in order' blurred exactly the line the rest of the project
+    keeps sharp."""
+    doc = (REPO / "docs" / "AUDIT-THREAT-MODEL.md").read_text().lower()
+    assert "one worked example" in doc, \
+        "the units must be marked as an example, not a requirement"
+    assert "the protocol provides the mechanism" in doc
+    assert "the deployment provides everything else" in doc
+
+
+def test_spec_separates_normative_mechanism_from_deployment_routine():
+    spec = (REPO / "spec" / "DoSync-SPEC-v0.1.md").read_text()
+    assert "**Normative:**" in spec
+    assert "Not normative — deployment configuration" in spec
+    assert "cannot\nverify that an operator uses it" in spec or \
+           "cannot verify that an operator uses it" in spec

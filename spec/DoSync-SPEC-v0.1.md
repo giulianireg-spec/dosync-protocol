@@ -649,10 +649,23 @@ link of a truncated chain is intact. Two further layers close that:
   wholesale — which no purely local check can, since an adversary with full
   database access controls every record such a check would consult.
 
-Implementations MUST NOT describe the chain as proof against an adversary who
-controls the host unless checkpoints are exported beyond that host's reach. The
-full attacker model, including what remains undetectable, is in
-`docs/AUDIT-THREAT-MODEL.md`.
+**Normative:** a conforming hub MUST be able to emit a signed checkpoint of its
+chain head, and MUST be able to verify a chain against one. The checkpoint
+document format and the meaning of the verification are part of this
+specification.
+
+**Not normative — deployment configuration:** how often checkpoints are taken,
+where they are stored, how they are exported, and how long they are retained.
+These are risk trade-offs specific to a deployment, and the protocol takes no
+position on them. Checkpoint frequency IS the window an attacker could still
+edit, so the choice is consequential — but it belongs to whoever bears that
+risk, not to the protocol.
+
+Consequently, conformance testing can verify that the MECHANISM works; it cannot
+verify that an operator uses it. Implementations MUST NOT describe the chain as
+proof against an adversary who controls the host unless checkpoints are in fact
+exported beyond that host's reach. The full attacker model, including what
+remains undetectable, is in `docs/AUDIT-THREAT-MODEL.md`.
 
 ## 8. Certification
 
