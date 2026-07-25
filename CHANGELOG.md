@@ -7,6 +7,27 @@ this implementation of it.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed — behavior
+- **`db audit-verify` now performs additional checks and can fail where it
+  previously passed.** Besides the hash links it compares the chain against a
+  head mark recorded separately, and against a signed checkpoint when
+  `--checkpoint` is given. Anyone running this command in cron or CI should
+  expect a non-zero exit on a chain whose tail was removed — which is the point,
+  but it is new behavior on an existing command. A legitimate `audit-archive`
+  does NOT trip it.
+
+### Added
+- Monotonic `seq` on every audit entry, inside the hashed content, so gaps and
+  reordering break verification.
+- `db audit-checkpoint` — an Ed25519-signed statement of the chain head, meant
+  to be stored off the hub. It is the only layer that detects a history
+  rewritten wholesale by someone with full database access.
+- `docs/AUDIT-THREAT-MODEL.md` — attacker model, a verification matrix that
+  includes what is NOT detected, and a compliance runbook.
+- `DOSYNC_AUDIT_HEAD_EVERY` (default 25) — how often the head mark is persisted.
+
 ## [0.4.1] — 2026-07-22
 
 First published release. `pip install dosync`.

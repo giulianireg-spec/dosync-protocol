@@ -309,6 +309,14 @@ Examples:
     p_aver = db_sub.add_parser("audit-verify", help="Verify the audit log SHA-256 chain (live DB, a backup file, or an archive segment)")
     p_aver.add_argument("--file", default=None, help="Verify a backup file instead of the live DB")
     p_aver.add_argument("--segment", default=None, help="Verify an archive segment file standalone (prints its sha256 for cross-checking against the live chain's audit_archived entry)")
+    p_aver.add_argument("--checkpoint", default=None,
+                        help="Verify the live chain against a signed checkpoint exported earlier "
+                             "(detects a chain rewritten wholesale, which local checks cannot)")
+
+    p_cp = db_sub.add_parser(
+        "audit-checkpoint",
+        help="Emit a signed checkpoint of the chain head, to store OFF this machine")
+    p_cp.add_argument("--out", help="Checkpoint file (default: audit_checkpoint_<ts>.json)")
     p_arst = db_sub.add_parser("audit-restore", help="Restore the audit log from a backup file")
     p_arst.add_argument("--file", required=True, help="Backup file to restore from")
     p_arst.add_argument("--force", action="store_true", help="Overwrite a non-empty audit log")
@@ -368,6 +376,7 @@ Examples:
         elif args.command == "audit-backup":  db_audit_backup(args)
         elif args.command == "migrate-sensor-kind": db_migrate_sensor_kind(args)
         elif args.command == "audit-archive":  db_audit_archive(args)
+        elif args.command == "audit-checkpoint": db_audit_checkpoint(args)
         elif args.command == "audit-verify":  db_audit_verify(args)
         elif args.command == "audit-restore": db_audit_restore(args)
 
@@ -549,8 +558,12 @@ def db_audit_archive(args):
     # computed EXACTLY like AuditLog.append (prev_hash, timestamp, sorted-json
     # sha256) so the live chain stays verifiable.
     tail_hash = remaining[-1]["hash"]
+    # Continue the sequence: this marker is a chain entry like any other, and a
+    # hole in the numbering is indistinguishable from a removed entry.
+    _seqs = [e["seq"] for e in entries if e.get("seq") is not None]
     arch_entry = {
         "type": "audit_archived",
+        "seq": (max(_seqs) + 1) if _seqs else None,
         "generation": generation,
         "archived_count": len(archived),
         "segment_first_hash": manifest["first_hash"],
@@ -569,6 +582,14 @@ def db_audit_archive(args):
                         [(i,) for i in archived_ids])
         cur.execute("INSERT INTO audit_log (entry_json, hash, timestamp) VALUES (?, ?, ?)",
                     (json.dumps(arch_entry), arch_entry["hash"], arch_entry["timestamp"]))
+
+    # The head high-water mark must follow the operation that just rewrote the
+    # log. Without this, the mark still pointed at the pre-archive tail and the
+    # next `audit-verify` reported "entries removed from the end" after a
+    # perfectly legitimate archive — a false alarm that trains operators to
+    # ignore the real one.
+    db.set_audit_head(arch_entry.get("seq"), arch_entry["hash"])
+
     db.set_audit_anchor({
         "anchor_prev_hash": manifest["last_hash"],
         "generations": generation,
@@ -582,6 +603,66 @@ def db_audit_archive(args):
     print(f"  The live chain now anchors at {manifest['last_hash'][:16]}... and carries an")
     print(f"  audit_archived entry binding the segment file. Restart the hub; then run")
     print(f"  'db audit-verify' (live) and 'db audit-verify --segment {out}' to confirm both.")
+
+
+def db_audit_checkpoint(args):
+    """Emit a SIGNED checkpoint of the chain head, for storage off this machine.
+
+    The hash chain proves no entry was altered. The head record in `audit_meta`
+    additionally reveals a removed tail. Neither survives an adversary who can
+    write to the whole database: they rewrite the entries, recompute the hashes,
+    and update the metadata to match. Nothing that lives only on this machine
+    can detect that, because the attacker owns everything the check would
+    consult.
+
+    A checkpoint breaks that circle by leaving. It states "at this moment the
+    chain had N entries ending in H", signed with the hub's Ed25519 key. Copy it
+    somewhere the hub cannot reach — another host, a mailbox, a printout — and a
+    later `audit-verify --checkpoint` proves the chain still contains that exact
+    history. A rewritten chain cannot match a checkpoint it never saw.
+
+    Two honest limits, stated because a security control that oversells itself
+    is worse than none: an attacker holding the signing key can forge new
+    checkpoints (keep the key off the hub for high-assurance deployments), and a
+    checkpoint left ON this machine protects nothing — its value comes entirely
+    from being stored somewhere else.
+    """
+    from dosync import cert_signing
+
+    db = get_db(args.db)
+    head = db.get_audit_head()
+    entries = db.load_audit_log()
+
+    if not entries:
+        print("audit-checkpoint\n  Chain is empty — nothing to checkpoint.")
+        return
+
+    last = entries[-1]
+    anchor = db.get_audit_anchor() or {}
+    doc = {
+        "format_version": "dosync-audit-checkpoint/v1",
+        "seq":            last.get("seq", (head or {}).get("seq")),
+        "head_hash":      last.get("hash"),
+        "entry_count":    len(entries),
+        "anchor_prev_hash": anchor.get("anchor_prev_hash", "0" * 64),
+        "archived_total": anchor.get("archived_total", 0),
+        "created_at":     time.time(),
+    }
+    signed = cert_signing.sign_report(doc)
+
+    out = args.out or f"audit_checkpoint_{int(time.time())}.json"
+    with open(out, "w") as f:
+        json.dump(signed, f, indent=2, sort_keys=True)
+
+    print("audit-checkpoint")
+    print(f"  Entries:    {doc['entry_count']} (seq {doc['seq']})")
+    print(f"  Head:       {doc['head_hash'][:32]}...")
+    if doc["archived_total"]:
+        print(f"  Archived:   {doc['archived_total']} entries in earlier segments")
+    print(f"  Written:    {out}")
+    print(f"  Signed by:  {signed['signature']['public_key'][:16]}...")
+    print("\n  STORE THIS OFF THIS MACHINE. A checkpoint kept on the hub proves")
+    print("  nothing against an attacker who controls the hub.")
 
 
 def db_audit_backup(args):
@@ -655,6 +736,94 @@ def db_audit_verify(args):
     if anchor_note:
         print(anchor_note)
     print(f"  Chain valid: {'yes ✓' if ok else 'NO ✗ — tamper or corruption detected'}")
+
+    # Links prove nothing was ALTERED. They cannot prove nothing was REMOVED
+    # from the end — every surviving link of a truncated chain is intact. The
+    # two checks below compare the chain against records kept elsewhere.
+    #
+    # Both treat their reference as a HIGH-WATER MARK, not as a mirror of the
+    # tail. Archiving legitimately shortens the live chain and the head lags by
+    # design (it is written in batches), so demanding equality reported tamper
+    # after every archive — a false alarm that teaches operators to ignore the
+    # real one, and broke the exit code that automation depends on.
+    if not getattr(args, "file", None) and not getattr(args, "segment", None):
+        _db = get_db(args.db)
+        head = _db.get_audit_head()
+        if head and entries:
+            by_seq = {e.get("seq"): e.get("hash") for e in entries
+                      if e.get("seq") is not None}
+            seqs = [s for s in by_seq if s is not None]
+            m_seq, m_hash = head.get("seq"), head.get("hash")
+            if m_seq is None or not seqs:
+                print("  Head record: present (chain predates sequence numbers)")
+            elif m_seq in by_seq:
+                if by_seq[m_seq] == m_hash:
+                    behind = max(seqs) - m_seq
+                    extra = f" — chain has grown {behind} entries since" if behind else ""
+                    print(f"  Head record: consistent ✓ (entry {m_seq}{extra})")
+                else:
+                    print(f"  Head record: ALTERED ✗ — entry {m_seq} does not match "
+                          f"the recorded hash")
+                    ok = False
+            elif m_seq > max(seqs):
+                print(f"  Head record: TRUNCATED ✗ — recorded up to entry {m_seq}, "
+                      f"chain now ends at {max(seqs)}")
+                ok = False
+            else:
+                print(f"  Head record: entry {m_seq} has been archived "
+                      f"(verify it in the segment)")
+        elif entries:
+            print("  Head record: none (chain predates head checkpoints)")
+
+    if getattr(args, "checkpoint", None):
+        from dosync import cert_signing
+        try:
+            with open(args.checkpoint) as f:
+                cp = json.load(f)
+        except (OSError, ValueError) as e:
+            print(f"  Checkpoint:  FAILED to read — {e}")
+            sys.exit(1)
+        sig_ok, sig_msg = cert_signing.verify_report(cp)
+        print(f"  Checkpoint:  signature {'valid ✓' if sig_ok else 'INVALID ✗ — ' + sig_msg}")
+        if not sig_ok:
+            ok = False
+        else:
+            cp_head = cp.get("head_hash")
+            hashes = [e.get("hash") for e in entries]
+            # How much was archived AFTER the checkpoint was taken. Entries the
+            # checkpoint counted may now live in a segment rather than the log,
+            # and that is an operation the operator performed, not an attack.
+            now_anchor = _db.get_audit_anchor() if not getattr(args, "file", None) else {}
+            archived_since = ((now_anchor or {}).get("archived_total", 0)
+                              - cp.get("archived_total", 0))
+
+            if cp_head in hashes:
+                pos = hashes.index(cp_head) + 1
+                expected = cp.get("entry_count")
+                if expected is not None:
+                    # Archiving removes entries from the FRONT, so the attested
+                    # head slides down by exactly that many positions.
+                    expected -= max(archived_since, 0)
+                if expected is not None and pos != expected:
+                    print(f"    ✗ attested head is at entry {pos}, expected {expected} "
+                          f"— history before the checkpoint was altered")
+                    ok = False
+                else:
+                    note = (f" ({archived_since} entries archived since)"
+                            if archived_since > 0 else "")
+                    print(f"    attested head found at entry {pos} of {len(entries)} ✓{note}")
+            elif archived_since > 0:
+                # The attested head was archived out of the live log. The live
+                # database cannot confirm or deny it; the segment can.
+                print(f"    attested head not in the live chain — {archived_since} "
+                      f"entries archived since the checkpoint")
+                print(f"    → verify it inside the segment: "
+                      f"audit-verify --segment {(now_anchor or {}).get('last_archive_file', '<segment>')}")
+            else:
+                print(f"    ✗ attested head {str(cp_head)[:16]}... NOT PRESENT in the chain "
+                      f"— this history was rewritten or replaced")
+                ok = False
+
     sys.exit(0 if ok else 1)
 
 

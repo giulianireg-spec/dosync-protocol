@@ -656,3 +656,83 @@ would have caught.
 **Honest scope.** This closes the policy/audit bypass. It does NOT make the chain resistant
 to truncation or to full rewrite by an attacker with write access to the database — those
 are inherent limits of a hash chain with no external anchor, and remain true. See HORIZON.
+
+## AUDIT-CHAIN-INTEGRITY — Truncation detection, signed checkpoints, honest threat model — SHIPPED 2026-07-25 · effort M
+Second finding of the strengths audit. The chain was tested against three attacks instead of
+being trusted: altering an entry was caught; **truncating the tail was not**, and **rewriting
+the chain wholesale was not**. The first is fixable, the second is fixable only by leaving
+the machine, and both were being described by the single word "tamper-evident".
+
+**Layer 1 (existing).** Hash links catch modification and insertion.
+
+**Layer 2 — sequence + head record.** Entries now carry a monotonic `seq` inside the hashed
+content, and the latest `(seq, hash)` is written to `audit_meta` — a different table — as
+entries are appended. `audit-verify` compares the chain's actual head against it and reports
+`MISMATCH ✗ — entries removed from the end`. Catches accidental deletion, truncated restores,
+buggy code, and any compromise reaching the log but not the metadata. Does NOT stop an
+attacker who writes to both; said so rather than implied.
+
+**Layer 3 — signed exportable checkpoint.** `db audit-checkpoint` emits an Ed25519-signed
+statement of the head, to be stored OFF the hub; `audit-verify --checkpoint FILE` proves the
+chain still contains that history. Demonstrated end to end: after rewriting every entry,
+recomputing all hashes AND updating the head record, local verification still reported
+`Chain valid: yes ✓ / Head record: matches ✓` — and the exported checkpoint reported
+`attested head NOT PRESENT — this history was rewritten or replaced`. That contrast is the
+whole argument for the layer.
+
+**Backward compatible.** Chains written before sequence numbers have none; verification
+checks continuity only where the field exists, so the reference deployment's live chain and
+its 26k-entry archived segment keep verifying across the upgrade.
+
+**Two bugs found while building it.** (1) A test for sequence gaps edited `seq` on a sealed
+entry, so it passed on the broken HASH rather than the gap — tautological, the v9 failure
+mode again; rebuilt to construct valid hashes with a missing number. (2) Restoring the
+sequence from the last entry broke after archiving: the `audit_archived` marker is written by
+direct SQL and carries no `seq`, so the fallback used the row count, which after archiving is
+far below the numbers survivors already hold — the series wound backwards and the next append
+produced a chain that failed its own verification. Now the highest number present is used.
+
+`docs/AUDIT-THREAT-MODEL.md` states the attacker model and the verification matrix,
+including the rows that read "not detected" — a documented limit that is not tested is the
+kind of claim this project exists to avoid. Spec §7.6. 695/695.
+
+## AUDIT-INTEGRITY-PANEL-FIXES — Blockers found reviewing the solution before applying it — SHIPPED 2026-07-25
+The chain-integrity work was submitted to the panel BEFORE being applied, and the panel
+refused it: "the design is correct, the implementation is not ready". What exposed the
+defects was not an attack but the LEGITIMATE operation — archiving after taking a
+checkpoint made verification report tampering twice and exit non-zero.
+
+**B1/B2/B3 — false alarms on a documented operation.** The root cause was one wrong
+assumption in three places: that the chain only ever grows. Archiving shortens it.
+- The head mark was compared to the tail by EQUALITY. It is now a HIGH-WATER MARK: the
+  chain must still CONTAIN the marked entry with the marked hash. Growing past it is
+  healthy, the marked entry missing below the chain's range means it was archived
+  (informational), and the chain no longer reaching it means truncation (failure).
+- `audit-archive` now advances the mark after appending its marker.
+- Checkpoint verification accounts for entries archived since, instead of comparing the
+  attested head's position against a stale entry count.
+- Consequently the exit code is 0 after a legitimate archive and non-zero for both real
+  attacks. Paredes' argument for treating this as blocking rather than cosmetic: a control
+  that cries wolf during normal operation teaches operators to wave through the real alarm.
+
+**R1 — head writes are batched** (`DOSYNC_AUDIT_HEAD_EVERY`, default 25, flushed at
+shutdown and before log-rewriting operations). Writing it on every append cost 57% per
+entry, which lands during an emergency when one intent produces dozens of entries on a Pi.
+Batching is only safe BECAUSE of the high-water-mark semantics: a mark lagging behind means
+the chain grew, which is never an attack.
+
+**R2–R5** — a matrix row for events since the last checkpoint (with the note that checkpoint
+frequency IS the editable window), a compliance runbook with a systemd timer that exports
+off-host, and the `audit-verify` behavior change called out in the CHANGELOG rather than
+buried among features.
+
+**A test that did not test what it claimed.** The first attempt at pinning B1 asserted the
+absence of a false alarm — but the high-water-mark change alone already guarantees that, so
+removing the archive-side fix did not fail it. Rewritten to assert what the archive update
+actually buys: the mark ADVANCES, so a truncation after an archive is still caught. Verified
+to fail when the update is removed. Same lesson as the v9 tautology and the sequence-gap
+test: assert the mechanism, not a symptom another mechanism also prevents.
+
+702/702. Live: legitimate archive → exit 0, clean; truncation → `TRUNCATED ✗`, exit 1;
+full rewrite with the head fixed up → local checks pass, exported checkpoint reports
+`attested head NOT PRESENT`, exit 1.

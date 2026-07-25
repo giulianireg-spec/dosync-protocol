@@ -291,6 +291,34 @@ class DoSyncDB:
                 ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json
             """, (json.dumps(anchor),))
 
+    def set_audit_head(self, seq: int, head_hash: str) -> None:
+        """Record the latest entry's (seq, hash) in `audit_meta`.
+
+        Deliberately a DIFFERENT table from `audit_log`. Deleting rows from the
+        log then contradicts a record the deletion did not touch, which is what
+        makes truncation visible — the links themselves cannot show it, since
+        every surviving link is still intact.
+
+        This raises the bar; it is not a wall. Anyone able to write to both
+        tables can keep them consistent. It reliably catches accidental
+        deletion, a partially restored backup, buggy code, and any compromise
+        that reaches the log but not the metadata. For an adversary with full
+        database access, the answer is an exported signed checkpoint
+        (`manage.py db audit-checkpoint`), which lives outside this file.
+        """
+        with self._cursor() as cur:
+            cur.execute("""
+                INSERT INTO audit_meta (key, value_json) VALUES ('chain_head', ?)
+                ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json
+            """, (json.dumps({"seq": seq, "hash": head_hash, "at": time.time()}),))
+
+    def get_audit_head(self) -> dict | None:
+        """The recorded head, or None for a chain written before checkpoints."""
+        with self._cursor() as cur:
+            cur.execute("SELECT value_json FROM audit_meta WHERE key = 'chain_head'")
+            row = cur.fetchone()
+        return json.loads(row[0]) if row else None
+
     def load_audit_log(self) -> list[dict]:
         """Carga el audit log completo ordenado por timestamp."""
         with self._cursor() as cur:

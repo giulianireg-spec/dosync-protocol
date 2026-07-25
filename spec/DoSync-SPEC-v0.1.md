@@ -632,6 +632,28 @@ transactions to the physical world.
 
 ---
 
+### 7.6 Audit chain integrity
+
+Every action the hub takes is appended to a SHA-256 hash chain: each entry
+carries the previous entry's hash and a monotonic `seq`, both inside the hashed
+content. Altering or inserting a record breaks every link after it.
+
+Hash links alone cannot detect a record removed from the END — every surviving
+link of a truncated chain is intact. Two further layers close that:
+
+- The latest `(seq, hash)` is recorded in a separate table as entries are
+  appended, so removing rows from the log contradicts a record the removal did
+  not touch.
+- `audit-checkpoint` emits a **signed** statement of the chain head, intended to
+  be stored off the hub. Verification against it detects a history rewritten
+  wholesale — which no purely local check can, since an adversary with full
+  database access controls every record such a check would consult.
+
+Implementations MUST NOT describe the chain as proof against an adversary who
+controls the host unless checkpoints are exported beyond that host's reach. The
+full attacker model, including what remains undetectable, is in
+`docs/AUDIT-THREAT-MODEL.md`.
+
 ## 8. Certification
 
 A device or hub implementation is **DoSync Certified** if it passes the official certification CLI (`certify.py`) included in the reference repository.
