@@ -864,3 +864,14 @@ produce only one, and deleting the files does not fake a missed interval. 723/72
 Worth stating as a general lesson: a periodic task that sleeps before its first action has a
 hidden requirement — uptime longer than its period. Deployments restart for updates, power
 and configuration. An interval that only survives uninterrupted uptime is not an interval.
+
+## CHECKPOINT-GITIGNORE — Evidence was one `git add -A` from a public repo — SHIPPED 2026-07-25
+`DOSYNC_CHECKPOINT_DIR` defaults to `checkpoints/`, relative to the working directory — so a
+hub started from a clone writes its audit evidence INSIDE the repository, and `checkpoints/`
+was not ignored. This project's own workflow runs `git add -A` on every patch, and the hub
+has been started from the Mac clone during testing, so the two only had to coincide once.
+
+Added to `.gitignore`, with the reasoning inline and a pointer to setting
+`DOSYNC_CHECKPOINT_DIR` outside the clone. Not a secrets leak — a checkpoint holds hashes,
+counts and a signature — but operational evidence accumulating in a public source repository
+by accident is not a thing to discover later.

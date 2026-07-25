@@ -29,3 +29,15 @@ server.log
 audit_log_backup_*.json
 benchmark_run_*.log
 benchmarks/recall-prod-*.json
+
+# Audit checkpoints — operational evidence, not source.
+#
+# The default location is relative to the working directory, so on a hub started
+# from a clone they land inside the repository. That matters because the
+# development workflow here uses `git add -A` on every patch: without this rule,
+# a deployment's audit evidence eventually gets committed to a public repo by
+# accident. They are also per-day files that would accumulate forever.
+#
+# Point DOSYNC_CHECKPOINT_DIR somewhere outside the clone (e.g.
+# /var/lib/dosync/checkpoints) to keep evidence and source properly apart.
+checkpoints/
