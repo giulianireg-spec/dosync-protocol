@@ -35,6 +35,14 @@ logging.basicConfig(
 
 _certify_mode = os.environ.get("DOSYNC_CERTIFY", "").lower() in ("1", "true", "yes")
 
+# Reserved intent class for POST /v1/device/action. A direct action names its
+# own device and needs no semantic resolution, but it still passes through the
+# policy engine — under this class, so a deployment can constrain direct control
+# the same way it constrains any intent, e.g.
+#   {"type": "device_exclusion", "intent_classes": ["direct_control"], ...}
+# Reserved: it is the hub that issues it, never a caller.
+DIRECT_CONTROL_INTENT_CLASS = "direct_control"
+
 
 def _resolve_db_path() -> str:
     """Where the hub stores its data.
@@ -1617,7 +1625,39 @@ async def device_action(
     req: dict,
     auth: str = Depends(require_auth),
 ):
-    from dosync.models import DeviceAction, Urgency
+    """Execute one action on one named device, without semantic resolution.
+
+    This is a legitimate operation — an operator or an agent that already knows
+    exactly which device and which action, with no goal to resolve. What it is
+    NOT is a way around the protocol.
+
+    Until 2026-07-25 this endpoint called the executor directly: no policy
+    evaluation, no audit entry. A device could be actuated and leave no trace in
+    the tamper-evident chain, and a deployment policy forbidding that device
+    could be sidestepped by calling here instead of firing an intent. The MCP
+    server's device-control tool uses this path, so the bypass was available to
+    the AI itself — precisely the thing the policy engine exists to prevent.
+
+    DESIGN-PRINCIPLES §"On adapter-side fallback" rejects bypass mechanisms for
+    exactly three reasons: they break the audit chain, they break the policy
+    engine, and they turn actions back into commands. That ruling was written
+    about adapters acting without the hub; it applies with equal force to an
+    endpoint inside the hub that skips the same two layers.
+
+    So a direct action is now a first-class protocol operation:
+
+      * it is evaluated by the policy engine under the reserved intent class
+        `direct_control`, so a deployment can constrain it exactly as it
+        constrains any intent (e.g. an exclusion policy listing
+        `intent_classes: ["direct_control"]`);
+      * it ALWAYS appends to the audit chain — whether it executed, was blocked,
+        or failed — recording that it arrived by the direct path, so an auditor
+        can tell operator actions from intent-driven ones;
+      * blocked actions return 403 with the deciding policy named.
+    """
+    from dosync.models import ActionPlan, DeviceAction, Intent, IntentClass, Urgency
+    from dosync.policies import PolicyDecision
+
     device_id = req.get("device_id")
     action    = req.get("action")
     params    = req.get("params", {})
@@ -1631,12 +1671,71 @@ async def device_action(
         raise HTTPException(status_code=404,
             detail=f"Device '{device_id}' not found")
 
-    dev_action = DeviceAction(
-        device_id=device_id,
-        action=action,
-        params=params,
+    # Urgency is accepted but defaults to INFO: a direct action carries no goal
+    # from which urgency could be inferred, and INFO is the safest assumption —
+    # it never triggers emergency bypasses in policies.
+    try:
+        urgency = Urgency(req.get("urgency", "info"))
+    except ValueError:
+        raise HTTPException(status_code=422,
+            detail=f"Invalid urgency '{req.get('urgency')}'")
+
+    dev_action = DeviceAction(device_id=device_id, action=action, params=params)
+
+    # A synthetic intent so the policy engine sees this the way it sees anything
+    # else. The reserved class makes direct control addressable BY policy rather
+    # than invisible to it.
+    synthetic = Intent(
+        intent=IntentClass(DIRECT_CONTROL_INTENT_CLASS),
+        urgency=urgency,
+        context={"source": "direct_action_endpoint", "device_id": device_id},
     )
-    result = await executor.execute(dev_action, Urgency.INFO)
+    plan = ActionPlan(intent_id=synthetic.intent_id, actions=[dev_action],
+                      urgency=urgency)
+
+    if hub.policy_engine:
+        presult = hub.policy_engine.evaluate(synthetic, plan)
+        survived = True
+        if presult.decision == PolicyDecision.BLOCK:
+            survived = False
+        elif presult.decision == PolicyDecision.MODIFY:
+            survived = any(a.device_id == device_id and a.action == action
+                           for a in (presult.modified_actions or []))
+        if not survived:
+            logging.getLogger("dosync.server").warning(
+                "Direct action %s on %s BLOCKED by policy '%s': %s",
+                action, device_id, presult.policy_name, presult.reason)
+            hub.audit_log.append({
+                "type":      "direct_action_blocked",
+                "action_id": synthetic.intent_id,
+                "device_id": device_id,
+                "action":    action,
+                "urgency":   urgency.value,
+                "policy":    presult.policy_name,
+                "reason":    presult.reason,
+                "source":    "direct_action_endpoint",
+            })
+            raise HTTPException(
+                status_code=403,
+                detail=(f"Action '{action}' on '{device_id}' is not permitted by "
+                        f"deployment policy '{presult.policy_name}': {presult.reason}"))
+
+    result = await executor.execute(dev_action, urgency)
+
+    # Unconditional: an action that touched a device is in the chain, success or
+    # not. The chain answers "what did this system do", and a failed attempt is
+    # part of that answer.
+    hub.audit_log.append({
+        "type":      "direct_action_executed",
+        "action_id": synthetic.intent_id,
+        "device_id": result.device_id,
+        "action":    result.action,
+        "params":    params,
+        "urgency":   urgency.value,
+        "success":   result.success,
+        "error":     result.error,
+        "source":    "direct_action_endpoint",
+    })
 
     await ws_manager.broadcast("device_action", {
         "device_id": result.device_id,
@@ -1648,6 +1747,7 @@ async def device_action(
     return {
         "device_id": result.device_id,
         "action":    result.action,
+        "action_id": synthetic.intent_id,
         "success":   result.success,
         "response":  result.response,
         "error":     result.error,

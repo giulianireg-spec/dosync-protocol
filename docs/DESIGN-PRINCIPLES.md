@@ -250,6 +250,17 @@ Bypass mechanisms that allow adapters to act without the hub would:
 - Break the policy engine — safety constraints are not evaluated
 - Break the semantic model — actions become commands again, which is exactly what DoSync was designed to avoid
 
+**This reasoning is not limited to adapters.** It applies to any path that
+reaches a device while skipping these layers, including paths *inside* the hub.
+`POST /v1/device/action` was such a path until 2026-07-25: it called the
+executor directly, so actions through it were neither policy-evaluated nor
+chained. The bypass was rejected at the perimeter and shipped in the core. A
+direct action is legitimate — naming your own device is not the same as evading
+governance — but it is now evaluated under the reserved `direct_control` intent
+class and always audited. When adding any new way to reach a device, the test is
+not "is this convenient" but "does the chain still describe everything this
+system did, and can a deployment still constrain it".
+
 **The correct resilience model for DoSync is hub availability, not adapter autonomy:**
 
 - `FailurePolicy.RETRY` handles transient adapter failures

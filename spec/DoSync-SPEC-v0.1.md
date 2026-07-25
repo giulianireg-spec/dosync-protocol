@@ -494,6 +494,38 @@ POST /v1/event  (device → Hub → AI)
 }
 ```
 
+### 7.3.1 Direct device action
+
+A caller that already knows the device and the action — an operator, or an agent
+with no goal left to resolve — may act on one device without semantic
+resolution:
+
+```
+POST /v1/device/action
+
+{ "device_id": "lamp-hall", "action": "turn_on", "params": {}, "urgency": "info" }
+```
+
+Skipping RESOLUTION does not mean skipping the protocol. A direct action is
+still governed:
+
+- **Policy applies.** The hub evaluates it under the reserved intent class
+  `direct_control`, so a deployment constrains direct control exactly as it
+  constrains any intent — for example an exclusion policy listing
+  `"intent_classes": ["direct_control"]`. An action a policy forbids returns
+  **403** naming the deciding policy.
+- **It is always audited.** Executed actions append `direct_action_executed`;
+  blocked ones append `direct_action_blocked` with the deciding policy and its
+  reason. Both carry `source: "direct_action_endpoint"`, so an auditor can
+  distinguish an operator's action from one the system decided on its own.
+- `urgency` is optional and defaults to `info`. A direct action carries no goal
+  from which urgency could be inferred, and `info` never triggers the emergency
+  bypasses some policies grant.
+
+An endpoint that skipped policy and audit would be a "mode without the
+protocol", which §"On adapter-side fallback" of DESIGN-PRINCIPLES rejects for
+the protocol as a whole.
+
 ### 7.4 Device heartbeat (device → Hub)
 
 The hub tracks device health from two independent signals. **Passive** health

@@ -620,3 +620,39 @@ package — the test that would have caught #1 the day it was introduced. Verifi
 the old variable name restored. 674/674.
 
 Version bumped to **0.4.1**: 0.4.0 was consumed on TestPyPI and carried the data-loss bug.
+
+## DIRECT-ACTION-GOVERNANCE — Closing a bypass in the project's own central claim — SHIPPED 2026-07-25 · effort M
+Found by auditing the five differentiators the project advertises AGAINST THE CODE instead
+of trusting them. Two did not survive:
+
+`POST /v1/device/action` called `executor.execute()` directly — no policy evaluation, no
+audit entry. Demonstrated empirically: a lock was actuated (`unlock → status: unlocked`,
+HTTP 200) and the chain recorded **nothing**. So "policies the AI cannot escape" was false
+(the AI calls here instead of firing an intent) and "a tamper-evident record of what the
+system did" was incomplete (this path did nothing to the record). Worse, the MCP server's
+device-control tool uses this endpoint — including a branch that commands EVERY light at
+once — so the bypass belonged to the agent, not to an operator.
+
+DESIGN-PRINCIPLES §"On adapter-side fallback" already listed exactly these three
+consequences (broken chain, unevaluated safety constraints, actions reduced to commands)
+when rejecting adapter autonomy in the v11 review. The perimeter was closed and the same
+hole shipped in the core.
+
+Fix: a direct action is now a first-class protocol operation, not an escape hatch. It is
+evaluated by the policy engine under the reserved intent class `direct_control` (so a
+deployment writes `"intent_classes": ["direct_control"]` and binds this path like any
+other), blocked actions return 403 naming the deciding policy, and EVERY outcome appends to
+the chain — `direct_action_executed` or `direct_action_blocked`, both tagged
+`source: direct_action_endpoint` so an auditor can separate operator actions from decisions
+the system made. Urgency defaults to `info`: a direct action has no goal to infer urgency
+from, and `info` never triggers emergency bypasses.
+
+Validated live: excluded device → 403 + `direct_action_blocked`; permitted device → 200 +
+`direct_action_executed`; chain verifies. Certification S12 still passes. 681/681, and the
+tests fail with either the audit or the policy step removed — including a structural test,
+because the original defect was a MISSING step, which no assertion on a passing request
+would have caught.
+
+**Honest scope.** This closes the policy/audit bypass. It does NOT make the chain resistant
+to truncation or to full rewrite by an attacker with write access to the database — those
+are inherent limits of a hash chain with no external anchor, and remain true. See HORIZON.
