@@ -317,6 +317,8 @@ Examples:
         "audit-checkpoint",
         help="Emit a signed checkpoint of the chain head, to store OFF this machine")
     p_cp.add_argument("--out", help="Checkpoint file (default: audit_checkpoint_<ts>.json)")
+    p_cp.add_argument("--force", action="store_true",
+                      help="Overwrite an existing checkpoint (discards the evidence it held)")
     p_arst = db_sub.add_parser("audit-restore", help="Restore the audit log from a backup file")
     p_arst.add_argument("--file", required=True, help="Backup file to restore from")
     p_arst.add_argument("--force", action="store_true", help="Overwrite a non-empty audit log")
@@ -658,6 +660,22 @@ def db_audit_checkpoint(args):
     signed = cert_signing.sign_report(doc)
 
     out = args.out or f"audit_checkpoint_{int(time.time())}.json"
+
+    # A checkpoint is evidence, and the OLDEST one is the most valuable — each
+    # attests to a longer stretch of history, so the one a careless filename
+    # clobbers is the one that narrows an attacker's window most. Found in
+    # production: a suggested filename with only date granularity replaced that
+    # morning's checkpoint, and the runbook's systemd unit used `%i`, which
+    # expands to nothing outside a template unit and would have overwritten the
+    # same file every day. Silently destroying evidence is not an option here.
+    if os.path.exists(out) and not args.force:
+        print("audit-checkpoint — REFUSED")
+        print(f"  {out} already exists. A checkpoint is evidence; overwriting it")
+        print( "  discards proof about the history it attested to. Choose another")
+        print( "  name (the default includes a timestamp), or pass --force if you")
+        print( "  are certain this one is expendable.")
+        sys.exit(1)
+
     with open(out, "w") as f:
         json.dump(signed, f, indent=2, sort_keys=True)
 

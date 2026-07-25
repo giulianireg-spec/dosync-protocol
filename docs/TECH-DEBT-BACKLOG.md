@@ -736,3 +736,28 @@ test: assert the mechanism, not a symptom another mechanism also prevents.
 702/702. Live: legitimate archive → exit 0, clean; truncation → `TRUNCATED ✗`, exit 1;
 full rewrite with the head fixed up → local checks pass, exported checkpoint reports
 `attested head NOT PRESENT`, exit 1.
+
+## CHECKPOINT-EVIDENCE-PROTECTION — Two ways the runbook destroyed its own evidence — SHIPPED 2026-07-25
+Both found by watching the reference deployment actually USE the feature, not by review.
+
+1. **Same-day checkpoints overwrote each other.** The suggested filename used date-only
+   granularity. Two checkpoints taken the same day — one before archiving, one after —
+   collapsed into one, and the PRE-archive checkpoint, attesting to 16,223 entries, was
+   lost. Older checkpoints are the valuable ones: each covers a longer stretch of history,
+   so the one a careless filename clobbers narrows an attacker's window most.
+2. **The runbook's systemd unit used `%i`** — systemd's INSTANCE NAME specifier, valid only
+   in template units. In a plain unit it expands to nothing, so every daily run would have
+   written the same file and destroyed the previous day's evidence silently. A compliance
+   runbook that quietly overwrites its own evidence is worse than none: it produces
+   confidence without the artifact.
+
+Fixed: `audit-checkpoint` REFUSES to overwrite (`--force` is the deliberate escape hatch),
+and the runbook derives a unique UTC timestamp through a shell with `%%` escaping.
+
+**And the newly-added principle failed on its first outing.** The structural test written to
+pin #2 scanned lines beginning with `ExecStart` — but the filename sits on a CONTINUATION
+line, so reintroducing `%i` did not fail it. That is exactly "assert the mechanism, not a
+symptom", committed in the same session the rule was added to DESIGN-PRINCIPLES. Rewritten
+to scan whole `ini` blocks; both defects now verified to fail when reintroduced. The rule
+works — it just has to be applied to the test one is writing at that moment, which is the
+hard part.

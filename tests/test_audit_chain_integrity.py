@@ -446,3 +446,65 @@ def test_checkpoint_of_a_legacy_chain_omits_the_null_sequence(tmp_path):
     _rewrite_everything(dbp)
     bad = _manage(dbp, "audit-verify", "--checkpoint", str(cp))
     assert "NOT PRESENT" in bad.stdout and bad.returncode != 0
+
+
+# ── Evidence protection (2026-07-25) ─────────────────────────────────────────
+# Both found by watching the reference deployment use the feature, not by review.
+
+def test_checkpoint_refuses_to_overwrite_evidence(tmp_path):
+    """A checkpoint is evidence, and the OLDEST is the most valuable — it
+    attests to the longest stretch of history. In production a suggested
+    filename with only date granularity silently replaced that morning's
+    checkpoint, losing the one that covered 16,223 entries."""
+    dbp = tmp_path / "a.db"
+    cp = tmp_path / "cp.json"
+    _chain(dbp, 5)
+
+    first = _manage(dbp, "audit-checkpoint", "--out", str(cp))
+    assert first.returncode == 0, first.stdout + first.stderr
+    original = cp.read_text()
+
+    second = _manage(dbp, "audit-checkpoint", "--out", str(cp))
+    assert second.returncode != 0, "overwriting evidence must not be silent"
+    assert "REFUSED" in second.stdout
+    assert cp.read_text() == original, "the existing evidence must be untouched"
+
+    forced = _manage(dbp, "audit-checkpoint", "--out", str(cp), "--force")
+    assert forced.returncode == 0, "--force is the deliberate escape hatch"
+
+
+def test_runbook_does_not_use_a_template_only_specifier():
+    """The runbook is operational instruction, and a wrong systemd specifier
+    there destroys evidence on a schedule: `%i` is the INSTANCE NAME, valid only
+    in template units, and expands to nothing elsewhere — so every daily run
+    would overwrite the same file.
+
+    Scans whole `ini` blocks, not lines starting with `ExecStart`. The first
+    version of this test did the latter and MISSED the bug when it was
+    reintroduced, because the filename sits on a continuation line — the exact
+    failure the 'assert the mechanism' principle describes, committed while
+    adding that principle. A systemd directive is its first line AND everything
+    it continues onto.
+    """
+    doc = (REPO / "docs" / "AUDIT-THREAT-MODEL.md").read_text()
+
+    blocks, current, inside = [], [], False
+    for line in doc.splitlines():
+        if not inside and line.strip().startswith("```ini"):
+            inside, current = True, []
+        elif inside and line.strip().startswith("```"):
+            blocks.append("\n".join(current))
+            inside = False
+        elif inside:
+            current.append(line)
+
+    assert blocks, "the runbook must contain systemd units"
+    assert any("audit-checkpoint" in b for b in blocks), \
+        "the runbook must contain a checkpoint unit"
+    for b in blocks:
+        for line in b.splitlines():
+            if line.lstrip().startswith("#"):
+                continue          # the comment names %i deliberately
+            assert "%i" not in line, (
+                "%i expands to nothing outside a template unit, so every run "
+                f"overwrites the same file:\n  {line.strip()}")

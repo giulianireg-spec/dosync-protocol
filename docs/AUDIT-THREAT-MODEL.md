@@ -122,8 +122,17 @@ After=dosync.service
 Type=oneshot
 User=dosync
 WorkingDirectory=/var/lib/dosync
-ExecStart=/usr/local/bin/dosync-manage db audit-checkpoint \
-          --out /var/lib/dosync/checkpoints/cp-%i.json
+# The filename MUST be unique per run. systemd has no date specifier, so the
+# timestamp comes from a shell, and `%%` escapes the percent signs systemd would
+# otherwise consume.
+#
+# This originally read `cp-%i.json`. `%i` is systemd's INSTANCE NAME, valid only
+# in template units; in a plain unit it expands to nothing, so every run would
+# have written the same file and destroyed the previous day's evidence without a
+# word. A compliance runbook that quietly overwrites its own evidence is worse
+# than no runbook: it produces confidence without the artifact.
+ExecStart=/bin/sh -c '/usr/local/bin/dosync-manage db audit-checkpoint \
+          --out /var/lib/dosync/checkpoints/cp-$(date -u +%%Y%%m%%dT%%H%%M%%SZ).json'
 # THE POINT OF THE WHOLE EXERCISE: get it off this machine. A checkpoint that
 # stays on the hub proves nothing against anyone who controls the hub. Replace
 # this with whatever destination your environment allows — an object store, a
@@ -148,6 +157,11 @@ WantedBy=timers.target
 ```bash
 sudo systemctl enable --now dosync-checkpoint.timer
 ```
+
+The command refuses to overwrite an existing checkpoint (`--force` only if you
+are certain one is expendable). **Older checkpoints are worth more than newer
+ones** — each covers a longer stretch of history. Keep them all; they are under
+a kilobyte each.
 
 ### Weekly, reviewed by a human
 
