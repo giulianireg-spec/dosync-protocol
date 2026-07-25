@@ -842,3 +842,25 @@ a statement of fact, not a mute button.
 Spec §7.6 now defines both settings and states why the second exists: a protocol that
 cannot distinguish "nobody collects these" from "someone else collects these" will
 mis-advise every deployment that got it right.
+
+## CHECKPOINT-RESTART-STARVATION — A daily schedule that never fired — SHIPPED 2026-07-25
+Found by pulling `cp-*.json` from the reference deployment after a day of work and getting
+nothing back — the only file present was one created by hand earlier.
+
+The scheduler slept BEFORE its first write. With a daily interval and a hub restarted for
+each deploy, the 24-hour timer reset every time and never elapsed: **a hub that restarts
+more often than the interval produced no evidence at all**, silently, while logging that
+checkpoints were scheduled. The log said the right thing and nothing happened — the failure
+mode this project keeps finding, this time in a feature written to prevent exactly that.
+
+Fixed: on start the hub writes immediately if a checkpoint is OVERDUE, then settles into the
+interval. "Overdue" comes from a timestamp persisted in `audit_meta`, not from files on
+disk, because in a pull arrangement the collector removes them once fetched and an empty
+directory would otherwise read as "never checkpointed" and produce one on every restart.
+
+Pinned by three tests: a short-lived hub still produces a checkpoint, repeated restarts
+produce only one, and deleting the files does not fake a missed interval. 723/723.
+
+Worth stating as a general lesson: a periodic task that sleeps before its first action has a
+hidden requirement — uptime longer than its period. Deployments restart for updates, power
+and configuration. An interval that only survives uninterrupted uptime is not an interval.

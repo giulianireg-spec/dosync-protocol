@@ -319,6 +319,26 @@ class DoSyncDB:
             row = cur.fetchone()
         return json.loads(row[0]) if row else None
 
+    def set_last_checkpoint_at(self, ts: float) -> None:
+        """Remember when a checkpoint was last produced.
+
+        Kept in the database rather than inferred from files on disk, because in
+        a pull arrangement the collector may remove them once fetched — and a
+        hub that reads "no files" as "never checkpointed" would write a fresh one
+        every restart. This survives both.
+        """
+        with self._cursor() as cur:
+            cur.execute("""
+                INSERT INTO audit_meta (key, value_json) VALUES ('last_checkpoint_at', ?)
+                ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json
+            """, (json.dumps({"at": ts}),))
+
+    def get_last_checkpoint_at(self) -> float | None:
+        with self._cursor() as cur:
+            cur.execute("SELECT value_json FROM audit_meta WHERE key = 'last_checkpoint_at'")
+            row = cur.fetchone()
+        return json.loads(row[0]).get("at") if row else None
+
     def load_audit_log(self) -> list[dict]:
         """Carga el audit log completo ordenado por timestamp."""
         with self._cursor() as cur:

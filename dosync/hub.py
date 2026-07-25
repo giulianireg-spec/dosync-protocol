@@ -1476,6 +1476,19 @@ class DoSyncHub:
                 "to a location this hub does not own (a mounted share, removable media) "
                 "to make the audit chain's tamper-evidence complete.")
 
+        # Write first if one is overdue, THEN settle into the interval.
+        #
+        # Sleeping first looks harmless and is not: a hub that restarts more
+        # often than the interval never reaches the first write, so it produces
+        # no evidence at all. Found by looking at why a pull of `cp-*.json`
+        # came back empty after a day of work — every restart had reset a
+        # 24-hour timer that never elapsed. Deployments restart for updates,
+        # power and configuration changes; an interval that only survives
+        # uninterrupted uptime is not an interval.
+        last = self.db.get_last_checkpoint_at()
+        if last is None or (time.time() - last) >= interval:
+            self.write_checkpoint(directory)
+
         while True:
             try:
                 await asyncio.sleep(interval)
@@ -1512,6 +1525,10 @@ class DoSyncHub:
 
         self._last_checkpoint_at = time.time()
         self._last_checkpoint_path = path
+        try:
+            self.db.set_last_checkpoint_at(self._last_checkpoint_at)
+        except Exception as e:      # pragma: no cover - defensive
+            log.warning("Could not persist the checkpoint timestamp: %s", e)
         log.info("Audit checkpoint written: %s (%d entries, head %s…)",
                  path, doc["entry_count"], doc["head_hash"][:16])
 

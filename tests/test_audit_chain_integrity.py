@@ -763,3 +763,91 @@ def test_neither_setting_still_warns(tmp_path, monkeypatch, caplog):
 
     assert hub._checkpoint_export_state == "not_configured"
     assert any("NOT exported" in str(r.msg) for r in caplog.records)
+
+
+# ── Restarts must not starve the schedule (2026-07-25) ──────────────────────
+
+def test_a_hub_that_restarts_often_still_produces_checkpoints(tmp_path):
+    """Found by pulling `cp-*.json` after a day of work and getting nothing.
+
+    The scheduler slept BEFORE its first write, so every restart reset a 24-hour
+    timer that never elapsed — a hub restarting more often than the interval
+    produced no evidence at all, silently. Deployments restart for updates,
+    power and configuration; an interval that only survives uninterrupted uptime
+    is not an interval.
+    """
+    import asyncio as _a
+
+    dbp = tmp_path / "a.db"
+    out = tmp_path / "cps"
+
+    async def short_life(cycle):
+        hub = DoSyncHub(db_path=str(dbp))
+        hub.audit_log.append({"type": "a", "n": cycle})
+        t = _a.create_task(hub.start_checkpoint_scheduler(
+            interval=3600, directory=str(out)))     # far longer than the hub lives
+        await _a.sleep(0.3)
+        t.cancel()
+
+    async def run():
+        for c in range(3):
+            await short_life(c)
+    _a.run(run())
+
+    written = list(out.glob("cp-*.json"))
+    assert written, "a short-lived hub must still produce a checkpoint"
+
+
+def test_restarts_do_not_produce_a_checkpoint_each_time(tmp_path):
+    """The other half: writing on every start would flood the directory on a
+    hub that restart-loops, and each file claims to be periodic evidence."""
+    import asyncio as _a
+
+    dbp = tmp_path / "a.db"
+    out = tmp_path / "cps"
+
+    async def run():
+        for c in range(4):
+            hub = DoSyncHub(db_path=str(dbp))
+            hub.audit_log.append({"type": "a", "n": c})
+            t = _a.create_task(hub.start_checkpoint_scheduler(
+                interval=3600, directory=str(out)))
+            await _a.sleep(0.3)
+            t.cancel()
+    _a.run(run())
+
+    assert len(list(out.glob("cp-*.json"))) == 1, \
+        "only the first start was overdue; the rest must respect the interval"
+
+
+def test_the_checkpoint_time_survives_the_collector_deleting_files(tmp_path):
+    """In a pull arrangement the collector may remove checkpoints once fetched.
+    Reading 'no files' as 'never checkpointed' would write a fresh one on every
+    restart, so the timestamp lives in the database instead."""
+    import asyncio as _a
+
+    dbp = tmp_path / "a.db"
+    out = tmp_path / "cps"
+
+    async def first():
+        hub = DoSyncHub(db_path=str(dbp))
+        hub.audit_log.append({"type": "a"})
+        t = _a.create_task(hub.start_checkpoint_scheduler(
+            interval=3600, directory=str(out)))
+        await _a.sleep(0.3)
+        t.cancel()
+    _a.run(first())
+
+    for f in out.glob("cp-*.json"):        # the collector took them
+        f.unlink()
+
+    async def second():
+        hub = DoSyncHub(db_path=str(dbp))
+        t = _a.create_task(hub.start_checkpoint_scheduler(
+            interval=3600, directory=str(out)))
+        await _a.sleep(0.3)
+        t.cancel()
+    _a.run(second())
+
+    assert not list(out.glob("cp-*.json")), \
+        "an empty directory is not evidence of a missed interval"
