@@ -209,6 +209,50 @@ least 12 characters and a passphrase of several words is better than a short
 clever string. Existing keys: `dosync-manage keys list` (previews only — they
 are hashed), `dosync-manage keys revoke <preview>`, `dosync-manage keys reset`.
 
+### Access: a password you choose, or none at all
+
+The hub prints a token on first start and stores only a hash of it, so it cannot
+show you that one again. You are not stuck with it.
+
+**From the dashboard** (the ⚙ button, once connected): set a password of your
+choosing, or turn the token requirement off entirely. No shell, no unit file.
+
+**From a terminal**, if you prefer:
+
+```bash
+# Choose your own — for a person who has to type it
+dosync-manage keys create --token "my-house-2026-kitchen" --label dashboard
+
+# Let it generate one — for a program that will store it
+dosync-manage keys create --label my-integration
+
+# Start with no authentication at all
+DOSYNC_AUTH=false dosync-hub
+```
+
+**Running without a token is a legitimate choice, not a trap door.** On a home
+network, behind a router, with no port forwarding, a token protects against
+nobody who is not already inside your house. It is the wrong default for a
+clinic and an unnecessary obstacle for a workshop, so DoSync offers it plainly
+rather than assuming everyone shares one threat model. It is not suitable for
+any hub reachable from outside its own network.
+
+Two things worth knowing:
+
+- **`DOSYNC_AUTH` in the environment wins.** If it is set in your service
+  configuration, the dashboard will tell you so and refuse to override it — a
+  click in a browser should not quietly undo what the machine was told to do.
+- **Changing access is recorded.** Setting a password or turning authentication
+  off appends to the audit chain, so "when did this hub become open, and who did
+  it" has an answer. The token value itself is never written there.
+
+A chosen password must be at least 12 characters, and a passphrase of several
+words is better than a short clever string: a bearer token is checked with no
+rate limiting and no lockout, so it is guessed offline at full speed.
+
+Existing keys: `dosync-manage keys list` (previews only — they are hashed),
+`keys revoke <preview>`, `keys reset`.
+
 ### Docker
 
 ```bash

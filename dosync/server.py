@@ -280,7 +280,28 @@ except Exception as _e:
     logging.getLogger("dosync.server").warning("Notifications not available: %s", _e)
 
 # ── Auth setup ────────────────────────────────────────────────────────────────
-_auth_enabled = os.environ.get("DOSYNC_AUTH", "true").lower() != "false"
+# Two possible sources, and the order between them is stated rather than left to
+# whichever ran last — this project has already been bitten by a value living in
+# several places that disagreed.
+#
+#   1. DOSYNC_AUTH in the environment WINS whenever it is explicitly set. An
+#      operator who wrote it into a systemd unit expects that to hold, and a
+#      click in a browser must not quietly override the machine's declaration.
+#   2. Otherwise the stored setting applies, so the choice can be made from the
+#      dashboard by someone who has no business editing unit files.
+#   3. Failing both, authentication is ON. A hub that starts open because nobody
+#      said otherwise is the wrong default, whatever the deployment.
+#
+# The dashboard reports which source is in force, so a toggle that cannot take
+# effect says why instead of appearing broken.
+_auth_env = os.environ.get("DOSYNC_AUTH")
+if _auth_env is not None:
+    _auth_enabled = _auth_env.lower() != "false"
+    _auth_source = "environment"
+else:
+    _auth_enabled = bool(hub.db.get_setting("auth_required", True))
+    _auth_source = "setting" if hub.db.get_setting("auth_required") is not None \
+        else "default"
 _auth_manager = AuthManager(hub.db, enabled=_auth_enabled)
 set_auth_manager(_auth_manager)
 
@@ -1554,6 +1575,107 @@ async def receive_heartbeat(req: HeartbeatRequest, auth: str = Depends(require_a
         "last_heartbeat": snap["last_heartbeat"],
         "reachable":      snap["reachable"],
     }
+
+
+@app.get("/v1/auth/mode", tags=["Security"])
+def auth_mode(auth: str = Depends(require_auth)):
+    """Whether a token is required, and which source decided that."""
+    return {
+        "auth_required": _auth_manager.enabled,
+        "source": _auth_source,
+        "env_override": _auth_source == "environment",
+        "note": ("DOSYNC_AUTH is set in this hub's environment and takes precedence; "
+                 "changing the mode here will not take effect until it is removed."
+                 if _auth_source == "environment" else
+                 "Changeable from here; stored with the hub."),
+    }
+
+
+@app.post("/v1/auth/mode", tags=["Security"])
+def set_auth_mode(req: dict, auth: str = Depends(require_auth)):
+    """Turn the token requirement on or off, without editing a unit file.
+
+    Requiring a shell for this put a wall in front of exactly the person least
+    able to climb it: someone running DoSync at home, behind a router, for whom
+    a token protects against nobody already inside the house. That is a
+    legitimate configuration and it should not need systemd.
+
+    Turning it OFF is a security-relevant act, so it is treated as one: the
+    caller must be authenticated (when auth is on), must confirm explicitly, and
+    the change lands in the tamper-evident chain. An operator who later asks
+    "when did this hub become open, and who did it" gets an answer.
+    """
+    if "auth_required" not in req:
+        raise HTTPException(status_code=422, detail="auth_required (bool) is required")
+    desired = bool(req["auth_required"])
+
+    if _auth_source == "environment":
+        raise HTTPException(
+            status_code=409,
+            detail="DOSYNC_AUTH is set in this hub's environment and takes precedence. "
+                   "Remove it from the service configuration to manage the mode here.")
+
+    if not desired and not req.get("confirm"):
+        raise HTTPException(
+            status_code=422,
+            detail="Disabling authentication leaves this hub open to anyone who can "
+                   "reach it on the network. Repeat with confirm=true if that is "
+                   "intended (reasonable on a home network behind a router; not for a "
+                   "hub reachable from outside it).")
+
+    previous = _auth_manager.enabled
+    hub.db.set_setting("auth_required", desired)
+    _auth_manager.enabled = desired
+
+    hub.audit_log.append({
+        "type": "auth_mode_changed",
+        "auth_required": desired,
+        "previous": previous,
+        "source": "dashboard_or_api",
+    })
+    logging.getLogger("dosync.server").warning(
+        "Authentication requirement changed: %s → %s", previous, desired)
+
+    return {"auth_required": desired, "previous": previous,
+            "note": "Recorded in the audit chain."}
+
+
+@app.post("/v1/auth/token", tags=["Security"])
+def set_auth_token(req: dict, auth: str = Depends(require_auth)):
+    """Set a token of your choosing, from the browser.
+
+    The hub used to hand out 43 random characters and no way to replace them
+    except a command line — so the only route into the dashboard was a string
+    nobody memorises, which ends up in a note or is simply lost. Choosing one is
+    how every other self-hosted tool works.
+
+    The value is held to the same floor as the CLI path: a bearer token is
+    checked with no rate limit or lockout, so it is guessed offline at full
+    speed. Existing keys are left alone unless `replace_all` is set — revoking
+    what other integrations are using should be deliberate.
+    """
+    token = (req.get("token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=422, detail="token is required")
+    try:
+        if req.get("replace_all"):
+            _auth_manager.reset_keys()
+        created = _auth_manager.generate_key(
+            label=req.get("label", "dashboard"), token=token)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    hub.audit_log.append({
+        "type": "auth_token_created",
+        "label": req.get("label", "dashboard"),
+        "replaced_all": bool(req.get("replace_all")),
+        "chosen": True,
+        # The token itself is never written to the chain — the chain is readable
+        # by anyone who can read the chain.
+    })
+    return {"created": True, "label": req.get("label", "dashboard"),
+            "replaced_all": bool(req.get("replace_all")),
+            "weak": len(created) < 20}
 
 
 @app.get("/v1/keys", tags=["Security"])

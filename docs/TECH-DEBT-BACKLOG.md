@@ -1002,3 +1002,34 @@ README beside the other two options, stated as a legitimate choice rather than a
 
 741/741. This is the texture of H6: not a redesign, but the places where the system knows
 the answer and does not say it.
+
+## ACCESS-FROM-THE-BROWSER — Managing your own password without a shell — SHIPPED 2026-07-26
+Operator's request, and correct: setting a password or turning authentication off required
+`systemctl edit` and CLI commands — putting the obstacle in front of exactly the person
+least able to clear it. Someone running DoSync at home, behind a router, for whom a token
+guards against nobody already inside the house, had to learn systemd to say so.
+
+New: `GET/POST /v1/auth/mode` and `POST /v1/auth/token`, plus a ⚙ control in the dashboard.
+Set a passphrase, or switch the requirement off, from the browser.
+
+Designed with the project's own habits rather than around them:
+- **Precedence is stated, not emergent.** `DOSYNC_AUTH` in the environment WINS and the hub
+  says so (409 with an explanation, and the dashboard explains before asking) — a click in a
+  browser must not quietly override what a unit file declares. Otherwise the stored setting
+  applies; failing both, authentication is ON. The alternative was a fifth value living in
+  two places, which this project has already been bitten by four times.
+- **Turning auth off is treated as the security act it is:** authenticated, explicitly
+  confirmed, logged at WARNING, and appended to the tamper-evident chain as
+  `auth_mode_changed`. "When did this hub become open, and who did it" now has an answer.
+  The token VALUE never enters the chain — a chain is readable by whoever can read it.
+- **`reset_keys` moved onto AuthManager.** `manage.py keys reset` opened its own sqlite
+  connection to delete keys; a second caller would have meant the same deletion written
+  twice in two files, free to drift.
+
+Documented in the README (the three options, with running open presented as a legitimate
+choice rather than a trap door) and normatively in spec §7.7.
+
+**And the first version of these tests broke five unrelated ones.** The helper reloaded
+`dosync.server` to rebuild auth state from the environment and never put it back, leaving
+authentication switched on for everything that ran afterwards. Reloading a module in a test
+is fine; not restoring it is not. Now a fixture with teardown. 747/747.

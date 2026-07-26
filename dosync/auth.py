@@ -131,6 +131,21 @@ class AuthManager:
             return token
         return None
 
+    def reset_keys(self) -> int:
+        """Delete every API key. Returns how many were removed.
+
+        Lives here rather than as raw SQL at the call site: `manage.py keys
+        reset` opened its own sqlite connection to do this, so a second caller
+        (the dashboard) would have meant the same deletion written twice, in two
+        files, free to drift.
+        """
+        keys = self.db.list_api_keys() if hasattr(self.db, "list_api_keys") else []
+        with self.db._cursor() as cur:
+            cur.execute("DELETE FROM api_keys")
+            removed = cur.rowcount
+        log.warning("All API keys deleted (%s)", removed)
+        return removed if removed and removed > 0 else len(keys)
+
     def list_keys(self) -> list[dict]:
         return self.db.list_api_keys()
 

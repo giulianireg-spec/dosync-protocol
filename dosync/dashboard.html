@@ -490,6 +490,7 @@
          cannot. Keys are stored hashed and shown once, so the honest answer is
          not "look it up" but "choose or mint one", and the page now says so. -->
     <button class="btn sm" onclick="showTokenHelp()" title="Where do I get a token?">?</button>
+    <button class="btn sm" onclick="openAccess()" title="Access settings">⚙</button>
   </div>
 </header>
 
@@ -620,6 +621,57 @@ window.addEventListener('load', () => {
 });
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
+// Access settings, in the browser. Changing the password or turning the token
+// requirement off used to require a shell — which put a wall in front of exactly
+// the person least able to climb it: someone running this at home, behind a
+// router, for whom a token guards against nobody already inside the house.
+async function openAccess() {
+  if (!token) { alert("Connect first, then change access settings."); return; }
+  let mode;
+  try { mode = await api('GET', '/v1/auth/mode'); }
+  catch { alert("Could not read the access settings."); return; }
+
+  if (mode.env_override) {
+    alert("Access is fixed by this hub's environment\n\n" +
+          "DOSYNC_AUTH is set in the service configuration, which takes " +
+          "precedence over anything set here — a click in a browser should not " +
+          "override what the machine was told to do.\n\n" +
+          "Remove it from the unit file to manage access from this page.");
+    return;
+  }
+
+  const choice = prompt(
+    "Access settings\n\n" +
+    "Authentication is currently " + (mode.auth_required ? "REQUIRED" : "OFF") + ".\n\n" +
+    "Type:\n" +
+    "  a new password  → to set it (12 characters minimum)\n" +
+    "  off             → to stop requiring a token\n" +
+    "  on              → to start requiring one\n");
+  if (!choice) return;
+
+  try {
+    if (choice.trim().toLowerCase() === 'off') {
+      if (!confirm("Turn authentication OFF?\n\nAnyone who can reach this hub on " +
+                   "the network will be able to control your devices. Reasonable on " +
+                   "a home network behind a router; not for a hub reachable from " +
+                   "outside it.\n\nThis is recorded in the audit log.")) return;
+      await api('POST', '/v1/auth/mode', { auth_required: false, confirm: true });
+      alert("Authentication is off. Recorded in the audit log.");
+    } else if (choice.trim().toLowerCase() === 'on') {
+      await api('POST', '/v1/auth/mode', { auth_required: true });
+      alert("Authentication is required again. Recorded in the audit log.");
+    } else {
+      const r = await api('POST', '/v1/auth/token',
+                          { token: choice.trim(), label: 'dashboard' });
+      alert("Password set." + (r.weak ? "\n\nIt is on the short side — a bearer " +
+            "token has no lockout, so a passphrase of several words is safer." : "") +
+            "\n\nYour previous token still works until you revoke it.");
+    }
+  } catch (e) {
+    alert("Could not apply that: " + (e.message || e));
+  }
+}
+
 function showTokenHelp() {
   alert(
     "DoSync access\n\n" +

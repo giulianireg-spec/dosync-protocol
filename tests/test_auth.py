@@ -1,3 +1,4 @@
+import pytest
 """
 DoSync Auth + Security Validation
 
@@ -305,3 +306,108 @@ def test_generated_tokens_are_still_the_default():
     a = auth.generate_key(label="one")
     b = auth.generate_key(label="two")
     assert a != b and len(a) > 30
+
+
+# ── Access management without a shell (2026-07-26) ──────────────────────────
+
+@pytest.fixture
+def access_hub(tmp_path, monkeypatch):
+    """A freshly reloaded server module, RESTORED afterwards.
+
+    These tests need module-level auth state rebuilt from the environment, which
+    means reloading `dosync.server`. That replaces globals other test files
+    already hold references to — the first version of this helper left
+    authentication switched on for everything that ran later and broke five
+    unrelated tests. Reloading is fine; not putting it back is not.
+    """
+    import importlib
+    import os
+
+    import dosync.server as srv
+
+    original = {k: os.environ.get(k) for k in ("DOSYNC_DB", "DOSYNC_AUTH")}
+
+    def build(env_auth=None):
+        monkeypatch.setenv("DOSYNC_DB", str(tmp_path / "a.db"))
+        if env_auth is None:
+            monkeypatch.delenv("DOSYNC_AUTH", raising=False)
+        else:
+            monkeypatch.setenv("DOSYNC_AUTH", env_auth)
+        importlib.reload(srv)
+        from fastapi.testclient import TestClient
+        tok = srv._auth_manager.ensure_default_key() or "seed"
+        return srv, TestClient(srv.app), {"Authorization": f"Bearer {tok}"}
+
+    yield build
+
+    for k, v in original.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+    importlib.reload(srv)
+
+
+def _client(access_hub, env_auth=None):
+    return access_hub(env_auth)
+
+
+def test_operator_can_set_a_password_from_the_api(access_hub):
+    srv, c, H = _client(access_hub)
+    r = c.post("/v1/auth/token", headers=H,
+               json={"token": "my-house-2026-kitchen", "label": "dashboard"})
+    assert r.status_code == 200
+    assert c.get("/v1/devices",
+                 headers={"Authorization": "Bearer my-house-2026-kitchen"}
+                 ).status_code == 200
+
+
+def test_a_weak_password_is_refused_over_the_api(access_hub):
+    srv, c, H = _client(access_hub)
+    assert c.post("/v1/auth/token", headers=H, json={"token": "1234"}).status_code == 422
+
+
+def test_turning_auth_off_requires_confirmation(access_hub):
+    """One click should not open a hub. The confirmation is the difference
+    between a decision and an accident."""
+    srv, c, H = _client(access_hub)
+    assert c.post("/v1/auth/mode", headers=H,
+                  json={"auth_required": False}).status_code == 422
+    assert c.post("/v1/auth/mode", headers=H,
+                  json={"auth_required": False, "confirm": True}).status_code == 200
+    assert c.get("/v1/devices").status_code == 200, "no token needed now"
+
+
+def test_access_changes_land_in_the_audit_chain(access_hub):
+    """'When did this hub become open, and who did it' must have an answer.
+    The token VALUE is never written — the chain is readable by whoever can read
+    the chain."""
+    srv, c, H = _client(access_hub)
+    c.post("/v1/auth/token", headers=H, json={"token": "a-chosen-passphrase"})
+    c.post("/v1/auth/mode", headers=H, json={"auth_required": False, "confirm": True})
+
+    types = [e["type"] for e in srv.hub.audit_log.entries()]
+    assert "auth_token_created" in types
+    assert "auth_mode_changed" in types
+    raw = str(srv.hub.audit_log.entries())
+    assert "a-chosen-passphrase" not in raw, "the token must never enter the chain"
+
+
+def test_the_environment_wins_over_the_dashboard(access_hub):
+    """An operator who wrote DOSYNC_AUTH into a unit file expects it to hold; a
+    click in a browser must not quietly override the machine's declaration. The
+    hub says so rather than letting the toggle appear broken."""
+    srv, c, H = _client(access_hub, env_auth="true")
+    mode = c.get("/v1/auth/mode", headers=H).json()
+    assert mode["source"] == "environment" and mode["env_override"] is True
+    r = c.post("/v1/auth/mode", headers=H,
+               json={"auth_required": False, "confirm": True})
+    assert r.status_code == 409, "and refuses with an explanation, not silently"
+    assert "environment" in r.json()["detail"]
+
+
+def test_auth_default_is_on(access_hub):
+    """With nothing configured anywhere, a hub must not start open."""
+    srv, c, H = _client(access_hub)
+    assert c.get("/v1/auth/mode", headers=H).json()["auth_required"] is True
+    assert c.get("/v1/devices").status_code == 401

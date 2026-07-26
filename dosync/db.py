@@ -43,6 +43,16 @@ CREATE TABLE IF NOT EXISTS audit_log (
 -- entries are archived to a segment file, the live chain no longer starts at
 -- genesis — it starts at the ANCHOR (the last archived entry's hash), stored
 -- here so verification and hub restore know where the chain begins.
+-- Operator settings changeable at runtime (from the dashboard, not only from a
+-- shell). Kept separate from audit_meta because that table is chain metadata
+-- and this is deployment preference; mixing them would make "what did the
+-- operator configure" and "where does the chain begin" share a namespace.
+CREATE TABLE IF NOT EXISTS settings (
+    key             TEXT PRIMARY KEY,
+    value_json      TEXT NOT NULL,
+    updated_at      REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS audit_meta (
     key             TEXT PRIMARY KEY,
     value_json      TEXT NOT NULL
@@ -354,6 +364,20 @@ class DoSyncDB:
             cur.execute(
                 "INSERT INTO audit_log (entry_json, hash, timestamp) VALUES (?, ?, ?)",
                 (json.dumps(marker), marker["hash"], marker["timestamp"]))
+
+    def set_setting(self, key: str, value) -> None:
+        with self._cursor() as cur:
+            cur.execute("""
+                INSERT INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json,
+                                               updated_at = excluded.updated_at
+            """, (key, json.dumps(value), time.time()))
+
+    def get_setting(self, key: str, default=None):
+        with self._cursor() as cur:
+            cur.execute("SELECT value_json FROM settings WHERE key = ?", (key,))
+            row = cur.fetchone()
+        return json.loads(row[0]) if row else default
 
     def load_audit_log(self) -> list[dict]:
         """Carga el audit log completo ordenado por timestamp."""

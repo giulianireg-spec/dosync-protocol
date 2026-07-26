@@ -720,6 +720,30 @@ proof against an adversary who controls the host unless checkpoints are in fact
 exported beyond that host's reach. The full attacker model, including what
 remains undetectable, is in `docs/AUDIT-THREAT-MODEL.md`.
 
+### 7.7 Access control
+
+A hub MUST support bearer-token authentication and MUST allow an operator to
+manage it without shell access — `GET/POST /v1/auth/mode` and
+`POST /v1/auth/token`. Requiring a terminal to change a password puts the
+obstacle in front of exactly the operator least able to clear it.
+
+**Normative:**
+
+- A token chosen by the operator MUST be accepted, subject to a minimum length
+  (12 characters in this implementation). Tokens are verified without rate
+  limiting, so short values are guessed offline at full speed.
+- Disabling authentication MUST require explicit confirmation, and MUST append
+  to the audit chain. So MUST creating a token. The token VALUE MUST NOT be
+  written to the chain.
+- Where an environment variable and a stored setting disagree, the environment
+  MUST win and the hub MUST say so rather than silently ignoring the request.
+- With nothing configured, authentication MUST default to required.
+
+**Not normative:** whether a given deployment requires a token at all. A hub on
+a private network behind a router, unreachable from outside it, may legitimately
+run open; the protocol provides the switch and records its use rather than
+imposing one threat model on every installation.
+
 ## 8. Certification
 
 A device or hub implementation is **DoSync Certified** if it passes the official certification CLI (`certify.py`) included in the reference repository.
