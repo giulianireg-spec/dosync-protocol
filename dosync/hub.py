@@ -1393,6 +1393,23 @@ def _assurance_is_regulated() -> bool:
         "regulated", "high", "audited")
 
 
+def checkpoint_export_mode() -> str:
+    """How checkpoints leave this host, derived from CONFIGURATION.
+
+    Read at status time rather than remembered from the last write. The state
+    used to be set only when a checkpoint was produced, so a hub that had just
+    restarted reported "unknown" about a setting it could see plainly — and a
+    monitor checking this field would be blind for a whole interval after every
+    restart, which is exactly when someone is most likely to be watching.
+    """
+    if os.environ.get("DOSYNC_CHECKPOINT_EXPORT_EXTERNAL", "").lower() in (
+            "1", "true", "yes"):
+        return "external"
+    if os.environ.get("DOSYNC_CHECKPOINT_EXPORT_DIR"):
+        return "configured"
+    return "not_configured"
+
+
 class DoSyncHub:
     """
     Main entry point for the DoSync protocol.

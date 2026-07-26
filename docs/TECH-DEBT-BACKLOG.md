@@ -904,3 +904,15 @@ genesis IN MEMORY: `verify()` failed and `/v1/status` reported `audit_integrity:
 chain that was perfectly intact — a false accusation, the exact failure mode the panel
 blocked earlier for a different reason. The value is per-chain state; nothing recomputes it.
 Pinned by a test that fails if any operation resets it. 728/728.
+
+## CHECKPOINT-EXPORT-MODE — Status said "unknown" about a setting it could read — SHIPPED 2026-07-26
+Spotted in production output: a hub with `DOSYNC_CHECKPOINT_EXPORT_EXTERNAL=true` reported
+`checkpoint_export: unknown` right after a restart. The field was only assigned when a
+checkpoint was WRITTEN, so between a restart and the next interval the hub claimed ignorance
+about configuration sitting in its own environment — and a monitor watching that field was
+blind for a whole interval after every restart, which is precisely when someone is looking.
+
+Now derived from configuration at status time (`not_configured` / `configured` / `external`),
+with the last attempt's OUTCOME kept separately as `checkpoint_export_last`. Two different
+questions — where copies should go, and whether the most recent one got there — that were
+being answered by one field. 730/730.

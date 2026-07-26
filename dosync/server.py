@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 
 from dosync import __version__
+import dosync.hub as _hubmod
 from dosync.hub import DoSyncHub
 from dosync import metrics as M
 from dosync.executor import SimulatedExecutor
@@ -1998,7 +1999,11 @@ def get_status():
         # Whether the artifact actually leaves this host. "not_configured" means
         # the chain's tamper-evidence is incomplete — visible to monitoring
         # rather than only in a log line nobody re-reads.
-        "checkpoint_export": getattr(hub, "_checkpoint_export_state", "unknown"),
+        "checkpoint_export": _hubmod.checkpoint_export_mode(),
+        # The outcome of the LAST attempt, distinct from the configuration
+        # above: "configured" says where copies should go, this says whether the
+        # most recent one got there.
+        "checkpoint_export_last": getattr(hub, "_checkpoint_export_state", "unknown"),
         "checkpoint_age_s": (
             round(_time.time() - hub._last_checkpoint_at)
             if getattr(hub, "_last_checkpoint_at", None) else None),

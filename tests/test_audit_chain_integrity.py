@@ -942,3 +942,40 @@ def test_a_home_deployment_is_not_nagged(tmp_path, monkeypatch, caplog):
     assert path, "checkpoints are still produced — they cost nothing and help"
     assert not [r for r in caplog.records if "NOT exported" in str(r.msg)], \
         "a household must not be warned about an adversary that is themselves"
+
+
+def test_export_mode_is_read_from_configuration_not_remembered(monkeypatch):
+    """`/v1/status` used to report "unknown" after a restart, because the state
+    was only set when a checkpoint was written. A monitor watching that field
+    was blind for a whole interval after every restart — which is exactly when
+    someone is most likely to be looking."""
+    from dosync.hub import checkpoint_export_mode
+
+    monkeypatch.delenv("DOSYNC_CHECKPOINT_EXPORT_EXTERNAL", raising=False)
+    monkeypatch.delenv("DOSYNC_CHECKPOINT_EXPORT_DIR", raising=False)
+    assert checkpoint_export_mode() == "not_configured"
+
+    monkeypatch.setenv("DOSYNC_CHECKPOINT_EXPORT_DIR", "/tmp/somewhere")
+    assert checkpoint_export_mode() == "configured"
+
+    monkeypatch.setenv("DOSYNC_CHECKPOINT_EXPORT_EXTERNAL", "true")
+    assert checkpoint_export_mode() == "external", \
+        "a declared pull arrangement wins — it is the stronger one"
+
+
+def test_status_reports_export_mode_without_a_prior_checkpoint():
+    """The regression itself: a freshly started hub must already know."""
+    import os
+
+    from fastapi.testclient import TestClient
+
+    import dosync.server as srv
+
+    os.environ["DOSYNC_CHECKPOINT_EXPORT_EXTERNAL"] = "true"
+    try:
+        body = TestClient(srv.app).get("/v1/status").json()
+        assert body["checkpoint_export"] == "external"
+        assert "checkpoint_export_last" in body, \
+            "the last attempt's outcome stays available, separately"
+    finally:
+        os.environ.pop("DOSYNC_CHECKPOINT_EXPORT_EXTERNAL", None)
