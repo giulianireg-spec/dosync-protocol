@@ -257,3 +257,51 @@ if __name__ == "__main__":
             failed += 1
     print(f"\n{passed}/{passed+failed} auth + security tests passed.")
     sys.exit(1 if failed else 0)
+
+
+# ── Choosing your own token (2026-07-26) ────────────────────────────────────
+
+def test_operator_can_choose_the_token():
+    """Raised by the operator: the only way into the dashboard was a 43-character
+    random string, which nobody memorises, so it lives in a note or gets lost —
+    which is exactly what happened to this project's author. Software people
+    self-host lets them pick a password."""
+    from dosync.auth import AuthManager
+    from dosync.db import DoSyncDB
+
+    db = DoSyncDB(":memory:"); db.init()
+    auth = AuthManager(db)
+    token = auth.generate_key(label="dashboard", token="my-house-2026-kitchen")
+    assert token == "my-house-2026-kitchen"
+    assert auth.verify(token) is True
+    assert auth.verify("something-else-entirely") is False
+
+
+def test_a_chosen_token_still_has_a_floor():
+    """A bearer token is checked with no rate limit or lockout, so it is guessed
+    offline at full speed — which makes a short one materially worse than a
+    short login password."""
+    import pytest
+
+    from dosync.auth import AuthManager
+    from dosync.db import DoSyncDB
+
+    db = DoSyncDB(":memory:"); db.init()
+    auth = AuthManager(db)
+    with pytest.raises(ValueError):
+        auth.generate_key(token="1234")
+    with pytest.raises(ValueError):
+        auth.generate_key(token="dosync")
+
+
+def test_generated_tokens_are_still_the_default():
+    """Choosing is an option, not a requirement — a program that will store the
+    value should still get something random."""
+    from dosync.auth import AuthManager
+    from dosync.db import DoSyncDB
+
+    db = DoSyncDB(":memory:"); db.init()
+    auth = AuthManager(db)
+    a = auth.generate_key(label="one")
+    b = auth.generate_key(label="two")
+    assert a != b and len(a) > 30

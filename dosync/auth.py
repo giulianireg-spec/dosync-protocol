@@ -66,12 +66,36 @@ class AuthManager:
         self.db      = db
         self.enabled = enabled
 
-    def generate_key(self, label: str = "default") -> str:
+    #: Shortest token this hub will store. A bearer token is checked without
+    #: rate limiting or lockout, so it is guessed offline at full speed —
+    #: which makes a short one materially worse than a short login password.
+    #: Twelve is a floor against the trivial ("dosync", "1234"), not a claim
+    #: that twelve is strong.
+    MIN_TOKEN_LENGTH = 12
+
+    def generate_key(self, label: str = "default", token: str = None) -> str:
+        """Create an API key, store its hash, and return the plaintext once.
+
+        `token` lets the operator CHOOSE the value instead of receiving 43 random
+        characters. That was not possible before, and the consequence was worse
+        than inconvenience: the only way to reach the dashboard was to keep a
+        string nobody can memorise, so it ended up in a note, a password manager,
+        or a chat message — or was simply lost, which is what happened to this
+        project's own author. Software people self-host lets them pick a
+        password; there is no reason a hub should not.
+
+        Chosen values are still held to a floor (MIN_TOKEN_LENGTH) and the caller
+        is told when a value is weak rather than being silently trusted.
         """
-        Genera una nueva API key, la hashea y la guarda en la DB.
-        Retorna el token en texto plano — solo se muestra UNA VEZ.
-        """
-        token    = secrets.token_urlsafe(32)
+        if token is not None:
+            token = token.strip()
+            if len(token) < self.MIN_TOKEN_LENGTH:
+                raise ValueError(
+                    f"Token must be at least {self.MIN_TOKEN_LENGTH} characters. "
+                    "It is checked with no rate limit, so a short one is guessed "
+                    "offline at full speed.")
+        else:
+            token = secrets.token_urlsafe(32)
         key_hash = hash_token(token)
         self.db.save_api_key(key_hash, label)
         log.info("New API key generated: label='%s'", label)

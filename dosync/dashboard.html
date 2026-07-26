@@ -485,6 +485,11 @@
     <input class="token-input" id="tokenInput" type="password"
            placeholder="API token…" autocomplete="off">
     <button class="btn sm" onclick="connect()">Connect</button>
+    <!-- The field said "API token…" and nothing else, and the project's own
+         author could not work out where to get one — so a newcomer certainly
+         cannot. Keys are stored hashed and shown once, so the honest answer is
+         not "look it up" but "choose or mint one", and the page now says so. -->
+    <button class="btn sm" onclick="showTokenHelp()" title="Where do I get a token?">?</button>
   </div>
 </header>
 
@@ -592,8 +597,17 @@ let ws        = null;
 let token     = '';
 let eventCount  = 0;
 let intentCount = 0;
-const HUB = `http://${window.location.hostname}:47200`;
-const WS  = `ws://${window.location.hostname}:47200`;
+// Derived from how this page was actually loaded, not assumed.
+//
+// These were hardcoded to http:// and ws:// on port 47200, which meant the
+// dashboard could not work on any TLS deployment: a browser refuses to let an
+// HTTPS page fetch http:// or open ws:// (mixed content), so the request never
+// left the tab and the UI simply stayed "disconnected" with no error. The hub
+// warns at every startup that TLS is not configured — and the moment an
+// operator complied, its own interface stopped working. It also broke on any
+// port other than 47200.
+const HUB = `${window.location.protocol}//${window.location.host}`;
+const WS  = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
@@ -606,6 +620,23 @@ window.addEventListener('load', () => {
 });
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
+function showTokenHelp() {
+  alert(
+    "DoSync access\n\n" +
+    "The hub prints a token the first time it starts and stores only a hash of" +
+    " it, so it cannot show you that one again. Three ways forward:\n\n" +
+    "1. CHOOSE one, like a password, so you need not store 43 random characters:\n" +
+    "   dosync-manage keys create --token \"my-house-2026\" --label dashboard\n\n" +
+    "2. Let it generate one, for a program that will store it:\n" +
+    "   dosync-manage keys create --label dashboard\n\n" +
+    "3. Turn authentication off, if this hub sits on a home network behind a\n" +
+    "   router and nothing outside can reach it:\n" +
+    "   DOSYNC_AUTH=false\n\n" +
+    "(from a clone, replace dosync-manage with: python3 manage.py)\n\n" +
+    "`keys list` shows which keys exist, but only a preview of each — they are" +
+    " hashed, by design.");
+}
+
 function connect() {
   token = document.getElementById('tokenInput').value.trim();
   if (token) localStorage.setItem('dosync_token', token);

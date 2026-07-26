@@ -224,3 +224,44 @@ def test_intent_classes_endpoint_gives_the_dashboard_what_it_needs():
     for c in data["intent_classes"]:
         assert "name" in c and "urgency" in c, \
             "the launcher needs a label and an urgency to sort and colour by"
+
+
+def test_dashboard_explains_how_to_get_in():
+    """The project's author opened the dashboard, saw "API token…", and could
+    not work out where to obtain one. Then, once told, the token did not work —
+    because the page hardcoded http:// and could not talk to an HTTPS hub. Two
+    separate walls at the first screen.
+
+    Keys are hashed and shown once, so the honest guidance is not "look it up".
+    All three real options must be named: choose one, generate one, or turn
+    authentication off for a hub nothing outside can reach.
+    """
+    from fastapi.testclient import TestClient
+
+    import dosync.server as srv
+    page = TestClient(srv.app).get("/").text
+
+    assert "keys create --token" in page, "choosing your own must be offered"
+    assert "DOSYNC_AUTH=false" in page, "so must running without one"
+    assert "showTokenHelp" in page
+
+
+def test_dashboard_follows_the_scheme_it_was_loaded_over():
+    """Hardcoded http:// and ws:// meant the dashboard could not work on any TLS
+    deployment: a browser blocks an HTTPS page from fetching http://, so the
+    request never left the tab and the UI sat at "disconnected" with no error.
+    The hub warns at every startup that TLS is unconfigured — and the moment an
+    operator complied, its own interface stopped working."""
+    import re
+
+    from fastapi.testclient import TestClient
+
+    import dosync.server as srv
+    page = TestClient(srv.app).get("/").text
+    body = re.sub(r"<!--.*?-->", "", page, flags=re.S)
+
+    assert not re.search(r"const HUB\s*=\s*`http://", body), \
+        "the scheme must come from window.location, not be assumed"
+    assert "window.location.protocol" in body
+    assert not re.search(r":47200`", body), \
+        "the port must come from window.location.host too"

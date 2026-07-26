@@ -82,7 +82,15 @@ def keys_create(args):
     header("Create API Key")
     db    = get_db(args.db)
     auth  = get_auth(db)
-    token = auth.generate_key(args.label)
+    chosen = getattr(args, "token", None)
+    try:
+        token = auth.generate_key(args.label, token=chosen)
+    except ValueError as e:
+        print(f"\n  Refused: {e}\n")
+        sys.exit(1)
+    if chosen and len(chosen) < 20:
+        warn("That token is short. It is accepted, but a bearer token has no "
+             "lockout — prefer a passphrase of several words.")
 
     print()
     print(f"  {C.BOLD}{C.GREEN}New API key generated:{C.RESET}")
@@ -285,6 +293,10 @@ Examples:
 
     p_create = keys_sub.add_parser("create", help="Generate a new API key")
     p_create.add_argument("--label", default="default", help="Label for this key")
+    p_create.add_argument("--token", default=None,
+                          help="Choose the token yourself instead of receiving a random "
+                               "one (minimum 12 characters). Useful when a person, rather "
+                               "than a program, has to type it.")
 
     p_reset = keys_sub.add_parser("reset", help="Delete all keys and generate new one")
     p_reset.add_argument("--yes", action="store_true", help="Skip confirmation")

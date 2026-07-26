@@ -971,3 +971,34 @@ over one that lied about it, but registering a device still means POSTing a JSON
 with curl, and configuration is still environment variables. The gap the operator described
 — "a common user, someone with basic knowledge, at most Home Assistant experience" — is
 about installation and onboarding, and remains open.
+
+## ACCESS-USABILITY — Two walls at the first screen, and an undocumented escape — SHIPPED 2026-07-26
+The operator could not get into his own dashboard. Both reasons were real defects, and the
+questions he asked afterwards exposed a third.
+
+**The dashboard could not talk to a TLS hub at all.** It hardcoded
+`const HUB = http://…:47200` and `ws://`. A browser blocks an HTTPS page from fetching
+`http://` — mixed content — so the request never left the tab and the UI sat at
+"disconnected" with no error anywhere. The hub warns at every single startup that TLS is not
+configured, and the moment an operator complied, its own interface stopped working. It was
+also broken on any port other than 47200. Now derived from `window.location`.
+
+**Nothing told anyone where a token comes from.** The tooling has always existed
+(`keys list/create/revoke/reset`); the dashboard mentioned it in zero words. And the obvious
+guidance would have been wrong: keys are stored hashed and shown once, so a lost token
+cannot be looked up.
+
+**You could not choose your own.** `generate_key` always produced 43 random characters, so
+the only way into the dashboard was a string nobody memorises — it ends up in a note, a
+password manager, or lost, which is what happened here. `keys create --token` now accepts a
+chosen value with a 12-character floor and a warning below 20, because a bearer token is
+checked with no rate limit or lockout and is therefore guessed offline at full speed.
+
+**And `DOSYNC_AUTH=false` appeared in ZERO documentation files.** It works, it has always
+worked, and no user could discover it. For a hub on a home network behind a router with no
+port forwarding, requiring a token protects against nobody already outside the house — the
+right default for a clinic, an unnecessary obstacle for a workshop. Now documented in the
+README beside the other two options, stated as a legitimate choice rather than a trap door.
+
+741/741. This is the texture of H6: not a redesign, but the places where the system knows
+the answer and does not say it.
