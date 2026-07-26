@@ -509,11 +509,41 @@ their own key. Cryptographically sound, but it attests "I ran the tests", not "a
 authority verified me". A public registry of certified implementations, or a neutral
 certifying party, is the v1.0-scale answer.
 
-## H6 — End-user interface (FamilyOS)
-*Raised by Ferreyra (panel 2026-07-21).*
-Everything reachable today is curl, tokens and JSON. The protocol layer is the right place to
-have spent the effort, but the stated destination — a private generational AI for the home —
-has no front door yet. Out of scope for the protocol; in scope for what the protocol is for.
+## H6 — Usable by someone who is not a developer
+*Raised by Ferreyra (panel 2026-07-21). Sharpened by the operator 2026-07-26: the target is
+"a common user, someone with basic knowledge, at most Home Assistant experience" — and
+DoSync is not only for home automation, so the same bar applies to a small shop or a
+workshop.*
+
+**Closed since it was raised** (2026-07-26, all found by trying to USE the thing):
+- `pip install dosync` exists; the hub runs with one command.
+- The dashboard SHIPS with the package. It never had before — it sat at the repo root, so no
+  install ever carried it, and the packaging move broke its path in clones too.
+- It no longer lies about what the project is: the launcher renders the deployment's own
+  intent classes instead of eight hardcoded home scenarios, and the version comes from the
+  API instead of saying v0.1 for three releases.
+- It works over TLS. It hardcoded `http://`, so on any HTTPS hub the browser blocked it
+  silently — the hub nagged operators to enable TLS and then its own UI stopped working.
+- Access is manageable from the browser: choose a password, or turn authentication off, with
+  the change recorded in the audit chain.
+- The warning Chrome shows on a self-signed certificate is explained, with per-platform
+  instructions — previously the hub said "run setup_pki.sh" and abandoned the operator at
+  the consequence.
+
+**Still open, and this is the substance of it:**
+- **Registering a device means POSTing a JSON manifest with curl.** This is the single
+  biggest wall. Home Assistant is tolerated by non-developers largely because it DISCOVERS
+  devices; DoSync makes you describe each one by hand.
+- **No onboarding.** A fresh hub has zero devices and no path from there that does not
+  involve reading the spec.
+- **Configuration is environment variables and `systemctl edit`** for everything except
+  access.
+- **No packaged install for a non-technical machine** — no OS image, no add-on, no installer.
+
+The pattern worth carrying: none of what got fixed was a redesign. Each was a place where the
+system knew the answer and did not say it, or worked in the author's setup and nowhere else.
+The remaining items are different in kind — they are product, not polish, and discovery is
+the one that decides whether the rest matters.
 
 ## H7 — Second independent implementation + language-independent wire format
 *Standing item, predates the panel.*
