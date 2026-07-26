@@ -168,3 +168,59 @@ def test_a_missing_dashboard_answers_instead_of_crashing(monkeypatch):
     r = TestClient(srv.app).get("/")
     assert r.status_code == 200, "a missing file is not a server error"
     assert "/docs" in r.text, "it must point somewhere useful"
+
+
+def test_dashboard_does_not_hardcode_a_version():
+    """It displayed "Hub v0.1" for three releases — a fourth hardcoded version
+    source, and the only one a visitor ever sees. Checks the RENDERED markup,
+    not the file, so an explanatory comment cannot satisfy it."""
+    import re
+
+    from fastapi.testclient import TestClient
+
+    import dosync.server as srv
+    page = TestClient(srv.app).get("/").text
+    body = re.sub(r"<!--.*?-->", "", page, flags=re.S)
+    assert not re.search(r"Hub v\d+\.\d+", body), \
+        "the version must come from /v1/status, not the markup"
+
+
+def test_dashboard_intents_come_from_the_deployment():
+    """The launcher held eight hardcoded home scenarios — Good Morning, Bedtime,
+    blinds, coffee — which made the project's only visual artifact contradict
+    its central claim of domain agnosticism. Anyone evaluating DoSync for a
+    plant or a care facility opened this page and saw a house.
+
+    Comments are stripped before checking: the explanation above the grid names
+    those scenarios on purpose, and a substring search would pass on it — the
+    recurring 'assert the mechanism' trap.
+    """
+    import re
+
+    from fastapi.testclient import TestClient
+
+    import dosync.server as srv
+    page = TestClient(srv.app).get("/").text
+    body = re.sub(r"<!--.*?-->", "", page, flags=re.S)
+
+    for scenario in ("Good Morning", "Bedtime", "Blinds up", "Coffee on",
+                     "Away Mode", "Remind Chore"):
+        assert scenario not in body, \
+            f"'{scenario}' is a home scenario baked into a domain-agnostic protocol"
+
+    assert 'id="intentGrid"' in body, "the launcher must have a container to fill"
+    assert "/v1/intent-classes" in body, \
+        "and must populate it from what this deployment registered"
+
+
+def test_intent_classes_endpoint_gives_the_dashboard_what_it_needs():
+    """The rendering depends on these fields; a change to the endpoint that
+    dropped one would leave the launcher blank with no test failing."""
+    from fastapi.testclient import TestClient
+
+    import dosync.server as srv
+    data = TestClient(srv.app).get("/v1/intent-classes").json()
+    assert data["intent_classes"], "a hub must expose its intent classes"
+    for c in data["intent_classes"]:
+        assert "name" in c and "urgency" in c, \
+            "the launcher needs a label and an urgency to sort and colour by"

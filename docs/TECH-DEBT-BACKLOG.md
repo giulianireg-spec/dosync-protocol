@@ -942,3 +942,32 @@ copies it separately, and a missing file now returns an honest page pointing at 
 The package-data test initially passed with the declaration deleted, because the comment
 above it also names the file — sixth instance of asserting a symptom rather than the
 mechanism. Now it parses the declaration line. 733/733.
+
+## DASHBOARD-DOMAIN-AGNOSTIC — The only visual artifact contradicted the project's central claim — SHIPPED 2026-07-26
+Opening the freshly-shipped dashboard in a browser showed two things worth more than the fix:
+
+**It displayed "Hub v0.1".** A FOURTH hardcoded version source, three releases stale, and the
+only one a visitor ever sees. The project had just consolidated three disagreeing sources in
+code; the one on screen was missed because nobody looked at the screen.
+
+**The intent launcher was eight hardcoded home scenarios** — Good Morning, Bedtime, blinds
+up, coffee on, laundry done — with zero calls to `/v1/intent-classes`. So the single visual
+artifact of a protocol whose non-negotiable flag is *"this is not a smart-home project"*
+presented itself as a smart-home app. Anyone evaluating DoSync for a plant, a hospital or a
+care facility opened this page and saw a house. The positioning problem the integral audit
+identified was not only in the README; it was rendered, in the product.
+
+Now the launcher is built from what THIS deployment has registered, sorted with emergency
+first (in an incident the button you need must not be the one you scroll to), and the
+version comes from `/v1/status` like every other number on the page. A factory sees factory
+intents. Nothing about a house survives in the markup.
+
+Tests strip HTML comments before asserting, because the explanation above the grid names
+those scenarios deliberately and a substring search passes on it — the same trap that made
+the package-data test green a few hours earlier. 736/736.
+
+**Not a closure of H6.** A browser page that renders the deployment is a real improvement
+over one that lied about it, but registering a device still means POSTing a JSON manifest
+with curl, and configuration is still environment variables. The gap the operator described
+— "a common user, someone with basic knowledge, at most Home Assistant experience" — is
+about installation and onboarding, and remains open.

@@ -475,7 +475,7 @@
 <header>
   <div class="logo">
     <div class="logo-mark">DS</div>
-    <span class="logo-text">DoSync<span class="logo-sub">Hub v0.1</span></span>
+    <span class="logo-text">DoSync<span class="logo-sub" id="hubVersion">Hub</span></span>
   </div>
   <div class="header-right">
     <div class="ws-indicator">
@@ -549,47 +549,16 @@
       <span class="panel-title">Intent Launcher</span>
     </div>
     <div class="main-scroll">
-      <div class="intent-grid">
-        <button class="intent-btn emergency-btn" onclick="fireIntent('ensure_safety','emergency')">
-          <span class="intent-icon">🚨</span>
-          <div class="intent-name">Ensure Safety</div>
-          <div class="intent-desc">Emergency response — all emergency-capable devices</div>
-        </button>
-        <button class="intent-btn" onclick="fireIntent('notify_family','warning')">
-          <span class="intent-icon">📱</span>
-          <div class="intent-name">Notify Family</div>
-          <div class="intent-desc">Push + SMS alert to all family phones</div>
-        </button>
-        <button class="intent-btn emergency-btn" onclick="fireSmoke()">
-          <span class="intent-icon">🔥</span>
-          <div class="intent-name">Smoke Emergency</div>
-          <div class="intent-desc">3-phase: Alert → Evacuate → Access</div>
-        </button>
-        <button class="intent-btn" onclick="fireIntent('save_energy','info')">
-          <span class="intent-icon">🏠</span>
-          <div class="intent-name">Save Energy</div>
-          <div class="intent-desc">Nobody home — lights off, thermostat eco</div>
-        </button>
-        <button class="intent-btn" onclick="fireIntent('morning_routine','info')">
-          <span class="intent-icon">☀️</span>
-          <div class="intent-name">Good Morning</div>
-          <div class="intent-desc">Blinds up · Coffee on · Weather display</div>
-        </button>
-        <button class="intent-btn" onclick="fireIntent('bedtime_routine','info')">
-          <span class="intent-icon">🌙</span>
-          <div class="intent-name">Bedtime</div>
-          <div class="intent-desc">Lights dim · Blinds close · 21:30 routine</div>
-        </button>
-        <button class="intent-btn" onclick="fireIntent('remind_chore','info')">
-          <span class="intent-icon">👕</span>
-          <div class="intent-name">Remind Chore</div>
-          <div class="intent-desc">Laundry done notification</div>
-        </button>
-        <button class="intent-btn" onclick="fireIntent('away_mode','info')">
-          <span class="intent-icon">🚗</span>
-          <div class="intent-name">Away Mode</div>
-          <div class="intent-desc">Car left garage — secure the home</div>
-        </button>
+      <!-- Populated from GET /v1/intent-classes, not written here.
+           This grid used to hold eight hardcoded home scenarios — Good Morning,
+           Bedtime, Blinds up, Coffee on — which made the project's only visual
+           artifact contradict its central claim: DoSync is domain-agnostic and
+           explicitly not a smart-home product. Anyone evaluating it for a plant
+           or a care facility opened this page and saw a house. Now the launcher
+           shows whatever intent classes THIS deployment has registered, so a
+           factory sees factory intents and a hospital sees clinical ones. -->
+      <div class="intent-grid" id="intentGrid">
+        <div class="empty"><div class="empty-text">Connect to load intents</div></div>
       </div>
 
       <div class="section-title">Audit Log <span id="integrityBadge"></span></div>
@@ -650,6 +619,7 @@ function connect() {
     setWsStatus('connected');
     loadStatus();
     loadDevices();
+    loadIntents();
     loadAudit();
   };
 
@@ -811,7 +781,49 @@ async function loadStatus() {
     document.getElementById('statOccupied').textContent =
       s.occupied ? 'Yes' : 'No';
     document.getElementById('statWs').textContent = s.ws_connections ?? 1;
+    // The version was written into the markup as "v0.1" and stayed there for
+    // three releases — a fourth hardcoded source, and the only one a visitor
+    // ever sees. Reported by the hub now, like every other number here.
+    document.getElementById('hubVersion').textContent =
+      'Hub v' + s.version + ' · ' + s.protocol;
   } catch {}
+}
+
+// Build the launcher from what THIS deployment registered. A home shows home
+// intents, a plant shows industrial ones, and neither is written into this file.
+async function loadIntents() {
+  const grid = document.getElementById('intentGrid');
+  try {
+    const data = await api('GET', '/v1/intent-classes');
+    const classes = data.intent_classes || [];
+    if (!classes.length) {
+      grid.innerHTML = '<div class="empty"><div class="empty-text">' +
+        'No intent classes registered</div></div>';
+      return;
+    }
+    // Emergency first: in a real incident the button you need must not be the
+    // one you scroll to.
+    const rank = { emergency: 0, alert: 1, warning: 2, info: 3 };
+    classes.sort((a, b) => (rank[a.urgency] ?? 9) - (rank[b.urgency] ?? 9) ||
+                            a.name.localeCompare(b.name));
+    const icon = u => u === 'emergency' ? '🚨' : u === 'alert' ? '⚠️'
+                    : u === 'warning' ? '🔔' : '•';
+    grid.innerHTML = classes.map(c => {
+      const label = c.name.replace(/_/g, ' ')
+        .replace(/\b\w/g, m => m.toUpperCase());
+      const desc = (c.description || '')
+        .replace(/[<>&]/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[ch]));
+      return '<button class="intent-btn' +
+        (c.urgency === 'emergency' ? ' intent-emergency' : '') +
+        '" onclick="fireIntent(\'' + c.name + '\',\'' + c.urgency + '\')">' +
+        '<span class="intent-icon">' + icon(c.urgency) + '</span>' +
+        '<div class="intent-name">' + label + '</div>' +
+        '<div class="intent-desc">' + desc + '</div></button>';
+    }).join('');
+  } catch {
+    grid.innerHTML = '<div class="empty"><div class="empty-text">' +
+      'Could not load intents</div></div>';
+  }
 }
 
 async function loadDevices() {
