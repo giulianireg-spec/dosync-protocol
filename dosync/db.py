@@ -339,6 +339,22 @@ class DoSyncDB:
             row = cur.fetchone()
         return json.loads(row[0]).get("at") if row else None
 
+    def replace_audit_after_archive(self, archived: list[dict],
+                                    marker: dict) -> None:
+        """Remove archived entries and append the marker, in ONE transaction.
+
+        Atomicity matters more here than anywhere else in this file: a crash
+        between the delete and the insert would leave a chain whose head does
+        not match its marker, which reads exactly like tampering. The audit
+        chain must never be left in a state that accuses its own operator.
+        """
+        with self._cursor() as cur:
+            hashes = [(e["hash"],) for e in archived]
+            cur.executemany("DELETE FROM audit_log WHERE hash = ?", hashes)
+            cur.execute(
+                "INSERT INTO audit_log (entry_json, hash, timestamp) VALUES (?, ?, ?)",
+                (json.dumps(marker), marker["hash"], marker["timestamp"]))
+
     def load_audit_log(self) -> list[dict]:
         """Carga el audit log completo ordenado por timestamp."""
         with self._cursor() as cur:

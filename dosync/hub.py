@@ -956,8 +956,15 @@ class AuditLog:
         self._head_every = int(os.environ.get("DOSYNC_AUDIT_HEAD_EVERY", "25"))
         self._since_head = 0
         # AUDIT-ARCHIVE: where THIS chain begins. Genesis for a chain that has
-        # never been archived; the last archived entry's hash otherwise (set at
-        # restore from audit_meta). Verification starts here, not at genesis.
+        # never been archived; the last archived entry's hash otherwise — set at
+        # restore, and updated in place when the hub archives itself.
+        #
+        # This assignment belongs HERE and nowhere else. It spent one release
+        # inside flush_head() by accident, which meant every checkpoint write
+        # silently reset a live archived chain's anchor to genesis: in-memory
+        # verify() then failed, and /v1/status reported audit_integrity=false on
+        # a chain that was perfectly intact.
+        self.anchor_prev_hash = "0" * 64
         self.anchor_prev_hash = "0" * 64
 
     def _record_head(self, force: bool = False) -> None:
@@ -980,10 +987,6 @@ class AuditLog:
         """Force the head to disk — called at shutdown and before operations
         that rewrite the log, so the mark is current when it matters."""
         self._record_head(force=True)
-        # AUDIT-ARCHIVE: where THIS chain begins. Genesis for a chain that has
-        # never been archived; the last archived entry's hash otherwise (set at
-        # restore from audit_meta). Verification starts here, not at genesis.
-        self.anchor_prev_hash = "0" * 64
 
     def append(self, entry: dict) -> str:
         # Monotonic sequence number (2026-07-25). The hash chain alone cannot see
@@ -1370,6 +1373,26 @@ class DeviceHealth:
             log.warning("DeviceHealth: failed to load state from db: %s", e)
 
 
+def _assurance_is_regulated() -> bool:
+    """Does this deployment have to prove anything to someone else?
+
+    DoSync's audit machinery serves two different needs that look alike. In a
+    home or a small shop the operator is the only interested party: the chain is
+    a log that answers "what did the system do", and nobody will ever be asked
+    to demonstrate it was not edited. In a care facility, a plant, or anywhere a
+    regulator or an insurer can ask, the same chain has to function as EVIDENCE,
+    which requires exported checkpoints and a routine behind them.
+
+    Defaulting to `standard` is deliberate. Warning a household about an
+    adversary who controls the host means warning them about themselves — a
+    warning they cannot act on and would be right to ignore, which is how a
+    system teaches people that its warnings are noise. A deployment that needs
+    the stronger posture says so, and gets told when its evidence is incomplete.
+    """
+    return os.environ.get("DOSYNC_ASSURANCE", "standard").lower() in (
+        "regulated", "high", "audited")
+
+
 class DoSyncHub:
     """
     Main entry point for the DoSync protocol.
@@ -1466,15 +1489,18 @@ class DoSyncHub:
             log.info("Audit checkpoints are collected externally "
                      "(DOSYNC_CHECKPOINT_EXPORT_EXTERNAL) — this hub keeps no copy "
                      "elsewhere and holds no credentials to the collector.")
-        else:
+        elif _assurance_is_regulated():
             # Said at STARTUP, not only when the first checkpoint is written a
             # day later: an operator who is going to configure this should learn
             # it now, not after a day of producing artifacts nobody collects.
+            # Only for deployments that declared they must prove things — see
+            # _assurance_is_regulated for why this is not everyone's problem.
             log.warning(
-                "DOSYNC_CHECKPOINT_EXPORT_DIR is unset — checkpoints will stay on this "
-                "host, where they prove nothing against anyone who controls it. Set it "
-                "to a location this hub does not own (a mounted share, removable media) "
-                "to make the audit chain's tamper-evidence complete.")
+                "DOSYNC_ASSURANCE=regulated but no checkpoint export is configured. "
+                "Checkpoints will stay on this host, where they prove nothing against "
+                "anyone who controls it. Set DOSYNC_CHECKPOINT_EXPORT_DIR to push copies "
+                "somewhere, or DOSYNC_CHECKPOINT_EXPORT_EXTERNAL=true if something else "
+                "collects them from here.")
 
         # Write first if one is overdue, THEN settle into the interval.
         #
@@ -1489,9 +1515,15 @@ class DoSyncHub:
         if last is None or (time.time() - last) >= interval:
             self.write_checkpoint(directory)
 
+        # Archiving rides the same timer. Both are maintenance the deployment
+        # should not have to remember, and a hub that checkpoints faithfully
+        # while its chain grows without bound has solved the smaller problem.
+        self.maybe_archive()
+
         while True:
             try:
                 await asyncio.sleep(interval)
+                self.maybe_archive()
                 self.write_checkpoint(directory)
             except asyncio.CancelledError:
                 log.info("Audit checkpoint scheduler stopped")
@@ -1542,11 +1574,19 @@ class DoSyncHub:
         who controls this host — so "where does it go" is not an afterthought,
         it is the step that turns the artifact into evidence. The DESTINATION is
         deployment-specific (a mounted share, a synced folder, removable media),
-        but the CONFIGURATION POINT is part of the protocol, and so is what
-        happens when it is absent: the hub says so, loudly and repeatedly,
-        instead of writing files nobody collects.
+        but the CONFIGURATION POINT is part of the protocol.
 
-        Honest about how much this buys, because the gradation matters:
+        **Whether any of this matters depends on who you are proving things to.**
+        In a home or a small shop the operator IS the only interested party;
+        there is no third party to convince, and the chain is a useful log rather
+        than evidence. Warning such a deployment about an adversary who controls
+        the host — which is to say, about themselves — teaches them that DoSync's
+        warnings are noise. So the nagging is gated on `DOSYNC_ASSURANCE`, which
+        defaults to `standard` and says nothing. A deployment that must satisfy
+        an auditor sets `regulated` and gets told, loudly, when its evidence is
+        not leaving the building.
+
+        Honest about how much an export buys, because the gradation matters:
 
           * **Not configured** — no protection against a compromised host.
           * **A directory this hub can write to** (typically a network mount) —
@@ -1574,13 +1614,14 @@ class DoSyncHub:
         target = os.environ.get("DOSYNC_CHECKPOINT_EXPORT_DIR")
         if not target:
             self._checkpoint_export_state = "not_configured"
-            log.warning(
-                "Audit checkpoint NOT exported: neither DOSYNC_CHECKPOINT_EXPORT_DIR nor "
-                "DOSYNC_CHECKPOINT_EXPORT_EXTERNAL is set. A checkpoint kept only on this "
-                "host does not detect a rewritten history. Set the first to push copies "
-                "somewhere, or the second to declare that something else collects them "
-                "from here — which is the stronger arrangement, and the reason 'unset' "
-                "is not assumed to be a mistake.")
+            if _assurance_is_regulated():
+                log.warning(
+                    "Audit checkpoint NOT exported: neither DOSYNC_CHECKPOINT_EXPORT_DIR "
+                    "nor DOSYNC_CHECKPOINT_EXPORT_EXTERNAL is set, and this deployment "
+                    "declares DOSYNC_ASSURANCE=regulated. A checkpoint kept only on this "
+                    "host does not detect a rewritten history.")
+            else:
+                log.debug("Audit checkpoint kept locally (%s); no export configured.", path)
             return
         try:
             import shutil
@@ -1593,6 +1634,107 @@ class DoSyncHub:
             self._checkpoint_export_state = "failed"
             log.error("Audit checkpoint export to %s FAILED: %s — the checkpoint "
                       "exists locally but is not yet evidence.", target, e)
+
+    def maybe_archive(self, keep: int = None, directory: str = None) -> str | None:
+        """Archive the oldest chain entries if the live chain has grown too big.
+
+        The hub does this ITSELF, while running, and that is what makes it safe.
+        `manage.py db audit-archive` requires the hub stopped because it is a
+        SECOND process contending for a single-writer database — a constraint of
+        that arrangement, not of archiving. In-process there is no second writer,
+        so the operation that needed a maintenance window becomes routine.
+
+        It needs to be automatic because it is not optional. The reference
+        deployment went from 2,000 live entries to 16,258 in five days: an
+        unbounded chain grows memory, slows every restart, and lengthens every
+        verification, forever. Leaving that to an operator's memory is the same
+        mistake as leaving checkpoints to it — and worse for a home or a small
+        shop, where nobody is watching entry counts and the failure arrives
+        months later as "why is this slow now".
+
+        Refuses on a chain that does not verify: archiving corruption would seal
+        it into a segment that later reads as trusted history.
+
+        Args:
+            keep:      live entries to retain. Defaults to DOSYNC_AUDIT_MAX_LIVE
+                       (10000); 0 disables archiving entirely.
+            directory: where segments go. Defaults to DOSYNC_ARCHIVE_DIR
+                       ("audit-segments").
+        """
+        import hashlib as _hashlib
+
+        from . import audit_backup as ab
+
+        if keep is None:
+            keep = int(os.environ.get("DOSYNC_AUDIT_MAX_LIVE", "10000"))
+        if keep <= 0:
+            return None
+        if directory is None:
+            directory = os.environ.get("DOSYNC_ARCHIVE_DIR", "audit-segments")
+
+        entries = self.audit_log.entries()
+        if len(entries) <= keep:
+            return None
+
+        anchor = self.db.get_audit_anchor() or {}
+        start_anchor = anchor.get("anchor_prev_hash", ab.GENESIS)
+        generation = anchor.get("generations", 0) + 1
+
+        if not ab.verify_entries(entries, start_anchor):
+            log.error("Automatic archiving REFUSED: the live chain does not verify from "
+                      "its anchor. Archiving now would seal the corruption into a segment "
+                      "that later reads as trusted history. Investigate before continuing.")
+            return None
+
+        cut = len(entries) - keep
+        archived, remaining = entries[:cut], entries[cut:]
+
+        os.makedirs(directory, exist_ok=True)
+        out = os.path.join(directory,
+                           f"audit_segment_g{generation}_{int(time.time())}.json")
+        manifest = ab.write_segment(archived, out, start_anchor, generation)
+        seg_sha = ab.file_sha256(out)
+
+        # The archival is itself a chain event, computed exactly as AuditLog
+        # appends do, so the live chain stays verifiable across the seam.
+        arch_entry = {
+            "type": "audit_archived",
+            "generation": generation,
+            "archived_count": len(archived),
+            "segment_first_hash": manifest["first_hash"],
+            "segment_last_hash": manifest["last_hash"],
+            "segment_file": os.path.basename(out),
+            "segment_sha256": seg_sha,
+            "automatic": True,
+            "seq": self.audit_log._next_seq,
+            "prev_hash": remaining[-1]["hash"],
+            "timestamp": time.time(),
+        }
+        arch_entry["hash"] = _hashlib.sha256(
+            json.dumps(arch_entry, sort_keys=True).encode()).hexdigest()
+
+        self.db.replace_audit_after_archive(archived, arch_entry)
+        self.db.set_audit_anchor({
+            "anchor_prev_hash": manifest["last_hash"],
+            "generations": generation,
+            "archived_total": anchor.get("archived_total", 0) + len(archived),
+            "last_archive_file": out,
+            "last_archive_sha256": seg_sha,
+            "archived_at": time.time(),
+        })
+
+        # In-memory state must follow the database, or the next append chains
+        # from an entry that is no longer there.
+        self.audit_log._entries = remaining + [arch_entry]
+        self.audit_log.anchor_prev_hash = manifest["last_hash"]
+        self.audit_log._prev_hash = arch_entry["hash"]
+        self.audit_log._next_seq = arch_entry["seq"] + 1
+        self.audit_log.flush_head()
+
+        log.info("Audit chain archived automatically: %d entries → %s "
+                 "(generation %d, %d kept live)",
+                 len(archived), out, generation, len(remaining))
+        return out
 
     async def start_state_refresh(
         self,

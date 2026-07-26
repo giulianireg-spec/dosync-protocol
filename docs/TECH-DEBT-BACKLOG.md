@@ -875,3 +875,32 @@ Added to `.gitignore`, with the reasoning inline and a pointer to setting
 `DOSYNC_CHECKPOINT_DIR` outside the clone. Not a secrets leak — a checkpoint holds hashes,
 counts and a signature — but operational evidence accumulating in a public source repository
 by accident is not a thing to discover later.
+
+## ASSURANCE-PROFILE + AUTO-ARCHIVE — Lowering the bar, and a live bug found doing it — SHIPPED 2026-07-25
+Three operator questions, one root: **who are you proving things to?**
+
+*"Shouldn't this be automatable?"* — Yes, and the constraint was an artifact. `manage.py db
+audit-archive` requires the hub stopped because it is a SECOND process contending for a
+single-writer database; in-process there is no second writer. The hub now archives ITSELF
+while running (`DOSYNC_AUDIT_MAX_LIVE`, default 10000, `0` disables), on the same timer as
+checkpoints, refusing on a chain that does not verify. The reference deployment went from
+2,000 to 16,258 live entries in five days — an unbounded chain is not something to leave to
+someone's memory, least of all in a home or a factory where nobody watches entry counts.
+
+*"Is it mandatory?"* — No, and the docs implied otherwise. `DOSYNC_ASSURANCE` defaults to
+`standard` and gates the export nagging; `regulated` turns it on. Spec §7.6 now states
+plainly that a home installation configuring none of this is conforming and loses nothing it
+needed.
+
+*"Are we setting the technical bar too high?"* — We were. A household starting the hub
+received four alarming lines about an adversary who controls the host — which is to say,
+about themselves. Unactionable warnings teach operators to ignore the actionable ones. Gone
+by default.
+
+**And a live bug in production, found by this work.** The `anchor_prev_hash` initialisation
+ended up inside `flush_head()` instead of `__init__` when this file was rewritten after a
+lost working copy. Every checkpoint write therefore reset an archived chain's anchor to
+genesis IN MEMORY: `verify()` failed and `/v1/status` reported `audit_integrity: false` on a
+chain that was perfectly intact — a false accusation, the exact failure mode the panel
+blocked earlier for a different reason. The value is per-chain state; nothing recomputes it.
+Pinned by a test that fails if any operation resets it. 728/728.

@@ -654,6 +654,21 @@ chain head, and MUST be able to verify a chain against one. The checkpoint
 document format and the meaning of the verification are part of this
 specification.
 
+**Who this is for.** DoSync's audit chain serves two different needs that look
+alike. Where the operator is the only interested party — a home, a small shop —
+the chain is a LOG: it answers "what did the system do", and nobody will ask for
+proof it was not edited. Where a regulator, an insurer or a second party can
+ask, the same chain must function as EVIDENCE, which requires exported
+checkpoints and a routine behind them.
+
+`DOSYNC_ASSURANCE` declares which. It defaults to `standard`, and in that mode a
+hub MUST NOT warn about missing checkpoint export: warning a household about an
+adversary who controls the host means warning them about themselves, and a
+warning that cannot be acted on teaches operators to ignore the ones that can.
+`regulated` turns those warnings on. **Nothing in this section is required of a
+`standard` deployment** — a home installation that configures none of it is
+conforming and loses nothing it needed.
+
 **Normative default:** a hub SHOULD generate checkpoints automatically. The
 RECOMMENDED interval is **86400 seconds (daily)**, configurable through
 `DOSYNC_CHECKPOINT_INTERVAL`; `0` disables generation. A deployment is free to

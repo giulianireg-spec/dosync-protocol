@@ -666,7 +666,10 @@ def test_the_default_is_enabled_and_daily(monkeypatch, tmp_path):
 # failure mode this whole layer exists to prevent.
 
 def test_missing_export_is_reported_not_silent(tmp_path, monkeypatch, caplog):
+    """...to a deployment that declared it must prove things. See the companion
+    test below for why this is gated rather than universal."""
     import logging
+    monkeypatch.setenv("DOSYNC_ASSURANCE", "regulated")
     monkeypatch.delenv("DOSYNC_CHECKPOINT_EXPORT_DIR", raising=False)
     hub = DoSyncHub(db_path=str(tmp_path / "a.db"))
     hub.audit_log.append({"type": "a"})
@@ -753,6 +756,7 @@ def test_neither_setting_still_warns(tmp_path, monkeypatch, caplog):
     with neither set, the warning stands."""
     import logging
 
+    monkeypatch.setenv("DOSYNC_ASSURANCE", "regulated")
     monkeypatch.delenv("DOSYNC_CHECKPOINT_EXPORT_DIR", raising=False)
     monkeypatch.delenv("DOSYNC_CHECKPOINT_EXPORT_EXTERNAL", raising=False)
 
@@ -851,3 +855,90 @@ def test_the_checkpoint_time_survives_the_collector_deleting_files(tmp_path):
 
     assert not list(out.glob("cp-*.json")), \
         "an empty directory is not evidence of a missed interval"
+
+
+# ── Automatic archiving, and a live bug it exposed (2026-07-25) ─────────────
+
+def test_the_hub_archives_itself_without_being_stopped(tmp_path):
+    """`manage.py db audit-archive` requires the hub stopped because it is a
+    SECOND process contending for a single-writer database — a constraint of
+    that arrangement, not of archiving. In-process there is no second writer."""
+    hub = DoSyncHub(db_path=str(tmp_path / "a.db"))
+    for i in range(60):
+        hub.audit_log.append({"type": "a", "n": i})
+
+    seg = hub.maybe_archive(keep=20, directory=str(tmp_path / "segs"))
+    assert seg and Path(seg).exists()
+    assert len(hub.audit_log.entries()) == 21      # 20 kept + the marker
+    assert hub.audit_log.verify(), "the chain must verify immediately after"
+
+    hub.audit_log.append({"type": "after"})
+    assert hub.audit_log.verify(), "and keep verifying as it grows"
+
+    reloaded = DoSyncHub(db_path=str(tmp_path / "a.db"))
+    assert reloaded.audit_log.verify(), "and across a restart"
+
+
+def test_archiving_refuses_a_chain_that_does_not_verify(tmp_path):
+    hub = DoSyncHub(db_path=str(tmp_path / "a.db"))
+    for i in range(40):
+        hub.audit_log.append({"type": "a", "n": i})
+    hub.audit_log._entries[5]["n"] = 999           # break it
+
+    assert hub.maybe_archive(keep=10, directory=str(tmp_path / "segs")) is None, \
+        "archiving corruption would seal it into a segment that reads as trusted"
+
+
+def test_archiving_is_a_no_op_below_the_threshold(tmp_path):
+    hub = DoSyncHub(db_path=str(tmp_path / "a.db"))
+    for i in range(5):
+        hub.audit_log.append({"type": "a", "n": i})
+    assert hub.maybe_archive(keep=100, directory=str(tmp_path / "segs")) is None
+
+
+def test_flush_head_does_not_reset_the_anchor(tmp_path):
+    """A live bug this work exposed. The anchor initialisation spent one release
+    inside flush_head() instead of __init__, so every checkpoint write reset an
+    archived chain's anchor to genesis: in-memory verify() then failed and
+    /v1/status reported audit_integrity=false on an intact chain. The value is
+    per-chain state, not something any operation recomputes."""
+    hub = DoSyncHub(db_path=str(tmp_path / "a.db"))
+    for i in range(30):
+        hub.audit_log.append({"type": "a", "n": i})
+    hub.maybe_archive(keep=10, directory=str(tmp_path / "segs"))
+
+    anchored = hub.audit_log.anchor_prev_hash
+    assert anchored != "0" * 64, "archiving must move the anchor off genesis"
+
+    hub.audit_log.flush_head()
+    assert hub.audit_log.anchor_prev_hash == anchored, \
+        "flushing the head mark must not touch where the chain begins"
+    assert hub.audit_log.verify()
+
+
+def test_a_home_deployment_is_not_nagged(tmp_path, monkeypatch, caplog):
+    """The question that prompted this: does someone running DoSync in a house
+    or a small shop need any of it?
+
+    No. There, the operator is the only interested party — nobody will ask them
+    to demonstrate the chain was not edited, and warning them about "an
+    adversary who controls this host" means warning them about themselves. A
+    warning that cannot be acted on is one they are right to ignore, and a
+    system that produces those teaches people to ignore the rest. Checkpoints
+    are still generated, because they are cheap and useful against corruption;
+    the ceremony is not imposed.
+    """
+    import logging
+
+    monkeypatch.delenv("DOSYNC_ASSURANCE", raising=False)   # the default
+    monkeypatch.delenv("DOSYNC_CHECKPOINT_EXPORT_DIR", raising=False)
+    monkeypatch.delenv("DOSYNC_CHECKPOINT_EXPORT_EXTERNAL", raising=False)
+
+    hub = DoSyncHub(db_path=str(tmp_path / "a.db"))
+    hub.audit_log.append({"type": "a"})
+    with caplog.at_level(logging.WARNING):
+        path = hub.write_checkpoint(directory=str(tmp_path / "cps"))
+
+    assert path, "checkpoints are still produced — they cost nothing and help"
+    assert not [r for r in caplog.records if "NOT exported" in str(r.msg)], \
+        "a household must not be warned about an adversary that is themselves"
