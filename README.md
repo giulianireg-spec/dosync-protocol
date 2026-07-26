@@ -1,6 +1,6 @@
 # DoSync Protocol
 
-> The semantic layer between AI agents and physical devices.
+> Governance and accountability for AI that acts on physical devices.
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Protocol](https://img.shields.io/badge/protocol-v0.4-green.svg)](spec/DoSync-SPEC-v0.1.md)
@@ -39,6 +39,65 @@ Someone has to translate. Today, that translation is custom code written per-dev
 DoSync is an open protocol (Apache 2.0) that lets AI systems interact with physical devices using **semantic intent** — expressing *what they want to achieve*, not *how to achieve it*.
 
 When the hub receives `"ensure_safety / emergency"`, every registered device figures out its own role automatically based on its declared capabilities — no hardcoded rules, no manual configuration.
+
+---
+
+## How is this different from what already exists?
+
+A fair question, and the honest answer is that DoSync sits **above** most of what
+it gets compared to, not against it.
+
+| | What it does | What it does not decide |
+|---|---|---|
+| **Matter, Zigbee, MQTT** | Move commands to devices | Which device should act, or whether it should |
+| **W3C Web of Things** (Thing Description) | Describe a device's properties, actions and events, with semantic annotations | Which devices serve a goal, what an operator forbids, or what happened afterwards |
+| **MCP, A2A** | Connect an agent to tools | Anything about a tool being a door lock and the action being irreversible |
+| **DoSync** | Resolve a goal to a plan, constrain it, execute it, and prove what happened | Transport, device description, or agent connectivity — it uses all three |
+
+**Specifically on W3C Web of Things**, since it is the closest and the most
+established: a Thing Description tells you a lock exposes a `lock` action and
+how to invoke it. That is genuinely the right way to describe a device, and
+DoSync does not compete with it. What a description cannot do is decide that a
+lock is one of the things that should respond to *"there is an emergency"*,
+refuse to touch it because this deployment forbids it, arbitrate when two
+intents want it at once, or leave evidence afterwards that survives someone with
+root access. Those are the questions DoSync answers.
+
+**On MCP**: DoSync ships an MCP server. It is a distribution channel, not a
+rival. MCP is how an agent reaches DoSync; DoSync is what happens between the
+agent's goal and a device moving.
+
+### The five things
+
+Everything above reduces to five properties. Each is verifiable in a running
+hub — the numbers below come from the reference deployment, not from a
+brochure:
+
+1. **Explainable resolution.** `GET /v1/intents/{class}/explain` returns which
+   devices were evaluated, which were included, and the score breakdown behind
+   each. The score it reports is the same value the resolver decided with — one
+   computation, not a narration of one.
+2. **Policies the AI cannot route around.** A deployment declares what must not
+   happen; every path to a device is evaluated against it, including direct
+   device actions and the MCP tool. This was not true until we audited our own
+   claim and found the hole.
+3. **A record that resists tampering — and says where it stops.** SHA-256 chain
+   with policy provenance, plus sequence numbers, a head mark and signed
+   exportable checkpoints. What it detects and what it cannot is written down in
+   [the threat model](docs/AUDIT-THREAT-MODEL.md), including the rows that read
+   "not detected".
+4. **Formal arbitration of physical conflict.** A per-device claim state machine
+   with stated invariants ([consistency model §3.1](spec/CONSISTENCY-MODEL.md)), so an
+   emergency and a routine wanting the same device is resolved by rule rather
+   than by timing.
+5. **Failure semantics that do not lie.** `contradicted` (the device said yes,
+   the sensor disagrees) is distinct from `unverifiable` (we could not look), and
+   `likely_powered_off` from `indeterminate`. The system says what it does not
+   know.
+
+None of these is claimed to be unbreakable. Claim 3 in particular has documented
+limits, on purpose: a protocol whose value is honesty cannot make absolute
+security claims and stay coherent.
 
 ---
 

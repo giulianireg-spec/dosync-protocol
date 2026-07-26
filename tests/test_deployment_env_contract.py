@@ -278,3 +278,54 @@ def test_the_browser_warning_is_explained_somewhere():
     assert "update-ca-certificates" in readme
     assert "does **not** mean the connection is unencrypted" in readme, \
         "and what it does NOT mean, since that is the part people get wrong"
+
+
+# ── Positioning (2026-07-26) ────────────────────────────────────────────────
+
+def test_readme_answers_the_comparison_an_evaluator_will_make():
+    """The integral audit found the closest competitor is W3C Web of Things —
+    Thing Description is a finished W3C Recommendation backed by Oracle,
+    Siemens, Intel and others — and that the README never mentioned it. An
+    informed evaluator makes that comparison anyway; the only question is
+    whether they make it with our answer or without it."""
+    readme = (REPO / "README.md").read_text()
+    assert "Web of Things" in readme, "the nearest standard must be named"
+    assert "Thing Description" in readme
+    assert "MCP" in readme and "distribution channel" in readme, \
+        "and MCP framed as a channel rather than a rival"
+
+
+def test_readme_does_not_make_absolute_security_claims():
+    """Oracle's "unbreakable" was broken within days of the campaign and became
+    a case study. For a protocol whose value proposition IS honesty — states
+    like `unverifiable` and `indeterminate` exist precisely to avoid claiming
+    what cannot be known — an absolute security claim would be self-refuting.
+
+    The disclaimer sentence is removed before checking, because it necessarily
+    contains the word it disclaims. The first version of this test failed on the
+    project's own denial — an assertion arguing with itself.
+    """
+    import re
+
+    readme = (REPO / "README.md").read_text()
+    assert "None of these is claimed to be unbreakable" in readme, \
+        "the limit should be stated outright, not merely avoided"
+
+    # Strip the sentence that names the word in order to reject it.
+    checked = re.sub(r"None of these is claimed[^.]*\.", "", readme).lower()
+    for absolute in ("unbreakable", "100% secure", "impossible to tamper",
+                     "cannot be hacked", "fully secure", "completely secure"):
+        assert absolute not in checked, \
+            f"'{absolute}' is not a claim this protocol can support"
+
+
+def test_readme_links_resolve():
+    """A citation that does not resolve is worse than no citation in front of an
+    evaluator — and one of them did not: the claim state machine was cited as
+    living in the protocol spec when it is in the consistency model."""
+    import re
+
+    readme = (REPO / "README.md").read_text()
+    links = re.findall(r"\]\((?!http)([^)#]+)", readme)
+    missing = [l for l in sorted(set(links)) if not (REPO / l.strip()).exists()]
+    assert not missing, f"broken local links in README: {missing}"

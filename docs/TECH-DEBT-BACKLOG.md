@@ -1055,3 +1055,37 @@ active, which is roughly ninety seconds before the operator meets the warning.
 
 748/748. Found by the operator saying "it works, but the crossed-out https bothers me" — a
 question nobody had answered because nobody had asked.
+
+## POSITIONING-REFRAME — Answering the comparison instead of avoiding it — SHIPPED 2026-07-26
+Recommendation #3 of the integral audit, and the one with the highest return per hour: the
+README led with *"the semantic layer between AI agents and physical devices"* and never
+mentioned W3C Web of Things. That is the closest thing to a competitor — Thing Description
+is a finished W3C Recommendation with Oracle, Siemens, Intel, Microsoft and Hitachi behind
+it — so "semantic layer" is the ONE part of the pitch that is genuinely contested. An
+informed evaluator makes that comparison regardless; the only choice was whether they made
+it with our answer or without it.
+
+Headline is now **"Governance and accountability for AI that acts on physical devices"**,
+and a new section places DoSync against transport (Matter/MQTT), description (W3C WoT) and
+agent protocols (MCP) — above them, not against them. On WoT specifically: a Thing
+Description says a lock exposes a `lock` action and how to invoke it, which is the right way
+to describe a device; what it cannot do is decide the lock should answer *"there is an
+emergency"*, refuse because this deployment forbids it, arbitrate two intents wanting it at
+once, or leave evidence that survives root access. MCP is named as a distribution channel,
+which is what shipping an MCP server makes it.
+
+The five differentiators are stated with the evidence that now exists behind each — and only
+because it exists: two of them were FALSE when the panel first asserted them, and the
+section says so about #2 rather than quietly presenting the fixed version.
+
+Deliberately absent: any absolute security claim. Oracle's "unbreakable" was broken within
+days and became a case study; for a protocol whose value is honesty — `unverifiable`,
+`indeterminate`, a threat model with rows reading "not detected" — an absolute claim would
+be self-refuting. The README says so outright.
+
+Three tests guard it: the comparison is present, no absolute claims appear, and every local
+link resolves. That last one caught a real defect immediately — the claim state machine was
+cited as living in the protocol spec when it is in the consistency model, and a citation
+that does not resolve is worse than none in front of an evaluator. The absolutes test also
+failed on its first run, on the project's own disclaimer sentence: an assertion arguing with
+itself. 751/751.
