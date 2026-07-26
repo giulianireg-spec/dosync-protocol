@@ -253,6 +253,51 @@ rate limiting and no lockout, so it is guessed offline at full speed.
 Existing keys: `dosync-manage keys list` (previews only — they are hashed),
 `keys revoke <preview>`, `keys reset`.
 
+### TLS, and why your browser says "Not secure"
+
+`bash setup_pki.sh` creates a private certificate authority in `certs/` and
+issues the hub a certificate from it. Start the hub with those files and traffic
+is encrypted:
+
+```bash
+dosync-hub --host 0.0.0.0 &      # or with uvicorn's --ssl-keyfile / --ssl-certfile
+```
+
+Your browser will then show **"Not secure"** with `https` struck through. This
+is expected and it does **not** mean the connection is unencrypted. It means the
+browser does not recognise the authority that signed the certificate — which is
+you. A public CA cannot issue a certificate for `192.168.x.x`, so a hub on a
+private network is always in this position.
+
+Two honest options:
+
+**Accept the warning.** Click through it. The connection is encrypted; what is
+missing is a third party vouching that the server is who it claims. On your own
+LAN, where you set up the hub yourself, that is a much smaller gap than it looks.
+
+**Trust your own CA, and the warning goes away** — on the machines you choose:
+
+```bash
+# macOS
+sudo security add-trusted-cert -d -r trustRoot \
+  -k /Library/Keychains/System.keychain certs/ca.crt
+
+# Linux (Debian/Ubuntu)
+sudo cp certs/ca.crt /usr/local/share/ca-certificates/dosync-ca.crt
+sudo update-ca-certificates
+
+# Windows (PowerShell, as Administrator)
+Import-Certificate -FilePath ca.crt -CertStoreLocation Cert:\LocalMachine\Root
+```
+
+Copy `certs/ca.crt` from the hub first — it is the only file you need, and it
+contains no secret. The hub's private key (`certs/hub.key`) never leaves the
+hub.
+
+**What the warning does mean.** If you see it on a hub you did not set up, or on
+a network you do not control, do not click through — that is exactly the case
+the warning exists for.
+
 ### Docker
 
 ```bash

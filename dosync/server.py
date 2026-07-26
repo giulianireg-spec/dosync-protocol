@@ -610,6 +610,13 @@ async def lifespan(app: FastAPI):
         from dosync.security import get_status as get_pki_status
         _pki = get_pki_status()
         if _pki.is_ready:
+            # Mentioning the browser warning here because the operator meets it
+            # about ninety seconds after seeing this line, and until now nothing
+            # in the project explained it: the hub said "run setup_pki.sh", they
+            # did, and their browser called the result insecure.
+            log.info("TLS active — browsers will warn until this hub's CA (certs/ca.crt) "
+                     "is trusted on the machine you browse from; see the README. The "
+                     "connection is encrypted either way.")
             log.info("=== TLS/PKI: ACTIVE === CA valid %d days · Hub cert valid %d days · %d adapter cert(s)",
                      _pki.ca_info.days_until_expiry, _pki.hub_info.days_until_expiry, len(_pki.adapter_certs))
             if _pki.hub_info.is_expiring_soon:

@@ -265,3 +265,16 @@ def test_dashboard_follows_the_scheme_it_was_loaded_over():
     assert "window.location.protocol" in body
     assert not re.search(r":47200`", body), \
         "the port must come from window.location.host too"
+
+
+def test_the_browser_warning_is_explained_somewhere():
+    """The hub tells operators to run setup_pki.sh. About ninety seconds later
+    their browser says "Not secure" and strikes through https — and nothing in
+    the project explained why, or how to finish. An instruction whose predictable
+    outcome is an alarming warning is an incomplete instruction."""
+    readme = (REPO / "README.md").read_text()
+    assert "Not secure" in readme, "the warning operators will see must be named"
+    assert "add-trusted-cert" in readme, "and the way to resolve it, per platform"
+    assert "update-ca-certificates" in readme
+    assert "does **not** mean the connection is unencrypted" in readme, \
+        "and what it does NOT mean, since that is the part people get wrong"

@@ -1033,3 +1033,25 @@ choice rather than a trap door) and normatively in spec §7.7.
 `dosync.server` to rebuild auth state from the environment and never put it back, leaving
 authentication switched on for everything that ran afterwards. Reloading a module in a test
 is fine; not restoring it is not. Now a fixture with teardown. 747/747.
+
+## TLS-BROWSER-WARNING — An instruction the project never finished — SHIPPED 2026-07-26
+The hub warns at every startup: "TLS/PKI: NOT CONFIGURED — Run: bash setup_pki.sh". An
+operator complies, opens the dashboard, and the browser says **"Not secure"** with `https`
+struck through. Nothing in the README, the docs or the script explained why, what it means,
+or how to finish — the project told people to do something and left them at the consequence.
+
+Worse, the natural reading is the wrong one: the strike-through does not mean the connection
+is unencrypted. It means no third party vouches for the certificate, because the signer is
+the operator themselves. A public CA cannot issue for `192.168.x.x`, so every hub on a
+private network lands here — this is not an edge case, it is the default outcome of
+following the advice.
+
+Documented in the README: what the warning does and does not mean, the two honest options
+(accept it, or trust your own CA), per-platform commands for macOS, Linux and Windows, the
+note that `certs/ca.crt` is the only file needed and holds no secret — and, importantly,
+when NOT to click through, since the warning does exist for a real reason on networks one
+does not control. The hub now says the same thing on the line right before announcing TLS is
+active, which is roughly ninety seconds before the operator meets the warning.
+
+748/748. Found by the operator saying "it works, but the crossed-out https bothers me" — a
+question nobody had answered because nobody had asked.
