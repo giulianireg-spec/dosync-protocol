@@ -76,4 +76,8 @@ version = { attr = "dosync.__version__" }
 include = ["dosync*"]
 
 [tool.setuptools.package-data]
-dosync = ["py.typed"]
+# dashboard.html is the only thing a non-developer can open. It lived at the
+# repository root and was therefore absent from every `pip install dosync`,
+# while the handler looked for it next to server.py — so the one entry point
+# that does not require curl was missing in the package and broken in a clone.
+dosync = ["py.typed", "dashboard.html"]

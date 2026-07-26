@@ -113,3 +113,58 @@ def test_reported_version_matches_the_package():
     body = client.get("/v1/status").json()
     assert body["version"] == dosync.__version__
     assert body["protocol_version"] == dosync.__protocol_version__
+
+
+# ── The one non-developer entry point (2026-07-26) ──────────────────────────
+
+def test_dashboard_ships_inside_the_package():
+    """H6 in the horizon list — "everything is curl and tokens" — was worse than
+    recorded: a browser dashboard existed, but it sat at the repository root, so
+    `pip install dosync` never carried it, and after the packaging move the
+    handler looked for it beside server.py where it was not. The single entry
+    point that needs no terminal was missing from the package and broken in a
+    clone at the same time."""
+    from pathlib import Path
+
+    import dosync
+    shipped = Path(dosync.__file__).parent / "dashboard.html"
+    assert shipped.exists(), \
+        "dashboard.html must live inside the package to survive an install"
+
+    pyproject = (REPO / "pyproject.toml").read_text()
+    # The declaration itself, not any mention of the filename — the comment
+    # above that line names it too, so a substring search passes even after the
+    # declaration is deleted. Sixth instance of "assert the mechanism".
+    import re
+    decl = re.search(r"^dosync\s*=\s*\[(.+)\]", pyproject, re.M)
+    assert decl and "dashboard.html" in decl.group(1), \
+        "dashboard.html must be declared as package-data, or the wheel omits it"
+
+
+def test_dashboard_is_served():
+    from fastapi.testclient import TestClient
+
+    import dosync.server as srv
+    r = TestClient(srv.app).get("/")
+    assert r.status_code == 200
+    assert "<html" in r.text[:300].lower()
+
+
+def test_a_missing_dashboard_answers_instead_of_crashing(monkeypatch):
+    """The fallback used to be `FileResponse.__new__(FileResponse)` — an
+    uninitialised object that raises AttributeError inside the framework. The
+    one person who arrived without a terminal got a stack trace."""
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+
+    import dosync.server as srv
+
+    real = Path.exists
+    monkeypatch.setattr(
+        Path, "exists",
+        lambda self: False if self.name == "dashboard.html" else real(self))
+
+    r = TestClient(srv.app).get("/")
+    assert r.status_code == 200, "a missing file is not a server error"
+    assert "/docs" in r.text, "it must point somewhere useful"

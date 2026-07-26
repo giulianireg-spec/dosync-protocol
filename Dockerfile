@@ -13,7 +13,8 @@ FROM python:3.11-slim
 WORKDIR /app
 COPY --from=build /src/dist/*.whl /tmp/
 RUN pip install --no-cache-dir /tmp/*.whl && rm /tmp/*.whl
-COPY dashboard.html .
+# dashboard.html now ships inside the wheel (dosync/dashboard.html); nothing
+# to copy separately, and nothing to forget when the layout changes again.
 
 RUN mkdir -p /data
 

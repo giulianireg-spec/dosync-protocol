@@ -797,13 +797,26 @@ async def websocket_endpoint(ws: WebSocket):
 
 
 
-@app.get("/", response_class=FileResponse, tags=["Status"])
+@app.get("/", tags=["Status"])
 def dashboard():
+    """The hub's browser view — the only entry point that is not curl.
+
+    Missing it used to return `FileResponse.__new__(FileResponse)`: an
+    uninitialised object that raises AttributeError deep inside the framework.
+    Someone opening the hub in a browser got a stack trace instead of an answer,
+    which is the worst possible greeting for the one person who came here
+    without a terminal. Now it says what happened and where to go instead.
+    """
     from pathlib import Path
     dashboard_path = Path(__file__).parent / "dashboard.html"
     if dashboard_path.exists():
         return FileResponse(dashboard_path, media_type="text/html")
-    return FileResponse.__new__(FileResponse)
+    return HTMLResponse(
+        "<h1>DoSync Hub</h1>"
+        "<p>The hub is running, but its dashboard file is not installed.</p>"
+        "<p>The API is available at <a href='/docs'>/docs</a> and machine-readable "
+        "status at <a href='/api'>/api</a>.</p>",
+        status_code=200)
 
 
 @app.get("/api", tags=["Status"])

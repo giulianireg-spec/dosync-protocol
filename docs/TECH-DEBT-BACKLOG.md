@@ -916,3 +916,29 @@ Now derived from configuration at status time (`not_configured` / `configured` /
 with the last attempt's OUTCOME kept separately as `checkpoint_export_last`. Two different
 questions — where copies should go, and whether the most recent one got there — that were
 being answered by one field. 730/730.
+
+## DASHBOARD-SHIPPING — The only non-developer entry point was broken and unpackaged — SHIPPED 2026-07-26
+The operator pushed back on H6 ("everything is curl and tokens") being mentioned and then
+dropped. Checking before building found the gap was not what the horizon list said: a
+936-line browser dashboard already existed and was served at `/`. It was simply unreachable.
+
+Three faults, compounding:
+1. **It sat at the repository root**, so `pip install dosync` never carried it — the one
+   thing a non-developer can open was absent from every install the project ever produced.
+2. **The packaging move broke it in clones too.** The handler resolves
+   `Path(__file__).parent / "dashboard.html"`, and `__file__` became `dosync/server.py` when
+   the application moved into the package. Introduced by this project's own packaging work.
+3. **The fallback was `FileResponse.__new__(FileResponse)`** — an uninitialised object that
+   raises AttributeError inside the framework. Someone opening the hub in a browser got a
+   stack trace, which is the worst possible greeting for the one visitor who arrived without
+   a terminal.
+
+Fixed: `dashboard.html` moved into `dosync/`, declared as package-data, Dockerfile no longer
+copies it separately, and a missing file now returns an honest page pointing at `/docs` and
+`/api`. Verified the way it matters — built the wheel, installed it into a clean venv, ran
+`dosync-hub`, and fetched `/`: 200, 28,433 bytes of HTML. A stranger who runs
+`pip install dosync && dosync-hub` and opens a browser now sees something.
+
+The package-data test initially passed with the declaration deleted, because the comment
+above it also names the file — sixth instance of asserting a symptom rather than the
+mechanism. Now it parses the declaration line. 733/733.
