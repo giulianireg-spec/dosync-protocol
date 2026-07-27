@@ -858,6 +858,47 @@ def root():
     }
 
 
+@app.patch("/v1/devices/{device_id}", tags=["Devices"])
+async def rename_device(device_id: str, req: dict, auth: str = Depends(require_auth)):
+    """Change a device's display name, and optionally its room.
+
+    Renaming had no endpoint at all: the only way to fix a name was to
+    re-register the whole manifest, which means reconstructing every capability
+    by hand to change one string. A device adopted from a scan arrives called
+    `wiz-a4c138`, so getting the name wrong — or simply changing your mind about
+    a room — was a disproportionate amount of work.
+
+    Only presentation fields. Capabilities describe what a device CAN DO and
+    come from the device or its adapter; letting an operator edit them here
+    would let the registry drift from the hardware, and the resolver would plan
+    against a fiction.
+    """
+    device = hub.registry.get(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
+
+    new_name = (req.get("device_name") or "").strip()
+    if not new_name:
+        raise HTTPException(status_code=422, detail="device_name is required")
+
+    previous = device.device_name
+    device.device_name = new_name
+    if "room" in req:
+        device.room = (req.get("room") or "").strip()
+
+    # Persisted the same way registration does, or the new name survives only
+    # until the next restart — a rename that silently un-renames itself would be
+    # worse than not offering the feature.
+    hub.db.save_device(device.device_id, device.to_dict())
+    hub.audit_log.append({
+        "type": "device_renamed",
+        "device_id": device_id,
+        "previous_name": previous,
+        "device_name": new_name,
+    })
+    return {"device_id": device_id, "device_name": new_name, "previous": previous}
+
+
 @app.post("/v1/devices/register", tags=["Devices"])
 def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth)):
     # ── Device authentication ──────────────────────────────────────────────
@@ -1842,8 +1883,45 @@ async def run_discovery(auth: str = Depends(require_auth)):
 
 @app.get("/v1/discovery/scan", tags=["Discovery"])
 async def scan_devices(auth: str = Depends(require_auth)):
+    """List devices reachable on any transport this hub can search.
+
+    Asks every registered adapter, rather than calling one discoverer by name.
+    Discovery used to mean "UDP broadcast", which quietly made it an IP-only
+    idea in a protocol that is supposed to have no such limit — Bluetooth
+    devices announce themselves on a radio channel, and a device behind a radio
+    gateway is visible only to whatever speaks that radio. Each transport
+    answers in its own terms now.
+
+    The response says which transports were actually searched, because "nothing
+    found" means something different when Bluetooth was never scanned.
+    """
     from dosync.discovery import discover_wiz
-    wiz_devices = await discover_wiz(timeout=5.0)
+
+    found, searched, skipped = [], [], []
+
+    # WiZ discovery still lives in discovery.py rather than the adapter; moving
+    # it is mechanical and left for when the adapter is next touched.
+    try:
+        found.extend(await discover_wiz(timeout=5.0))
+        searched.append("wiz (udp broadcast)")
+    except Exception as e:
+        log.info("WiZ scan did not run: %s", e)
+
+    for name in (executor.registered_adapters()
+                 if hasattr(executor, "registered_adapters") else []):
+        adapter = executor.get_adapter(name)
+        if adapter is None or name == "wiz":
+            continue
+        if not getattr(adapter, "can_discover", lambda: False)():
+            skipped.append(name)
+            continue
+        try:
+            found.extend(await adapter.discover(timeout=5.0))
+            searched.append(name)
+        except Exception as e:
+            log.info("Discovery via %s did not run: %s", name, e)
+
+    wiz_devices = found
     return {
         "found": [
             {
@@ -1856,6 +1934,11 @@ async def scan_devices(auth: str = Depends(require_auth)):
             for d in wiz_devices
         ],
         "count": len(wiz_devices),
+        "searched": searched,
+        # Named explicitly: an adapter that cannot discover is the normal case,
+        # not a fault, and a user reading "nothing found" deserves to know which
+        # transports were never looked at.
+        "not_searchable": skipped,
     }
 
 

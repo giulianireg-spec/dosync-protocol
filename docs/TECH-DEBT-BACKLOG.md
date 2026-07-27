@@ -1162,3 +1162,41 @@ information, and silence leaves a user unable to tell it apart from a broken pag
 rather than a hardcoded `if adapter == "wiz"`, a guided first minute, device delete/rename
 from the UI, explaining "intent" where it is used, policies from the interface, visible
 intent outcomes, and a non-pip install path.
+
+## H6-DEVICE-MANAGEMENT + MULTI-TRANSPORT-DISCOVERY — SHIPPED 2026-07-26
+Operator's two objections, both correct, and the second exposed a limit nobody had named.
+
+**"Unregistering and renaming must also work from the panel."** Right, and the contradiction
+was immediate: the previous message told him to remove a device with curl, one message after
+claiming the bar was lower. Renaming had no endpoint at all — fixing a name meant
+re-registering the entire manifest, reconstructing every capability to change one string,
+and a device adopted from a scan arrives called `wiz-a4c138`. Added `PATCH /v1/devices/{id}`
+(presentation fields only: capabilities describe what a device CAN DO and come from the
+device, so letting an operator edit them would let the registry drift from the hardware and
+the resolver plan against a fiction), plus rename and remove controls on every card. Both
+audited. Remove says plainly that the device keeps working and only DoSync stops knowing
+about it — someone expecting the light to go off would otherwise think it failed.
+
+**"Does this only work for WiFi? What about BLE, or radio?"** It did, and nothing said so.
+Discovery meant UDP broadcast because the only implementation was WiZ's, living in a central
+module behind `if adapter == "wiz"` — which quietly made an IP assumption in a protocol that
+claims no such limit. Now `discover()`/`can_discover()` are optional methods on
+`DoSyncAdapter`, each transport answering in its own terms, and **BLE implements it** over
+Bluetooth radio with no broadcast address involved. A BLE candidate is deliberately
+incomplete: an advertisement carries a name and an address, not capabilities — GATT says how
+to write bytes, not what they mean — so it is offered for adoption with no actions and the
+operator supplies them. Presenting a guess as a capability would be worse than admitting the
+transport cannot tell us.
+
+`GET /v1/discovery/scan` now asks every adapter and reports `searched` and `not_searchable`,
+because "nothing found" means something different when Bluetooth was never scanned.
+
+**Two defects found on the way.** `NotificationAdapter` did not inherit `DoSyncAdapter` — it
+duck-typed with a matching `adapter_name` and `execute`, which worked until the base class
+gained methods it silently lacked. A structural test now fails if any adapter stops
+inheriting. And the new tests polluted the suite by popping `DOSYNC_DB` on teardown instead
+of restoring its original value, sending later tests to an on-disk database — the same
+failure as the auth fixture, through a different door.
+
+An empty hub now names the Scan button instead of showing an empty list, which is panel
+priority #3 arriving for free. 768/768.

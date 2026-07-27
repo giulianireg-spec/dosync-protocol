@@ -20,6 +20,8 @@ from __future__ import annotations
 import logging
 import os
 
+from . import DoSyncAdapter
+
 log = logging.getLogger("dosync.notifications")
 
 # Cargar .env si existe
@@ -44,7 +46,17 @@ EMERGENCY_INTENTS = {"ensure_safety", "alert_anomaly", "notify"}
 WARNING_INTENTS   = {"report_status", "remind_chore"}
 
 
-class NotificationAdapter:
+class NotificationAdapter(DoSyncAdapter):
+    """SMS and push notifications.
+
+    Inherits `DoSyncAdapter` (it did not until 2026-07-26 — it duck-typed with a
+    matching `adapter_name` and `execute`, which worked until the base class
+    gained `discover`/`can_discover` and this adapter silently lacked them).
+    Duck-typing an interface means every later addition to that interface skips
+    you without a word; the scan loop only survived it because it happened to
+    use a defensive getattr.
+    """
+
     adapter_name = "notifications"
     """Sends SMS via Twilio for critical DoSync intents."""
 

@@ -117,6 +117,52 @@ class BLEAdapter(DoSyncAdapter):
         self._hub = hub
         self._connect_timeout = connect_timeout
 
+    async def discover(self, timeout: float = 5.0) -> list:
+        """Scan for BLE advertisements.
+
+        Proof that discovery is not an IP-only idea. Bluetooth devices announce
+        themselves on a radio channel, not a network — nothing about DoSync's
+        model required a broadcast address, only the previous implementation
+        did, and it lived in a central module that knew about WiZ specifically.
+
+        What comes back is a CANDIDATE, deliberately incomplete: an
+        advertisement carries a name and an address, not what the device can do.
+        BLE has no equivalent of "this is a dimmable lamp" — GATT characteristics
+        say how to write bytes, not what the bytes mean. So a BLE candidate is
+        offered for adoption with no actions, and the operator supplies them.
+        Presenting a guess as a capability would be worse than admitting the
+        transport cannot tell us.
+        """
+        from ..discovery import DiscoveredDevice
+
+        try:
+            from bleak import BleakScanner
+        except ImportError:
+            log.debug("BLE discovery unavailable: bleak is not installed")
+            return []
+
+        try:
+            found = await BleakScanner.discover(timeout=timeout)
+        except Exception as e:
+            # A missing or disabled adapter is ordinary on a machine with no
+            # Bluetooth; it is not an error worth failing a whole scan over.
+            log.info("BLE scan did not run: %s", e)
+            return []
+
+        candidates = []
+        for d in found:
+            if not getattr(d, "name", None):
+                continue          # unnamed beacons are noise to a human picking
+            candidates.append(DiscoveredDevice(
+                adapter="ble",
+                device_id=f"ble-{d.address.replace(':', '').lower()}",
+                device_name=d.name,
+                ip=d.address,     # the address field carries the MAC here
+                extra={"rssi": getattr(d, "rssi", None), "transport": "bluetooth-le"},
+            ))
+        log.info("BLE scan found %d named device(s)", len(candidates))
+        return candidates
+
     @property
     def adapter_name(self) -> str:
         return "ble"

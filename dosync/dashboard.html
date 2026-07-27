@@ -974,6 +974,33 @@ async function scanDevices() {
   if (adopted) alert("Added " + adopted + " device(s). Recorded in the audit log.");
 }
 
+async function renameDevice(id, current) {
+  const name = prompt("Rename this device.\n\nThis changes only what it is " +
+                      "called — what it can do comes from the device itself.",
+                      current || id);
+  if (!name || !name.trim() || name.trim() === current) return;
+  try {
+    await api('PATCH', '/v1/devices/' + encodeURIComponent(id),
+              { device_name: name.trim() });
+    await loadDevices();
+  } catch (e) { alert("Could not rename: " + (e.message || e)); }
+}
+
+async function removeDevice(id, name) {
+  // Deliberately says what it does and does not do: unregistering is not the
+  // same as the device disappearing, and someone who expects the light to stop
+  // working will be confused when it does not.
+  if (!confirm("Remove \"" + (name || id) + "\" from this hub?\n\n" +
+               "The device keeps working on its own; DoSync simply stops " +
+               "knowing about it, and intents will no longer include it.\n\n" +
+               "Recorded in the audit log. You can add it again with Scan.")) return;
+  try {
+    await api('DELETE', '/v1/devices/' + encodeURIComponent(id));
+    await loadDevices();
+    await loadStatus();
+  } catch (e) { alert("Could not remove: " + (e.message || e)); }
+}
+
 async function loadDevices() {
   try {
     const data = await api('GET', '/v1/devices');
@@ -981,7 +1008,12 @@ async function loadDevices() {
     list.innerHTML = '';
 
     if (!data.devices?.length) {
-      list.innerHTML = '<div class="empty"><div class="empty-icon">📡</div><div class="empty-text">No devices registered</div></div>';
+      // An empty hub used to be a dead end — nothing said what to do next, and
+      // the only exit was a hand-written JSON manifest. Now it names the button.
+      list.innerHTML = '<div class="empty"><div class="empty-icon">📡</div>' +
+        '<div class="empty-text">No devices yet.<br><br>' +
+        'Press <b>Scan</b> above to look for devices on this network, or ' +
+        'register one directly with POST /v1/devices/register.</div></div>';
       return;
     }
 
@@ -995,6 +1027,15 @@ async function loadDevices() {
         <div class="device-top">
           <span class="device-name">${d.device_name}</span>
           <span class="device-adapter">${adapter}</span>
+          <!-- Renaming meant re-registering the whole manifest and removing meant
+               curl. Telling a non-developer the bar is lower while leaving them
+               a terminal for their first mistake would not have been true. -->
+          <span class="device-actions">
+            <button class="btn ghost sm" title="Rename"
+                    onclick="renameDevice('${d.device_id}','${(d.device_name||'').replace(/'/g,"\\'")}')">✎</button>
+            <button class="btn ghost sm" title="Remove from this hub"
+                    onclick="removeDevice('${d.device_id}','${(d.device_name||'').replace(/'/g,"\\'")}')">✕</button>
+          </span>
         </div>
         <div class="device-id">${d.device_id}</div>
         <div class="device-tags">

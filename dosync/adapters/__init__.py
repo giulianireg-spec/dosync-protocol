@@ -72,6 +72,34 @@ class DoSyncAdapter(ABC):
         """Close the connection. Optional."""
         pass
 
+    async def discover(self, timeout: float = 5.0) -> list:
+        """Find devices reachable over THIS adapter's transport.
+
+        Optional. The default returns nothing, which is the correct answer for
+        most adapters and is not a failure: a drone does not announce itself on
+        a broadcast, a clinical device sits on a proprietary bus, and a sensor
+        on a radio link is only visible to whatever gateway speaks that radio.
+        Discovery is a property of a transport, not a promise a protocol can
+        make on every transport's behalf.
+
+        Implementing it means answering it in that transport's own terms —
+        UDP broadcast for WiZ, BLE advertisements for Bluetooth, mDNS for
+        Shelly, commissioning for Matter. Discovery previously lived in a
+        central module with `if adapter == "wiz"`, which meant every new
+        transport had to edit shared code to be findable; now a transport
+        answers for itself.
+
+        Returns a list of `dosync.discovery.DiscoveredDevice`. Finding a device
+        does NOT register it — the operator approves and names candidates (see
+        POST /v1/discovery/adopt).
+        """
+        return []
+
+    def can_discover(self) -> bool:
+        """Whether this adapter implements discovery, so a caller can say which
+        transports were searched instead of implying it searched everywhere."""
+        return type(self).discover is not DoSyncAdapter.discover
+
     async def get_state(self, device_id: str) -> dict | None:
         """
         Query current device state directly from the physical device.
