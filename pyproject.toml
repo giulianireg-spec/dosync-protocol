@@ -39,12 +39,26 @@ dependencies = [
     "uvicorn>=0.23.0,<1.0",
     "pydantic>=2.7.0,<3.0",
     "jsonschema>=4.18,<5.0",
+    # DISCOVERY libraries belong in the core install, unlike CONTROL libraries.
+    #
+    # The rule elsewhere in this file — do not pull in libraries for hardware you
+    # do not own — is right for control: you install dosync[wiz] because you know
+    # you have WiZ bulbs. Discovery is how you find out WHAT you have, so the
+    # dependency is needed BEFORE the knowledge that would justify installing it.
+    # Left optional, a user scans, sees nothing, and concludes DoSync does not
+    # support Bluetooth — a false conclusion caused by our packaging.
+    #
+    # ~20 MB, and DoSync degrades gracefully without it (the adapter reports the
+    # transport as not searchable rather than failing), so a constrained
+    # deployment can `pip uninstall bleak` and lose only BLE discovery.
+    "bleak>=0.21",
 ]
 
 [project.optional-dependencies]
 wiz     = ["pywizlight>=0.5.0"]
 mqtt    = ["paho-mqtt>=2.0.0"]
 ha      = ["aiohttp>=3.8.0"]
+# Kept so `dosync[ble]` and `dosync[all]` keep resolving; bleak is now core.
 ble     = ["bleak>=0.21"]
 sms     = ["twilio>=8.0.0"]
 mavlink = ["pymavlink>=2.4.0"]

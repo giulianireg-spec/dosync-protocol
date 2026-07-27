@@ -1200,3 +1200,28 @@ failure as the auth fixture, through a different door.
 
 An empty hub now names the Scan button instead of showing an empty list, which is panel
 priority #3 arriving for free. 768/768.
+
+## DISCOVERY-DEPENDENCIES — A circle in the packaging rule — SHIPPED 2026-07-26
+The operator: "bleak should come by default in the standard; whether the user has Bluetooth
+is a separate matter — otherwise the bar stays high." Correct, and for a sharper reason than
+convenience.
+
+The optional-extras rule — *do not pull in libraries for hardware you do not own* — is right
+for CONTROL libraries: you install `dosync[wiz]` because you know you have WiZ bulbs.
+**Discovery is how you find out what you have**, so its dependency is needed BEFORE the
+knowledge that would justify installing it. Left optional, the failure is not friction but a
+false belief: a user scans, sees nothing, and concludes DoSync does not support Bluetooth.
+The costs are asymmetric — ~20 MB on a server that will never use it, against an invisible
+capability for everyone else.
+
+`bleak` moved to core dependencies. And the same circle existed one level up: the BLE adapter
+was registered only with `DOSYNC_BLE_ENABLED=true`, so even WITH the library installed the
+scan did not search Bluetooth. Verified by installing the wheel into a clean venv and
+scanning: `searched: ['wiz (udp broadcast)']` — the library was there and unused. Now the
+adapter registers whenever the library imports, with the variable inverted to opt out.
+
+After the fix, a clean `pip install dosync` scans WiFi and Bluetooth radio with no
+configuration: `searched: ['wiz (udp broadcast)', 'ble']`.
+
+Version 0.4.2 — adding a core dependency changes what an install produces, which is a real
+change for anyone who runs it. 771/771.

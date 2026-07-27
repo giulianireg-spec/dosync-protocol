@@ -230,7 +230,16 @@ evaluated, which it included, and the score breakdown behind each decision.
 Step 4 is the other: every action leaves a SHA-256-chained entry, so what the
 system did is provable after the fact rather than merely logged.
 
-Install only the adapters you need:
+**Discovery works out of the box.** The library that finds Bluetooth devices
+ships in the core install, and the BLE adapter registers itself when it is
+available — because discovery is how you learn what you have. Requiring an extra
+first would be a circle: nobody installs a Bluetooth library before knowing they
+own Bluetooth devices, and nobody can find out without it. A hub with no radio
+loses nothing — the scan reports the transport as unsearchable rather than
+failing — and `pip uninstall bleak` or `DOSYNC_BLE_ENABLED=false` removes it.
+
+Install only the CONTROL adapters you need — those follow the opposite rule,
+since you already know which hardware you own:
 
 ```bash
 pip install 'dosync[wiz]'      # Philips WiZ bulbs

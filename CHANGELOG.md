@@ -28,6 +28,29 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   includes what is NOT detected, and a compliance runbook.
 - `DOSYNC_AUDIT_HEAD_EVERY` (default 25) — how often the head mark is persisted.
 
+## [0.4.2] — 2026-07-26
+
+### Changed
+- **`bleak` is now a core dependency and the BLE adapter registers by default**
+  (`DOSYNC_BLE_ENABLED=false` opts out). Discovery libraries are not like control
+  libraries: you install `dosync[wiz]` because you know you own WiZ bulbs, but
+  discovery is how you find out what you own — so the dependency is needed before
+  the knowledge that would justify it. Left optional, a user scanned, saw nothing,
+  and concluded DoSync does not support Bluetooth: a false belief produced by
+  packaging. Adds ~20 MB; a hub with no radio degrades to reporting the transport
+  as unsearchable.
+
+### Added
+- `GET /v1/discovery/scan` asks every adapter and reports `searched` and
+  `not_searchable` — "nothing found" means something different when a transport
+  was never searched.
+- `POST /v1/discovery/adopt` — register one scanned candidate under a name the
+  operator chose, recorded in the audit chain. Scanning itself registers nothing.
+- `PATCH /v1/devices/{id}` — rename without re-registering the whole manifest.
+- `discover()` / `can_discover()` as optional adapter methods; BLE implements
+  discovery over Bluetooth radio, with no broadcast address involved.
+- Dashboard: Scan, rename and remove controls; an empty hub says what to do next.
+
 ## [0.4.1] — 2026-07-22
 
 First published release. `pip install dosync`.

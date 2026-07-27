@@ -131,14 +131,28 @@ else:
         from dosync.adapters.wiz import WiZAdapter
         executor = AdapterExecutor(hub, fallback_to_simulated=True)
         executor.register(WiZAdapter(hub=hub))
-        # BLE adapter — opt-in. Only registered when DOSYNC_BLE_ENABLED=true, since
-        # not every hub has a Bluetooth radio. Universal: one adapter drives any
-        # BLE device via the manifest's action→characteristic map.
-        if os.environ.get("DOSYNC_BLE_ENABLED", "false").lower() == "true":
+        # BLE adapter — registered whenever the library is importable, and
+        # switched OFF with DOSYNC_BLE_ENABLED=false.
+        #
+        # This was opt-in, reasoning that not every hub has a Bluetooth radio.
+        # Sound for CONTROL, and the same circle as the bleak dependency for
+        # DISCOVERY: nobody enables a BLE adapter until they know they have BLE
+        # devices, and nobody can find out without the adapter registered. Left
+        # opt-in, a user scans, sees nothing, and concludes DoSync does not do
+        # Bluetooth — a false conclusion produced by our defaults.
+        #
+        # A hub with no radio costs nothing for this: the scan catches the
+        # failure and reports the transport as unsearchable rather than erroring,
+        # and the adapter only ever acts on devices registered against it, of
+        # which there are none until someone adopts one.
+        if os.environ.get("DOSYNC_BLE_ENABLED", "true").lower() != "false":
             try:
                 from dosync.adapters.ble import BLEAdapter
                 executor.register(BLEAdapter(hub=hub))
                 logging.getLogger("dosync.server").info("BLEAdapter registered")
+            except ImportError:
+                logging.getLogger("dosync.server").debug(
+                    "BLE unavailable: bleak is not installed")
             except Exception as _ble_e:
                 logging.getLogger("dosync.server").warning(
                     "BLEAdapter registration failed: %s", _ble_e)

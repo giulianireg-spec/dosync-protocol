@@ -13,8 +13,12 @@ Two design decisions came out of that session and are pinned here:
   * **The operator names them.** `wiz-a4c138` is what the bulb calls itself;
     "Kitchen light" is what makes every later screen readable.
 """
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
+
+REPO = Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture
@@ -245,3 +249,43 @@ def test_every_adapter_inherits_the_base_class():
             if name.endswith(("Adapter", "Bridge")) and not issubclass(obj, DoSyncAdapter):
                 offenders.append(f"{mod.name}.{name}")
     assert not offenders, f"adapters not inheriting DoSyncAdapter: {offenders}"
+
+
+# ── Discovery must work out of the box (2026-07-26) ─────────────────────────
+# The optional-extras rule — do not install libraries for hardware you do not
+# own — is right for CONTROL and wrong for DISCOVERY, because discovery is how
+# you find out what you own. The dependency is needed BEFORE the knowledge that
+# would justify installing it, so left optional a user scans, sees nothing, and
+# concludes DoSync does not support Bluetooth.
+
+def test_a_discovery_library_is_a_core_dependency():
+    import re
+
+    pyproject = (REPO / "pyproject.toml").read_text()
+    core = re.search(r"^dependencies = \[(.*?)^\]", pyproject, re.M | re.S)
+    assert core and "bleak" in core.group(1), \
+        "bleak belongs in core: you cannot know you need it until you have scanned"
+
+
+def test_ble_adapter_registers_without_being_asked():
+    """Registering it was opt-in via DOSYNC_BLE_ENABLED=true — the same circle
+    one level up: nobody enables a BLE adapter before knowing they have BLE
+    devices, and nobody can find out without it registered."""
+    import inspect
+
+    import dosync.server as srv
+    src = inspect.getsource(srv)
+    assert 'DOSYNC_BLE_ENABLED", "true"' in src, \
+        "BLE must be on by default, with the variable as the way to turn it off"
+
+
+def test_a_hub_without_bluetooth_is_not_broken_by_this():
+    """A radio-less host costs nothing: the scan catches the failure and reports
+    the transport as unsearchable instead of erroring, and the adapter only acts
+    on devices registered against it — of which there are none."""
+    import asyncio
+
+    from dosync.adapters.ble import BLEAdapter
+
+    result = asyncio.run(BLEAdapter().discover(timeout=0.1))
+    assert result == [] or isinstance(result, list)
