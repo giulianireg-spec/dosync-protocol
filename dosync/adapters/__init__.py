@@ -96,8 +96,18 @@ class DoSyncAdapter(ABC):
         return []
 
     def can_discover(self) -> bool:
-        """Whether this adapter implements discovery, so a caller can say which
-        transports were searched instead of implying it searched everywhere."""
+        """Whether this adapter can search its transport RIGHT NOW.
+
+        Implementing `discover` is necessary and not sufficient: a BLE adapter
+        with no `bleak` installed, or a hub with no radio, implements it and
+        cannot use it. The distinction matters because the answer feeds a report
+        of which transports were searched — and claiming to have searched
+        Bluetooth when the library was missing produces exactly the false
+        "nothing found" this reporting exists to prevent.
+
+        Adapters whose readiness depends on something beyond the method existing
+        should override this. The default answers the structural question alone.
+        """
         return type(self).discover is not DoSyncAdapter.discover
 
     async def get_state(self, device_id: str) -> dict | None:

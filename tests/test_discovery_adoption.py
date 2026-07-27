@@ -289,3 +289,29 @@ def test_a_hub_without_bluetooth_is_not_broken_by_this():
 
     result = asyncio.run(BLEAdapter().discover(timeout=0.1))
     assert result == [] or isinstance(result, list)
+
+
+def test_can_discover_reflects_availability_not_just_intent():
+    """Caught on the reference deployment: the log said "BLEAdapter registered"
+    on a Pi where `bleak` had failed to install, and the scan would have
+    reported Bluetooth as searched. Implementing `discover` is necessary and not
+    sufficient — a scan that never touched the radio must not look like a scan
+    that found nothing, which is the entire reason for reporting which
+    transports were searched."""
+    import builtins
+
+    from dosync.adapters.ble import BLEAdapter
+
+    real_import = builtins.__import__
+
+    def without_bleak(name, *a, **k):
+        if name == "bleak":
+            raise ImportError("simulated")
+        return real_import(name, *a, **k)
+
+    builtins.__import__ = without_bleak
+    try:
+        assert BLEAdapter().can_discover() is False, \
+            "an adapter that cannot import its library cannot search"
+    finally:
+        builtins.__import__ = real_import

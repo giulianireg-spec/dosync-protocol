@@ -117,6 +117,21 @@ class BLEAdapter(DoSyncAdapter):
         self._hub = hub
         self._connect_timeout = connect_timeout
 
+    def can_discover(self) -> bool:
+        """True only when `bleak` is actually importable.
+
+        The base answer — "this class overrides discover" — was reported as
+        "Bluetooth was searched" on a hub where the library was missing, so a
+        scan that never touched the radio looked like a scan that found nothing.
+        The whole point of reporting which transports were searched is to keep
+        those two apart.
+        """
+        try:
+            import bleak  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
     async def discover(self, timeout: float = 5.0) -> list:
         """Scan for BLE advertisements.
 

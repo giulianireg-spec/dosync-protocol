@@ -329,3 +329,18 @@ def test_readme_links_resolve():
     links = re.findall(r"\]\((?!http)([^)#]+)", readme)
     missing = [l for l in sorted(set(links)) if not (REPO / l.strip()).exists()]
     assert not missing, f"broken local links in README: {missing}"
+
+
+def test_install_instructions_cover_the_target_platform():
+    """`pip install dosync` fails on Raspberry Pi OS, Debian 12+ and Ubuntu
+    23.04+ with a wall of text about externally-managed-environment (PEP 668) —
+    and the Raspberry Pi is the machine most likely to be running a hub. The
+    project's own author hit it. An install instruction that fails on the target
+    platform is the first wall in front of exactly the user H6 is about."""
+    readme = (REPO / "README.md").read_text()
+    assert "externally-managed-environment" in readme, \
+        "the error users will actually see must be named, so a search finds it"
+    assert "pipx install dosync" in readme, \
+        "and the correct tool offered — DoSync is an application, not a library"
+    assert "break-system-packages" in readme, \
+        "including the option we do not recommend, and why"

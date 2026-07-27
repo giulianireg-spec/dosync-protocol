@@ -1225,3 +1225,29 @@ configuration: `searched: ['wiz (udp broadcast)', 'ble']`.
 
 Version 0.4.2 — adding a core dependency changes what an install produces, which is a real
 change for anyone who runs it. 771/771.
+
+## SCAN-HONESTY + PEP668-INSTALL — Two walls the reference Pi found — SHIPPED 2026-07-27
+Deploying the previous change to the reference hub exposed both immediately.
+
+**The scan would have lied.** The Pi logged "BLEAdapter registered" on a host where `bleak`
+had failed to install — the adapter registers fine because the library import is lazy — so
+`can_discover()` answered True and the scan would have reported Bluetooth as SEARCHED when
+it never touched the radio. That is precisely the false "nothing found" that reporting
+searched transports exists to prevent, shipped inside the feature meant to prevent it.
+Implementing `discover` is necessary and not sufficient; BLE now overrides `can_discover()`
+to check that its library actually imports.
+
+**`pip install dosync` fails on the target platform.** Raspberry Pi OS, Debian 12+ and
+Ubuntu 23.04+ refuse system-wide pip installs (PEP 668) and answer with a wall of text about
+externally-managed environments. The Raspberry Pi is the machine most likely to be running a
+hub, and the project's own author hit this — an install instruction that fails on the target
+platform is the first wall in front of exactly the user H6 is about.
+
+The README now leads with `pipx install dosync`, which is the correct tool rather than a
+workaround: DoSync is an application with commands you run, not a library you import, and
+pipx gives it a private environment while keeping `dosync-hub` on PATH. The venv path is
+documented for people writing Python against it, and `--break-system-packages` is named
+along with why it is the option not to choose. The error string itself appears in the README
+so that searching for it finds the answer.
+
+772/772.

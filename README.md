@@ -192,9 +192,42 @@ Benchmark (Raspberry Pi 5, Python 3.11.2):
 ### Install and run — five minutes, no hardware
 
 ```bash
-pip install dosync
+pipx install dosync      # recommended
 dosync-hub
 ```
+
+<details>
+<summary><b>"error: externally-managed-environment"?</b> — Raspberry Pi OS, Debian 12+, Ubuntu 23.04+</summary>
+
+Those systems refuse system-wide `pip install` (PEP 668) to stop Python packages
+from breaking the OS. This hits the Raspberry Pi first, which is the most likely
+machine to be running a hub, so it is worth getting right rather than working
+around.
+
+**`pipx` is the correct tool here** and not a workaround: DoSync is an
+application with commands you run, not a library you import into your own code.
+pipx gives it a private environment and still puts `dosync-hub`,
+`dosync-manage` and `dosync-certify` on your PATH.
+
+```bash
+sudo apt install pipx        # once
+pipx ensurepath              # once; open a new shell afterwards
+pipx install dosync
+```
+
+If you are writing Python against DoSync rather than running the hub, a virtual
+environment is the right choice instead:
+
+```bash
+python3 -m venv ~/dosync-env
+~/dosync-env/bin/pip install dosync
+~/dosync-env/bin/dosync-hub
+```
+
+`pip install --break-system-packages dosync` also works and is the one option we
+would not recommend: it installs into the system Python that your OS depends on,
+which is the situation PEP 668 exists to prevent.
+</details>
 
 That is a working hub on `http://127.0.0.1:47200`. It starts with a simulated
 executor, so you can drive the whole protocol — register devices, fire intents,
