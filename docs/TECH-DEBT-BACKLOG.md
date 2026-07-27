@@ -1119,3 +1119,46 @@ cited as living in the protocol spec when it is in the consistency model, and a 
 that does not resolve is worse than none in front of an evaluator. The absolutes test also
 failed on its first run, on the project's own disclaimer sentence: an assertion arguing with
 itself. 751/751.
+
+## DISCOVERY-SCAN-AND-ADOPT — H6 priority #1 — SHIPPED 2026-07-26
+Panel session on H6 inverted the diagnosis. "Everything must be registered by hand" implied
+discovery had to be built; measuring found the opposite. **The expensive half was already
+done**: six of eight adapters know how to construct a manifest — knowing that a device is a
+dimmable lamp and expressing that in DoSync's model is the hard, technology-specific work.
+`discovery.py` (207 lines), `Discovery.run()`, `run_periodic()` and two endpoints all
+existed. **The dashboard called none of them**, so a hub with no devices was a dead end whose
+only exit was a hand-written JSON manifest — the same defect as the dashboard itself living
+outside the package, one week later.
+
+Two design decisions from the session, both implemented:
+
+**Scanning does not register.** `GET /v1/discovery/scan` lists candidates and changes
+nothing; new `POST /v1/discovery/adopt` registers one, with a name the operator chose. Torres'
+argument for treating this as a correctness issue rather than a preference: in a protocol
+whose central claim is accountability, devices appearing in the registry because they
+answered a broadcast — approved by nobody — contradicts the premise. Twenty bulbs in a house
+is convenient; twenty unapproved devices in a plant is not.
+
+**The operator names them.** `wiz-a4c138` is what the bulb calls itself; "Kitchen light" is
+what makes every later screen readable. Approval and naming are the same step because they
+are the same decision.
+
+`POST /v1/discovery/run` keeps auto-registering — legitimate for a scripted setup, where
+invoking it IS the approval — but now appends `devices_auto_adopted` with
+`approved_by_operator: false`, distinguishing it from a deliberate choice. "How did this
+device get here" belongs to the same family as "who turned authentication off".
+
+Adapters that cannot build a manifest from a scan say so and point at
+`POST /v1/devices/register`, because per Aguirre discovery is an adapter capability and not
+a protocol promise: a drone does not answer a UDP broadcast and a clinical device sits on a
+proprietary bus. Manual registration is a first-class path, not a failure.
+
+A scan that finds nothing says so explicitly — the hub being alive and reachable is itself
+information, and silence leaves a user unable to tell it apart from a broken page.
+
+758/758; name handling and audit both verified to fail when removed.
+
+**Still open from the same session** (panel priorities 2–8): discovery as an adapter method
+rather than a hardcoded `if adapter == "wiz"`, a guided first minute, device delete/rename
+from the UI, explaining "intent" where it is used, policies from the interface, visible
+intent outcomes, and a non-pip install path.

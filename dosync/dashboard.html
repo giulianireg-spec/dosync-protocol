@@ -539,6 +539,12 @@
   <div class="panel">
     <div class="panel-header">
       <span class="panel-title">Devices</span>
+      <!-- A hub with no devices used to be a dead end: nothing on this page said
+           what to do next, and the only way forward was a hand-written JSON
+           manifest sent with curl. The scan endpoints existed all along and
+           nothing here called them. -->
+      <button class="btn ghost sm" onclick="scanDevices()"
+              title="Look for devices on this network">Scan</button>
       <button class="btn ghost sm" onclick="loadDevices()">↺</button>
     </div>
     <div class="panel-body" id="deviceList">
@@ -907,6 +913,65 @@ async function loadIntents() {
     grid.innerHTML = '<div class="empty"><div class="empty-text">' +
       'Could not load intents</div></div>';
   }
+}
+
+// Scanning shows CANDIDATES and changes nothing. The operator picks which ones
+// become devices and what they are called — approval and naming in one step.
+// Registering whatever answered a broadcast would contradict the premise of a
+// protocol built around being able to account for what is in it, and
+// `wiz-a4c138` is what the bulb calls itself, not what its owner calls it.
+async function scanDevices() {
+  if (!token) { alert("Connect first."); return; }
+  const list = document.getElementById('deviceList');
+  const previous = list.innerHTML;
+  list.innerHTML = '<div class="empty"><div class="empty-text">Scanning…</div></div>';
+
+  let found;
+  try {
+    found = (await api('GET', '/v1/discovery/scan')).found || [];
+  } catch (e) {
+    list.innerHTML = previous;
+    alert("Scan failed: " + (e.message || e));
+    return;
+  }
+
+  const fresh = found.filter(d => !d.registered);
+  if (!found.length) {
+    list.innerHTML = previous;
+    // Saying "none" is itself information: the hub is alive and reachable, so
+    // the problem is elsewhere. Silence would leave the user unable to tell
+    // this apart from a broken page.
+    alert("No devices answered on this network.\n\n" +
+          "Only some adapters can discover — WiZ today. Anything else is " +
+          "registered directly with POST /v1/devices/register, which is a " +
+          "normal path, not a failure.");
+    return;
+  }
+  if (!fresh.length) {
+    list.innerHTML = previous;
+    alert("Found " + found.length + " device(s), all already registered.");
+    return;
+  }
+
+  let adopted = 0;
+  for (const d of fresh) {
+    const name = prompt(
+      "Found: " + (d.device_name || d.device_id) + "  (" + d.adapter + " @ " + d.ip + ")\n\n" +
+      "Name it to add it — this is the name you will see everywhere else.\n" +
+      "Leave empty to skip this one.", d.device_name || '');
+    if (!name || !name.trim()) continue;
+    try {
+      await api('POST', '/v1/discovery/adopt', {
+        adapter: d.adapter, device_id: d.device_id, ip: d.ip,
+        device_name: name.trim() });
+      adopted++;
+    } catch (e) {
+      alert("Could not add " + d.device_id + ": " + (e.message || e));
+    }
+  }
+  await loadDevices();
+  await loadStatus();
+  if (adopted) alert("Added " + adopted + " device(s). Recorded in the audit log.");
 }
 
 async function loadDevices() {

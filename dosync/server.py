@@ -1750,15 +1750,93 @@ def get_presence(auth: str = Depends(require_auth)):
     }
 
 
+@app.post("/v1/discovery/adopt", tags=["Discovery"])
+async def adopt_device(req: dict, auth: str = Depends(require_auth)):
+    """Register ONE discovered candidate, with a name the operator chose.
+
+    Scanning and adopting are deliberately separate. `POST /v1/discovery/run`
+    finds devices and registers them in one step, which is fine for a scripted
+    setup but wrong as the only path: in a protocol whose argument is
+    accountability, devices appearing in the registry because they answered a
+    broadcast — approved by nobody — contradicts the premise. Twenty bulbs in a
+    house is convenient; twenty unapproved devices in a plant is not.
+
+    So a human path exists: scan lists candidates and changes nothing, then this
+    adopts the ones the operator picked. The naming matters as much as the
+    approval — "Kitchen light" is what makes every later screen readable, and
+    `wiz-a4c138` is what the device calls itself.
+
+    Adoption is appended to the audit chain. "How did this device get here" is
+    the same class of question as "who turned authentication off".
+    """
+    adapter = req.get("adapter")
+    device_id = req.get("device_id")
+    if not adapter or not device_id:
+        raise HTTPException(status_code=422,
+                            detail="adapter and device_id are required")
+
+    if hub.registry.get(device_id):
+        return {"adopted": False, "reason": "already registered",
+                "device_id": device_id}
+
+    # Per-adapter manifest construction. The knowledge of what a WiZ bulb can do
+    # belongs to the WiZ adapter, not here — this only routes to it. When
+    # discovery becomes an adapter capability (horizon item), this dispatch goes
+    # away with it.
+    name = (req.get("device_name") or "").strip() or device_id
+    if adapter == "wiz":
+        from dosync.adapters.wiz import wiz_manifest
+        manifest = wiz_manifest(
+            device_id=device_id, device_name=name,
+            ip=req.get("ip", ""), tags=req.get("tags"),
+            room=req.get("room", ""))
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Adapter '{adapter}' cannot build a manifest from a scan yet. "
+                   "Register this device manually with POST /v1/devices/register.")
+
+    hub.register_device(manifest)
+    hub.audit_log.append({
+        "type": "device_adopted",
+        "device_id": device_id,
+        "device_name": name,
+        "adapter": adapter,
+        "source": "discovery_scan",
+        "approved_by_operator": True,
+    })
+    return {"adopted": True, "device_id": device_id, "device_name": name,
+            "adapter": adapter}
+
+
 @app.post("/v1/discovery/run", tags=["Discovery"])
 async def run_discovery(auth: str = Depends(require_auth)):
     from dosync.discovery import Discovery
+    before = {d.device_id for d in hub.registry.all()}
     disc = Discovery(hub, timeout_override=5.0)
     new_count = await disc.run()
+    added = [d.device_id for d in hub.registry.all() if d.device_id not in before]
+
+    # Registering without a human choosing is defensible for a scripted setup —
+    # invoking this endpoint IS the approval — but it must not be invisible. The
+    # chain answers "how did this device get here" the same way it answers "who
+    # turned authentication off".
+    if added:
+        hub.audit_log.append({
+            "type": "devices_auto_adopted",
+            "device_ids": added,
+            "count": len(added),
+            "source": "discovery_run",
+            "approved_by_operator": False,
+        })
     return {
         "status":       "complete",
         "new_devices":  new_count,
+        "adopted":      added,
         "total_devices": len(hub.registry.all()),
+        "note": "Registered automatically and recorded in the audit chain. Use "
+                "GET /v1/discovery/scan followed by POST /v1/discovery/adopt to "
+                "choose and name devices instead.",
     }
 
 
