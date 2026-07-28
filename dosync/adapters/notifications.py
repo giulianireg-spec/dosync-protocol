@@ -57,6 +57,7 @@ class NotificationAdapter(DoSyncAdapter):
     use a defensive getattr.
     """
 
+    adapter_kind = "infrastructure"
     adapter_name = "notifications"
     """Sends SMS via Twilio for critical DoSync intents."""
 

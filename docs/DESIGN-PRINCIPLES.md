@@ -218,6 +218,55 @@ Two consequences for how this project tracks work:
   an auditor asks "how often, and who ensures it", the answer must exist before
   they ask.
 
+## On adapters: what ships, and who answers for it
+
+Adapters fall into three kinds, and the difference is a claim the project makes
+rather than an accident of history:
+
+- **Ecosystem** — implements an open standard or an open project: MQTT, Matter,
+  BLE, MAVLink, the Home Assistant bridge. These belong in a protocol the way
+  HTTP support belongs in a web framework.
+- **Reference** — implements one vendor's product. WiZ and Shelly are here.
+  They ship as worked examples of how an adapter is written, not as endorsement,
+  partnership, or a promise to track anyone's firmware.
+- **Infrastructure** — not a device technology (notifications).
+
+The distinction exists because shipping vendor code silently says two things
+this project does not mean: that it privileges those brands, and that it is a
+smart-home product. Both are legible in the file tree. Deleting them would say
+something equally wrong — they are the only executable answer to "how do I write
+an adapter" — so the claim is declared (`adapter_kind`), exposed
+(`GET /v1/adapters`) and tested instead.
+
+**A new adapter must choose its kind.** Inheriting a flattering default is how a
+classification stops meaning anything.
+
+## On loading adapters from a repository
+
+DoSync does not download and execute adapter code from a remote source, and will
+not. This is the same ruling as adapter-side fallback, for the same reason.
+
+The entire argument of this protocol is that nothing acts on a physical device
+without passing a policy and leaving a record. Fetching executable code from the
+internet — code whose whole purpose is to actuate hardware — would place the
+largest possible hole exactly where the guarantee lives. A bypass of one line
+was closed here in July because it let an agent skip the policy engine; a remote
+plugin loader is that hole with whole packages through it.
+
+Three supported paths, covering different cases:
+
+- **Ecosystem adapters**, in the package. The project answers for them.
+- **Declarative adapters**, a file the operator writes describing an HTTP, MQTT
+  or Modbus device. The operator answers for them. No code is executed that the
+  operator did not write.
+- **Third-party adapters via Python entry points** — a vendor publishes
+  `dosync-adapter-x` and the operator installs it deliberately. The publisher
+  answers for it, and installation is an explicit act with a supply chain behind
+  it rather than a silent fetch.
+
+The difference between the third path and a plugin repository is consent and
+attribution: someone chose to install it, and someone's name is on it.
+
 ## What the audit log is for
 
 The SHA-256 tamper-evident audit log is not a debugging tool. It is an accountability infrastructure.

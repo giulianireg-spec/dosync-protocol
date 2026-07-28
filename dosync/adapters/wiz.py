@@ -139,6 +139,11 @@ def wiz_manifest(
 # ── WiZ Adapter ───────────────────────────────────────────────────────────────
 
 class WiZAdapter(DoSyncAdapter):
+    #: Reference implementation. See DoSyncAdapter.adapter_kind — shipped as a
+    #: worked example of how an adapter is written, not as vendor-endorsed
+    #: support for this product.
+    adapter_kind = "reference"
+
     """
     DoSync adapter for Philips WiZ smart bulbs.
 

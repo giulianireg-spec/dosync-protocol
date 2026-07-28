@@ -1895,6 +1895,43 @@ async def run_discovery(auth: str = Depends(require_auth)):
     }
 
 
+@app.get("/v1/adapters", tags=["Devices"])
+def list_adapters(auth: str = Depends(require_auth)):
+    """Which technologies this hub can speak, and on what basis it ships them.
+
+    The `kind` matters more than it looks. A protocol that ships `wiz.py` and
+    `shelly.py` without saying anything implies two things it does not mean:
+    that it privileges those brands, and that it is a smart-home product. Both
+    are visible in the file tree and neither is true — DoSync is domain-agnostic
+    and those two are worked examples of how an adapter is written.
+
+    So the distinction is declared rather than left to inference:
+
+      * `ecosystem` — an open standard or open project (MQTT, Matter, BLE,
+        MAVLink, the Home Assistant bridge). Belongs in a protocol.
+      * `reference` — one vendor's product, shipped as an example. Not an
+        endorsement, a partnership, or a promise to track their firmware.
+      * `infrastructure` — not a device technology (notifications).
+    """
+    out = []
+    for name in (executor.registered_adapters()
+                 if hasattr(executor, "registered_adapters") else []):
+        adapter = executor.get_adapter(name)
+        if adapter is None:
+            continue
+        out.append({
+            "name": name,
+            "kind": getattr(adapter, "adapter_kind", "ecosystem"),
+            "can_discover": bool(getattr(adapter, "can_discover", lambda: False)()),
+        })
+    return {
+        "adapters": sorted(out, key=lambda a: (a["kind"], a["name"])),
+        "count": len(out),
+        "note": "kind=reference means a worked example of writing an adapter for "
+                "one vendor's product, not endorsed support for it.",
+    }
+
+
 @app.get("/v1/discovery/scan", tags=["Discovery"])
 async def scan_devices(auth: str = Depends(require_auth)):
     """List devices reachable on any transport this hub can search.

@@ -1251,3 +1251,39 @@ along with why it is the option not to choose. The error string itself appears i
 so that searching for it finds the answer.
 
 772/772.
+
+## ADAPTER-CLASSIFICATION — What ships, and who answers for it — SHIPPED 2026-07-27
+Operator: "the adapters we write here, like wiz, should not be in the package — that is a
+personal configuration for MY installation, and we do not know what a future user will
+have." Correct, and the argument is not size: vendor code is 3% of the package. It is what
+shipping it COMMUNICATES — that the project privileges those brands and is a smart-home
+product. Both legible in the file tree, neither true.
+
+The panel resolved it as reclassify, not delete: WiZ is the only executable answer to "how
+do I write an adapter", and deleting it leaves that question unanswered. So the claim is
+declared (`adapter_kind` on the adapter class), exposed (`GET /v1/adapters`) and tested,
+rather than left to inference:
+
+- **ecosystem** — an open standard or open project (MQTT, Matter, BLE, MAVLink, the HA
+  bridge). Belongs in a protocol the way HTTP belongs in a web framework.
+- **reference** — one vendor's product, shipped as a worked example. Not endorsement, not
+  partnership, not a promise to track their firmware.
+- **infrastructure** — not a device technology (notifications).
+
+Moving the modules was considered and rejected: ten files import them and any third party
+already using `dosync.adapters.wiz` would break, which is a real cost for a statement that a
+declared, tested, API-visible attribute makes just as well. A test requires any new adapter
+to choose a kind, since inheriting a flattering default is how a classification stops
+meaning anything.
+
+**Remote adapter loading is now ruled out in DESIGN-PRINCIPLES**, alongside adapter-side
+fallback and for the same reason: the protocol's whole argument is that nothing actuates
+hardware without a policy and a record, and fetching executable code from the internet puts
+the largest possible hole exactly where the guarantee lives. A one-line bypass was closed
+here in July because it let an agent skip the policy engine; a remote plugin loader is that
+hole with whole packages through it. Three supported paths instead — ecosystem adapters in
+the package, declarative adapters the operator writes, third-party packages installed
+deliberately via entry points — distinguished by consent and attribution: someone chose to
+install it, and someone's name is on it.
+
+777/777.

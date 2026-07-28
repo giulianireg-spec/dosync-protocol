@@ -271,6 +271,20 @@ own Bluetooth devices, and nobody can find out without it. A hub with no radio
 loses nothing — the scan reports the transport as unsearchable rather than
 failing — and `pip uninstall bleak` or `DOSYNC_BLE_ENABLED=false` removes it.
 
+**On the adapters that ship with DoSync.** They come in three kinds, visible at
+`GET /v1/adapters`. **Ecosystem** adapters implement open standards — MQTT,
+Matter, BLE, MAVLink, and the Home Assistant bridge, which is the widest door of
+all: anything HA already integrates, DoSync can reach. **Reference** adapters
+(WiZ, Shelly) implement one vendor's product and ship as worked examples of how
+an adapter is written — not as endorsement, partnership, or a promise to track
+anyone's firmware. **Infrastructure** is notifications.
+
+If your device is not covered, DoSync does not download an adapter for it: the
+protocol's whole argument is that nothing actuates hardware without a policy and
+a record, and fetching executable code from the internet would put the largest
+possible hole exactly there. Instead, an operator writes a declarative adapter
+for HTTP/MQTT/Modbus devices, or installs a third-party package deliberately.
+
 Install only the CONTROL adapters you need — those follow the opposite rule,
 since you already know which hardware you own:
 

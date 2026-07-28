@@ -192,6 +192,11 @@ class _ShellyGen2:
 # ── Adapter ───────────────────────────────────────────────────────────────────
 
 class ShellyAdapter(DoSyncAdapter):
+    #: Reference implementation. See DoSyncAdapter.adapter_kind — shipped as a
+    #: worked example of how an adapter is written, not as vendor-endorsed
+    #: support for this product.
+    adapter_kind = "reference"
+
     """
     Adapter DoSync para dispositivos Shelly.
 

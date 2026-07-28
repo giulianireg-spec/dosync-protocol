@@ -72,6 +72,23 @@ class DoSyncAdapter(ABC):
         """Close the connection. Optional."""
         pass
 
+    #: What kind of adapter this is. Declared, not inferred, because the
+    #: distinction is a claim the project makes and should be checkable.
+    #:
+    #:   "ecosystem" — implements an OPEN STANDARD or an open project: MQTT,
+    #:       Matter, BLE, MAVLink, the Home Assistant bridge. These belong in a
+    #:       protocol the way HTTP support belongs in a web framework.
+    #:
+    #:   "reference" — implements ONE VENDOR'S PRODUCT. Shipped as a worked
+    #:       example of how an adapter is written, not as an endorsement, a
+    #:       partnership, or a promise to track that vendor's firmware. A
+    #:       protocol that ships vendor code without saying this implies both
+    #:       that it privileges those brands and that it is a smart-home
+    #:       product — neither of which is true here.
+    #:
+    #:   "infrastructure" — not a device technology at all (notifications).
+    adapter_kind: str = "ecosystem"
+
     async def discover(self, timeout: float = 5.0) -> list:
         """Find devices reachable over THIS adapter's transport.
 

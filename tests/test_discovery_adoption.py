@@ -315,3 +315,66 @@ def test_can_discover_reflects_availability_not_just_intent():
             "an adapter that cannot import its library cannot search"
     finally:
         builtins.__import__ = real_import
+
+
+# ── Adapter classification (2026-07-27) ─────────────────────────────────────
+# The operator: "the adapters we write here, like wiz, should not go in the
+# package — that is a personal configuration for MY installation, and we do not
+# know what a future user will have." Right, and the argument is not size —
+# vendor code is 3% of the package — but what shipping it COMMUNICATES: that the
+# project privileges those brands and is a smart-home product. Both visible in
+# the file tree, neither true.
+#
+# The panel's resolution was to reclassify rather than delete: WiZ is the only
+# executable answer to "how do I write an adapter", and removing it leaves that
+# question unanswered. So the claim is declared and checkable.
+
+def test_vendor_adapters_declare_themselves_as_reference():
+    from dosync.adapters.shelly import ShellyAdapter
+    from dosync.adapters.wiz import WiZAdapter
+
+    assert WiZAdapter.adapter_kind == "reference"
+    assert ShellyAdapter.adapter_kind == "reference"
+
+
+def test_open_standard_adapters_are_ecosystem():
+    """MQTT, Matter, BLE and MAVLink implement open standards; the Home
+    Assistant bridge targets an open project with thousands of integrations.
+    Those belong in a protocol the way HTTP belongs in a web framework."""
+    from dosync.adapters.ble import BLEAdapter
+    from dosync.adapters.matter import MatterAdapter
+    from dosync.adapters.mqtt import MQTTAdapter
+
+    for cls in (BLEAdapter, MatterAdapter, MQTTAdapter):
+        assert cls.adapter_kind == "ecosystem", f"{cls.__name__} is an open standard"
+
+
+def test_every_adapter_declares_a_valid_kind():
+    """An adapter added later must choose, rather than inheriting a default that
+    happens to be flattering."""
+    import importlib
+    import inspect
+    import pkgutil
+
+    import dosync.adapters as pkg
+    from dosync.adapters import DoSyncAdapter
+
+    valid = {"ecosystem", "reference", "infrastructure"}
+    for mod in pkgutil.iter_modules(pkg.__path__):
+        m = importlib.import_module(f"dosync.adapters.{mod.name}")
+        for name, obj in inspect.getmembers(m, inspect.isclass):
+            if obj.__module__ != m.__name__ or not issubclass(obj, DoSyncAdapter):
+                continue
+            assert getattr(obj, "adapter_kind", None) in valid, \
+                f"{name} declares no valid adapter_kind"
+
+
+def test_the_classification_is_visible_not_just_declared(client):
+    """Declaring it in a class attribute nobody reads would not answer the
+    objection — the point is that anyone looking at this hub can see the basis
+    on which each technology ships."""
+    srv, c = client
+    body = c.get("/v1/adapters").json()
+    assert body["adapters"], "a hub must report which technologies it speaks"
+    assert all("kind" in a for a in body["adapters"])
+    assert "not endorsed support" in body["note"]
