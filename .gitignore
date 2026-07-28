@@ -41,3 +41,9 @@ benchmarks/recall-prod-*.json
 # Point DOSYNC_CHECKPOINT_DIR somewhere outside the clone (e.g.
 # /var/lib/dosync/checkpoints) to keep evidence and source properly apart.
 checkpoints/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
