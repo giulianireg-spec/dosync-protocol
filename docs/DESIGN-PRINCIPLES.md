@@ -241,6 +241,28 @@ an adapter" — so the claim is declared (`adapter_kind`), exposed
 **A new adapter must choose its kind.** Inheriting a flattering default is how a
 classification stops meaning anything.
 
+## On optional dependencies
+
+A dependency needed to USE a capability the project offers by default cannot be
+optional. Optional extras exist for hardware a deployment may or may not own —
+`dosync[wiz]` because you have WiZ bulbs — and an advertised capability is not
+hardware.
+
+This appeared three times in two days, each time producing not friction but a
+false belief:
+
+- `bleak` in an extra: a user scanned, found nothing, and concluded DoSync does
+  not support Bluetooth.
+- The BLE adapter registered only on request: the library was installed and
+  unused, so the same conclusion followed with the library sitting right there.
+- `aiohttp` in an extra: a declarative adapter — whose only transport is HTTP —
+  failed at EXECUTION, during an intent, rather than at load.
+
+The last is the shape to watch for. A missing dependency that fails when the
+hub starts is an inconvenience; one that fails when an emergency reaches a
+device is a different category, and the difference is only visible if someone
+asks *when* the failure lands.
+
 ## On loading adapters from a repository
 
 DoSync does not download and execute adapter code from a remote source, and will

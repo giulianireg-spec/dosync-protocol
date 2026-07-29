@@ -1,0 +1,50 @@
+# A generic HTTP light — the simplest useful example, and the one to copy first.
+#
+# The point of this file is not the HTTP. It is the two lines that make DoSync
+# understand what the device IS: `tags` and each action's `type`. Without them
+# the hub could switch this light and no intent would ever choose to.
+
+device:
+  id: light-hallway
+  name: Hallway light
+  category: actuator
+  room: hallway              # folded into tags; that is how DoSync matches location
+  tags: [light, energy]
+  emergency_capable: true    # lights matter in an evacuation — this is why
+
+transport:
+  kind: http
+  base_url: http://192.168.1.40
+  timeout: 5
+
+actions:
+  turn_on:
+    type: turn_on            # what it MEANS. The resolver reads this, not the name.
+    description: Switch the light on
+    request:
+      method: POST
+      path: /light/on
+
+  turn_off:
+    type: turn_off
+    request:
+      method: POST
+      path: /light/off
+
+  set_brightness:
+    type: set_brightness
+    description: 0-100
+    request:
+      method: POST
+      path: /light/brightness
+      body:
+        value: "{params.brightness}"    # filled from the action's params
+
+sensors:
+  state:
+    type: boolean
+    kind: device_state       # about the device itself, not about the room
+    request:
+      method: GET
+      path: /light/status
+      extract: on            # read this field out of the JSON response

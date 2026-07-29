@@ -52,6 +52,16 @@ dependencies = [
     # transport as not searchable rather than failing), so a constrained
     # deployment can `pip uninstall bleak` and lose only BLE discovery.
     "bleak>=0.21",
+    # Same reasoning: the shipped device examples are YAML, and examples are how
+    # someone writes their first adapter. A user who must first discover that
+    # they need a YAML library has been handed the problem instead of the answer.
+    "pyyaml>=6.0",
+    # Declarative adapters speak HTTP, and HTTP is the only transport they
+    # speak. Leaving this in an extra meant a user's first declarative device
+    # failed at EXECUTION — during an intent, possibly an emergency — rather
+    # than at load. Third time this circle appeared in two days; see
+    # DESIGN-PRINCIPLES on dependencies of advertised capabilities.
+    "aiohttp>=3.8.0",
 ]
 
 [project.optional-dependencies]

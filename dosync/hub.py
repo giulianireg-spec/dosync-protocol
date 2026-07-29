@@ -31,6 +31,26 @@ log = logging.getLogger("dosync.hub")
 
 # ── Capability Registry (Layer 3) ─────────────────────────────────────────────
 
+#: Marker used to quarantine a device without deleting it.
+QUARANTINE_KEY = "quarantined"
+
+
+def is_quarantined(manifest) -> bool:
+    """Whether a device is registered but must not participate in intents.
+
+    Stored in `adapter_config` rather than as a new manifest field so it rides
+    the existing serialisation untouched — the flag is deployment state, not a
+    capability of the device.
+    """
+    cfg = getattr(manifest, "adapter_config", None) or {}
+    return bool(cfg.get(QUARANTINE_KEY))
+
+
+def quarantine_reason(manifest) -> str:
+    cfg = getattr(manifest, "adapter_config", None) or {}
+    return str(cfg.get("quarantine_reason", "")) if cfg.get(QUARANTINE_KEY) else ""
+
+
 class CapabilityRegistry:
     """
     Stores device manifests and answers capability queries.
@@ -75,7 +95,29 @@ class CapabilityRegistry:
         return self._devices.get(device_id)
 
     def all(self) -> list[CapabilityManifest]:
+        """Every registered device, including quarantined ones.
+
+        This is INVENTORY: what the hub knows about. Status pages, exports and
+        audits want this — a device the operator can no longer act on is still a
+        thing they need to see, and hiding it is how it gets forgotten.
+        """
         return list(self._devices.values())
+
+    def active(self) -> list[CapabilityManifest]:
+        """Devices eligible to PARTICIPATE in an intent.
+
+        Separate from `all()` because the two questions are different and were
+        being answered by one method. A device whose declarative file was
+        deleted is still in the inventory — the operator must see it to decide —
+        but it must not be planned into an emergency, because the operator
+        already believes it is gone.
+
+        Quarantine is deliberately not deletion: a directory that failed to
+        mount looks exactly like a directory whose files were removed, and a hub
+        that reacts to the first by deregistering a building is worse than one
+        that asks.
+        """
+        return [m for m in self._devices.values() if not is_quarantined(m)]
 
     def find_by_tags(self, tags: list[str]) -> list[CapabilityManifest]:
         """Return devices that have at least one of the given tags.
@@ -451,7 +493,7 @@ class CapabilityMatchingResolver(BaseResolver):
         # Empty resolution = READ-ONLY status query — mirrors resolve() (F4a):
         # the plan reads sensors on every sensing device; actuators never fire.
         if not target_tags and not target_actuators:
-            for device in self.registry.all():
+            for device in self.registry.active():
                 if device.sensors:
                     included.append({
                         "device_id":   device.device_id,
@@ -486,7 +528,7 @@ class CapabilityMatchingResolver(BaseResolver):
                          "The plan is read_sensors on every sensing device; actuators never fire."),
             }
 
-        for device in self.registry.all():
+        for device in self.registry.active():
             # v9: consume the SAME breakdown resolve() decides with. No recompute,
             # nothing to keep in sync — the explanation IS the decision, narrated.
             bd = self._score_breakdown(device, intent, resolution)
@@ -701,7 +743,7 @@ class CapabilityMatchingResolver(BaseResolver):
                     scope = "all"
 
             read_actions = []
-            for d in self.registry.all():
+            for d in self.registry.active():
                 if not d.sensors:
                     continue
                 sensor_ids = [

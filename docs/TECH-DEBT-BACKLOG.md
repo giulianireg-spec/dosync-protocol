@@ -1287,3 +1287,96 @@ deliberately via entry points — distinguished by consent and attribution: some
 install it, and someone's name is on it.
 
 777/777.
+
+## DECLARATIVE-ADAPTERS — Describe a device instead of programming one — SHIPPED 2026-07-27
+Panel decisions 3, 4 and 6 from the adapters session. Most of what a hub needs to reach a
+device is not interesting code — "send this request, read this field" — and requiring Python
+for it made "domain-agnostic" mean "agnostic across the domains we already wrote". An
+operator whose device was not among the eight bundled adapters had no path that did not
+involve a pull request.
+
+**The design constraint that decides whether this is useful** (Torres, on the panel): the
+file must produce a capability MANIFEST, not a command table. A file that only said "POST
+/on turns it on" would let DoSync switch the device and leave it invisible to everything
+that matters — no intent could select it, no policy could name it, an emergency would pass
+it by. So every action declares a `type` (what it MEANS in DoSync's vocabulary) and the
+device declares `tags` and `emergency_capable`. A device with no tags loads with a warning
+saying it will never be selected by an intent, which is almost never what the author wanted.
+
+**Five worked examples ship**, and per Ferreyra they are the deliverable rather than the
+appendix — "if one looks like what I have, I copy it and change the IP". Chosen so that two
+are NOT household devices: a 3D printer (emergency_capable, because a hot end runs
+unattended for hours) and a floor lighting controller in JSON (a commercial device, and the
+case the format handles worst — one endpoint controlling many fixtures). The television
+example exists to show what `emergency_capable: false` buys: a screen CAN display a warning,
+and in a care facility waking a sleeping resident with an alarm meant for staff is exactly
+wrong. The device could; whether it should is the deployment's call.
+
+Verified end to end: the five load at startup, register as devices, and the resolver selects
+them for `ensure_safety` with emergency-capable ones scoring higher (34 and 24 against 22
+and 12) — the claim the example files make about `emergency_capable` holds.
+
+Placeholders are SUBSTITUTED, never evaluated. A template language in a device description
+is a scripting language, and a scripting language read by a process that actuates hardware
+is a way to run code without anyone deciding to.
+
+**Stated limits**: HTTP only. No Zigbee, Z-Wave, BLE pairing, OPC-UA sessions, or anything
+needing a handshake or vendor SDK. `pyyaml` joins core dependencies for the same reason
+`bleak` did — the examples are YAML, and a user who must first discover they need a YAML
+library has been handed the problem instead of the answer.
+
+789/789. Still pending from that session: third-party adapters via entry points.
+
+## DECLARATIVE-PANEL-FIXES — Three blockers found before applying — SHIPPED 2026-07-27
+Submitted to the panel before applying, as with the audit chain. Refused again, and again
+the defects were behaviours that appear on the first day of real use rather than flaws in
+the design.
+
+**B1 — `aiohttp` sat in the `ha` extra.** A declarative adapter's only transport is HTTP, so
+a user's first declarative device failed at EXECUTION — during an intent, possibly an
+emergency — rather than at load. Third appearance of this circle in two days, and this time
+inside the feature built to remove it. Moved to core, and the pattern is now a rule in
+DESIGN-PRINCIPLES: *a dependency needed to use a capability the project offers by default
+cannot be optional; extras are for hardware a deployment may or may not own, and an
+advertised capability is not hardware.* The rule notes the shape to watch for — a missing
+dependency that fails at startup is an inconvenience, one that fails when an emergency
+reaches a device is a different category, and the difference is only visible if someone asks
+WHEN the failure lands.
+
+**B2 — the format was half-declarative.** Measured: editing a file UPDATED the device,
+deleting it did NOT remove it. Torres: "the worst of both worlds — the user learns from the
+first half that the file is the source of truth and discovers in the second that it was
+not", leaving phantom devices that emergency intents keep planning around. Benítez named the
+danger in the obvious fix before it was written: a directory that failed to mount looks
+exactly like a directory whose files were removed, and a hub that reacts to the first by
+deregistering a building is worse than one that asks.
+
+Resolved as QUARANTINE. A device whose file is gone leaves resolution, stays in the
+inventory, appears as quarantined in the API and the dashboard, and is recorded in the
+chain; removal remains an operator's act. Restoring the file returns it to service, also
+recorded. An empty directory quarantines nothing.
+
+This needed a distinction the registry did not have: `all()` is INVENTORY (status, exports,
+audits — a device the operator can no longer act on is still something they must see) and
+`active()` is PARTICIPATION. One method was answering both questions.
+
+**B3 — an unsupported `kind:` loaded silently** and failed only when an intent reached the
+device. The project already separates "searched" from "not searchable" in scanning so that
+"found nothing" cannot be mistaken for "did not look"; this was the same confusion with
+worse timing. Now refused at load, naming the supported transports and pointing at code
+adapters.
+
+**R1** duplicate device ids across files are reported instead of the later one winning by
+alphabetical accident — an operator could otherwise edit the losing file forever with no
+effect. **R2** unedited `REPLACE_WITH_…` values are flagged at load, since copying an example
+and forgetting the token is the most likely first mistake.
+
+**Two defects found while fixing these.** Re-registering a device from its restored file
+overwrites `adapter_config`, so by the time the un-quarantine check ran there was nothing
+left to detect: the device returned to service correctly and SILENTLY, and "when did this
+come back" is as much an audit question as "when did it go". Fixed by capturing the
+quarantined set before registration. And the new fixture omitted `DOSYNC_AUTH=false`, so the
+API returned 401 and the failure surfaced as a KeyError that said nothing about
+authentication — it looked like a quarantine bug for several minutes.
+
+798/798; all three blockers verified to fail when reintroduced.

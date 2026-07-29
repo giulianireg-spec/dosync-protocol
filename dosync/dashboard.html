@@ -1026,6 +1026,9 @@ async function loadDevices() {
       card.innerHTML = `
         <div class="device-top">
           <span class="device-name">${d.device_name}</span>
+          ${d.quarantined ? '<span class="device-adapter" style="color:#f59e0b" ' +
+            'title="' + (d.quarantine_reason || '') + ' — excluded from intents until you ' +
+            'remove it or restore its file">quarantined</span>' : ''}
           <span class="device-adapter">${adapter}</span>
           <!-- Renaming meant re-registering the whole manifest and removing meant
                curl. Telling a non-developer the bar is lower while leaving them

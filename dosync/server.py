@@ -694,6 +694,84 @@ async def lifespan(app: FastAPI):
     except Exception as _refresh_e:
         log.warning("Failed to start background state refresher: %s", _refresh_e)
 
+    # Declarative adapters — devices described in a file instead of in code.
+    # Registered at startup so a device someone described this morning is
+    # reachable this afternoon without anyone writing Python or waiting for a
+    # release of DoSync.
+    try:
+        from dosync.adapters.declarative import DeclarativeAdapter
+        from dosync.declarative import load_directory
+
+        _declared = load_directory()
+        if _declared:
+            if isinstance(_adapter_executor, AdapterExecutor) and \
+                    "declarative" not in _adapter_executor.registered_adapters():
+                _adapter_executor.register(DeclarativeAdapter(hub=hub))
+            # Captured BEFORE registering: re-registering a device from its file
+            # overwrites adapter_config with a fresh one that has no quarantine
+            # mark, so by the time the check below runs there is nothing left to
+            # detect. The device would return to service correctly and silently —
+            # and "when did this come back" is as much an audit question as
+            # "when did it go".
+            from dosync.hub import is_quarantined as _is_q
+            _was_quarantined = {d.device_id for d in hub.registry.all() if _is_q(d)}
+
+            for _manifest, _definition in _declared:
+                hub.register_device(_manifest)
+            log.info("Declarative adapters: %d device(s) registered from %s",
+                     len(_declared),
+                     os.environ.get("DOSYNC_DECLARATIVE_DIR", "declarative"))
+
+        # A device whose file is gone must not keep answering intents. It is
+        # QUARANTINED rather than deleted: a directory that failed to mount looks
+        # exactly like a directory whose files were removed, and a hub that
+        # reacts to the first by deregistering a building is worse than one that
+        # asks. The device stays in the inventory, leaves resolution, and the
+        # operator confirms the removal.
+        #
+        # Only runs when at least one file loaded, for the same reason: an empty
+        # directory is far more likely to be a mistake than an instruction.
+        if _declared:
+            from dosync.hub import QUARANTINE_KEY
+
+            _present = {m.device_id for m, _ in _declared}
+            for _dev in hub.registry.all():
+                if getattr(_dev, "adapter", None) != "declarative":
+                    continue
+                _cfg = _dev.adapter_config or {}
+                if _dev.device_id in _present:
+                    if _dev.device_id in _was_quarantined:
+                        _cfg.pop(QUARANTINE_KEY, None)
+                        _cfg.pop("quarantine_reason", None)
+                        hub.db.save_device(_dev.device_id, _dev.to_dict())
+                        hub.audit_log.append({
+                            "type": "device_unquarantined",
+                            "device_id": _dev.device_id,
+                            "reason": "its declarative file is present again",
+                        })
+                        log.info("Device %s is declared again — back in service",
+                                 _dev.device_id)
+                elif not _cfg.get(QUARANTINE_KEY):
+                    _cfg[QUARANTINE_KEY] = True
+                    _cfg["quarantine_reason"] = "declarative file no longer present"
+                    _dev.adapter_config = _cfg
+                    hub.db.save_device(_dev.device_id, _dev.to_dict())
+                    hub.audit_log.append({
+                        "type": "device_quarantined",
+                        "device_id": _dev.device_id,
+                        "reason": "declarative file no longer present",
+                        "note": "excluded from intents; still registered until an "
+                                "operator removes it",
+                    })
+                    log.warning(
+                        "Device %s was declared in a file that is no longer there. "
+                        "It is excluded from intents but still registered — remove "
+                        "it deliberately, or restore the file.", _dev.device_id)
+    except Exception as _decl_e:
+        # One bad directory must not stop a hub from starting; the devices that
+        # loaded still work and the operator needs the hub up to fix the rest.
+        log.warning("Declarative adapters not loaded: %s", _decl_e)
+
     # Audit checkpoints, on by default. The chain's tamper-evidence has one
     # limit only a checkpoint closes — a rewrite by someone with full database
     # access — and a guarantee that requires opt-in is one most installations
@@ -1154,9 +1232,28 @@ async def get_reachability(auth=Depends(require_auth)):
 
 @app.get("/v1/devices", tags=["Devices"])
 def list_devices(auth: str = Depends(require_auth)):
+    """Every device the hub knows about, quarantined ones included.
+
+    A quarantined device is reported rather than hidden. It is excluded from
+    intents — the operator already believes it is gone — but hiding it is how a
+    device gets forgotten while still occupying its id, and the operator needs
+    to see it in order to decide.
+    """
+    from dosync.hub import is_quarantined, quarantine_reason
+
+    devices = []
+    for d in hub.registry.all():
+        entry = d.to_public_dict()
+        if is_quarantined(d):
+            entry["quarantined"] = True
+            entry["quarantine_reason"] = quarantine_reason(d)
+        devices.append(entry)
+    quarantined = sum(1 for d in devices if d.get("quarantined"))
     return {
-        "count": len(hub.registry.all()),
-        "devices": [d.to_public_dict() for d in hub.registry.all()],
+        "count": len(devices),
+        "active": len(devices) - quarantined,
+        "quarantined": quarantined,
+        "devices": devices,
     }
 
 

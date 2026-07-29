@@ -279,7 +279,43 @@ all: anything HA already integrates, DoSync can reach. **Reference** adapters
 an adapter is written — not as endorsement, partnership, or a promise to track
 anyone's firmware. **Infrastructure** is notifications.
 
-If your device is not covered, DoSync does not download an adapter for it: the
+**If your device is not covered, describe it in a file.** A declarative adapter
+is YAML or JSON — no code, no release of DoSync to wait for:
+
+```yaml
+device:
+  id: light-hallway
+  name: Hallway light
+  tags: [light, energy]        # how intents find it
+  emergency_capable: true      # whether an emergency may use it
+
+transport:
+  kind: http
+  base_url: http://192.168.1.40
+
+actions:
+  turn_on:
+    type: turn_on              # what it MEANS to DoSync, not just its name
+    request: { method: POST, path: /light/on }
+```
+
+Drop it in `declarative/` (or set `DOSYNC_DECLARATIVE_DIR`) and restart. Five
+worked examples ship in [`examples/declarative/`](examples/declarative/) — a
+light, an air conditioner, a 3D printer, a television and a floor's lighting
+controller — chosen so one of them probably resembles what you have.
+
+The `type` on each action is the part that matters. A file that only said "POST
+/on turns it on" would let DoSync switch the device and leave it invisible to
+everything else: no intent could select it, no policy could name it, an
+emergency would pass it by.
+
+**What a declarative adapter cannot do**, stated plainly: it speaks HTTP. It
+cannot speak Zigbee, Z-Wave, BLE pairing, an OPC-UA session, or anything needing
+a handshake, session state or a vendor SDK. Those need a code adapter — an
+ecosystem one here, or a third-party package. This format covers most simple
+devices and almost no complex ones.
+
+DoSync does not download an adapter for you: the
 protocol's whole argument is that nothing actuates hardware without a policy and
 a record, and fetching executable code from the internet would put the largest
 possible hole exactly there. Instead, an operator writes a declarative adapter

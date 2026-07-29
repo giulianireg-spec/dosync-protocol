@@ -1,0 +1,47 @@
+# An air conditioner with a local HTTP API.
+#
+# Note what is NOT here: nothing about comfort schedules or "modes". A device
+# file describes what the device can do. What SHOULD happen, and when, is an
+# intent and a policy — keeping those apart is why the same file works in a
+# house and in a server room.
+
+device:
+  id: ac-living
+  name: Living room air conditioner
+  category: actuator
+  room: living-room
+  tags: [climate, comfort, energy]
+  emergency_capable: false   # an AC is not part of an emergency response here;
+                             # in a server room it would be, and that is a
+                             # DEPLOYMENT decision, not a property of the device
+
+transport:
+  kind: http
+  base_url: http://192.168.1.50
+  headers:
+    Authorization: Bearer REPLACE_WITH_YOUR_DEVICE_TOKEN
+
+actions:
+  turn_on:
+    type: turn_on
+    request: { method: POST, path: /api/power, body: { state: "on" } }
+
+  turn_off:
+    type: turn_off
+    request: { method: POST, path: /api/power, body: { state: "off" } }
+
+  set_temperature:
+    type: set_temperature
+    description: Target temperature in Celsius
+    request:
+      method: POST
+      path: /api/setpoint
+      body:
+        celsius: "{params.temperature}"
+
+sensors:
+  temperature:
+    type: temperature
+    kind: environment        # measures the ROOM — this distinction decides
+                             # whether a status report includes it
+    request: { method: GET, path: /api/status, extract: room_temp }
