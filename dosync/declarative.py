@@ -39,7 +39,7 @@ SUPPORTED_SUFFIXES = (".yaml", ".yml", ".json")
 #: Transports a declarative file may name. Deliberately short: anything needing
 #: pairing, session state or a vendor SDK is not describable in a file and is
 #: refused at load rather than at the moment an intent needs it.
-SUPPORTED_TRANSPORTS = {"http"}
+SUPPORTED_TRANSPORTS = {"http", "mqtt"}
 
 #: Text left in a copied example that the operator forgot to replace.
 PLACEHOLDER_MARKER = "REPLACE_WITH"
@@ -163,6 +163,17 @@ def build_manifest(data: dict, source: str = "<declarative>"):
         raise DeclarativeError(
             f"{source}: transport.base_url is required for http devices, e.g. "
             f"base_url: http://192.168.1.40")
+    if kind == "mqtt" and not str(transport.get("broker", "")).strip():
+        raise DeclarativeError(
+            f"{source}: transport.broker is required for mqtt devices, e.g. "
+            f"broker: 192.168.1.10")
+    if kind == "mqtt":
+        for action_name, spec in (actions or {}).items():
+            if isinstance(spec, dict) and not (spec.get("publish") or {}).get("topic"):
+                raise DeclarativeError(
+                    f"{source}: mqtt action '{action_name}' needs a "
+                    f"`publish: {{topic: ...}}`. An MQTT action is a message sent "
+                    f"to a topic; without one there is nothing to send.")
 
     # R2: an example copied without editing is the most likely first mistake.
     _unedited = _find_placeholders(data)

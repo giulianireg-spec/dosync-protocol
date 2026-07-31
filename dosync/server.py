@@ -694,6 +694,26 @@ async def lifespan(app: FastAPI):
     except Exception as _refresh_e:
         log.warning("Failed to start background state refresher: %s", _refresh_e)
 
+    # Third-party adapters, from packages the operator installed deliberately.
+    # Registered BEFORE declarative devices so a plugin can serve them, and
+    # recorded in the audit chain: this is code running inside the hub with the
+    # hub's permissions, and "what was running when this happened" is a question
+    # an incident review asks.
+    try:
+        from dosync.plugins import discover_third_party_adapters
+
+        for _name, _adapter, _origin in discover_third_party_adapters(hub=hub):
+            if isinstance(_adapter_executor, AdapterExecutor):
+                _adapter_executor.register(_adapter)
+                hub.audit_log.append({
+                    "type": "third_party_adapter_loaded",
+                    "adapter": _name,
+                    "package": _origin,
+                    "note": "runs inside the hub with the hub's permissions",
+                })
+    except Exception as _plug_e:
+        log.warning("Third-party adapter discovery failed: %s", _plug_e)
+
     # Declarative adapters — devices described in a file instead of in code.
     # Registered at startup so a device someone described this morning is
     # reachable this afternoon without anyone writing Python or waiting for a

@@ -62,6 +62,11 @@ dependencies = [
     # than at load. Third time this circle appeared in two days; see
     # DESIGN-PRINCIPLES on dependencies of advertised capabilities.
     "aiohttp>=3.8.0",
+    # MQTT is the second transport declarative adapters speak, and the most
+    # common one in industry after HTTP. 616 KB — thirty times smaller than
+    # bleak — so the rule about dependencies of advertised capabilities applies
+    # without a size argument to weigh against it.
+    "paho-mqtt>=2.0.0",
 ]
 
 [project.optional-dependencies]

@@ -281,10 +281,18 @@ Three supported paths, covering different cases:
 - **Declarative adapters**, a file the operator writes describing an HTTP, MQTT
   or Modbus device. The operator answers for them. No code is executed that the
   operator did not write.
-- **Third-party adapters via Python entry points** — a vendor publishes
-  `dosync-adapter-x` and the operator installs it deliberately. The publisher
-  answers for it, and installation is an explicit act with a supply chain behind
-  it rather than a silent fetch.
+- **Third-party adapters via Python entry points** (group `dosync.adapters`) — a
+  vendor publishes `dosync-adapter-x` and the operator installs it deliberately.
+  The publisher answers for it, and installation is an explicit act with a supply
+  chain behind it rather than a silent fetch.
+
+  Such an adapter runs inside the hub with the hub's permissions, which is the
+  cost of the arrangement and is not hidden: loading one is logged at WARNING and
+  appended to the audit chain, because "what code was running when this happened"
+  is a question an incident review asks. Its `adapter_kind` is set to
+  `third_party` BY THE LOADER and not read from the plugin — where code came from
+  is not the code's to assert, and a package claiming to be first-party code of
+  this project is exactly the claim not to take on trust.
 
 The difference between the third path and a plugin repository is consent and
 attribution: someone chose to install it, and someone's name is on it.

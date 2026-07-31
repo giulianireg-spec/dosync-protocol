@@ -87,6 +87,10 @@ class DoSyncAdapter(ABC):
     #:       product — neither of which is true here.
     #:
     #:   "infrastructure" — not a device technology at all (notifications).
+    #:
+    #:   "third_party" — arrived through an entry point from a package the
+    #:       operator installed. Set BY THE LOADER, never by the plugin: where
+    #:       code came from is not the code's to assert.
     adapter_kind: str = "ecosystem"
 
     async def discover(self, timeout: float = 5.0) -> list:

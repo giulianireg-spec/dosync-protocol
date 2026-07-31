@@ -359,7 +359,7 @@ def test_every_adapter_declares_a_valid_kind():
     import dosync.adapters as pkg
     from dosync.adapters import DoSyncAdapter
 
-    valid = {"ecosystem", "reference", "infrastructure"}
+    valid = {"ecosystem", "reference", "infrastructure", "third_party"}
     for mod in pkgutil.iter_modules(pkg.__path__):
         m = importlib.import_module(f"dosync.adapters.{mod.name}")
         for name, obj in inspect.getmembers(m, inspect.isclass):

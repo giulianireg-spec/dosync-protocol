@@ -1380,3 +1380,46 @@ API returned 401 and the failure surfaced as a KeyError that said nothing about
 authentication — it looked like a quarantine bug for several minutes.
 
 798/798; all three blockers verified to fail when reintroduced.
+
+## DECLARATIVE-MQTT + THIRD-PARTY-ADAPTERS — The last two adapter paths — SHIPPED 2026-07-27
+Closes the adapters panel session: three ways a technology reaches a deployment, all built.
+
+**MQTT in the declarative format** (Nakamura's recommendation). The most common transport in
+industry after HTTP, and the adapter for it already existed — only the declarative format
+could not name it. `paho-mqtt` joins core dependencies: 616 KB, thirty times smaller than
+bleak, so the dependency rule applies with no size argument to weigh against it.
+
+The MQTT path is deliberately honest about what a publish means: success says the BROKER
+accepted the message, not that the device acted on it, and at QoS 0 not even that. For a
+light the distinction is pedantic; for the conveyor in the shipped example, with someone
+standing near it, it is the whole question — which is why `verify_with` exists and why the
+result says so in its response rather than reporting a bare success. The example also shows
+per-action QoS overriding the device default, with the reasoning written down: a duplicated
+stop is harmless, a lost one is not, and a duplicated START would not be.
+
+**Third-party adapters via entry points** (group `dosync.adapters`). A vendor publishes
+`dosync-adapter-x`, the operator installs it, the hub finds it — no pull request here and no
+promise from this project to maintain code for hardware it has never seen.
+
+The security posture is the point of the design. DESIGN-PRINCIPLES rules out fetching adapter
+code remotely; an entry point differs in that someone chose to install it and someone's name
+is on it. But it still runs inside the hub with the hub's permissions, so: logged at WARNING
+on load, appended to the audit chain, and its `adapter_kind` set to `third_party` **by the
+loader**. Verified with a real installed plugin that declared itself `ecosystem` — a package
+claiming to be first-party code of this project — and was overridden. Where code came from is
+not the code's to assert.
+
+A broken plugin is skipped rather than fatal: one vendor's bad release must not take a
+building offline. Verified with three entry points where two fail — the working one still
+loads.
+
+**Found while testing:** `entry_points` was imported inside the function, so no test could
+substitute it and the suite tested against whatever happened to be installed in the
+environment running it. Moved to module level. A dependency reached for at call time is one a
+test cannot replace.
+
+**And a test that stopped testing what it named:** the "unsupported transport" case used
+`kind: mqtt`, which this same change made valid — it then passed for the wrong reason. Now
+uses zigbee, which is genuinely out of scope.
+
+810/810.

@@ -315,6 +315,24 @@ a handshake, session state or a vendor SDK. Those need a code adapter — an
 ecosystem one here, or a third-party package. This format covers most simple
 devices and almost no complex ones.
 
+**If it needs real code — pairing, a session, a vendor SDK — publish a package.**
+DoSync discovers adapters advertised by anything installed alongside it:
+
+```toml
+# in the vendor's pyproject.toml
+[project.entry-points."dosync.adapters"]
+daikin = "dosync_adapter_daikin:DaikinAdapter"
+```
+
+The operator runs `pip install dosync-adapter-daikin` and the hub finds it. No
+pull request here, and no promise from this project to maintain code for
+hardware it has never seen — the publisher answers for their own adapter.
+
+A third-party adapter runs inside the hub with the hub's permissions, so the hub
+says so: it is logged at WARNING when loaded, recorded in the audit chain, and
+reported as `kind: third_party` at `/v1/adapters` regardless of what the plugin
+declares about itself. Where code came from is not the code's to assert.
+
 DoSync does not download an adapter for you: the
 protocol's whole argument is that nothing actuates hardware without a policy and
 a record, and fetching executable code from the internet would put the largest

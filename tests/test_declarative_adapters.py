@@ -161,8 +161,10 @@ def test_an_unsupported_transport_is_refused_at_load():
     failed when an intent reached it. The project already separates "searched"
     from "not searchable" so that "found nothing" cannot be mistaken for "did
     not look"; this is the same confusion with worse timing."""
+    # Zigbee, not MQTT: MQTT became supported after this test was written, and a
+    # test whose example quietly turns valid stops testing what it names.
     data = _minimal()
-    data["transport"] = {"kind": "mqtt", "broker": "tcp://x"}
+    data["transport"] = {"kind": "zigbee"}
     with pytest.raises(DeclarativeError) as e:
         build_manifest(data, source="thing.yaml")
     assert "not supported" in str(e.value) and "code adapter" in str(e.value)
@@ -201,3 +203,46 @@ def test_unedited_example_values_are_flagged(tmp_path, caplog):
     with caplog.at_level(logging.WARNING):
         build_manifest(data, source="copied.yaml")
     assert any("unedited example values" in str(r.msg) for r in caplog.records)
+
+
+# ── MQTT transport (2026-07-27, Nakamura's recommendation) ──────────────────
+
+def test_mqtt_is_a_supported_transport():
+    """The most common transport in industry after HTTP, and the adapter for it
+    already existed — only the declarative format could not name it."""
+    data = _minimal()
+    data["transport"] = {"kind": "mqtt", "broker": "192.168.1.10"}
+    data["actions"]["turn_on"] = {"type": "turn_on",
+                                  "publish": {"topic": "plant/line/cmd",
+                                              "payload": '{"cmd":"on"}'}}
+    m = build_manifest(data)
+    assert m.adapter_config["transport"]["kind"] == "mqtt"
+
+
+def test_mqtt_requires_a_broker():
+    data = _minimal()
+    data["transport"] = {"kind": "mqtt"}
+    data["actions"]["turn_on"] = {"type": "turn_on",
+                                  "publish": {"topic": "t"}}
+    with pytest.raises(DeclarativeError) as e:
+        build_manifest(data)
+    assert "broker" in str(e.value)
+
+
+def test_an_mqtt_action_without_a_topic_is_refused():
+    """An MQTT action is a message sent to a topic; without one there is nothing
+    to send, and discovering that when an emergency fires is too late."""
+    data = _minimal()
+    data["transport"] = {"kind": "mqtt", "broker": "b"}
+    with pytest.raises(DeclarativeError) as e:
+        build_manifest(data)
+    assert "publish" in str(e.value)
+
+
+def test_an_mqtt_example_ships():
+    """And it is industrial, because MQTT's audience is not a house."""
+    loaded = load_directory(str(EXAMPLES))
+    mqtt_devices = [m for m, _ in loaded
+                    if (m.adapter_config or {}).get("transport", {}).get("kind") == "mqtt"]
+    assert mqtt_devices, "an MQTT example must ship — the format is learned by copying"
+    assert any("industrial" in m.tags or "machinery" in m.tags for m in mqtt_devices)

@@ -4,8 +4,8 @@ There is exactly one of these, no matter how many declarative devices exist. It
 reads the transport definition the loader stored on each manifest and performs
 the request. Adding a device is adding a file; it is never adding a class.
 
-Supports HTTP today. MQTT is the obvious next transport and is deliberately not
-claimed until it exists.
+Supports HTTP and MQTT. Anything needing pairing, session state or a vendor SDK
+is refused when the file loads rather than when an intent needs the device.
 """
 import asyncio
 import json
@@ -80,14 +80,78 @@ class DeclarativeAdapter(DoSyncAdapter):
 
         transport = definition.get("transport") or {}
         kind = str(transport.get("kind", "http")).lower()
-        if kind != "http":
+        if kind == "http":
+            return await self._http(action, transport, spec)
+        if kind == "mqtt":
+            return await self._mqtt(action, transport, spec)
+        # Unreachable in practice — the loader refuses unknown transports — but
+        # a device could be registered through the API with a hand-made config.
+        return ActionResult(
+            device_id=action.device_id, action=action.action, success=False,
+            error=f"Transport '{kind}' is not supported by declarative adapters. "
+                  f"A device needing {kind} needs a code adapter.")
+
+    async def _mqtt(self, action, transport: dict, spec: dict) -> ActionResult:
+        """Publish one message and report whether the broker accepted it.
+
+        MQTT is fire-and-forget by nature, and this is deliberately honest about
+        what that means: a successful publish says the BROKER took the message,
+        not that the device acted on it. At QoS 0 it does not even say that
+        much. Anything stronger requires the device to confirm — which is what
+        `verify_with` is for, and why the distinction between "we sent it" and
+        "we know it happened" exists in this protocol at all.
+        """
+        try:
+            import paho.mqtt.client as mqtt
+        except ImportError:
             return ActionResult(
                 device_id=action.device_id, action=action.action, success=False,
-                error=f"Transport '{kind}' is not supported by declarative "
-                      f"adapters yet — only http. A device needing {kind} needs "
-                      f"a code adapter.")
+                error="paho-mqtt is required for declarative MQTT devices")
 
-        return await self._http(action, transport, spec)
+        publish = spec.get("publish") or {}
+        params = dict(action.params or {})
+        topic = _substitute(str(publish.get("topic", "")), params, action.device_id)
+        payload = _substitute(publish.get("payload", ""), params, action.device_id)
+        if isinstance(payload, (dict, list)):
+            payload = json.dumps(payload)
+
+        broker = str(transport.get("broker", ""))
+        port = int(transport.get("port", 1883))
+        qos = int(publish.get("qos", transport.get("qos", 1)))
+
+        def _send() -> tuple[bool, str]:
+            client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+            user = transport.get("username")
+            if user:
+                client.username_pw_set(user, transport.get("password"))
+            try:
+                client.connect(broker, port,
+                               keepalive=int(transport.get("keepalive", 30)))
+                client.loop_start()
+                info = client.publish(topic, str(payload), qos=qos)
+                info.wait_for_publish(timeout=float(transport.get("timeout", 10)))
+                delivered = info.is_published()
+                return delivered, "" if delivered else "broker did not confirm publish"
+            finally:
+                try:
+                    client.loop_stop()
+                    client.disconnect()
+                except Exception:
+                    pass
+
+        try:
+            ok, err = await asyncio.get_running_loop().run_in_executor(None, _send)
+        except Exception as e:
+            return ActionResult(
+                device_id=action.device_id, action=action.action, success=False,
+                error=f"{type(e).__name__}: {e}")
+
+        return ActionResult(
+            device_id=action.device_id, action=action.action, success=ok,
+            response={"topic": topic, "qos": qos,
+                      "note": "the broker accepted the message; whether the device "
+                              "acted on it is not knowable from a publish"},
+            error=err or None)
 
     async def _http(self, action, transport: dict, spec: dict) -> ActionResult:
         try:
