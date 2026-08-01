@@ -106,6 +106,38 @@ operational lever in this document.
 
 ---
 
+## Signed heartbeats over an unencrypted channel
+
+Optional, off by default (`DOSYNC_LIGHTWEIGHT_HEARTBEAT`). Exists because an
+8-bit MCU on a coin cell cannot do TLS, and requiring it puts the hardware floor
+above the cheapest tier of IoT entirely.
+
+| Property | Over mTLS | Signed plaintext |
+|---|---|---|
+| Message authenticity | yes | **yes** — HMAC-SHA256 over the device's provisioning token |
+| Replay protection | yes | **yes** — narrow clock window plus single-use signatures |
+| Confidentiality | yes | **no** — `device_id`, timestamp and report travel readable |
+| Client identity to the network | yes | no |
+
+**Why this trade is acceptable for a heartbeat and would not be for an action.**
+A heartbeat is positive signal only: it marks a device reachable and never marks
+one unreachable. A forged heartbeat cannot switch anything on — the worst it does
+is make a dead device look healthy. That is precisely the attack worth
+preventing, and it is prevention of REPLAY rather than of forgery: repeat a
+captured heartbeat and a burnt-out smoke sensor reports healthy forever, blinding
+failure detection exactly when it is needed. Both are closed.
+
+**What an eavesdropper learns:** that a device called `sensor-door-01` exists and
+is alive, and whatever the `report` contains. Do not put anything in a report you
+would not put on a postcard.
+
+**Devices using this channel are marked.** `report_channel: signed_plaintext`
+appears in their health, because a device reporting over an unencrypted channel
+is in a different position from one on mTLS, and if the two look identical the
+protocol is hiding a real difference.
+
+---
+
 ## Runbook — audit evidence for a regulated deployment
 
 ### What is the protocol, and what is yours

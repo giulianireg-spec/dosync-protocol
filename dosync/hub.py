@@ -1374,6 +1374,20 @@ class DeviceHealth:
             self._state[device_id] = st
             self._persist(device_id)
 
+    def mark_channel(self, device_id: str, channel: str) -> None:
+        """Record HOW a device last reported — the transport, not the content.
+
+        A device whose heartbeats arrive over an unencrypted (though signed)
+        channel is in a different position from one reporting over mTLS, and if
+        both look identical in the device list the protocol is hiding a real
+        difference (panel, Aguirre). Recorded rather than judged: it is the
+        operator's decision whether that matters in their deployment.
+        """
+        with self._lock:
+            st = self._state.get(device_id, {})
+            st["report_channel"] = channel
+            self._state[device_id] = st
+
     def record_heartbeat(self, device_id: str, reported: dict | None = None) -> None:
         """DEVICE-HEALTH-ACTIVE (b): a device proactively reported its own health.
 
@@ -1437,6 +1451,10 @@ class DeviceHealth:
             "last_seen": st.get("last_seen"),
             "last_heartbeat": st.get("last_heartbeat"),
             "heartbeat_report": st.get("heartbeat_report"),
+            # How this device last reported. `signed_plaintext` means a channel
+            # that is authenticated but NOT encrypted — a real difference from
+            # mTLS, and one an operator can only act on if they can see it.
+            "report_channel": st.get("report_channel"),
             "unreachable_since": st.get("unreachable_since") if unreachable else None,
             "unreachable_until": st.get("unreachable_until") if unreachable else None,
             "note": ("no interaction recorded yet" if "last_seen" not in st and not unreachable

@@ -541,12 +541,44 @@ not verify. The CLI keeps its warning because the CLI still is a second process.
 The lesson worth keeping: a limitation attributed to a system was a limitation of the one
 way we happened to invoke it.
 
-## H4 — Lightweight heartbeat for TLS-incapable hardware
-*Raised by Kim (panel 2026-07-21).*
-`POST /v1/heartbeat` requires bearer auth over mTLS. An 8-bit MCU with 32KB of RAM cannot do
-TLS, so today's hardware floor is "TLS-capable" — which excludes the cheapest tier of IoT.
-The options (a pre-signed token over UDP, an aggregating gateway) all trade security for
-reach; that trade should be chosen deliberately, not defaulted into.
+## H4 — Heartbeats without TLS — CLOSED 2026-08-01
+*Raised by Kim (panel 2026-07-21); designed by the panel 2026-08-01 before any code.*
+
+The item said every option trades security for reach and that the trade must be chosen, not
+defaulted into. The panel found the trade is narrower than stated: **authenticity does not
+require TLS.** TLS provides channel confidentiality and channel authenticity; a heartbeat
+needs MESSAGE authenticity, and an HMAC-SHA256 fits comfortably on an 8-bit MCU.
+
+Why that is acceptable here and would not be for an action (Sosa and Benítez): a heartbeat is
+positive signal only — it marks a device reachable and never marks one unreachable — so a
+forged one cannot switch anything on. The attack worth preventing is SUPPRESSION: replay a
+captured heartbeat and a burnt-out smoke sensor reports healthy forever, blinding failure
+detection exactly when it matters. Replay protection is therefore not optional.
+
+**Nothing new was needed for credentials.** The project already had `device_tokens`, hashed
+storage and `POST /v1/devices/provision`. The HMAC key is `sha256(device_token)`: the device
+derives it, the hub already holds it, and the deliberate decision not to store tokens
+recoverably stays intact.
+
+Implemented per the panel's six decisions: HMAC over the existing token; mandatory replay
+protection (narrow window plus single-use signatures, with the seen-set pruned rather than
+grown); opt-in via `DOSYNC_LIGHTWEIGHT_HEARTBEAT`, off by default because a hub that starts
+accepting unencrypted messages without the operator choosing it is wrong even when it is safe
+(Ferreyra); the device marked `report_channel: signed_plaintext` and that field exposed in
+health, since two devices in different security positions must not look identical (Aguirre);
+a row in the threat model rather than a footnote; and plain HTTP rather than UDP, because the
+real floor of the market is an ESP8266 that speaks HTTP and not TLS (Torres, Kim).
+
+Clock errors are reported as clock errors. Cheap hardware has no NTP and drifts, and "your
+clock is off by 400 seconds" is a different problem from "your signature is wrong" — both
+look like "rejected" from outside.
+
+**Found while building it:** `mark_channel` wrote the field and `snapshot()` did not return
+it, so the marking existed and was invisible — the same shape as the dashboard that shipped
+outside the package. And the H8 configuration-reference test caught the new variable being
+undocumented within minutes of it existing, which is what that test is for.
+
+848/848.
 
 ## H5 — Third-party certification / public registry
 *Raised by Nakamura (panel 2026-07-21).*

@@ -32,6 +32,7 @@ GROUPS = [
                          "DOSYNC_CERTIFY", "DOSYNC_HUB_ROLE", "DOSYNC_HUB_URL",
                          "DOSYNC_PRIMARY_URL", "DOSYNC_STATUS_SCOPE")),
     ("Access", ("DOSYNC_AUTH", "DOSYNC_TOKEN", "DOSYNC_DEVICE_AUTH",
+                "DOSYNC_LIGHTWEIGHT_HEARTBEAT",
                 "DOSYNC_DEMO_TOKEN", "DOSYNC_CERTS_DIR", "DOSYNC_CA_CERT",
                 "DOSYNC_CERT_KEY")),
     ("Audit and evidence", ("DOSYNC_ASSURANCE", "DOSYNC_CHECKPOINT_INTERVAL",

@@ -308,6 +308,17 @@ except Exception as _e:
 #
 # The dashboard reports which source is in force, so a toggle that cannot take
 # effect says why instead of appearing broken.
+def lightweight_enabled() -> bool:
+    """Whether this hub accepts signed-but-unencrypted heartbeats.
+
+    Read at call time rather than captured at import, so a test — and an
+    operator restarting with the variable set — sees the change without the
+    module being reloaded.
+    """
+    from dosync.lightweight import is_enabled
+    return is_enabled()
+
+
 _auth_env = os.environ.get("DOSYNC_AUTH")
 if _auth_env is not None:
     _auth_enabled = _auth_env.lower() != "false"
@@ -1728,6 +1739,82 @@ async def receive_event(req: EventRequest, auth: str = Depends(require_auth)):
         "device_id": req.device_id,
         "event_id":  req.event_id,
         "severity":  req.severity,
+    }
+
+
+@app.post("/v1/heartbeat/signed", tags=["Devices"])
+async def receive_signed_heartbeat(req: dict):
+    """A heartbeat authenticated by signature instead of by TLS and bearer.
+
+    For hardware that cannot do TLS — an 8-bit MCU on a coin cell, where a
+    handshake costs more battery than a month of operation. Deliberately NOT
+    behind `require_auth`: the whole point is that the caller cannot present a
+    bearer token over an encrypted channel. Authenticity comes from an HMAC over
+    the device's own provisioning token instead.
+
+    Off unless `DOSYNC_LIGHTWEIGHT_HEARTBEAT=true`. A hub that starts accepting
+    messages over an unencrypted channel because somebody plugged in a cheap
+    sensor — without the operator choosing it — is wrong even when it is safe
+    (panel, Ferreyra).
+
+    Body: `device_id`, `timestamp` (unix seconds), `signature`, optional
+    `report`. See `dosync/lightweight.py` for the canonical string and the key
+    derivation, which a firmware author needs to reproduce exactly.
+    """
+    import json as _json
+
+    from dosync.lightweight import SignatureError, verify
+
+    if not lightweight_enabled():
+        raise HTTPException(
+            status_code=404,
+            detail="Signed heartbeats are not enabled on this hub. Set "
+                   "DOSYNC_LIGHTWEIGHT_HEARTBEAT=true to accept them, having read "
+                   "docs/AUDIT-THREAT-MODEL.md on what that channel does and does "
+                   "not protect.")
+
+    device_id = req.get("device_id")
+    if not device_id or not hub.registry.get(device_id):
+        # Same refusal as the authenticated endpoint: a heartbeat asserts that a
+        # KNOWN device is alive, not that a device exists.
+        raise HTTPException(status_code=404, detail="Unknown device")
+
+    token_hash = hub.db.get_device_token_hash(device_id)
+    if not token_hash:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Device '{device_id}' has no provisioning token. Run "
+                   f"POST /v1/devices/provision first — a signed heartbeat is "
+                   f"signed with that token.")
+
+    report = req.get("report") or None
+    report_json = _json.dumps(report, sort_keys=True, separators=(",", ":")) \
+        if report else ""
+
+    try:
+        verify(device_id=device_id, timestamp=req.get("timestamp"),
+               signature=req.get("signature", ""), token_hash=token_hash,
+               report_json=report_json)
+    except SignatureError as e:
+        # Logged: a burst of rejected heartbeats is either a device with a
+        # broken clock or somebody replaying captures, and both are worth seeing.
+        logging.getLogger("dosync.server").warning(
+            "Signed heartbeat from %s rejected: %s", device_id, e)
+        raise HTTPException(status_code=401, detail=str(e))
+
+    hub.health.record_heartbeat(device_id, report)
+    # Marked, so an operator can tell which devices report over an encrypted
+    # channel and which over a signed-but-readable one. If both look identical
+    # in the device list, the protocol is hiding a real difference (panel,
+    # Aguirre).
+    hub.health.mark_channel(device_id, "signed_plaintext")
+    snap = hub.health.snapshot(device_id)
+    return {
+        "device_id": device_id,
+        "acknowledged": True,
+        "channel": "signed_plaintext",
+        "note": "authenticated by signature; this channel is not encrypted",
+        "health": snap,
     }
 
 

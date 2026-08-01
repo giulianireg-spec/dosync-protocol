@@ -672,6 +672,19 @@ class DoSyncDB:
         )
         return cur.fetchone() is not None
 
+    def get_device_token_hash(self, device_id: str) -> str | None:
+        """The stored HASH of a device's provisioning token.
+
+        Returned, not the token — the hub never holds tokens in the clear, which
+        is why the HMAC key is the hash itself: the device derives the same value
+        with sha256(token) and the hub already has it, so neither side needs the
+        secret to travel or to be stored recoverably.
+        """
+        cur = self._conn.execute(
+            "SELECT token_hash FROM device_tokens WHERE device_id=?", (device_id,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
     def device_is_provisioned(self, device_id: str) -> bool:
         cur = self._conn.execute(
             "SELECT 1 FROM device_tokens WHERE device_id=?", (device_id,)

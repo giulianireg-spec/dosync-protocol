@@ -33,6 +33,7 @@ settings exist for deployments whose needs differ from that, not as a checklist.
 | `DOSYNC_AUTH` | _unset_ |
 | `DOSYNC_TOKEN` | _unset_ |
 | `DOSYNC_DEVICE_AUTH` | `permissive` |
+| `DOSYNC_LIGHTWEIGHT_HEARTBEAT` | _unset_ |
 | `DOSYNC_DEMO_TOKEN` | _unset_ |
 | `DOSYNC_CERTS_DIR` | `certs` |
 | `DOSYNC_CA_CERT` | _unset_ |
