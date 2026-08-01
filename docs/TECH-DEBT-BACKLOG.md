@@ -471,14 +471,26 @@ that nobody verified, which is the exact pattern this project keeps catching els
 item here is not a promise; it is a decision to postpone WITH the reason attached, so a
 future session inherits the thinking instead of rediscovering it.
 
-## H1 — Two concurrent same-rank emergencies on one device
-*Raised by Benítez (panel 2026-07-21). Also recorded in spec §3.1 as a known open edge.*
-The claim FSM arbitrates strictly-lower rank (I1) and same-rank conflicts are resolved
-pre-dispatch (§2) — but two emergencies DISPATCHED concurrently were never seen together
-pre-dispatch, so they do not arbitrate against each other. The device takes both writes; the
-last write is final. Rare in a home, less rare in a hospital or plant with multiple alarm
-sources. Closing it means first deciding what "correct" even means when two equally urgent
-truths target one device — a modeling question before a coding one.
+## H1 — Two concurrent same-rank emergencies — CLOSED 2026-07-31
+*Raised by Benítez (panel 2026-07-21).*
+Reproduced first: `unlock` and `lock` on one door, both emergency urgency, both returning
+success, the final state decided by arrival order, and **zero audit events**. The arbiter
+ranks urgencies so emergency-over-routine was solved; same-rank was deferred to "the
+PolicyEngine, pre-dispatch", which cannot help — by the time both reach the arbiter both have
+already passed policy.
+
+Closed by making it visible rather than by picking a winner. Blocking one would require
+inventing a priority the protocol does not have, and dropping the later action is as likely
+to be wrong as keeping it. Two emergency plans contending for one device is a fact about the
+DEPLOYMENT — usually two intents that should have been one — so it is now reported as
+`concurrent_same_rank_claims` with the note that the later action determines the final state.
+
+Two subtleties, both found by testing rather than by reasoning: the count has to happen
+BEFORE the per-device lock (the lock is what serialises them, so from inside, the first has
+already left and the contention is invisible), and it is released in a `finally` outside the
+lock covering the supersede return too, because a counter decremented on one path only would
+eventually report contention that is not happening — a false alarm in an audit trail is worse
+than no alarm.
 
 ## H2 — Verification via push-only sensors
 *Found by the 2026-07-21 verify_with drill.*
@@ -550,14 +562,20 @@ system knew the answer and did not say it, or worked in the author's setup and n
 The remaining items are different in kind — they are product, not polish, and discovery is
 the one that decides whether the rest matters.
 
-## H8 — Environment variables documented in one place
+## H8 — Configuration in one place — CLOSED 2026-07-31
 *Noticed 2026-07-31 while auditing what is open.*
-The hub now reads well over a dozen `DOSYNC_*` variables — assurance, checkpoints, archiving,
-declarative directory, adapters, auth — each documented where it was introduced and nowhere
-together. This backlog entry got one of them WRONG on first writing (`DOSYNC_AUTH_MAX_LIVE`
-for `DOSYNC_AUDIT_MAX_LIVE`), which is the argument for the item: if the author mistypes a
-variable while summarising his own work, an operator has no chance. A single reference table,
-tested against what the code actually reads.
+48 `DOSYNC_*` settings, each documented where it was introduced and nowhere together. The
+entry asking for this mistyped one while being written, which was the argument in miniature.
+
+`docs/CONFIGURATION.md` is now GENERATED from the source
+(`python3 -m dosync.config_reference --write`) and a test fails when it drifts — a
+hand-maintained table would have been the fifth thing here to hold one fact in two places.
+Grouped by what an operator is trying to do rather than alphabetically, because they arrive
+with a question and not with a variable name.
+
+Found while building it: the generator scanned its own docstring — which shows the pattern it
+searches for — and reported `DOSYNC_X` as a real setting. A generator that hallucinates is
+worse than a hand-written table.
 
 ## H7 — Second independent implementation + language-independent wire format
 *Standing item, predates the panel.*

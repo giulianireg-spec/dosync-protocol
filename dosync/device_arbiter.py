@@ -153,6 +153,10 @@ class DeviceArbiter:
         self._now = now_fn
         self._locks: dict[str, asyncio.Lock] = {}
         self._claims: dict[str, _Claim] = {}
+        #: How many actions are currently inside the per-device lock. Used only
+        #: to notice that two same-rank emergencies contended for one device;
+        #: the arbiter does not act on it, it reports it.
+        self._contending: dict[str, int] = {}
 
     # Delegate everything we don't override to the wrapped executor (register,
     # get_state, adapters, etc.), so the arbiter is a drop-in for AdapterExecutor.
@@ -192,6 +196,22 @@ class DeviceArbiter:
             grace=self._grace,
             max_hold=self._max_hold,
         )
+
+    def _emit(self, event: dict) -> None:
+        """Report to the audit hook, best-effort.
+
+        A failing hook must not abort the action it was reporting on — the
+        device work is the point and the note is the note. Logged rather than
+        swallowed, because this project has been bitten by a bare
+        `except: pass` hiding a security path that never ran.
+        """
+        if self._audit_hook is None:
+            return
+        try:
+            self._audit_hook(event)
+        except Exception as e:      # pragma: no cover - defensive
+            log.warning("Arbiter audit hook failed for %s: %s",
+                        event.get("type"), e)
 
     def _supersede(self, action: DeviceAction, claim: _Claim) -> ActionResult:
         reason = (
@@ -262,9 +282,38 @@ class DeviceArbiter:
         if claim is not None and claim.rank > rank:
             return self._supersede(action, claim)
 
+        # H1 detection must count BEFORE the lock, not inside it: the lock is
+        # what serialises the two, so by the time the second one is inside, the
+        # first has already left and the contention is invisible. The count is
+        # of actions WAITING OR RUNNING, which is what "two emergencies wanted
+        # this device at once" actually means.
+        waiting = self._contending.get(device_id, 0)
+        self._contending[device_id] = waiting + 1
+        if waiting and rank >= self._claim_min_rank:
+            self._emit({
+                "type": "concurrent_same_rank_claims",
+                "device_id": device_id,
+                "urgency": urgency.value,
+                "action": action.action,
+                "contending": waiting + 1,
+                "note": "another action of equal urgency already held this device; "
+                        "both execute and the later one determines the final state",
+            })
+
         # 3. Per-device serialization (different devices stay parallel).
-        async with self._lock_for(device_id):
-            claim = self._active_claim(device_id, self._now())
-            if claim is not None and claim.rank > rank:
-                return self._supersede(action, claim)
-            return await self._inner.execute(action, urgency)
+        try:
+            async with self._lock_for(device_id):
+                claim = self._active_claim(device_id, self._now())
+                if claim is not None and claim.rank > rank:
+                    return self._supersede(action, claim)
+                return await self._inner.execute(action, urgency)
+        finally:
+            # Outside the lock and covering every exit, including the supersede
+            # return above: a counter decremented on only one path leaks, and a
+            # leaked count would report contention that is not happening —
+            # a false alarm in the audit trail, which is worse than no alarm.
+            remaining = self._contending.get(device_id, 1) - 1
+            if remaining <= 0:
+                self._contending.pop(device_id, None)
+            else:
+                self._contending[device_id] = remaining

@@ -445,3 +445,33 @@ def test_extras_do_not_contradict_core_floors():
             assert m.group(2) == core_floors[m.group(1).lower()], (
                 f"{m.group(1)}: extras say >={m.group(2)}, core says "
                 f">={core_floors[m.group(1).lower()]} — one fact, one number")
+
+
+def test_the_configuration_reference_is_current():
+    """H8. The hub reads 48 `DOSYNC_*` settings, each documented where it was
+    introduced and nowhere together. The backlog entry that ASKED for this
+    document mistyped one while being written (`DOSYNC_AUTH_MAX_LIVE` for
+    `DOSYNC_AUDIT_MAX_LIVE`) — if the author gets one wrong summarising his own
+    work, an operator reading prose has no chance.
+
+    So the reference is generated, and this fails when it drifts. A
+    hand-maintained table would be the fifth thing here to hold one fact in two
+    places.
+    """
+    from dosync.config_reference import render, scan
+
+    target = REPO / "docs" / "CONFIGURATION.md"
+    assert target.exists(), "run: python3 -m dosync.config_reference --write"
+    assert target.read_text() == render(scan()), \
+        "docs/CONFIGURATION.md is stale — run python3 -m dosync.config_reference --write"
+
+
+def test_the_reference_does_not_invent_settings():
+    """The generator scanned its own docstring, which shows the pattern it looks
+    for, and reported `DOSYNC_X` as a real setting. A generator that
+    hallucinates is worse than a hand-written table."""
+    from dosync.config_reference import scan
+
+    found = scan()
+    assert "DOSYNC_X" not in found
+    assert "DOSYNC_ASSURANCE" in found and "DOSYNC_AUDIT_MAX_LIVE" in found

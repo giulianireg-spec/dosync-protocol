@@ -335,3 +335,126 @@ if __name__ == "__main__":
             print(f"  ERROR {fn.__name__}: {type(e).__name__}: {e}")
     print(f"\n{len(fns) - failed}/{len(fns)} passed")
     sys.exit(1 if failed else 0)
+
+
+# ── H1: two same-rank emergencies on one device (2026-07-31) ────────────────
+# Raised by Benítez (panel 2026-07-21) and carried in the horizon since. The
+# arbiter ranks urgencies, so emergency-over-routine was solved; two emergencies
+# were left to "the PolicyEngine, pre-dispatch" — which cannot help, because by
+# the time both reach the arbiter both have already passed policy.
+
+async def _gather_two(arbiter, a, b, urgency):
+    import asyncio
+    return await asyncio.gather(arbiter.execute(a, urgency),
+                                arbiter.execute(b, urgency))
+
+
+class _Slow:
+    """An executor slow enough that two actions genuinely overlap."""
+
+    def __init__(self):
+        self.sent = []
+
+    async def execute(self, action, urgency):
+        import asyncio
+
+        from dosync.models import ActionResult
+        self.sent.append(action.action)
+        await asyncio.sleep(0.05)
+        return ActionResult(device_id=action.device_id, action=action.action,
+                            success=True)
+
+
+def test_two_same_rank_emergencies_are_reported(monkeypatch):
+    """`unlock` and `lock` on one door, both emergencies, both reporting
+    success, outcome decided by arrival order — and nothing said so.
+
+    Not fixed by blocking one: both are legitimate and this layer cannot know
+    which is right. Ranking them would invent a priority the protocol does not
+    have. What is fixed is the silence, because two emergency plans contending
+    for one device is a fact about the deployment — usually two intents that
+    should have been one — and an incident review must be able to see it.
+    """
+    import asyncio
+
+    from dosync.device_arbiter import DeviceArbiter
+    from dosync.models import DeviceAction, Urgency
+
+    events = []
+    arb = DeviceArbiter(_Slow(), audit_hook=events.append)
+    a = DeviceAction(device_id="lock-front", action="unlock", params={})
+    b = DeviceAction(device_id="lock-front", action="lock", params={})
+
+    asyncio.run(_gather_two(arb, a, b, Urgency.EMERGENCY))
+
+    contention = [e for e in events if e["type"] == "concurrent_same_rank_claims"]
+    assert contention, "contending emergencies must not be silent"
+    assert contention[0]["device_id"] == "lock-front"
+    assert "later one determines the final state" in contention[0]["note"]
+
+
+def test_a_single_emergency_is_not_reported_as_contention():
+    """A false alarm in an audit trail is worse than no alarm: it is the thing
+    that teaches an operator to skim."""
+    import asyncio
+
+    from dosync.device_arbiter import DeviceArbiter
+    from dosync.models import DeviceAction, Urgency
+
+    events = []
+    arb = DeviceArbiter(_Slow(), audit_hook=events.append)
+    action = DeviceAction(device_id="lock-front", action="lock", params={})
+    asyncio.run(arb.execute(action, Urgency.EMERGENCY))
+
+    assert not [e for e in events if e["type"] == "concurrent_same_rank_claims"]
+
+
+def test_emergencies_on_different_devices_do_not_contend():
+    """Per-device serialisation is the point; two devices are two problems."""
+    import asyncio
+
+    from dosync.device_arbiter import DeviceArbiter
+    from dosync.models import DeviceAction, Urgency
+
+    events = []
+    arb = DeviceArbiter(_Slow(), audit_hook=events.append)
+    a = DeviceAction(device_id="lock-front", action="lock", params={})
+    b = DeviceAction(device_id="siren-hall", action="alarm", params={})
+    asyncio.run(_gather_two(arb, a, b, Urgency.EMERGENCY))
+
+    assert not [e for e in events if e["type"] == "concurrent_same_rank_claims"]
+
+
+def test_the_contention_counter_does_not_leak():
+    """It is decremented in a `finally` outside the lock, covering the supersede
+    return as well — a counter decremented on only one path would eventually
+    report contention that is not happening."""
+    import asyncio
+
+    from dosync.device_arbiter import DeviceArbiter
+    from dosync.models import DeviceAction, Urgency
+
+    arb = DeviceArbiter(_Slow())
+    a = DeviceAction(device_id="lock-front", action="unlock", params={})
+    b = DeviceAction(device_id="lock-front", action="lock", params={})
+    asyncio.run(_gather_two(arb, a, b, Urgency.EMERGENCY))
+    assert arb._contending == {}, "every path must release its count"
+
+
+def test_a_failing_audit_hook_does_not_abort_the_action():
+    """The device work is the point; the note is the note. Logged rather than
+    swallowed — this project has been bitten by a bare except hiding a security
+    path that never ran."""
+    import asyncio
+
+    from dosync.device_arbiter import DeviceArbiter
+    from dosync.models import DeviceAction, Urgency
+
+    def explode(_event):
+        raise RuntimeError("hook is broken")
+
+    arb = DeviceArbiter(_Slow(), audit_hook=explode)
+    a = DeviceAction(device_id="lock-front", action="unlock", params={})
+    b = DeviceAction(device_id="lock-front", action="lock", params={})
+    results = asyncio.run(_gather_two(arb, a, b, Urgency.EMERGENCY))
+    assert all(r.success for r in results)
