@@ -344,3 +344,51 @@ def test_install_instructions_cover_the_target_platform():
         "and the correct tool offered — DoSync is an application, not a library"
     assert "break-system-packages" in readme, \
         "including the option we do not recommend, and why"
+
+
+# ── Dependencies must not live in two places (2026-07-31) ───────────────────
+
+def test_requirements_and_pyproject_agree():
+    """CI went red for three commits because they had drifted.
+
+    The workflow installed `-r requirements.txt` while the package declared its
+    dependencies in `pyproject.toml`. Adding bleak, pyyaml, aiohttp and paho-mqtt
+    to the package installed them for every user and for nobody in CI, so four
+    tests failed there and passed everywhere else — the most confusing shape a
+    failure can take.
+
+    `requirements.txt` is kept because a CI job derives MINIMUM versions from it
+    to test against the declared floor. It is not kept as a second opinion about
+    what the package needs.
+    """
+    import re
+
+    pyproject = (REPO / "pyproject.toml").read_text()
+    core = re.search(r"^dependencies = \[(.*?)^\]", pyproject, re.M | re.S)
+    assert core, "core dependencies must be declared in pyproject.toml"
+
+    def _name(spec):
+        return re.split(r"[><=!\[]", spec, 1)[0].strip().lower()
+
+    declared = {_name(d) for d in re.findall(r'"([^"]+)"', core.group(1))}
+    listed = {_name(l) for l in (REPO / "requirements.txt").read_text().splitlines()
+              if l.strip() and not l.strip().startswith("#")}
+
+    missing = declared - listed
+    assert not missing, (
+        f"in pyproject.toml but not requirements.txt: {sorted(missing)} — CI "
+        f"installs the package now, but the floor job reads this file, and a "
+        f"dependency it does not know about is never tested at its minimum")
+
+    extra = listed - declared
+    assert not extra, (
+        f"in requirements.txt but not pyproject.toml: {sorted(extra)} — a user "
+        f"installing the package would not get these")
+
+
+def test_ci_installs_the_package_itself():
+    """What CI exercises must be what `pip install dosync` produces. Installing
+    a parallel list is how the two came apart in the first place."""
+    ci = (REPO / ".github" / "workflows" / "ci.yml").read_text()
+    assert "pip install -e ." in ci, \
+        "CI must install the package, not a hand-maintained mirror of its deps"

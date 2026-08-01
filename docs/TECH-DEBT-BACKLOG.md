@@ -1423,3 +1423,34 @@ test cannot replace.
 uses zigbee, which is genuinely out of scope.
 
 810/810.
+
+## CI-DEPENDENCY-DRIFT — Red for three commits, green everywhere else — SHIPPED 2026-07-31
+Spotted by the operator looking at the commit list on GitHub: the last fully green build was
+four days old, and the three since read 3/4, 1/4, 1/4 — getting worse. The suite passed
+locally every time.
+
+**Dependencies lived in two places and drifted.** CI ran `pip install -r requirements.txt`
+while the package declared its dependencies in `pyproject.toml`. Adding bleak, pyyaml,
+aiohttp and paho-mqtt to the package installed them for every user and for nobody in CI, so
+four tests failed there and passed everywhere else — the most confusing shape a failure can
+take, and the reason it survived three commits. It is also the fourth appearance of this
+exact failure mode in this project: the version in four disagreeing places, DOSYNC_DB vs
+DOSYNC_DB_PATH, the auth setting, and now this.
+
+Reproduced before fixing rather than assumed: a venv with only `requirements.txt` produced
+exactly the four failures CI reported.
+
+**CI now installs the package** in all three jobs. What CI exercises must be what
+`pip install dosync` produces; installing a hand-maintained mirror is how they came apart.
+`requirements.txt` is KEPT, because a CI job derives minimum versions from it to test
+against the declared floor — but it is kept as the floor's input, not as a second opinion
+about what the package needs, and a test now fails if the two lists disagree in either
+direction.
+
+Verified: a clean venv with `pip install -e .` runs 812/812, against 4 failures with the old
+installation path.
+
+**Worth stating as the pattern**, since it keeps recurring in different clothes: two places
+holding the same fact will diverge, and the divergence is usually discovered by whoever is
+NOT looking at the place that is wrong. Here the tests were right, the package was right, and
+the only wrong thing was a list nobody had reason to re-read.
