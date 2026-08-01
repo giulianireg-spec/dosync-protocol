@@ -52,9 +52,9 @@ jsonschema>=4.18,<5.0
 # pywizlight>=0.5.0     # Philips WiZ bulbs (UDP local)
 # twilio>=8.0.0         # SMS notifications
 # paho-mqtt>=2.0.0      # MQTT devices
-# aiohttp>=3.8.0        # Home Assistant bridge
+# aiohttp>=3.9.0        # Home Assistant bridge
 # bleak>=0.21           # universal BLE adapter (DOSYNC_BLE_ENABLED=true)
 bleak>=0.21
-pyyaml>=6.0
-aiohttp>=3.8.0
+pyyaml>=6.0.1
+aiohttp>=3.9.0
 paho-mqtt>=2.0.0

@@ -392,3 +392,56 @@ def test_ci_installs_the_package_itself():
     ci = (REPO / ".github" / "workflows" / "ci.yml").read_text()
     assert "pip install -e ." in ci, \
         "CI must install the package, not a hand-maintained mirror of its deps"
+
+
+def test_declared_floors_are_versions_that_exist_and_build():
+    """A minimum version nobody can install is not a minimum, it is a wish.
+
+    Two of the four dependencies added this week declared floors that cannot be
+    installed on the Python CI runs: `pyyaml==6.0` fails to build (the Cython
+    `cython_sources` error, fixed in 6.0.1) and `aiohttp==3.8.0` has no Python
+    3.12 support. The floor job caught both — which is what it is for — but only
+    after they had been merged, so this records the specific versions rather
+    than re-deriving the lesson next time.
+
+    Checked statically: actually installing them is the floor job's work, and
+    duplicating a CI job inside the suite would make every local run pay for it.
+    """
+    import re
+
+    reqs = (REPO / "requirements.txt").read_text()
+
+    def floor(pkg):
+        m = re.search(rf"^{pkg}>=([0-9.]+)", reqs, re.M)
+        return m.group(1) if m else None
+
+    assert floor("pyyaml") != "6.0", \
+        "pyyaml 6.0 cannot build on modern Python; 6.0.1 is the real floor"
+    assert floor("aiohttp") not in ("3.8.0", "3.8"), \
+        "aiohttp 3.8.x has no Python 3.12 support; 3.9.0 is the real floor"
+
+
+def test_extras_do_not_contradict_core_floors():
+    """`dosync[ha]` declared aiohttp>=3.8.0 while core declared >=3.9.0. pip
+    resolves the intersection so nothing breaks, but two numbers for one fact is
+    how the previous four divergences started."""
+    import re
+
+    pyproject = (REPO / "pyproject.toml").read_text()
+    core = re.search(r"^dependencies = \[(.*?)^\]", pyproject, re.M | re.S).group(1)
+
+    core_floors = {}
+    for spec in re.findall(r'"([^"]+)"', core):
+        m = re.match(r"([A-Za-z0-9_.-]+)>=([0-9.]+)", spec)
+        if m:
+            core_floors[m.group(1).lower()] = m.group(2)
+
+    extras = pyproject.split("[project.optional-dependencies]", 1)
+    if len(extras) < 2:
+        return
+    for spec in re.findall(r'"([^"]+)"', extras[1].split("[project.urls]")[0]):
+        m = re.match(r"([A-Za-z0-9_.-]+)>=([0-9.]+)", spec)
+        if m and m.group(1).lower() in core_floors:
+            assert m.group(2) == core_floors[m.group(1).lower()], (
+                f"{m.group(1)}: extras say >={m.group(2)}, core says "
+                f">={core_floors[m.group(1).lower()]} — one fact, one number")

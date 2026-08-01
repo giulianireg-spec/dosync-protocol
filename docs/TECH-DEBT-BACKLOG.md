@@ -1454,3 +1454,34 @@ installation path.
 holding the same fact will diverge, and the divergence is usually discovered by whoever is
 NOT looking at the place that is wrong. Here the tests were right, the package was right, and
 the only wrong thing was a list nobody had reason to re-read.
+
+## CI-FLOOR-VERSIONS — Two declared minimums that could not be installed — SHIPPED 2026-07-31
+The dependency-drift fix took CI from 1/4 to 3/4. The remaining red job was `floor`, which
+installs each dependency at its DECLARED minimum and runs the suite against it — and it was
+doing exactly its job.
+
+Two of the four dependencies added this week declared floors nobody can install:
+- **`pyyaml>=6.0`** — 6.0 fails to build on modern Python with the Cython
+  `cython_sources` error; 6.0.1 is the first version that builds.
+- **`aiohttp>=3.8.0`** — 3.8.x has no Python 3.12 support and dies on
+  `longintrepr.h`.
+
+Both were written from memory rather than checked, which is the whole reason the floor job
+exists: **a minimum version nobody can install is not a minimum, it is a wish.** Isolated by
+installing each floor separately rather than guessing from the traceback — the combined
+install failed on pyyaml and the error looked like aiohttp's.
+
+Corrected to `pyyaml>=6.0.1` and `aiohttp>=3.9.0`, verified by installing all eight floors
+into a clean venv and running the suite against them: 812 passed.
+
+**And the extras contradicted core.** `dosync[ha]` and `dosync[all]` still said
+`aiohttp>=3.8.0` while core said `>=3.9.0`. pip resolves the intersection so nothing would
+have broken, but two numbers for one fact is precisely how the previous four divergences
+started — the version in four places, DOSYNC_DB vs DOSYNC_DB_PATH, the auth setting, and
+requirements.txt vs pyproject. A test now fails when an extra names a different floor than
+core for the same package.
+
+Both specific versions are pinned by a test as well, recording the fact rather than leaving
+the lesson to be re-derived: the floor job catches this, but only after it is merged.
+
+814/814.
