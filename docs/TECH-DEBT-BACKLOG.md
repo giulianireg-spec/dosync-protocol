@@ -489,11 +489,16 @@ hub's last-known reading would close it — but first someone must answer whethe
 reading is "independent observation" at all, and what freshness bound keeps that honest.
 A panel question, not a default to slide into.
 
-## H3 — Online audit archiving (without stopping the hub)
+## H3 — Online audit archiving — CLOSED 2026-07-25
 *Raised by Sosa (panel 2026-07-21).*
-`audit-archive` requires the hub stopped: fine at 28k entries, wrong at millions. Not a bug —
-a named scaling limit. Closing it means safe concurrent segmentation under a single SQLite
-writer.
+The constraint turned out to be an artifact of the tool, not of archiving: `manage.py db
+audit-archive` needs the hub stopped because it is a SECOND process contending for a
+single-writer database. In-process there is no second writer, so the hub now archives
+ITSELF while running (`DOSYNC_AUDIT_MAX_LIVE`, default 10000), refusing on a chain that does
+not verify. The CLI keeps its warning because the CLI still is a second process.
+
+The lesson worth keeping: a limitation attributed to a system was a limitation of the one
+way we happened to invoke it.
 
 ## H4 — Lightweight heartbeat for TLS-incapable hardware
 *Raised by Kim (panel 2026-07-21).*
@@ -544,6 +549,15 @@ The pattern worth carrying: none of what got fixed was a redesign. Each was a pl
 system knew the answer and did not say it, or worked in the author's setup and nowhere else.
 The remaining items are different in kind — they are product, not polish, and discovery is
 the one that decides whether the rest matters.
+
+## H8 — Environment variables documented in one place
+*Noticed 2026-07-31 while auditing what is open.*
+The hub now reads well over a dozen `DOSYNC_*` variables — assurance, checkpoints, archiving,
+declarative directory, adapters, auth — each documented where it was introduced and nowhere
+together. This backlog entry got one of them WRONG on first writing (`DOSYNC_AUTH_MAX_LIVE`
+for `DOSYNC_AUDIT_MAX_LIVE`), which is the argument for the item: if the author mistypes a
+variable while summarising his own work, an operator has no chance. A single reference table,
+tested against what the code actually reads.
 
 ## H7 — Second independent implementation + language-independent wire format
 *Standing item, predates the panel.*
