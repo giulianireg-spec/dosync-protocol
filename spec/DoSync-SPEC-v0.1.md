@@ -632,6 +632,36 @@ transactions to the physical world.
 
 ---
 
+### 7.5.1 Verification from pushed readings
+
+A verifying sensor is normally POLLED after the action. Push-only transports
+(MQTT, GPIO) cannot be polled, so such a sensor could never verify anything and
+a conforming hub returned `unverifiable`.
+
+A binding MAY declare `accept_cached_within_s`, allowing a reading the device
+PUSHED to serve as evidence. Two conditions apply and both are normative:
+
+- The reading MUST have arrived **after the action was dispatched**. A reading
+  that predates dispatch describes the state before the action and confirms
+  nothing, however recent it is. Implementations MUST compare against the
+  dispatch time, not against the current clock.
+- The reading MUST be within the declared window.
+
+**There is no default window, and implementations MUST NOT invent one.** No
+single value is correct across devices: an ambient thermometer reporting every
+five minutes is fine; a door sensor reporting every five minutes cannot confirm
+a lock. Absent a declaration, the result is `unverifiable`, as before.
+
+`VerificationResult.evidence` records how the observation was obtained —
+`polled` or `pushed` — because `verified` MUST NOT mean two different things. A
+polled reading is causally posterior to the action by construction; a pushed one
+is weaker evidence, and an auditor has to be able to tell them apart.
+
+`no_change_reported` is returned when a binding opted in and no qualifying
+reading exists. It is distinct from `unverifiable`: a sensor that publishes on
+change and stayed silent because nothing changed is healthy, and reporting it as
+unverifiable sends an operator after a sensor that is working.
+
 ### 7.6 Audit chain integrity
 
 Every action the hub takes is appended to a SHA-256 hash chain: each entry

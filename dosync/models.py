@@ -353,6 +353,11 @@ class VerificationStatus(str, Enum):
     VERIFIED     = "verified"      # sensor agreed with expected_reading in time
     CONTRADICTED = "contradicted"  # device said OK but the sensor disagreed
     UNVERIFIABLE = "unverifiable"  # the verifying sensor itself did not answer in time
+    # A push-only sensor that reports ON CHANGE and did not report, because
+    # nothing it watches changed (panel, Kim). Distinct from `unverifiable`: the
+    # sensor is healthy and silent, which is not the same as absent, and an
+    # operator chasing a broken sensor should not be sent after this one.
+    NO_CHANGE_REPORTED = "no_change_reported"
 
 
 @dataclass
@@ -364,6 +369,22 @@ class VerifyBinding:
     sensor_id: str
     expected_reading: Any
     deadline_s: float = 5.0
+    #: Accept a reading the sensor PUSHED, if it arrived after the action was
+    #: dispatched and within this many seconds. `None` (the default) means only
+    #: a reading polled on demand counts, which is the behaviour before
+    #: 2026-08-01 and stays the default deliberately.
+    #:
+    #: Push-only sensors (MQTT, GPIO) cannot be polled at all, so without this
+    #: they can never verify anything and the hub returns `unverifiable` — honest
+    #: but useless exactly where most sensors are. With it, a recent pushed
+    #: reading counts as evidence, and the result records that it was weaker
+    #: evidence (see VerificationResult.evidence).
+    #:
+    #: No global default is possible (panel, Aguirre): an ambient thermometer
+    #: reporting every five minutes is fine, a door sensor reporting every five
+    #: minutes is useless for confirming a lock. The binding declares it or
+    #: nothing does.
+    accept_cached_within_s: float | None = None
 
 
 @dataclass
@@ -377,6 +398,19 @@ class VerificationResult:
     # firmware reporting twice is weaker evidence. Recorded so an auditor knows
     # what "verified" actually means.
     independence: str = "independent_device"   # or "same_device"
+    #: HOW the observation was obtained, because `verified` must not mean two
+    #: different things (panel decision, Torres). A reading we asked for after
+    #: acting is causally posterior to the action; a reading the device happened
+    #: to send is weaker evidence — legitimate, but not the same, and an auditor
+    #: has to be able to tell without reading the code.
+    #:
+    #:   "polled"  — the hub queried the sensor after the action
+    #:   "pushed"  — the device sent it, after dispatch and within the window
+    evidence: str = "polled"
+    #: For pushed evidence: when the reading actually arrived. Absolute, not an
+    #: age, because the comparison that matters is against the ACTION, not the
+    #: clock — a reading that predates dispatch confirms nothing however recent.
+    observed_at: float | None = None
     checked_at: float = field(default_factory=time.time)
 
 
@@ -388,6 +422,13 @@ class DeviceAction:
     relevance_score: float            = 0.0
     # INDEPENDENT-OBSERVATION: opt-in. None → behaves exactly as before.
     verify_with: Optional["VerifyBinding"] = None
+    #: When this action was handed to an adapter. Set by the executor, not by
+    #: the caller. Exists so verification can ask whether a PUSHED sensor
+    #: reading arrived after the action or before it — a reading that predates
+    #: dispatch describes the world before we acted and confirms nothing,
+    #: however recent it is. Without this the freshness window would be measured
+    #: against the clock, which is the wrong question.
+    dispatched_at: Optional[float] = None
 
 @dataclass
 class ActionPlan:

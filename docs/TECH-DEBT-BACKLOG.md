@@ -492,14 +492,43 @@ lock covering the supersede return too, because a counter decremented on one pat
 eventually report contention that is not happening — a false alarm in an audit trail is worse
 than no alarm.
 
-## H2 — Verification via push-only sensors
-*Found by the 2026-07-21 verify_with drill.*
-Verification reads the verifier through `adapter.get_state`; adapters that only PUSH (mqtt,
-and the GPIO path) cannot be polled on demand, so a push-only sensor cannot serve as a
-verifier and the hub honestly returns `unverifiable`. A freshness-bounded fallback to the
-hub's last-known reading would close it — but first someone must answer whether a CACHED
-reading is "independent observation" at all, and what freshness bound keeps that honest.
-A panel question, not a default to slide into.
+## H2 — Verification from pushed readings — CLOSED 2026-08-01
+*Found by the 2026-07-21 verify_with drill; the item explicitly asked for a panel before an
+implementation, and that was the right instinct.*
+
+The question was whether a cached reading is independent observation. The panel's answer was
+that it is not the same thing: a reading the hub asks for after acting is causally posterior
+to the action, while one the device happened to send may predate it — and then it describes
+the world before we did anything. Arriving AFTER dispatch and recently, it is evidence:
+weaker, because we did not ask for it, but evidence.
+
+**A finding reordered the work.** `update_state()` stored values with no arrival time at all,
+so the freshness bound the item proposed was unimplementable — not by design, but because the
+data was not being retained. Timestamps first, policy second.
+
+Implemented per the panel's five decisions:
+1. Readings are stamped on arrival, in a map parallel to the state cache so nothing that
+   reads state sees a stamp beside a sensor.
+2. **The window is measured against the ACTION, not the clock.** `DeviceAction.dispatched_at`
+   is set by the executor at dispatch; a reading older than that is rejected however fresh.
+3. Opt-in per binding (`accept_cached_within_s`), with **no default**: no single value is
+   right for a thermometer and a door sensor at once, and silently accepting stale readings
+   as `verified` is exactly what this protocol refuses.
+4. `VerificationResult.evidence` records `polled` or `pushed`, because `verified` cannot mean
+   two different things (Torres) — plus `observed_at`, since when the evidence arrived is
+   part of what the evidence is.
+5. New status `no_change_reported` for a change-reporting sensor that stayed silent (Kim):
+   healthy and quiet is not the same as absent, and conflating them sends an operator after a
+   working sensor.
+
+**A test that passed for the wrong reason**, caught by deleting the code it protected: the
+"without opt-in" case used a reading that predated the action, so the timing guard rejected
+it anyway and removing the opt-in check left the test green. It proved the timing check
+worked, not the opt-in. Now the reading arrives after dispatch and the test asserts that a
+perfectly good pushed reading is still ignored. Fourth instance of this pattern; the rule in
+DESIGN-PRINCIPLES exists for a reason and still has to be applied consciously each time.
+
+Spec §7.5.1. 831/831, with three separate reintroductions verified to fail.
 
 ## H3 — Online audit archiving — CLOSED 2026-07-25
 *Raised by Sosa (panel 2026-07-21).*

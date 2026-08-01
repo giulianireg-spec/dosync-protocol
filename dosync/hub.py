@@ -844,6 +844,19 @@ class StateAwareResolver(CapabilityMatchingResolver):
         super().__init__(registry)
         self._hub = hub
         self._state_cache: dict = {}
+        #: device_id → {sensor_id: arrival timestamp}. Parallel to the cache so
+        #: that reading state never sees a stamp where a sensor should be.
+        self._state_stamps: dict = {}
+
+    def reading_age(self, device_id: str, sensor_id: str) -> float | None:
+        """When a pushed reading for this sensor arrived, or None if never.
+
+        Returns the absolute timestamp, not an age in seconds, because the
+        caller compares it against the moment an ACTION was dispatched — not
+        against the clock. A reading that predates the action confirms nothing,
+        however recent it is, and an age would have thrown that away.
+        """
+        return (self._state_stamps.get(device_id) or {}).get(sensor_id)
 
     def _get_device_state(self, device_id: str) -> dict:
         """Returns cached device state or empty dict if unknown."""
@@ -881,10 +894,23 @@ class StateAwareResolver(CapabilityMatchingResolver):
         log.info('StateAwareResolver: device %s unreachable mark cleared', device_id)
 
     def update_state(self, device_id: str, state: dict) -> None:
-        """Called by adapters after execution to update state cache and persist to DB."""
+        """Called by adapters after execution to update state cache and persist to DB.
+
+        Each key is stamped with the moment it arrived. Until 2026-08-01 the
+        cache held values with no age at all, which made the whole of H2
+        unimplementable: you cannot bound a cached reading by freshness when
+        nothing records when it arrived. The stamps live in a parallel map
+        rather than inside the state dict so nothing that reads state sees a
+        new key appear beside a sensor.
+        """
         if device_id not in self._state_cache:
             self._state_cache[device_id] = {}
         self._state_cache[device_id].update(state)
+
+        now = time.time()
+        stamps = self._state_stamps.setdefault(device_id, {})
+        for key in state:
+            stamps[key] = now
         # Persist to SQLite to survive hub restarts
         try:
             db = getattr(self._hub, 'db', None)
@@ -1209,23 +1235,82 @@ class _TimedExecutor:
         independence = ("same_device" if sensor_device == action.device_id
                         else "independent_device")
 
-        def _result(status, observed):
+        def _result(status, observed, evidence="polled", observed_at=None):
             return VerificationResult(
                 status=status, sensor_id=binding.sensor_id,
                 expected=binding.expected_reading, observed=observed,
-                independence=independence)
+                independence=independence, evidence=evidence,
+                observed_at=observed_at)
+
+        def _pushed_reading():
+            """A reading the device SENT, if the binding accepts one and it
+            qualifies. Returns (value, arrived_at) or None.
+
+            Two conditions, and the second is the one that is easy to get wrong:
+            the reading must be recent, AND it must have arrived AFTER the
+            action was dispatched. A reading from before the action describes
+            the world before we did anything — it confirms nothing, however
+            fresh it is (panel, Sosa). Comparing against the clock instead of
+            against the action would accept exactly that.
+            """
+            window = getattr(binding, "accept_cached_within_s", None)
+            if not window:
+                return None
+            resolver = getattr(self._hub, "resolver", None)
+            if resolver is None or not hasattr(resolver, "reading_age"):
+                return None
+            key = sensor_key or "state"
+            arrived = resolver.reading_age(sensor_device, key)
+            if arrived is None:
+                return None
+
+            dispatched = getattr(action, "dispatched_at", None)
+            if dispatched is not None and arrived < dispatched:
+                return None          # predates the action: evidence of nothing
+            if (time.time() - arrived) > float(window):
+                return None          # outside the window the binding declared
+
+            cached = resolver._state_cache.get(sensor_device) or {}
+            if key not in cached:
+                return None
+            return cached[key], arrived
 
         # Read the verifying sensor through its adapter's get_state — the same
         # path the active probe uses. If we cannot reach one, the honest verdict
         # is UNVERIFIABLE (we could not look), NOT contradiction.
+        def _fallback():
+            """What to answer when the sensor cannot be polled.
+
+            Tries a pushed reading first (only if the binding asked for one),
+            and otherwise distinguishes two situations that used to look
+            identical: a sensor that pushes ON CHANGE and stayed silent because
+            nothing changed is healthy, and reporting it as `unverifiable` sends
+            an operator hunting a broken sensor that is working (panel, Kim).
+            The distinction is only defensible when the binding opted in — with
+            no window declared, we have no basis to claim silence means anything.
+            """
+            pushed = _pushed_reading()
+            if pushed is not None:
+                value, arrived = pushed
+                status = (VerificationStatus.VERIFIED
+                          if value == binding.expected_reading
+                          else VerificationStatus.CONTRADICTED)
+                return _result(status, value, evidence="pushed", observed_at=arrived)
+            if getattr(binding, "accept_cached_within_s", None):
+                return _result(VerificationStatus.NO_CHANGE_REPORTED, None,
+                               evidence="pushed")
+            return _result(VerificationStatus.UNVERIFIABLE, None)
+
         inner = self._inner
         if not isinstance(inner, AdapterExecutor):
-            return _result(VerificationStatus.UNVERIFIABLE, None)
+            return _fallback()
 
         device = self._hub.registry.get(sensor_device) if self._hub else None
         adapter = inner.get_adapter(device.adapter) if device else None
+        # A push-only adapter (MQTT, GPIO) has no get_state at all — this is the
+        # H2 case, and the only path that could ever reach a pushed reading.
         if adapter is None or not hasattr(adapter, "get_state"):
-            return _result(VerificationStatus.UNVERIFIABLE, None)
+            return _fallback()
 
         try:
             state = await _asyncio.wait_for(
@@ -1234,7 +1319,7 @@ class _TimedExecutor:
             state = None
 
         if state is None:
-            return _result(VerificationStatus.UNVERIFIABLE, None)
+            return _fallback()
 
         observed = state.get(sensor_key) if (sensor_key and isinstance(state, dict)) else state
         if observed == binding.expected_reading:

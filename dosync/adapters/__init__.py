@@ -19,6 +19,7 @@ Publicación de adapters de terceros:
 
 from __future__ import annotations
 import logging
+import time as _time
 from abc import ABC, abstractmethod
 
 from ..models import ActionResult, DeviceAction, Urgency
@@ -242,6 +243,10 @@ class AdapterExecutor:
                 action.device_id, action.action, adapter_name,
             )
             try:
+                # Stamped at the moment of dispatch so verification can tell a
+                # sensor reading that arrived AFTER the action from one that
+                # predates it — the latter confirms nothing, however recent.
+                action.dispatched_at = _time.time()
                 result = await self._adapters[adapter_name].execute(action, urgency)
                 if result.success:
                     self._update_resolver_state(action)
