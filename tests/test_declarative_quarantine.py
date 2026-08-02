@@ -113,9 +113,55 @@ def test_quarantine_is_recorded_and_reversible(hub_with_files):
         assert "device_unquarantined" in [e["type"] for e in srv.hub.audit_log.entries()]
 
 
-def test_an_empty_directory_does_not_deregister_everything(hub_with_files):
-    """Benítez's objection, pinned. A directory that failed to mount is far more
-    likely than an instruction to remove every device at once."""
+def test_deleting_the_last_file_still_quarantines_its_device(hub_with_files):
+    """Found on the reference deployment, not by these tests.
+
+    The original guard only ran the quarantine pass if at least one file had
+    loaded — protecting against a failed mount, per Benítez. But the operator
+    deleted their ONLY declarative file and the device stayed active, silently:
+    the same guard that protects a lost directory also blocked the legitimate
+    case of removing the last device.
+
+    Resolved by remembering how many files were seen last time. Going from some
+    to none is a change the hub WITNESSED, and quarantine is the safe response
+    because quarantine is not deletion — the device stays in the inventory and
+    returns the moment the file does.
+    """
+    from dosync.hub import is_quarantined
+
+    files, start = hub_with_files
+    (files / "lamp.json").write_text(json.dumps(_device("lamp")))
+    srv, c = start()
+    with c:
+        assert not is_quarantined(srv.hub.registry.get("lamp"))
+
+    (files / "lamp.json").unlink()          # the only one
+    srv, c = start()
+    with c:
+        assert is_quarantined(srv.hub.registry.get("lamp")), \
+            "deleting the last file must still take its device out of intents"
+        assert srv.hub.registry.get("lamp") is not None, \
+            "and must not delete it — quarantine is reversible, deletion is not"
+
+
+def test_a_directory_that_was_never_populated_changes_nothing(hub_with_files):
+    """The other half. A first start that finds no files, or a directory that
+    was already empty, has witnessed nothing and must not act."""
+    from dosync.hub import is_quarantined
+
+    files, start = hub_with_files
+    srv, c = start()                        # no files at all, ever
+    with c:
+        assert srv.hub.db.get_setting("declarative_file_count") == 0
+
+    srv, c = start()                        # and again
+    with c:
+        assert not [d for d in srv.hub.registry.all() if is_quarantined(d)]
+
+
+def test_a_device_returns_when_its_file_does(hub_with_files):
+    """Which is what makes quarantining a vanished directory acceptable: if the
+    disk comes back, so does the device, without anyone intervening."""
     from dosync.hub import is_quarantined
 
     files, start = hub_with_files
@@ -123,12 +169,15 @@ def test_an_empty_directory_does_not_deregister_everything(hub_with_files):
     srv, c = start()
     with c:
         pass
-
-    (files / "lamp.json").unlink()          # nothing left at all
+    (files / "lamp.json").unlink()
     srv, c = start()
     with c:
-        assert not is_quarantined(srv.hub.registry.get("lamp")), \
-            "an empty directory must not be read as 'remove everything'"
+        assert is_quarantined(srv.hub.registry.get("lamp"))
+
+    (files / "lamp.json").write_text(json.dumps(_device("lamp")))
+    srv, c = start()
+    with c:
+        assert not is_quarantined(srv.hub.registry.get("lamp"))
 
 
 def test_the_api_reports_quarantined_devices(hub_with_files):

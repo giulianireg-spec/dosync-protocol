@@ -760,9 +760,25 @@ async def lifespan(app: FastAPI):
         # asks. The device stays in the inventory, leaves resolution, and the
         # operator confirms the removal.
         #
-        # Only runs when at least one file loaded, for the same reason: an empty
-        # directory is far more likely to be a mistake than an instruction.
-        if _declared:
+        # When the directory is EMPTY, the situation is ambiguous and the hub
+        # must decide between two readings that look identical from here: an
+        # operator removed their last declarative device, or a mount failed and
+        # took the whole directory with it. Refusing to act protects the second
+        # and breaks the first — which is what happened on the reference
+        # deployment: the operator deleted their only file and the device stayed
+        # active, silently.
+        #
+        # Resolved by remembering how many files were seen last time. Going from
+        # some to none is a change the hub WITNESSED, and quarantine is the safe
+        # response to it because quarantine is not deletion — the device stays in
+        # the inventory and returns the moment the file does. A first start that
+        # finds nothing, or a directory that was already empty, changes nothing.
+        _previous_count = hub.db.get_setting("declarative_file_count")
+        hub.db.set_setting("declarative_file_count", len(_declared))
+        _witnessed_disappearance = (
+            not _declared and isinstance(_previous_count, int) and _previous_count > 0)
+
+        if _declared or _witnessed_disappearance:
             from dosync.hub import QUARANTINE_KEY
 
             _present = {m.device_id for m, _ in _declared}

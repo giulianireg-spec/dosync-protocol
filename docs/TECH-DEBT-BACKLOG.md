@@ -1627,3 +1627,33 @@ specification, and three tests enforce it plus changelog coverage. 851/851.
 protocol documentation, and the reason is worth facing — a session dominated by making the
 system usable is exactly when a specification feels like bureaucracy, and exactly when it is
 most needed.
+
+## DECLARATIVE-LAST-FILE — The quarantine that did not fire — SHIPPED 2026-08-01
+Found on the reference deployment, by the drill the second session audit said was missing:
+declarative adapters and quarantine were validated by tests only, and Paredes noted that this
+project has a habit of finding things when hardware enters. It did.
+
+The operator copied an example, restarted, saw the device register (21 active), deleted the
+file, restarted — **and the device stayed active**. Silently.
+
+**Cause: the guard protecting one legitimate case was blocking another.** The quarantine pass
+only ran `if _declared` — if at least one file had loaded — which is Benítez's protection
+against a failed mount deregistering a building. But an operator removing their LAST
+declarative device produces exactly the same empty directory, and the guard blocked that too.
+The tests missed it because every one of them left a second file behind; the "empty directory
+changes nothing" test asserted the very behaviour that turned out to be wrong for this case.
+
+**Resolved by remembering.** The hub stores how many declarative files it saw last time.
+Going from some to none is a change it WITNESSED, and quarantine is the safe response to a
+witnessed disappearance because quarantine is not deletion: the device stays in the
+inventory, leaves intent resolution, and returns the moment the file does — verified in both
+directions. A first start that finds nothing, or a directory that was already empty, has
+witnessed nothing and does not act.
+
+A directory that vanishes entirely now also quarantines. That is defensible on the same
+grounds: a hub planning emergencies around devices whose definitions it cannot read is worse
+than one that sets them aside reversibly, and the device comes back with the disk.
+
+Two conflicting requirements, both reasonable, that could not both hold under the old rule.
+The distinction that reconciles them is not "empty versus non-empty" but "did the hub see
+this change happen". 853/853, verified to fail when the old guard is restored.
