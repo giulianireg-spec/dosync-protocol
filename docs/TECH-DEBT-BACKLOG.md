@@ -1578,3 +1578,52 @@ Both specific versions are pinned by a test as well, recording the fact rather t
 the lesson to be re-derived: the floor job catches this, but only after it is merged.
 
 814/814.
+
+## SESSION-AUDIT-FIXES — What the session review found — SHIPPED 2026-08-01
+A critical audit of the whole session, run by searching the repository for gaps rather than
+confirming successes. Five findings, all real, and the measurement was worse than the
+estimate: not seven undocumented event types but **32**, and not five undocumented endpoints
+but **27 of 41**.
+
+The gap did not come from this session — it accumulated. What this session did was make it
+visible, by adding enough surface at once that the omission stopped being deniable.
+
+**H-1, the blocker: the 0.4.2 changelog was incomplete.** Six entries, all about discovery,
+omitting declarative adapters, quarantine, third-party entry points, signed heartbeats and
+browser-managed access — two of those with security implications: an endpoint that accepts
+unencrypted messages, and a loader for third-party code. Sosa's argument for treating it as
+blocking rather than cosmetic: an operator has a right to know what enters their hub.
+Rewritten into 21 entries across six areas, leading with the two advertised properties that
+were FALSE and are now true.
+
+**H-2: 32 audit event types, none in the specification, which had no table of event types at
+all.** Spec §7.8 now lists every one, grouped by what an operator is looking for. This is not
+tidiness — the chain's value is that somebody who did not write the hub can read it, and a
+second implementation has to know what to emit for the same situation. A chain of names only
+its author understands is a log, not evidence.
+
+**H-3: 27 endpoints outside the spec.** §7.9 is the complete HTTP surface. §7.10 specifies
+signed heartbeats normatively, including that they MUST be off by default and MUST NOT be
+described as secure transport.
+
+**H-4: certification covered none of the new protocol surface.** C09–C12 added: adapters
+declare a valid kind, scanning is side-effect free and reports which transports it searched,
+the device inventory separates active from quarantined, and the signed-heartbeat channel is
+closed unless enabled. 51/56 — the remaining five are the known environmental ones.
+
+C09 failed on its first run, correctly: in certification mode no adapters are registered, and
+the check demanded that some exist. Zero adapters is legitimate — what conformance requires
+is that whatever IS reported declares a valid basis. Demanding their existence would test the
+deployment rather than the protocol.
+
+**H-5: `report_channel` was written and exposed only in health**, not in the device list
+where an operator actually looks. Fifth instance this session of writing a value and
+half-exposing it.
+
+`python3 -m dosync.spec_coverage --check` now fails when the implementation grows past the
+specification, and three tests enforce it plus changelog coverage. 851/851.
+
+**Worth recording as the lesson**, in Benítez's words: what was overlooked was not code but
+protocol documentation, and the reason is worth facing — a session dominated by making the
+system usable is exactly when a specification feels like bureaucracy, and exactly when it is
+most needed.

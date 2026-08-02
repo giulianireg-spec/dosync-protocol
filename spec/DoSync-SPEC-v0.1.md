@@ -774,6 +774,151 @@ a private network behind a router, unreachable from outside it, may legitimately
 run open; the protocol provides the switch and records its use rather than
 imposing one threat model on every installation.
 
+## 7.8 Audit event types
+
+Every entry in the audit chain carries a `type`. A conforming hub emits the
+types below with these meanings; an implementation MAY emit additional types,
+and MUST NOT reuse one of these names for a different meaning.
+
+This table exists because the chain's value is its legibility to someone who did
+not write the hub. An operator whose deployment records `device_quarantined` has
+to be able to look it up, and a second implementation has to know what to emit
+for the same situation. A chain of event names only its author understands is a
+log, not evidence.
+
+### Devices
+
+| Type | Meaning |
+|---|---|
+| `device_registered` | A device declared its capabilities and was accepted |
+| `device_updated` | An existing device re-registered with a changed manifest |
+| `device_unregistered` | A device was removed from the registry |
+| `device_renamed` | A device's display name changed; capabilities untouched |
+| `device_adopted` | A scanned candidate was approved and named by an operator |
+| `devices_auto_adopted` | Devices registered by an unattended scan (`approved_by_operator: false`) |
+| `device_quarantined` | A device is registered but excluded from intents, with a reason |
+| `device_unquarantined` | A quarantined device returned to service |
+| `device_capability_anomaly` | Capabilities changed without a firmware version change — may indicate compromise |
+| `device_event` | A device reported an event of its own |
+
+### Intents and actions
+
+| Type | Meaning |
+|---|---|
+| `intent_executed` | An intent was resolved to a plan and dispatched |
+| `intent_pending_confirmation` | An intent requires operator confirmation before dispatch |
+| `emergency_unsatisfiable` | An emergency intent resolved to no capable device |
+| `phase_executed` | One phase of a multi-phase intent completed |
+| `direct_action_executed` | A single action on a named device, bypassing resolution but not policy |
+| `direct_action_blocked` | Such an action refused by deployment policy, naming the policy |
+| `action_rejected_invalid_params` | An action refused because its parameters failed validation |
+| `concurrent_same_rank_claims` | Two actions of equal urgency contended for one device; the later determines final state |
+
+### Policy and access
+
+| Type | Meaning |
+|---|---|
+| `policy_modified` | A policy altered a plan, with the SHA-256 of the policy file that decided |
+| `auth_mode_changed` | The token requirement was turned on or off |
+| `auth_token_created` | An API token was created (never the token itself) |
+| `third_party_adapter_loaded` | An adapter from an installed third-party package was loaded |
+
+### Composite operations
+
+| Type | Meaning |
+|---|---|
+| `composite_started` | A multi-step operation began |
+| `composite_finished` | It completed, with its outcome |
+| `composite_rejected` | It was refused before starting |
+| `composite_step_blocked` | One step was blocked while the operation continued |
+| `composite_unknown_kind` | A composition kind the hub does not implement |
+| `operation_created` | A long-running operation was created |
+| `operation_transition` | Such an operation changed state |
+| `operation_telemetry` | Telemetry recorded against a running operation |
+
+### Environment
+
+| Type | Meaning |
+|---|---|
+| `presence_updated` | Occupancy changed, with the signal that decided |
+| `profile_loaded` | A deployment profile was loaded |
+| `audit_archived` | Chain entries were moved to a segment file, binding its hash |
+
+**Normative:** entries MUST NOT contain secrets. A token, a key or a password
+belongs nowhere in the chain — it is readable by anyone who can read the chain.
+
+## 7.9 Endpoint summary
+
+The complete HTTP surface of a conforming hub. Sections above define semantics;
+this exists so an implementer can see the whole surface at once and so no
+endpoint can be added without appearing here (`python3 -m dosync.spec_coverage`
+fails otherwise).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/v1/status` | Hub identity, version, protocol, integrity |
+| GET | `/v1/adapters` | Technologies this hub speaks, and on what basis each ships |
+| POST | `/v1/devices/register` | A device declares its capabilities |
+| GET | `/v1/devices` | Inventory, including quarantined devices |
+| GET | `/v1/devices/{device_id}` | One device's manifest |
+| PATCH | `/v1/devices/{device_id}` | Change presentation fields only — never capabilities |
+| DELETE | `/v1/devices/{device_id}` | Remove a device from the registry |
+| POST | `/v1/devices/provision` | Pre-authorise a device id and issue its token |
+| GET | `/v1/devices/provisioned` | Which device ids are provisioned |
+| DELETE | `/v1/devices/{device_id}/token` | Revoke a device token |
+| POST | `/v1/devices/verify-cert` | Validate a device certificate |
+| POST | `/v1/intent` | Fire an intent synchronously |
+| POST | `/v1/intent/async` | Fire an intent, returning immediately |
+| GET | `/v1/intents/{intent_class}/explain` | Which devices were evaluated, included, and why |
+| GET | `/v1/intent-classes` | Intent classes this deployment has registered |
+| POST | `/v1/intent-classes` | Register a domain-specific intent class |
+| DELETE | `/v1/intent-classes/{name}` | Remove one |
+| POST | `/v1/device/action` | One action on one named device — policy-evaluated and audited |
+| GET | `/v1/discovery/scan` | List candidates on every searchable transport; registers nothing |
+| POST | `/v1/discovery/adopt` | Register one candidate under a name the operator chose |
+| POST | `/v1/discovery/run` | Scan and register unattended (recorded as not operator-approved) |
+| POST | `/v1/heartbeat` | Device-initiated liveness over an authenticated channel |
+| POST | `/v1/heartbeat/signed` | Liveness signed with the device token, for hardware that cannot do TLS (§7.10) |
+| GET | `/v1/health/devices` | Per-device health, including how each last reported |
+| GET | `/v1/health/reachability` | Cause attribution for unreachable devices |
+| GET | `/v1/audit` | The audit chain |
+| GET | `/v1/auth/mode` | Whether a token is required, and which source decided |
+| POST | `/v1/auth/mode` | Change that, confirmed and recorded |
+| POST | `/v1/auth/token` | Set a token of the operator's choosing |
+| GET | `/v1/keys` | API keys, as previews only |
+| POST | `/v1/keys` | Create an API key |
+| GET | `/v1/presence` | Current occupancy |
+| POST | `/v1/presence` | Report an occupancy signal |
+| GET | `/v1/operations` | Long-running operations |
+| GET | `/v1/operations/{operation_id}` | One operation |
+| GET | `/v1/hub/peers` | Known peer hubs |
+| POST | `/v1/hub/promote` | Promote a secondary hub |
+
+## 7.10 Signed heartbeats
+
+A hub MAY accept heartbeats authenticated by signature rather than by transport
+security, for hardware that cannot perform a TLS handshake. It MUST be disabled
+by default.
+
+The device signs `device_id \n timestamp \n report_json` with HMAC-SHA256, keyed
+on the SHA-256 of its provisioning token — a value the device derives and the hub
+already stores, so the token itself never has to be recoverable.
+
+A conforming implementation MUST:
+
+- reject a timestamp outside a narrow window of the hub's clock, and say that the
+  clock is the problem rather than the key;
+- reject a signature already accepted within that window. A heartbeat is a
+  positive signal, so the attack it invites is REPLAY: repeating a captured
+  message keeps a failed device reporting healthy, blinding failure detection;
+- record the channel on the device (`report_channel`), because a device reporting
+  over an unencrypted channel is in a different position from one on mTLS and the
+  two MUST NOT be indistinguishable to an operator.
+
+This channel provides message authenticity and replay resistance. It does NOT
+provide confidentiality: `device_id`, timestamp and report travel readable.
+Implementations MUST NOT describe it as secure transport.
+
 ## 8. Certification
 
 A device or hub implementation is **DoSync Certified** if it passes the official certification CLI (`certify.py`) included in the reference repository.

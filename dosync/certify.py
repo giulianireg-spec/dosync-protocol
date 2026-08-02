@@ -969,6 +969,67 @@ def run_conformance(base: str, report: CertReport):
         + (f" from {st_body.get('audit_anchor_prefix')}..." if anchored else " (not archived — genesis chain)"),
     ))
 
+    # C9-C12 cover protocol surface added in 0.4.2. A conformance suite that
+    # does not follow the protocol certifies a DoSync that no longer exists
+    # (Nakamura, session audit 2026-08-01) — a gap nobody notices until a second
+    # implementation appears, which is exactly when it matters most.
+
+    # C9. A hub reports which technologies it speaks and on what basis each
+    # ships. The BASIS is the protocol-relevant part: a vendor adapter shipped
+    # as a worked example is a different claim from an open-standard one.
+    ad_status, ad_body = request("GET", f"{base}/v1/adapters")
+    kinds = {a.get("kind") for a in ad_body.get("adapters", [])}
+    valid_kinds = kinds <= {"ecosystem", "reference", "infrastructure", "third_party"}
+    # Zero adapters is legitimate — a hub in certification mode registers none,
+    # and so does one whose hardware is not present yet. What conformance
+    # requires is that whatever IS reported declares a valid basis; demanding
+    # that adapters exist would test the deployment, not the protocol.
+    report.add(TestResult(
+        "C09  Adapters declare a valid kind (ecosystem|reference|infrastructure|third_party)",
+        ad_status == 200 and valid_kinds,
+        f"kinds present: {sorted(kinds)}" if kinds
+        else "no adapters registered (valid — nothing to misdeclare)",
+    ))
+
+    # C10. Scanning must be side-effect free. A hub that registers whatever
+    # answered a broadcast contradicts the premise of a protocol built on being
+    # able to account for what is in it.
+    before = request("GET", f"{base}/v1/devices")[1].get("count", 0)
+    sc_status, sc_body = request("GET", f"{base}/v1/discovery/scan")
+    after = request("GET", f"{base}/v1/devices")[1].get("count", 0)
+    report.add(TestResult(
+        "C10  Scanning registers nothing and reports which transports it searched",
+        sc_status == 200 and before == after and "searched" in sc_body,
+        f"devices {before}→{after}, searched={sc_body.get('searched')}, "
+        f"not_searchable={sc_body.get('not_searchable')}",
+    ))
+
+    # C11. The device list distinguishes participation from inventory. A device
+    # excluded from intents must be visible AND distinguishable — hiding it is
+    # how a device gets forgotten while still holding its id.
+    dv_status, dv_body = request("GET", f"{base}/v1/devices")
+    has_split = "active" in dv_body and "quarantined" in dv_body
+    report.add(TestResult(
+        "C11  Device inventory separates active from quarantined",
+        dv_status == 200 and has_split,
+        f"count={dv_body.get('count')}, active={dv_body.get('active')}, "
+        f"quarantined={dv_body.get('quarantined')}",
+    ))
+
+    # C12. Signed heartbeats are OPTIONAL and must be off unless asked for. A
+    # hub that accepts unauthenticated-transport messages by default fails this
+    # deliberately: the trade is the operator's to make.
+    hb_status, hb_body = request(
+        "POST", f"{base}/v1/heartbeat/signed",
+        {"device_id": "conformance-probe", "timestamp": 0, "signature": "x" * 64})
+    report.add(TestResult(
+        "C12  Signed heartbeat channel is disabled unless enabled (never open by default)",
+        hb_status in (404, 401),
+        f"HTTP {hb_status} — "
+        + ("disabled, as required by default" if hb_status == 404
+           else "enabled on this hub; the request was rejected on its merits"),
+    ))
+
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 

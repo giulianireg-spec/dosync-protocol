@@ -1278,6 +1278,13 @@ def list_devices(auth: str = Depends(require_auth)):
         if is_quarantined(d):
             entry["quarantined"] = True
             entry["quarantine_reason"] = quarantine_reason(d)
+        # How this device last reported. Present here and not only in health,
+        # because the device list is where an operator actually looks — a
+        # device on an unencrypted channel that appears identical to one on
+        # mTLS is exactly the difference the marking exists to show.
+        channel = (hub.health.snapshot(d.device_id) or {}).get("report_channel")
+        if channel:
+            entry["report_channel"] = channel
         devices.append(entry)
     quarantined = sum(1 for d in devices if d.get("quarantined"))
     return {

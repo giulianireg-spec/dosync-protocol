@@ -475,3 +475,47 @@ def test_the_reference_does_not_invent_settings():
     found = scan()
     assert "DOSYNC_X" not in found
     assert "DOSYNC_ASSURANCE" in found and "DOSYNC_AUDIT_MAX_LIVE" in found
+
+
+# ── The specification must keep up with the implementation (2026-08-01) ─────
+
+def test_every_audit_event_type_is_in_the_spec():
+    """A session audit found 32 event types in the code and a specification with
+    NO table of event types — not seven rows missing, the table absent.
+
+    This matters more than tidiness: the audit chain's value is that somebody
+    who did not write the hub can read it. An operator whose deployment records
+    `device_quarantined` has to be able to look it up, and a second
+    implementation has to know what to emit for the same situation. A chain of
+    names only its author understands is a log, not evidence.
+    """
+    from dosync.spec_coverage import documented_event_types, emitted_event_types
+
+    missing = emitted_event_types() - documented_event_types()
+    assert not missing, (
+        f"emitted but not in spec §7.8: {sorted(missing)} — a hub that records "
+        f"an event nobody can look up is keeping a private log")
+
+
+def test_every_endpoint_is_in_the_spec():
+    """27 of 41 endpoints were outside the specification. The gap was not
+    created by any one session — it accumulated — but a protocol that grows
+    faster than its specification stops being a protocol and becomes a popular
+    program (Benítez)."""
+    from dosync.spec_coverage import report
+
+    _, missing = report()
+    assert not missing, f"exposed but not in spec §7.9: {sorted(missing)}"
+
+
+def test_the_changelog_covers_the_release():
+    """The 0.4.2 changelog listed six discovery entries and omitted five
+    features, two with security implications: an endpoint accepting unencrypted
+    messages, and a loader for third-party code. An operator has a right to know
+    what enters their hub."""
+    changelog = (REPO / "CHANGELOG.md").read_text()
+    section = changelog.split("## [0.4.2]")[1].split("## [0.4.1]")[0].lower()
+
+    for topic in ("declarative", "quarantin", "entry point", "heartbeat",
+                  "discovery", "auth"):
+        assert topic in section, f"0.4.2 ships {topic} and does not mention it"

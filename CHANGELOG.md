@@ -28,28 +28,106 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   includes what is NOT detected, and a compliance runbook.
 - `DOSYNC_AUDIT_HEAD_EVERY` (default 25) — how often the head mark is persisted.
 
-## [0.4.2] — 2026-07-26
+## [0.4.2] — 2026-08-01
 
-### Changed
-- **`bleak` is now a core dependency and the BLE adapter registers by default**
-  (`DOSYNC_BLE_ENABLED=false` opts out). Discovery libraries are not like control
-  libraries: you install `dosync[wiz]` because you know you own WiZ bulbs, but
-  discovery is how you find out what you own — so the dependency is needed before
-  the knowledge that would justify it. Left optional, a user scanned, saw nothing,
-  and concluded DoSync does not support Bluetooth: a false belief produced by
-  packaging. Adds ~20 MB; a hub with no radio degrades to reporting the transport
-  as unsearchable.
+A large release. Two of the five properties this project advertises were audited
+against the code and found to be **false as stated**; both are now true and
+tested. Alongside that, the work needed to make DoSync usable by someone who is
+not a developer.
 
-### Added
-- `GET /v1/discovery/scan` asks every adapter and reports `searched` and
-  `not_searchable` — "nothing found" means something different when a transport
-  was never searched.
-- `POST /v1/discovery/adopt` — register one scanned candidate under a name the
-  operator chose, recorded in the audit chain. Scanning itself registers nothing.
-- `PATCH /v1/devices/{id}` — rename without re-registering the whole manifest.
-- `discover()` / `can_discover()` as optional adapter methods; BLE implements
-  discovery over Bluetooth radio, with no broadcast address involved.
-- Dashboard: Scan, rename and remove controls; an empty hub says what to do next.
+### Security
+
+- **`POST /v1/device/action` bypassed the policy engine and the audit chain.**
+  A device could be actuated with no chain entry, and a deployment policy
+  forbidding it could be sidestepped by calling here instead of firing an intent.
+  The MCP device-control tool used this path, so the bypass belonged to the AI
+  rather than to an operator. Direct actions are now evaluated under the reserved
+  `direct_control` intent class and always audited.
+- **The audit chain did not detect truncation or wholesale rewriting.** Entries
+  now carry a monotonic `seq`; a head high-water mark is kept in a separate
+  table; and `db audit-checkpoint` emits an Ed25519-signed statement of the chain
+  head to be stored off the hub — the only layer that detects a history rewritten
+  by someone with full database access. `docs/AUDIT-THREAT-MODEL.md` states what
+  each layer does and does not catch, including the rows that read "not
+  detected".
+- **`POST /v1/heartbeat/signed`** — liveness for hardware that cannot do TLS,
+  authenticated by HMAC over the device's provisioning token. **Disabled by
+  default.** Provides message authenticity and replay resistance; provides NO
+  confidentiality — `device_id`, timestamp and report travel readable. Devices
+  using it are marked `report_channel: signed_plaintext`. See spec §7.10 and the
+  threat model before enabling it.
+- **Third-party adapters via entry points** (`dosync.adapters`). Such an adapter
+  runs inside the hub with the hub's permissions: loading one is logged at
+  WARNING, recorded in the audit chain, and reported as `kind: third_party`
+  regardless of what the plugin claims about itself. DoSync does not and will not
+  download adapter code from a remote source (DESIGN-PRINCIPLES).
+- Access is manageable without a shell: `GET/POST /v1/auth/mode` and
+  `POST /v1/auth/token`, plus controls in the dashboard. Choose a password, or
+  turn authentication off. `DOSYNC_AUTH` in the environment still wins, and the
+  hub says so rather than silently ignoring the request. Every change is audited.
+
+### Devices
+
+- **Scan and adopt.** `GET /v1/discovery/scan` lists candidates on every
+  searchable transport and registers nothing; `POST /v1/discovery/adopt`
+  registers one under a name the operator chose. Scanning searches WiFi and
+  Bluetooth out of the box.
+- **Declarative adapters** — describe a device in YAML or JSON instead of writing
+  code. HTTP and MQTT. Six worked examples ship in `examples/declarative/`,
+  including a 3D printer and an industrial conveyor. A file that disappears
+  QUARANTINES its device rather than deleting it: it leaves intent resolution,
+  stays in the inventory, and removal remains an operator's act.
+- `PATCH /v1/devices/{id}` renames a device without re-registering its manifest.
+- `GET /v1/adapters` reports which technologies a hub speaks and on what basis
+  each ships — `ecosystem` (an open standard), `reference` (one vendor's product,
+  a worked example and not an endorsement), `infrastructure`, or `third_party`.
+
+### Correctness
+
+- **Two same-rank emergencies on one device are no longer silent.** Both execute
+  and the later determines the final state, which is a fact about the deployment;
+  it is now recorded as `concurrent_same_rank_claims` instead of being invisible.
+- **Verification can accept a pushed reading** (`accept_cached_within_s`), so
+  push-only sensors can verify at all. The window is measured against the
+  ACTION, not the clock — a reading that predates dispatch confirms nothing.
+  `VerificationResult.evidence` distinguishes `polled` from `pushed`, because
+  `verified` must not mean two different things. New status
+  `no_change_reported`: a change-reporting sensor that stayed silent is healthy,
+  not absent.
+- The hub archives its own audit chain while running (`DOSYNC_AUDIT_MAX_LIVE`),
+  and emits checkpoints on a schedule (`DOSYNC_CHECKPOINT_INTERVAL`, daily).
+
+### Interface
+
+- The dashboard **ships with the package**. It never had: it sat at the
+  repository root, so no install carried it, and the packaging move broke its
+  path in clones too.
+- It follows the scheme it was loaded over — it hardcoded `http://`, so on any
+  TLS deployment the browser blocked it silently.
+- The intent launcher renders the deployment's own intent classes instead of
+  eight hardcoded home scenarios, and the version comes from the API instead of
+  reading `v0.1` for three releases.
+- Devices can be scanned, renamed and removed from the browser; an empty hub says
+  what to do next; the certificate warning a self-signed hub produces is
+  explained per platform.
+
+### Packaging
+
+- `bleak`, `pyyaml`, `aiohttp` and `paho-mqtt` are core dependencies. Discovery
+  and declarative adapters are advertised capabilities, and a dependency needed
+  to use one cannot be optional (DESIGN-PRINCIPLES).
+- `pipx install dosync` is the documented path: plain `pip install` fails on
+  Raspberry Pi OS, Debian 12+ and Ubuntu 23.04+ (PEP 668).
+
+### Documentation
+
+- `docs/CONFIGURATION.md` — all 49 settings, **generated from the source**, with
+  a test that fails when it drifts.
+- Spec §7.8 lists all 32 audit event types, §7.9 the complete endpoint surface,
+  §7.10 signed heartbeats. `python3 -m dosync.spec_coverage --check` fails when
+  the implementation grows past the specification.
+- README leads with governance and accountability rather than "semantic layer",
+  and answers how DoSync differs from W3C Web of Things and MCP.
 
 ## [0.4.1] — 2026-07-22
 
