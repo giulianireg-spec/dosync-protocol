@@ -850,9 +850,13 @@ belongs nowhere in the chain — it is readable by anyone who can read the chain
 ## 7.9 Endpoint summary
 
 The complete HTTP surface of a conforming hub. Sections above define semantics;
-this exists so an implementer can see the whole surface at once and so no
-endpoint can be added without appearing here (`python3 -m dosync.spec_coverage`
-fails otherwise).
+this exists so an implementer can see the whole surface at once.
+
+A conforming implementation MUST expose the endpoints marked required below and
+MAY omit the optional ones; it MUST NOT expose an endpoint under a `/v1/` path
+with semantics other than those given here. How a project keeps this table
+honest is its own business — the reference implementation fails a test when its
+server grows past this list.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -1123,7 +1127,7 @@ Implementors MUST be aware of the following distributed systems failure modes an
 
 **State divergence**: Devices registered with the primary are not yet replicated to the standby at failover time. Mitigation: synchronous replication for registry mutations, or accept a reconciliation window.
 
-**Audit log corruption**: Two hubs write to the same SQLite file simultaneously. Mitigation: never share a SQLite file between hub processes. Use `manage.py db audit-reset` to recover from chain integrity violations.
+**Audit log corruption**: two hub processes writing to one store simultaneously. Mitigation: a hub MUST NOT share its audit store with another hub process. Recovery from a broken chain requires an administrative reset, which MUST itself be recorded — the reference implementation provides `manage.py db audit-reset`.
 
 ### 11.7 Implementation guidance
 
@@ -1197,7 +1201,7 @@ Unreachable devices automatically re-enter the resolver's consideration after th
 
 #### Audit log integrity failure
 
-If `GET /v1/hub/heartbeat` returns `status: "degraded"`, the audit log chain is broken. The hub MUST continue operating but MUST report degraded status on every heartbeat until the chain is repaired. See `manage.py db audit-reset` for recovery.
+If `GET /v1/hub/heartbeat` returns `status: "degraded"`, the audit log chain is broken. The hub MUST continue operating but MUST report degraded status on every heartbeat until the chain is repaired. Repair is administrative and implementation-specific; the reference implementation provides `manage.py db audit-reset`.
 
 ---
 
