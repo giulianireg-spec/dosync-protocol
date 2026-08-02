@@ -7,27 +7,6 @@ this implementation of it.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Changed — behavior
-- **`db audit-verify` now performs additional checks and can fail where it
-  previously passed.** Besides the hash links it compares the chain against a
-  head mark recorded separately, and against a signed checkpoint when
-  `--checkpoint` is given. Anyone running this command in cron or CI should
-  expect a non-zero exit on a chain whose tail was removed — which is the point,
-  but it is new behavior on an existing command. A legitimate `audit-archive`
-  does NOT trip it.
-
-### Added
-- Monotonic `seq` on every audit entry, inside the hashed content, so gaps and
-  reordering break verification.
-- `db audit-checkpoint` — an Ed25519-signed statement of the chain head, meant
-  to be stored off the hub. It is the only layer that detects a history
-  rewritten wholesale by someone with full database access.
-- `docs/AUDIT-THREAT-MODEL.md` — attacker model, a verification matrix that
-  includes what is NOT detected, and a compliance runbook.
-- `DOSYNC_AUDIT_HEAD_EVERY` (default 25) — how often the head mark is persisted.
-
 ## [0.4.2] — 2026-08-01
 
 A large release. Two of the five properties this project advertises were audited
@@ -119,6 +98,19 @@ not a developer.
 - `pipx install dosync` is the documented path: plain `pip install` fails on
   Raspberry Pi OS, Debian 12+ and Ubuntu 23.04+ (PEP 668).
 
+### Audit tooling — behaviour change
+
+- **`db audit-verify` performs additional checks and can fail where it
+  previously passed.** Besides the hash links it compares the chain against a
+  head mark recorded separately, and against a signed checkpoint when
+  `--checkpoint` is given. Anyone running this in cron or CI should expect a
+  non-zero exit on a chain whose tail was removed — which is the point, but it
+  is new behaviour on an existing command. A legitimate `audit-archive` does NOT
+  trip it.
+- `db audit-checkpoint` emits the signed head statement described above.
+- `DOSYNC_AUDIT_HEAD_EVERY` (default 25) controls how often the head mark is
+  persisted.
+
 ### Documentation
 
 - `docs/CONFIGURATION.md` — all 49 settings, **generated from the source**, with
@@ -155,7 +147,11 @@ First published release. `pip install dosync`.
   `dosync-hub` writes to the current directory by default, which surprises
   people who run it from different places.
 
-## [Unreleased]
+### Also in 0.4.1
+
+*These entries spent nine days under `[Unreleased]` after their contents had
+shipped, so a reader saw published functionality marked as not released.
+Closing a version means moving the heading, and it was missed at the time.*
 
 ### Added
 - **The project is installable.** `pip install dosync` now provides the library

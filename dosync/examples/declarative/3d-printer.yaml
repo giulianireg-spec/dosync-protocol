@@ -1,0 +1,50 @@
+# A 3D printer with an OctoPrint-style API.
+#
+# Included because it is NOT a home-automation device, and the format should not
+# quietly assume houses. A printer has a job that can fail, which is exactly the
+# case where "stop it" has to reach further than the app that started it.
+
+device:
+  id: printer-workshop
+  name: Workshop 3D printer
+  category: actuator
+  room: workshop
+  tags: [appliance, workshop, emergency]
+  emergency_capable: true    # a printer runs a hot end unattended for hours;
+                             # an emergency stop must be able to reach it
+
+transport:
+  kind: http
+  base_url: http://192.168.1.70
+  headers:
+    X-Api-Key: REPLACE_WITH_YOUR_API_KEY
+
+actions:
+  pause_job:
+    type: pause
+    request:
+      method: POST
+      path: /api/job
+      body: { command: pause, action: pause }
+
+  cancel_job:
+    type: stop
+    description: Cancels the running print — used by emergency intents
+    request:
+      method: POST
+      path: /api/job
+      body: { command: cancel }
+
+  cool_down:
+    type: turn_off
+    description: Sets both heaters to zero
+    request:
+      method: POST
+      path: /api/printer/tool
+      body: { command: target, targets: { tool0: 0 } }
+
+sensors:
+  hotend_temperature:
+    type: temperature
+    kind: device_state
+    request: { method: GET, path: /api/printer, extract: temperature }

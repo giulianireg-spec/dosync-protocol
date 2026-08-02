@@ -109,4 +109,4 @@ include = ["dosync*"]
 # repository root and was therefore absent from every `pip install dosync`,
 # while the handler looked for it next to server.py — so the one entry point
 # that does not require curl was missing in the package and broken in a clone.
-dosync = ["py.typed", "dashboard.html"]
+dosync = ["py.typed", "dashboard.html", "examples/declarative/*"]

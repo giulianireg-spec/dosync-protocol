@@ -1,0 +1,52 @@
+{
+  "_comment": [
+    "A floor's lighting controller, in JSON rather than YAML — the two formats",
+    "are interchangeable, and JSON is what a building management system is more",
+    "likely to already emit.",
+    "",
+    "Included because it is a COMMERCIAL device, not a household one, and",
+    "because it shows the case the format handles worst: one endpoint that",
+    "controls many fixtures. DoSync sees one device with three actions. If each",
+    "fixture must be addressed independently, write one file per fixture, or use",
+    "a code adapter that enumerates them."
+  ],
+  "device": {
+    "id": "lighting-floor-3",
+    "name": "Third floor lighting",
+    "category": "actuator",
+    "tags": ["light", "emergency", "floor-3", "commercial"],
+    "emergency_capable": true
+  },
+  "transport": {
+    "kind": "http",
+    "base_url": "http://10.0.4.20/api",
+    "timeout": 8,
+    "headers": { "Authorization": "Bearer REPLACE_WITH_YOUR_TOKEN" }
+  },
+  "actions": {
+    "turn_on": {
+      "type": "turn_on",
+      "description": "All fixtures on this floor to full",
+      "request": { "method": "PUT", "path": "/zones/floor3", "body": { "level": 100 } }
+    },
+    "turn_off": {
+      "type": "turn_off",
+      "request": { "method": "PUT", "path": "/zones/floor3", "body": { "level": 0 } }
+    },
+    "set_brightness": {
+      "type": "set_brightness",
+      "request": {
+        "method": "PUT",
+        "path": "/zones/floor3",
+        "body": { "level": "{params.brightness}" }
+      }
+    }
+  },
+  "sensors": {
+    "level": {
+      "type": "number",
+      "kind": "device_state",
+      "request": { "method": "GET", "path": "/zones/floor3", "extract": "level" }
+    }
+  }
+}

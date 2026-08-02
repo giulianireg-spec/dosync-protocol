@@ -519,3 +519,52 @@ def test_the_changelog_covers_the_release():
     for topic in ("declarative", "quarantin", "entry point", "heartbeat",
                   "discovery", "auth"):
         assert topic in section, f"0.4.2 ships {topic} and does not mention it"
+
+
+def test_no_shipped_work_sits_under_unreleased():
+    """Two `[Unreleased]` sections were found at publication time, one holding
+    0.4.1's contents nine days after it shipped and one holding 0.4.2's. A
+    reader saw published functionality marked as not released — and one of the
+    entries was a BEHAVIOUR CHANGE to `audit-verify` that could break somebody's
+    cron.
+
+    An `[Unreleased]` section is legitimate; one describing a version that
+    already exists is not.
+    """
+    changelog = (REPO / "CHANGELOG.md").read_text()
+    import re
+
+    versions = re.findall(r"^## \[([0-9]+\.[0-9]+\.[0-9]+)\]", changelog, re.M)
+    assert versions, "the changelog must name released versions"
+
+    import dosync
+    assert dosync.__version__ in versions, (
+        f"version {dosync.__version__} is about to ship and has no changelog "
+        f"section — found {versions}")
+
+    # An Unreleased section is fine; one sitting ABOVE the current version means
+    # shipped work is filed under it.
+    unreleased = changelog.find("## [Unreleased]")
+    current = changelog.find(f"## [{dosync.__version__}]")
+    if unreleased != -1:
+        assert unreleased < current, \
+            "an [Unreleased] section below the current version holds shipped work"
+
+
+def test_the_declarative_examples_ship_with_the_package():
+    """The panel called the examples the deliverable, not the appendix — the
+    format is learned by finding one that resembles your device and changing the
+    address. They lived only at the repository root, so anyone who installed
+    from PyPI and never cloned had none."""
+    from pathlib import Path
+
+    import dosync
+    shipped = Path(dosync.__file__).parent / "examples" / "declarative"
+    assert shipped.is_dir(), "examples must live inside the package to be installed"
+    assert len(list(shipped.glob("*.yaml"))) + len(list(shipped.glob("*.json"))) >= 5
+
+    pyproject = (REPO / "pyproject.toml").read_text()
+    import re
+    decl = re.search(r"^dosync\s*=\s*\[(.+)\]", pyproject, re.M)
+    assert decl and "examples" in decl.group(1), \
+        "and be declared as package-data, or the wheel omits them"

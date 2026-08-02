@@ -1,0 +1,52 @@
+# A conveyor line controlled over MQTT.
+#
+# Here for two reasons. MQTT is the second transport declarative adapters speak
+# and the most common one in industry after HTTP — and this device is the case
+# where the difference between "we sent it" and "we know it happened" stops
+# being philosophy.
+#
+# A publish tells you the BROKER accepted the message. It does not tell you the
+# line stopped. For a light that distinction is pedantic; for a conveyor with
+# someone near it, it is the whole question. That is what `verify_with` is for
+# in the protocol, and why an MQTT action reports success as "accepted by the
+# broker" rather than as "done".
+
+device:
+  id: conveyor-line-2
+  name: Line 2 conveyor
+  category: actuator
+  room: floor-2
+  tags: [machinery, conveyor, emergency, industrial]
+  emergency_capable: true    # an emergency stop MUST be able to reach this
+
+transport:
+  kind: mqtt
+  broker: 192.168.10.5
+  port: 1883
+  username: dosync
+  password: REPLACE_WITH_YOUR_BROKER_PASSWORD
+  qos: 1                     # at least once — a stop command is not fire-and-forget
+
+actions:
+  emergency_stop:
+    type: stop
+    description: Immediate halt. Reached by emergency intents.
+    publish:
+      topic: plant/line2/conveyor/cmd
+      payload: '{"command":"estop"}'
+      qos: 2                 # exactly once, overriding the device default:
+                             # a duplicated stop is harmless, a lost one is not,
+                             # and a duplicated START would not be
+
+  start:
+    type: turn_on
+    publish:
+      topic: plant/line2/conveyor/cmd
+      payload: '{"command":"start"}'
+
+  set_speed:
+    type: set_speed
+    description: Metres per minute
+    publish:
+      topic: plant/line2/conveyor/cmd
+      payload: '{"command":"speed","value":"{params.speed}"}'

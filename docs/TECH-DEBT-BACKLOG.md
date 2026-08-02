@@ -1657,3 +1657,29 @@ than one that sets them aside reversibly, and the device comes back with the dis
 Two conflicting requirements, both reasonable, that could not both hold under the old rule.
 The distinction that reconciles them is not "empty versus non-empty" but "did the hub see
 this change happen". 853/853, verified to fail when the old guard is restored.
+
+## PUBLICATION-READINESS — Two things the package was about to ship without — SHIPPED 2026-08-02
+A third audit, run against the state of the repository at the moment of publishing rather
+than against the work done. Two findings, both invisible to the previous two passes because
+neither had asked "what does a stranger receive".
+
+**Two `[Unreleased]` sections, both holding shipped work.** One contained 0.4.1's contents
+nine days after 0.4.1 was published; the other held part of 0.4.2. A reader of the changelog
+saw published functionality marked as not released — and one of those entries was a
+BEHAVIOUR CHANGE to `audit-verify` that can break a cron job. Closing a version means moving
+a heading, and it was missed twice. Now a test fails when an `[Unreleased]` section sits
+below the current version, and when the version about to ship has no section at all.
+
+**The declarative examples did not travel in the wheel.** They lived only at the repository
+root, so anyone who installed from PyPI and never cloned had none — and the panel had called
+the examples the deliverable rather than the appendix, on the grounds that the format is
+learned by finding one that resembles your device and changing the address. Moved into
+`dosync/examples/declarative/` and declared as package-data; verified by installing the
+wheel into a clean venv and counting six.
+
+Same shape as the dashboard shipping outside the package in July, and as `report_channel`
+being written without being exposed: the work existed and did not reach the person it was
+for. Third instance of that pattern this week, which suggests the question worth asking after
+any feature is not "does it work" but "does it arrive".
+
+853/853; clean install verified end to end — version, dashboard, examples, hub, adapters.

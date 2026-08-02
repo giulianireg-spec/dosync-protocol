@@ -1,0 +1,40 @@
+# A television with an HTTP control API.
+#
+# Worth reading for what `emergency_capable: false` costs and buys. A screen can
+# display a warning, which sounds useful in an emergency — and in a care
+# facility it is exactly wrong, because a resident asleep in front of a TV
+# should not be woken by a fire alarm meant for staff. The device could do it;
+# whether it SHOULD is the deployment's call, expressed here and enforceable by
+# policy.
+
+device:
+  id: tv-living
+  name: Living room TV
+  category: actuator
+  room: living-room
+  tags: [display, communication, entertainment]
+  emergency_capable: false
+
+transport:
+  kind: http
+  base_url: http://192.168.1.60:8060
+
+actions:
+  turn_off:
+    type: turn_off
+    request: { method: POST, path: /keypress/PowerOff }
+
+  show_message:
+    type: notify
+    description: Displays text on screen
+    request:
+      method: POST
+      path: /message
+      body:
+        text: "{params.message}"
+
+sensors:
+  power_state:
+    type: boolean
+    kind: device_state
+    request: { method: GET, path: /query/device-info, extract: power_mode }
