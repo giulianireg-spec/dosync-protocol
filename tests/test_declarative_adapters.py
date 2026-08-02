@@ -246,3 +246,60 @@ def test_an_mqtt_example_ships():
                     if (m.adapter_config or {}).get("transport", {}).get("kind") == "mqtt"]
     assert mqtt_devices, "an MQTT example must ship — the format is learned by copying"
     assert any("industrial" in m.tags or "machinery" in m.tags for m in mqtt_devices)
+
+
+def test_the_bundled_examples_are_reachable_from_an_install():
+    """Shipping them in the wheel was necessary and not sufficient: the README
+    pointed at a repository path a PyPI user does not have, and nothing in the
+    code knew they existed. A feature that ships and cannot be found has not
+    arrived — third instance of that shape this week, after the dashboard
+    shipping outside the package and report_channel written without exposure."""
+    from dosync.declarative import bundled_examples_dir
+
+    d = bundled_examples_dir()
+    assert d.is_dir(), "the package must be able to locate its own examples"
+    assert len(list(d.glob("*.yaml"))) + len(list(d.glob("*.json"))) >= 6
+
+
+def test_examples_can_be_copied_somewhere_editable(tmp_path):
+    """Under site-packages they are on disk where nobody looks and nothing
+    should be edited."""
+    from dosync.declarative import copy_examples_to, load_directory
+
+    written = copy_examples_to(str(tmp_path / "declarative"))
+    assert len(written) >= 6
+    assert len(load_directory(str(tmp_path / "declarative"))) >= 6, \
+        "and the copies must be loadable as devices"
+
+
+def test_copying_does_not_overwrite_an_edited_example(tmp_path):
+    """An operator who edited one and re-ran the command must not lose their
+    work to a convenience."""
+    from dosync.declarative import copy_examples_to
+
+    target = tmp_path / "declarative"
+    copy_examples_to(str(target))
+    edited = next(target.glob("*.yaml"))
+    edited.write_text("# my own device\n")
+
+    second = copy_examples_to(str(target))
+    assert edited.name not in second
+    assert edited.read_text() == "# my own device\n"
+
+
+def test_the_repository_and_package_examples_agree():
+    """Two copies of one fact is how this project has drifted four times —
+    the version in four files, DOSYNC_DB vs DOSYNC_DB_PATH, the auth setting,
+    requirements against pyproject."""
+    import filecmp
+
+    from dosync.declarative import bundled_examples_dir
+
+    repo = REPO / "examples" / "declarative"
+    if not repo.is_dir():
+        return
+    for f in bundled_examples_dir().iterdir():
+        twin = repo / f.name
+        assert twin.exists(), f"{f.name} ships but is not in examples/declarative"
+        assert filecmp.cmp(f, twin, shallow=False), \
+            f"{f.name} differs between the package and the repository"

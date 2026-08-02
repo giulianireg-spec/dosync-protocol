@@ -1683,3 +1683,33 @@ for. Third instance of that pattern this week, which suggests the question worth
 any feature is not "does it work" but "does it arrive".
 
 853/853; clean install verified end to end — version, dashboard, examples, hub, adapters.
+
+## EXAMPLES-REACHABILITY — Shipped is not the same as reachable — SHIPPED 2026-08-02
+Fourth audit, run immediately before publishing. The previous pass put the declarative
+examples inside the wheel, which was necessary and **not sufficient**: the README pointed at
+a repository path a PyPI user does not have, the code did not know the examples existed, and
+under site-packages they sit where nobody looks and nothing should be edited. So a user who
+installed from PyPI still had no way to reach the thing the panel called the deliverable.
+
+Third instance of this exact shape this week — after the dashboard shipping outside the
+package and `report_channel` written without being exposed. The recurring question after any
+feature is not "does it work" but **"does it arrive"**.
+
+Added `bundled_examples_dir()`, `copy_examples_to()` and `dosync-manage examples`, which
+copies the six into the directory the hub reads and refuses to overwrite an edited file — an
+operator who customised an example must not lose it to a convenience command. Verified end to
+end from a clean venv: install, `dosync-manage examples`, start the hub, six devices
+registered.
+
+**A symlink was tried first and rejected.** Replacing the repository copy with a link to the
+package one removes the duplication cleanly on Linux and macOS and breaks on Windows without
+elevated permissions. A project aiming to be a standard cannot make its examples
+platform-conditional, so the duplication stays and a test asserts the two copies are
+byte-identical — two copies of one fact is how this project has drifted four times already.
+
+**And the signed heartbeat was absent from the README.** It exists, it is specified in §7.10,
+it is in the changelog — and a user reading the front door had no way to learn it exists.
+Documented with what it trades: message authenticity and replay resistance, and no
+confidentiality.
+
+859/859.

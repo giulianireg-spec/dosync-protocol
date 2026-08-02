@@ -325,6 +325,12 @@ Examples:
                         help="Verify the live chain against a signed checkpoint exported earlier "
                              "(detects a chain rewritten wholesale, which local checks cannot)")
 
+    p_ex = sub.add_parser(
+        "examples",
+        help="Copy the bundled declarative device examples where you can edit them")
+    p_ex.add_argument("--out", default=None,
+                      help="Destination (default: DOSYNC_DECLARATIVE_DIR or ./declarative)")
+
     p_cp = db_sub.add_parser(
         "audit-checkpoint",
         help="Emit a signed checkpoint of the chain head, to store OFF this machine")
@@ -368,6 +374,13 @@ Examples:
     p_rotate_adapter.add_argument("--ip", default="127.0.0.1", help="Adapter IP address")
 
     args = parser.parse_args()
+
+    # `examples` copies files and never touches the database — requiring one
+    # would mean a user could not get the examples until they had started a hub,
+    # which is backwards: the examples are how they set the hub up.
+    if args.group == "examples":
+        declarative_examples(args)
+        return
 
     if not Path(args.db).exists() and args.group != "keys":
         err(f"Database not found: {args.db}")
@@ -617,6 +630,30 @@ def db_audit_archive(args):
     print(f"  The live chain now anchors at {manifest['last_hash'][:16]}... and carries an")
     print(f"  audit_archived entry binding the segment file. Restart the hub; then run")
     print(f"  'db audit-verify' (live) and 'db audit-verify --segment {out}' to confirm both.")
+
+
+def declarative_examples(args):
+    """Copy the bundled device examples somewhere the operator can edit them.
+
+    The examples ship inside the package, which is necessary and not sufficient:
+    a user who installed from PyPI has them on disk under site-packages, where
+    nobody looks and nothing should be edited. This puts them where the hub
+    reads device files.
+    """
+    from dosync.declarative import bundled_examples_dir, copy_examples_to
+
+    target = args.out or os.environ.get("DOSYNC_DECLARATIVE_DIR", "declarative")
+    header("Declarative examples")
+    written = copy_examples_to(target)
+    if written:
+        for name in written:
+            print(f"  {C.GREEN}+{C.RESET} {name}")
+        print(f"\n  Copied {len(written)} example(s) to {target}/")
+        print("  Edit one to describe your device, then restart the hub.")
+    else:
+        print(f"  Everything already present in {target}/ — nothing copied.")
+        print(f"  (Originals: {bundled_examples_dir()})")
+    print()
 
 
 def db_audit_checkpoint(args):

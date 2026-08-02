@@ -299,10 +299,19 @@ actions:
     request: { method: POST, path: /light/on }
 ```
 
-Drop it in `declarative/` (or set `DOSYNC_DECLARATIVE_DIR`) and restart. Five
-worked examples ship in [`examples/declarative/`](examples/declarative/) — a
-light, an air conditioner, a 3D printer, a television and a floor's lighting
-controller — chosen so one of them probably resembles what you have.
+Drop it in `declarative/` (or set `DOSYNC_DECLARATIVE_DIR`) and restart.
+
+**You do not have to write the first one.** Six worked examples ship with the
+package — a light, an air conditioner, a 3D printer, a television, a floor's
+lighting controller and an industrial conveyor over MQTT — chosen so one of them
+probably resembles what you have:
+
+```bash
+dosync-manage examples        # copies them into declarative/, ready to edit
+```
+
+They are also readable in the repository at
+[`examples/declarative/`](examples/declarative/).
 
 The `type` on each action is the part that matters. A file that only said "POST
 /on turns it on" would let DoSync switch the device and leave it invisible to
@@ -421,6 +430,29 @@ rate limiting and no lockout, so it is guessed offline at full speed.
 
 Existing keys: `dosync-manage keys list` (previews only — they are hashed),
 `keys revoke <preview>`, `keys reset`.
+
+### Hardware that cannot do TLS
+
+A sensor running a year on a coin cell cannot perform a TLS handshake — it costs
+more battery than a month of operation. Such a device can still report liveness,
+signed rather than encrypted:
+
+```bash
+DOSYNC_LIGHTWEIGHT_HEARTBEAT=true dosync-hub
+```
+
+`POST /v1/heartbeat/signed` accepts a heartbeat authenticated by HMAC over the
+device's provisioning token. It is **off by default**, and it is worth knowing
+exactly what it trades before turning it on: the channel provides message
+authenticity and replay resistance, and **no confidentiality** — the device id,
+timestamp and report travel readable. Devices using it are marked
+`report_channel: signed_plaintext` so they are distinguishable from ones on mTLS.
+
+That trade is defensible for a heartbeat and would not be for an action: a
+heartbeat is positive signal only, so a forged one cannot switch anything on.
+The attack it invites is replay — repeating a captured message to keep a failed
+device reporting healthy — and that is closed. See spec §7.10 and
+[the threat model](docs/AUDIT-THREAT-MODEL.md).
 
 ### TLS, and why your browser says "Not secure"
 

@@ -237,6 +237,41 @@ def build_manifest(data: dict, source: str = "<declarative>"):
     )
 
 
+def bundled_examples_dir() -> Path:
+    """Where the worked examples live in an installed copy.
+
+    Exists because shipping them was not enough. They travel in the wheel now,
+    but the README points at a repository path a PyPI user does not have and
+    nothing in the code knew they existed — so an installed user still had no
+    way to reach the thing the panel called the deliverable. A feature that
+    ships and cannot be found has not arrived.
+    """
+    return Path(__file__).resolve().parent / "examples" / "declarative"
+
+
+def copy_examples_to(directory: str) -> list[str]:
+    """Copy the bundled examples somewhere the operator can edit them.
+
+    Returns the filenames written. Skips any that already exist — an operator
+    who edited an example and re-ran this must not lose their work to a
+    convenience command.
+    """
+    import shutil
+
+    target = Path(directory)
+    target.mkdir(parents=True, exist_ok=True)
+    written = []
+    for f in sorted(bundled_examples_dir().iterdir()):
+        if f.suffix.lower() not in SUPPORTED_SUFFIXES:
+            continue
+        dest = target / f.name
+        if dest.exists():
+            continue
+        shutil.copy2(f, dest)
+        written.append(f.name)
+    return written
+
+
 def load_directory(directory: str = None) -> list[tuple[Any, dict]]:
     """Load every declarative adapter in a directory.
 
