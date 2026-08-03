@@ -173,3 +173,31 @@ def test_endpoint_does_not_call_the_executor_unguarded():
     assert "audit_log.append" in src, "direct actions must be audited"
     assert "DIRECT_CONTROL_INTENT_CLASS" in src, \
         "policy evaluation needs the reserved intent class to be addressable"
+
+
+def test_conformance_accepts_a_policy_refusal():
+    """S12 rejected the reference deployment for doing the right thing.
+
+    The test predates the fix: until 2026-07-25 `/v1/device/action` called the
+    executor directly and could not be refused by anything, so 403 was not among
+    the accepted outcomes. Once the endpoint became policy-evaluated, a hub whose
+    deployment forbids acting on that device answers 403 — and the suite called
+    it a failure.
+
+    A conformance suite that treats a policy refusal as a defect pushes an
+    implementer toward removing the check, which is the opposite of what this
+    protocol asks for. Found by running the suite against a real deployment for
+    the first time rather than against a hub with no policies loaded.
+    """
+    import inspect
+
+    from dosync import certify
+
+    src = inspect.getsource(certify)
+    marker = "S12  Direct device action is executed or refused by policy"
+    assert marker in src, "S12 must name refusal as an acceptable outcome"
+
+    block = src[src.find(marker) - 800:src.find(marker) + 400]
+    assert "403" in block, "403 must be among the accepted statuses"
+    assert "500" not in block.split("status in")[1][:40], \
+        "and a server error must still fail — this is not a blanket accept"

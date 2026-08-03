@@ -1713,3 +1713,35 @@ Documented with what it trades: message authenticity and replay resistance, and 
 confidentiality.
 
 859/859.
+
+## CERTIFY-S12-POLICY-REFUSAL — The suite failed a hub for doing the right thing — SHIPPED 2026-08-02
+Found by running the conformance suite against the REAL deployment for the first time —
+with its own policy file and its own devices — instead of against a hub with nothing loaded.
+
+Result: **55/56**, not the 51 that had been reported for weeks. Four of the five
+long-standing "known environmental failures" were never defects at all: B04 failed because
+the suite was being run with `DOSYNC_AUTH=false`, and C04–C06 need a deployment where a
+policy actually modifies a plan. They pass on a hub that has one.
+
+The remaining failure was real and pointed the wrong way. **S12 rejected the hub for
+refusing an unauthorised action.** The test accepted `200, 404, 422` — written when
+`/v1/device/action` called the executor directly and could not be refused by anything. Making
+that endpoint policy-evaluated was one of the two false claims this project found in its own
+advertised strengths, and the suite had not caught up: a deployment whose policy forbids
+acting on a device answers 403, and conformance called that a defect.
+
+That is worse than a stale test. **A conformance suite that treats a policy refusal as a
+failure pushes an implementer toward removing the check** — it certifies the behaviour the
+protocol exists to prevent. Now accepts 200 or 403 and names both as conforming, while a 500
+still fails.
+
+Two lessons worth keeping:
+
+- **"Known environmental failure" became a label that prevented looking.** Five red tests
+  carried since July, accepted by habit; four were configuration of whoever ran them. A label
+  that stops inquiry is debt.
+- **A conformance suite run only against an empty hub tests an empty hub.** The properties
+  that matter here — policies refusing things, chains recording them — only exist in a
+  deployment with policies and traffic.
+
+860/860.

@@ -563,10 +563,24 @@ def run_standard(base: str, report: CertReport):
         "params":    {"brightness": 100},
         "urgency":   "info",
     })
+    # 403 is not a failure — it is the point. Until 2026-07-25 this endpoint
+    # called the executor directly, skipping the policy engine entirely; closing
+    # that was one of the two false claims this project found in its own
+    # advertised strengths. A deployment whose policy forbids acting on this
+    # device SHOULD refuse, and a conformance suite that treats the refusal as a
+    # defect would push an implementer toward removing the very check.
+    #
+    # Caught by running the suite against a real deployment for the first time:
+    # the reference hub answered 403 because its own policy file excludes the
+    # device, and the test had been written before a 403 was possible.
+    _policy_refused = status == 403
     report.add(TestResult(
-        "S12  Direct device action endpoint works",
-        status in (200, 404, 422),  # 404/422 acceptable if adapter not configured
-        f"status={status}",
+        "S12  Direct device action is executed or refused by policy — never unguarded",
+        status in (200, 403, 404, 422),
+        f"status={status}" + (
+            " — refused by deployment policy, which is conforming behaviour"
+            if _policy_refused else
+            " (404/422 acceptable when the adapter is not configured)"),
     ))
 
 
