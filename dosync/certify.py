@@ -237,8 +237,29 @@ class CertReport:
             self.failed += 1
             fail(result.name + (f" — {result.detail}" if result.detail else ""))
 
+    #: How many checks each tier is expected to run. A suite that stops early —
+    #: because the hub refused the setup, or the network dropped — must not be
+    #: mistaken for a suite that ran and found problems, and MUST NOT certify.
+    #:
+    #: Found the hard way: an empty DOSYNC_TOKEN made device registration fail,
+    #: the run aborted after 5 of 56 checks, and the report said
+    #: "NOT CERTIFIED — 1 test(s) failed". An operator reading that concludes
+    #: their hub failed conformance, when in fact it was never tested. Worse, a
+    #: run that aborted BEFORE any failure would have certified on zero checks.
+    #:
+    #: This is the same distinction the protocol itself insists on elsewhere:
+    #: `unverifiable` is not `contradicted`, and "not searchable" is not "found
+    #: nothing". A certification suite owes the same honesty.
+    EXPECTED_COUNTS = {
+        "basic": 12, "standard": 33, "emergency": 44, "conformance": 56,
+    }
+
     def finalize(self):
-        self.certified = self.failed == 0
+        expected = self.EXPECTED_COUNTS.get(self.tier)
+        self.expected = expected
+        self.executed = self.passed + self.failed
+        self.incomplete = bool(expected and self.executed < expected)
+        self.certified = self.failed == 0 and not self.incomplete
         raw = json.dumps({
             "host": self.host, "tier": self.tier,
             "timestamp": self.timestamp, "passed": self.passed, "failed": self.failed,
@@ -249,6 +270,12 @@ class CertReport:
         return {
             "dosync_cert_version": "0.3",
             "certified": self.certified,
+            # A third party reading this file must be able to tell a hub that
+            # failed from a suite that never finished. The signature covers
+            # these, so an incomplete run cannot be presented as a clean one.
+            "executed": getattr(self, "executed", self.passed + self.failed),
+            "expected": getattr(self, "expected", None),
+            "incomplete": getattr(self, "incomplete", False),
             "tier": self.tier,
             "hub": f"{self.host}:{self.port}",
             "hub_version": self.hub_version,
@@ -1136,6 +1163,16 @@ Tier test counts:
     if report.certified:
         print(f"\n  {C.BOLD}{C.OK}✓ CERTIFIED — DoSync {args.tier.upper()} ({report.passed}/{total}){C.RESET}")
         print(f"  Fingerprint: {report.fingerprint[:32]}…")
+    elif report.incomplete:
+        # Reported separately from a failure, because they mean opposite things
+        # about the hub: one says it behaved wrongly, the other says nobody
+        # found out. Conflating them tells an operator their hub failed when it
+        # was never tested.
+        print(f"\n  {C.BOLD}{C.WARN}⚠ NOT RUN — DoSync {args.tier.upper()} stopped after "
+              f"{report.executed} of {report.expected} checks{C.RESET}")
+        print( "  This is NOT a conformance failure: the suite could not complete.")
+        print( "  Usual cause: the hub refused the setup — check DOSYNC_TOKEN is set")
+        print( "  and that the hub is reachable, then run again.")
     else:
         print(f"\n  {C.BOLD}{C.FAIL}✗ NOT CERTIFIED — {report.failed} test(s) failed{C.RESET}")
 

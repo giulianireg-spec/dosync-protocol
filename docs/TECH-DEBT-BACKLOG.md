@@ -1745,3 +1745,34 @@ Two lessons worth keeping:
   deployment with policies and traffic.
 
 860/860.
+
+## CERTIFY-INCOMPLETE-RUNS — The suite could not tell "you failed" from "I never ran" — SHIPPED 2026-08-02
+An empty `DOSYNC_TOKEN` made device registration fail, the run aborted after **5 of 56**
+checks, and the report said *"NOT CERTIFIED — 1 test(s) failed"*. An operator reading that
+concludes their hub failed conformance. It was never tested.
+
+**And the dangerous direction is the other one:** a run that aborted BEFORE reaching a
+failing check would have reported zero failures and CERTIFIED — on almost no evidence, with
+a signature over it.
+
+This is the distinction the protocol insists on everywhere else and its own tooling did not
+make. `unverifiable` is not `contradicted`: one says the device disagreed, the other says we
+could not look. "Not searchable" is not "found nothing" — that separation was added to the
+scan endpoint two days ago for exactly this reason. A certification suite that cannot tell
+"your hub is wrong" from "I never started" fails the standard it exists to enforce.
+
+Each tier now declares how many checks it runs, and a run that executes fewer reports
+**"⚠ NOT RUN — stopped after N of M checks"** with the usual cause, states plainly that it
+is not a conformance failure, and does not certify. The counts ride in the signed report
+(`executed`, `expected`, `incomplete`), so a third party cannot be handed an incomplete run
+presented as a clean one.
+
+Found by hitting it three times in one session — the same empty shell variable — and
+noticing that the tool's answer was not merely unhelpful but wrong.
+
+866/866, zero warnings; verified to certify a 5-of-56 run when the guard is removed.
+
+**Milestone:** with S12 corrected, the reference deployment certifies **56/56, signed**,
+against a real hub — 22 devices, policies loaded, a 42,000-entry chain. Every previous
+certification was run against an empty hub, which is why four of the five long-standing
+"environmental failures" turned out never to have been defects.
