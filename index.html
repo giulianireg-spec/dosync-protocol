@@ -3,16 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DoSync Protocol — Open semantic IoT protocol for AI agents</title>
-<meta name="description" content="DoSync is an open protocol (Apache 2.0) that lets AI agents act on physical devices using semantic intent — deterministic, auditable, local-first, domain-agnostic. A semantic coordination layer that works alongside Home Assistant, Matter, Zigbee and Z-Wave, not a replacement for them.">
+<title>DoSync — Governance for AI that acts on physical devices</title>
+<meta name="description" content="Open protocol (Apache 2.0) for AI that acts on physical devices: one goal becomes a governed, audited plan. Runs locally. pip install dosync.">
 <link rel="canonical" href="https://dosync.dev/">
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="DoSync Protocol">
-<meta property="og:title" content="DoSync — The semantic layer between AI agents and physical devices">
-<meta property="og:description" content="AI speaks in goals. Devices speak in commands. DoSync is the bridge. Open protocol, Apache 2.0, self-certifiable.">
-<meta property="og:image" content="https://dosync.dev/og.svg">
+<meta property="og:title" content="DoSync — Governance for AI that acts on physical devices">
+<meta property="og:description" content="One goal becomes a governed, audited plan. Your deployment's rules can veto it; the record survives root access. Apache 2.0.">
+<meta property="og:image" content="https://dosync.dev/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:alt" content="DoSync Protocol — governance and accountability for AI that acts on physical devices">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:url" content="https://dosync.dev">
@@ -21,7 +25,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="DoSync — Semantic IoT protocol for AI agents">
 <meta name="twitter:description" content="AI speaks in goals. Devices speak in commands. DoSync is the bridge. Open source, Apache 2.0.">
-<meta name="twitter:image" content="https://dosync.dev/og.svg">
+<meta name="twitter:image" content="https://dosync.dev/og.png">
 
 <!-- SEO keywords -->
 <meta name="keywords" content="semantic IoT protocol, AI agents, semantic intent, agentic IoT, physical AI, deterministic orchestration, auditable, domain-agnostic, Home Assistant, MCP server, robotics, DoSync">
@@ -297,8 +301,8 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
   <div class="hero" style="padding-left:0;padding-right:0">
     <div>
       <p class="hero-eyebrow">Open Protocol · Apache 2.0</p>
-      <h1>AI speaks in goals.<br>Devices speak in<br>commands.<br><em>DoSync is the bridge.</em></h1>
-      <p class="hero-sub">An open communication protocol that lets AI agents interact with physical devices using semantic intent — no hardcoded rules, no manual configuration per device.</p>
+      <h1>When an AI acts on<br>the physical world,<br><em>someone has to answer for it.</em></h1>
+      <p class="hero-sub">DoSync turns a goal into a plan your deployment's own rules can veto, and leaves a record that survives someone with root access. Runs in the building it serves — no cloud required.</p>
       <div class="hero-actions">
         <button class="btn-primary" onclick="window.location='#quickstart'">
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M3 7.5h9M8.5 4l3.5 3.5L8.5 11" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -307,8 +311,8 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
         <button class="btn-secondary" onclick="window.location='#demo'">Watch the demo</button>
       </div>
       <div class="hero-stats">
-        <div class="stat"><span class="stat-num">33/33</span><span class="stat-label">certification tests</span></div>
-        <div class="stat"><span class="stat-num">2</span><span class="stat-label">implementations</span></div>
+        <div class="stat"><span class="stat-num">56/56</span><span class="stat-label">conformance, signed</span></div>
+        <div class="stat"><span class="stat-num">866</span><span class="stat-label">automated tests</span></div>
         <div class="stat"><span class="stat-num">&lt;100ms</span><span class="stat-label">intent to action</span></div>
         <div class="stat"><span class="stat-num">Apache 2.0</span><span class="stat-label">open source</span></div>
       </div>
@@ -664,27 +668,27 @@ document.addEventListener('DOMContentLoaded',function(){tlBuildSteps();});
 <section id="quickstart">
   <div class="section-inner">
     <p class="section-eyebrow">Quick start</p>
-    <h2 class="section-title">Up and running in three commands.</h2>
-    <p class="section-sub">No hardware required. The Docker demo starts the hub and registers 8 simulated devices automatically.</p>
+    <h2 class="section-title">Up and running in one command.</h2>
+    <p class="section-sub">No hardware required. The hub starts with authentication on, an audit chain running, and a device scan that searches WiFi and Bluetooth without any configuration.</p>
     <div class="qs-steps">
       <div class="qs-step">
         <div class="qs-step-header">
           <span class="qs-step-num">1</span>
-          <span class="qs-step-title">Clone the repo</span>
+          <span class="qs-step-title">Install</span>
         </div>
         <div class="qs-code">
-          <span class="prompt">$</span> git clone https://github.com/<br>
-          &nbsp;&nbsp;giulianireg-spec/dosync-protocol
+          <span class="prompt">$</span> pipx install dosync<br>
+            <span style="color:#5F5E5A"># or: pip install dosync</span>
         </div>
       </div>
       <div class="qs-step">
         <div class="qs-step-header">
           <span class="qs-step-num">2</span>
-          <span class="qs-step-title">Start with Docker</span>
+          <span class="qs-step-title">Start the hub</span>
         </div>
         <div class="qs-code">
-          <span class="prompt">$</span> cd dosync-protocol<br>
-          <span class="prompt">$</span> docker compose up
+          <span class="prompt">$</span> dosync-hub<br>
+            <span style="color:#5F5E5A"># auth on, audit chain running</span>
         </div>
       </div>
       <div class="qs-step">
@@ -734,7 +738,7 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
       <div style="display:flex;flex-direction:column;gap:14px;padding-top:8px">
         <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
           <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">Available today</p>
-          <p style="font-family:var(--font-mono);font-size:12px;color:#888780;line-height:1.9">wiz · homeassistant · shelly · matter · gpio · simulated</p>
+          <p style="font-family:var(--font-mono);font-size:12px;color:#888780;line-height:1.9">homeassistant · matter · mqtt · ble · mavlink · wiz · shelly · declarative · gpio</p>
         </div>
         <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
           <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">The adapter contract</p>
@@ -837,7 +841,7 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
     <div class="status-grid">
       <div class="status-items">
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">REST API · WebSocket · Dashboard</span></div>
-        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Certification CLI — Standard 33/33 · Emergency 44/44</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Certification — 56/56 conformance, signed, against a real deployment</span></div>
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Philips WiZ adapter (UDP local)</span></div>
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Home Assistant bridge (10 domains)</span></div>
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Native MCP server (Claude, any LLM)</span></div>
@@ -848,23 +852,28 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Emergency preemption — device-finality guaranteed (v0.4)</span></div>
         <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Prometheus /metrics — zero-dep observability</span></div>
         <div class="status-item"><span class="status-badge wip">In progress</span><span class="status-item-name">Distributed state replication</span></div>
-        <div class="status-item"><span class="status-badge planned">Planned</span><span class="status-item-name">BLE transport adapter</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">BLE adapter — controls and discovers over Bluetooth radio</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Declarative adapters — describe a device in YAML/JSON, no code (HTTP, MQTT)</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Third-party adapters via Python entry points</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Signed heartbeats for hardware that cannot do TLS</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">Device discovery over WiFi and Bluetooth, out of the box</span></div>
+        <div class="status-item"><span class="status-badge done">Done</span><span class="status-item-name">pip install dosync — 0.4.2 on PyPI</span></div>
         <div class="status-item"><span class="status-badge planned">Planned</span><span class="status-item-name">Third-party device certifications</span></div>
       </div>
       <div class="roadmap">
         <h3>Roadmap</h3>
         <div class="roadmap-items">
           <div class="roadmap-item">
-            <span class="roadmap-q">Q2 2026</span>
-            <span class="roadmap-text">Idempotency + delivery semantics · multi-hub assisted failover · protocol v0.4</span>
+            <span class="roadmap-q">Q2 2026 ✓</span>
+            <span class="roadmap-text">Shipped: idempotency + delivery semantics · multi-hub assisted failover · protocol v0.4</span>
           </div>
           <div class="roadmap-item">
-            <span class="roadmap-q">Q3 2026</span>
-            <span class="roadmap-text">Distributed state replication · benchmark under concurrent load · penetration testing · BLE transport</span>
+            <span class="roadmap-q">Q3 2026 — now</span>
+            <span class="roadmap-text">0.4.2 shipped: discovery over WiFi and Bluetooth · declarative adapters · third-party entry points · signed heartbeats · three-layer audit integrity. IEEE WF-IoT 2026 — submitted, decision pending. In progress: distributed state replication</span>
           </div>
           <div class="roadmap-item">
             <span class="roadmap-q">Q4 2026</span>
-            <span class="roadmap-text">IEEE WF-IoT 2026 paper · second independent implementation · outreach to device manufacturers</span>
+            <span class="roadmap-text">Second independent implementation · language-independent wire format · outreach to device manufacturers</span>
           </div>
           <div class="roadmap-item">
             <span class="roadmap-q">2027+</span>
