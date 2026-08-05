@@ -580,48 +580,68 @@ undocumented within minutes of it existing, which is what that test is for.
 
 848/848.
 
-## H5 — Third-party certification / public registry
+## Depends on other people, not on programming
+
+*H5 and H7 sat in this backlog alongside items like "two concurrent emergencies", which
+suggested they were work waiting to be scheduled. They are not: neither closes by writing
+code, and listing them as debt made the debt list dishonest about itself. Recorded here as
+goals with a dependency, so nobody — including the author — reads them as pending tasks.*
+
+### H5 — Certification by someone other than us
 *Raised by Nakamura (panel 2026-07-21).*
-Certification is self-administered: an implementer runs certify.py and signs the report with
-their own key. Cryptographically sound, but it attests "I ran the tests", not "an independent
-authority verified me". A public registry of certified implementations, or a neutral
-certifying party, is the v1.0-scale answer.
+Certification is self-administered: an implementer runs `certify.py` and signs the report
+with their own key. Cryptographically sound, and it attests "I ran the tests" rather than "an
+independent authority verified me". Closing it needs a neutral certifying party or a public
+registry — an institution, not a feature.
+
+What CAN be done meanwhile, and was: run the suite against a real deployment rather than an
+empty hub. That took the reference hub from a reported 51/56 to **56/56 signed**, and revealed
+that four of the five long-standing failures had never been defects.
+
+### H7 — A second independent implementation, and a wire format independent of Python
+*Standing item, predates the panel.*
+The strongest remaining threat to credibility: one implementation in one language is a
+program, not a protocol. What would settle it is a second implementation written by somebody
+else, ideally not in Python — which is not something this repository can produce, by
+definition.
+
+What CAN be done meanwhile: make the specification good enough that someone could. Spec §7.8
+now lists all 32 audit event types and §7.9 the complete endpoint surface, with
+`spec_coverage --check` failing when the implementation outgrows them. And the specification
+stopped citing its own reference implementation's file names, which taught a reader that the
+protocol and this program were the same thing — the exact confusion that keeps a second
+implementation from appearing.
 
 ## H6 — Usable by someone who is not a developer
-*Raised by Ferreyra (panel 2026-07-21). Sharpened by the operator 2026-07-26: the target is
-"a common user, someone with basic knowledge, at most Home Assistant experience" — and
-DoSync is not only for home automation, so the same bar applies to a small shop or a
-workshop.*
+*Raised by Ferreyra (panel 2026-07-21). Target: "a common user, someone with basic knowledge,
+at most Home Assistant experience" — and DoSync is not only for homes, so the same bar applies
+to a small shop or a workshop.*
 
-**Closed since it was raised** (2026-07-26, all found by trying to USE the thing):
-- `pip install dosync` exists; the hub runs with one command.
-- The dashboard SHIPS with the package. It never had before — it sat at the repo root, so no
-  install ever carried it, and the packaging move broke its path in clones too.
-- It no longer lies about what the project is: the launcher renders the deployment's own
-  intent classes instead of eight hardcoded home scenarios, and the version comes from the
-  API instead of saying v0.1 for three releases.
-- It works over TLS. It hardcoded `http://`, so on any HTTPS hub the browser blocked it
-  silently — the hub nagged operators to enable TLS and then its own UI stopped working.
-- Access is manageable from the browser: choose a password, or turn authentication off, with
-  the change recorded in the audit chain.
-- The warning Chrome shows on a self-signed certificate is explained, with per-platform
-  instructions — previously the hub said "run setup_pki.sh" and abandoned the operator at
-  the consequence.
+**Closed since it was raised**, all found by trying to USE the thing rather than reading it:
+`pip install dosync`; a dashboard that ships with the package, works over TLS and renders the
+deployment's own intents instead of eight hardcoded home scenarios; scan and adopt over WiFi
+and Bluetooth; rename and remove from the browser; access manageable without a shell; the
+certificate warning explained per platform; **declarative adapters, so a device can be
+described in a file instead of programmed**; and `dosync-manage examples`, which puts six
+worked examples where the operator can edit them.
 
-**Still open, and this is the substance of it:**
-- **Registering a device means POSTing a JSON manifest with curl.** This is the single
-  biggest wall. Home Assistant is tolerated by non-developers largely because it DISCOVERS
-  devices; DoSync makes you describe each one by hand.
-- **No onboarding.** A fresh hub has zero devices and no path from there that does not
-  involve reading the spec.
-- **Configuration is environment variables and `systemctl edit`** for everything except
-  access.
-- **No packaged install for a non-technical machine** — no OS image, no add-on, no installer.
+**That closed the item's own headline finding.** It used to read "registering a device means
+POSTing a JSON manifest with curl — this is the single biggest wall". It is not true any
+more, and this entry said so for a week after it stopped being true. Worth noting as its own
+lesson: a backlog that describes a fixed problem is as misleading as documentation that
+describes a fixed bug.
 
-The pattern worth carrying: none of what got fixed was a redesign. Each was a place where the
-system knew the answer and did not say it, or worked in the author's setup and nowhere else.
-The remaining items are different in kind — they are product, not polish, and discovery is
-the one that decides whether the rest matters.
+**Still open, and it is product rather than polish:**
+
+- **No onboarding.** A fresh hub scans and adopts, but nothing walks someone through the
+  first minute. The dashboard now names the Scan button on an empty hub; that is a sentence,
+  not an onboarding.
+- **Configuration is 49 environment variables** and `systemctl edit`. Only access is
+  manageable from the interface. `docs/CONFIGURATION.md` documents them all, which helps a
+  reader and does not help a non-developer.
+- **No install for a non-technical machine** — no OS image, no Home Assistant add-on, no
+  installer. Of the three, **the HA add-on is the highest return**: the bridge already exists,
+  the add-on store has a large installed base, and it is distribution and product at once.
 
 ## H8 — Configuration in one place — CLOSED 2026-07-31
 *Noticed 2026-07-31 while auditing what is open.*
@@ -637,14 +657,6 @@ with a question and not with a variable name.
 Found while building it: the generator scanned its own docstring — which shows the pattern it
 searches for — and reported `DOSYNC_X` as a real setting. A generator that hallucinates is
 worse than a hand-written table.
-
-## H7 — Second independent implementation + language-independent wire format
-*Standing item, predates the panel.*
-The strongest remaining threat to credibility: one implementation in one language is a
-program, not a protocol. A genuinely independent second implementation — ideally not in
-Python, ideally not by the same author — is what would demonstrate that the specification is
-actually a specification.
-
 
 ## LOOP-MIGRATION — get_event_loop() retirement, and a dead security alert it uncovered — CONFIRMED 2026-07-22 · effort S
 Started as hygiene: `asyncio.get_event_loop()` is deprecated since Python 3.10 and scheduled
