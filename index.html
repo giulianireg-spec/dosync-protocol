@@ -713,11 +713,11 @@ document.addEventListener('DOMContentLoaded',function(){tlBuildSteps();});
     <p class="section-sub">Press <strong style="color:#F0EEE8;font-weight:500">Scan</strong> and the hub asks every transport it can search. Bluetooth included, with nothing extra to install.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:32px;align-items:start">
       <div class="demo-terminal">
-        <div class="terminal-header"><span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-title">GET /v1/discovery/scan</span></div>
-        <div class="terminal-body">{
-  <span style="color:#7F77DD">"searched"</span>: [<span style="color:#1D9E75">"wiz (udp broadcast)"</span>, <span style="color:#1D9E75">"ble"</span>],
-  <span style="color:#7F77DD">"not_searchable"</span>: [<span style="color:#1D9E75">"homeassistant"</span>, <span style="color:#1D9E75">"mqtt"</span>],
-  <span style="color:#7F77DD">"found"</span>: [ ... ]
+        <div class="terminal-bar"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span><span style="margin-left:8px;font-family:var(--font-mono);font-size:11.5px;color:#5F5E5A">GET /v1/discovery/scan</span></div>
+        <div class="terminal-body">{<br>
+&nbsp;&nbsp;<span style="color:#7F77DD">"searched"</span>: [<span style="color:#1D9E75">"wiz (udp broadcast)"</span>, <span style="color:#1D9E75">"ble"</span>],<br>
+&nbsp;&nbsp;<span style="color:#7F77DD">"not_searchable"</span>: [<span style="color:#1D9E75">"homeassistant"</span>, <span style="color:#1D9E75">"mqtt"</span>],<br>
+&nbsp;&nbsp;<span style="color:#7F77DD">"found"</span>: [ ... ]<br>
 }</div>
       </div>
       <div>
@@ -781,20 +781,20 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
       <p class="section-sub" style="margin-bottom:24px">Most of what a hub needs to reach a device is not interesting code — "send this request, read this field". Requiring Python for that made "domain-agnostic" mean "agnostic across the domains we already wrote".</p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
         <div class="demo-terminal">
-          <div class="terminal-header"><span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-title">hallway-light.yaml</span></div>
-          <div class="terminal-body"><span style="color:#7F77DD">device</span>:
-  id: light-hallway
-  tags: [light, energy]        <span style="color:#5F5E5A"># how intents find it</span>
-  emergency_capable: true      <span style="color:#5F5E5A"># may an emergency use it</span>
-
-<span style="color:#7F77DD">transport</span>:
-  kind: http                   <span style="color:#5F5E5A"># http or mqtt</span>
-  base_url: http://192.168.1.40
-
-<span style="color:#7F77DD">actions</span>:
-  turn_on:
-    type: turn_on              <span style="color:#5F5E5A"># what it MEANS</span>
-    request: { method: POST, path: /light/on }</div>
+          <div class="terminal-bar"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span><span style="margin-left:8px;font-family:var(--font-mono);font-size:11.5px;color:#5F5E5A">hallway-light.yaml</span></div>
+          <div class="terminal-body"><span style="color:#7F77DD">device</span>:<br>
+&nbsp;&nbsp;id: light-hallway<br>
+&nbsp;&nbsp;tags: [light, energy]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#5F5E5A"># how intents find it</span><br>
+&nbsp;&nbsp;emergency_capable: true&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#5F5E5A"># may an emergency use it</span><br>
+<br>
+<span style="color:#7F77DD">transport</span>:<br>
+&nbsp;&nbsp;kind: http&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style="color:#5F5E5A"># http or mqtt</span><br>
+&nbsp;&nbsp;base_url: http://192.168.1.40<br>
+<br>
+<span style="color:#7F77DD">actions</span>:<br>
+&nbsp;&nbsp;turn_on:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;type: turn_on&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#5F5E5A"># what it MEANS</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;request: { method: POST, path: /light/on }</div>
         </div>
         <div>
           <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-bottom:16px">The <code style="font-family:var(--font-mono);font-size:12.5px;color:#AFA9EC">type</code> on each action is the part that matters. A file that only said "POST /on turns it on" would let DoSync switch the device and leave it invisible to everything else: no intent could select it, no policy could name it, an emergency would pass it by.</p>
@@ -809,8 +809,8 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
       <h3 style="font-size:20px;font-weight:500;margin-bottom:10px">If you make devices, you don't need us to add them.</h3>
       <p class="section-sub" style="margin-bottom:24px">Publish a package, your customer runs <code style="font-family:var(--font-mono);font-size:12.5px;color:#AFA9EC">pip install</code>, and the hub finds it. No pull request here, no waiting on one person's agenda — and no promise from this project to maintain code for hardware it has never seen. You answer for your own adapter.</p>
       <div class="demo-terminal" style="max-width:640px">
-        <div class="terminal-header"><span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-title">pyproject.toml</span></div>
-        <div class="terminal-body">[project.entry-points.<span style="color:#7F77DD">"dosync.adapters"</span>]
+        <div class="terminal-bar"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span><span style="margin-left:8px;font-family:var(--font-mono);font-size:11.5px;color:#5F5E5A">pyproject.toml</span></div>
+        <div class="terminal-body">[project.entry-points.<span style="color:#7F77DD">"dosync.adapters"</span>]<br>
 mybrand = <span style="color:#1D9E75">"dosync_adapter_mybrand:MyBrandAdapter"</span></div>
       </div>
       <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-top:20px;max-width:760px"><strong style="color:#F0EEE8;font-weight:500">DoSync does not download adapter code from a remote source, and will not.</strong> The whole argument of this protocol is that nothing actuates hardware without passing a policy and leaving a record; fetching executable code from the internet would put the largest possible hole exactly where the guarantee lives. An entry point differs in the two ways that matter: someone chose to install it, and someone's name is on it.</p>
