@@ -41,3 +41,25 @@ benchmarks/recall-prod-*.json
 # Point DOSYNC_CHECKPOINT_DIR somewhere outside the clone (e.g.
 # /var/lib/dosync/checkpoints) to keep evidence and source properly apart.
 checkpoints/
+
+# Deployment state and backups — never in the repository.
+#
+# Two empty .tgz files reached main on 2026-08-08 because a `tar` that had
+# failed left them behind and `git add -A` picked them up. Empty, so nothing
+# leaked — but the same command would have committed dosync.db, which on the
+# reference deployment is a 42,000-entry audit chain, and `*.db` was not covered
+# either. The only thing that had prevented it was that nobody ran `git add -A`
+# from the Pi.
+#
+# Since 0.4.3 state lives outside the source tree by default (see
+# docs/DEPLOYMENT-LAYOUT.md). These patterns cover deployments that predate it,
+# which includes the reference hub.
+*.tgz
+*.tar.gz
+*.tar
+*.db
+*.db-shm
+*.db-wal
+audit-segments/
+audit_log_backup_*.json
+dosync-cert-*.json
