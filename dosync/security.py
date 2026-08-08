@@ -61,7 +61,8 @@ log = logging.getLogger("dosync.security")
 
 # ── Configuración ─────────────────────────────────────────────────────────────
 
-CERTS_DIR       = Path(os.environ.get("DOSYNC_CERTS_DIR", "certs"))
+from .paths import certs_dir as _certs_dir
+CERTS_DIR       = _certs_dir()
 CA_KEY_PATH     = CERTS_DIR / "ca.key"
 CA_CERT_PATH    = CERTS_DIR / "ca.crt"
 HUB_KEY_PATH    = CERTS_DIR / "hub.key"

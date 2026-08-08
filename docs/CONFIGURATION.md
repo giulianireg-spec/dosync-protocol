@@ -35,7 +35,7 @@ settings exist for deployments whose needs differ from that, not as a checklist.
 | `DOSYNC_DEVICE_AUTH` | `permissive` |
 | `DOSYNC_LIGHTWEIGHT_HEARTBEAT` | _unset_ |
 | `DOSYNC_DEMO_TOKEN` | _unset_ |
-| `DOSYNC_CERTS_DIR` | `certs` |
+| `DOSYNC_CERTS_DIR` | _unset_ |
 | `DOSYNC_CA_CERT` | _unset_ |
 | `DOSYNC_CERT_KEY` | `str(Path.home(` |
 
@@ -45,12 +45,10 @@ settings exist for deployments whose needs differ from that, not as a checklist.
 |---|---|
 | `DOSYNC_ASSURANCE` | `standard` |
 | `DOSYNC_CHECKPOINT_INTERVAL` | `86400` |
-| `DOSYNC_CHECKPOINT_DIR` | `checkpoints` |
 | `DOSYNC_CHECKPOINT_EXPORT_DIR` | _unset_ |
 | `DOSYNC_CHECKPOINT_EXPORT_EXTERNAL` | _unset_ |
 | `DOSYNC_AUDIT_HEAD_EVERY` | `25` |
 | `DOSYNC_AUDIT_MAX_LIVE` | `10000` |
-| `DOSYNC_ARCHIVE_DIR` | `audit-segments` |
 
 ## Devices and adapters
 
@@ -81,7 +79,6 @@ settings exist for deployments whose needs differ from that, not as a checklist.
 | `DOSYNC_EMERGENCY_CLAIM_GRACE` | `3` |
 | `DOSYNC_EMERGENCY_CLAIM_MAX_HOLD` | `60` |
 | `DOSYNC_VALIDATE_PARAMS` | `true` |
-| `DOSYNC_POLICIES` | _unset_ |
 | `DOSYNC_EMERGENCY_CONTACT` | _unset_ |
 | `DOSYNC_RESOLVER_URL` | _unset_ |
 | `DOSYNC_RESOLVER_CA_CERT` | _unset_ |

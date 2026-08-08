@@ -1788,3 +1788,48 @@ noticing that the tool's answer was not merely unhelpful but wrong.
 against a real hub — 22 devices, policies loaded, a 42,000-entry chain. Every previous
 certification was run against an empty hub, which is why four of the five long-standing
 "environmental failures" turned out never to have been defects.
+
+## DEPLOYMENT-LAYOUT — Nine places, four of them forgotten — SHIPPED 2026-08-08
+Found while preparing to reflash the reference Pi. Its configuration lived in nine
+locations: `/etc/dosync/policies.json`, `/etc/dosync/gpio.env`, four systemd drop-ins
+(`policies.conf`, `llm-resolver.conf`, `override.conf`, `mqtt.conf`), and the database,
+PKI and checkpoints **inside a git clone**. Four of the nine were unknown until they were
+searched for, and the author had operated this deployment for months.
+
+**The contradiction worth naming:** this protocol argues that its evidence survives someone
+with root access. It did not survive `git clean -fdx` — a command people run to tidy a
+repository. The sophisticated threat was covered and the trivial one was not.
+
+Every default path was relative to the working directory (`dosync.db`, `certs/`,
+`checkpoints/`, `audit-segments/`, `declarative/`), verified by starting a hub in an empty
+directory and watching it create its database there. A hub started from a home directory put
+its CA in the home directory.
+
+**Resolved with a cascade rather than a single layout**, because the tension is real: `pipx`
+installs as an ordinary user who cannot write to `/etc` or `/var/lib`, while a systemd unit
+runs as root and should. Configuration resolves `~/.config/dosync` → `/etc/dosync`, state
+resolves to `~/.local/state/dosync` or `/var/lib/dosync`, and the split follows the XDG
+question — *is this datum unique to this machine?* An audit chain and a private CA are;
+policies and device descriptions are not.
+
+**Three compatibility rules, and the second is why this was safe to ship:**
+1. An explicit variable always wins — every configured deployment is unaffected.
+2. **An existing database in the working directory keeps being used**, with a warning.
+   Without this, the reference hub would have come up tomorrow with an empty chain and a
+   fresh CA, orphaning 42,000 entries.
+3. Data in two places raises rather than choosing. Choosing wrong means writing to one chain
+   while auditing the other.
+
+The PKI directory is now created 0700. It previously inherited whatever permissions it got.
+
+**A bug caught by the existing tests:** the first wiring put the resolution call outside its
+`if directory is None`, so an explicit `directory=` argument was silently overridden — twelve
+checkpoint tests went red at once and named it. The tests that failed were written weeks ago
+for a different reason, which is the argument for having them.
+
+`docs/DEPLOYMENT-LAYOUT.md` documents the layout, the migration, and backup as two
+directories instead of nine locations. **Deliberately not in the protocol spec**: mandating
+Linux paths would tie an implementation in Rust on FreeBSD to conventions it does not share,
+and H7 is precisely that such an implementation should exist.
+
+866 + 12 tests; the three critical rules verified to fail when removed.

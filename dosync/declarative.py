@@ -281,7 +281,8 @@ def load_directory(directory: str = None) -> list[tuple[Any, dict]]:
     the hub running to fix it.
     """
     if directory is None:
-        directory = os.environ.get("DOSYNC_DECLARATIVE_DIR", "declarative")
+        from .paths import resolve_config_dir
+        directory = str(resolve_config_dir("declarative", "DOSYNC_DECLARATIVE_DIR"))
     path = Path(directory)
     if not path.is_dir():
         return []

@@ -1639,7 +1639,9 @@ class DoSyncHub:
                         "A rewritten history will not be detectable.", interval)
             return
         if directory is None:
-            directory = os.environ.get("DOSYNC_CHECKPOINT_DIR", "checkpoints")
+            from .paths import resolve_state
+            directory = str(resolve_state("checkpoints", "DOSYNC_CHECKPOINT_DIR",
+                                          create=True))
 
         _export = os.environ.get("DOSYNC_CHECKPOINT_EXPORT_DIR")
         log.info("Audit checkpoints scheduled every %.0fs → %s", interval, directory)
@@ -1699,7 +1701,9 @@ class DoSyncHub:
         from . import audit_backup, cert_signing
 
         if directory is None:
-            directory = os.environ.get("DOSYNC_CHECKPOINT_DIR", "checkpoints")
+            from .paths import resolve_state
+            directory = str(resolve_state("checkpoints", "DOSYNC_CHECKPOINT_DIR",
+                                          create=True))
 
         # The mark must be current before attesting to it.
         self.audit_log.flush_head()
@@ -1832,7 +1836,8 @@ class DoSyncHub:
         if keep <= 0:
             return None
         if directory is None:
-            directory = os.environ.get("DOSYNC_ARCHIVE_DIR", "audit-segments")
+            from .paths import resolve_state
+            directory = str(resolve_state("audit-segments", "DOSYNC_ARCHIVE_DIR", create=True))
 
         entries = self.audit_log.entries()
         if len(entries) <= keep:

@@ -65,7 +65,12 @@ def _resolve_db_path() -> str:
             "DOSYNC_DB_PATH is a deprecated alias for DOSYNC_DB — using %s. "
             "Rename the variable to DOSYNC_DB.", alias)
         return alias
-    return "dosync.db"
+    # No explicit setting: resolve through the deployment layout, which keeps an
+    # existing database in the working directory rather than starting a new one
+    # beside it. A hub that came up with an empty chain after an upgrade would
+    # lose exactly the history this protocol exists to protect.
+    from dosync.paths import resolve_state
+    return str(resolve_state("dosync.db", "DOSYNC_DB", create=True))
 
 
 # ── Estado global del hub ─────────────────────────────────────────────────────
@@ -732,6 +737,7 @@ async def lifespan(app: FastAPI):
     try:
         from dosync.adapters.declarative import DeclarativeAdapter
         from dosync.declarative import load_directory
+        from dosync.paths import resolve_config_dir
 
         _declared = load_directory()
         if _declared:
@@ -751,7 +757,7 @@ async def lifespan(app: FastAPI):
                 hub.register_device(_manifest)
             log.info("Declarative adapters: %d device(s) registered from %s",
                      len(_declared),
-                     os.environ.get("DOSYNC_DECLARATIVE_DIR", "declarative"))
+                     str(resolve_config_dir("declarative", "DOSYNC_DECLARATIVE_DIR")))
 
         # A device whose file is gone must not keep answering intents. It is
         # QUARANTINED rather than deleted: a directory that failed to mount looks

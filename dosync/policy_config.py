@@ -249,4 +249,6 @@ def configured_path() -> str | None:
     common state — not an error. The reference hub ships with NO deployment
     policies, because the protocol has no opinion about your house.
     """
-    return os.environ.get("DOSYNC_POLICIES") or None
+    from .paths import resolve_config
+    found = resolve_config("policies.json", "DOSYNC_POLICIES")
+    return str(found) if found else None
