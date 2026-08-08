@@ -7,6 +7,40 @@ this implementation of it.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] — 2026-08-08
+
+### Changed
+- **A deployment now has one place to live.** Configuration resolves
+  `~/.config/dosync/` → `/etc/dosync/`; state (audit chain, PKI, checkpoints,
+  archived segments) goes to `~/.local/state/dosync/` or `/var/lib/dosync/`.
+  Paths cascade because the tension is real: `pipx` installs as a user who
+  cannot write to `/etc`, a systemd unit runs as root and should.
+
+  Found preparing to reflash the reference deployment, whose configuration lived
+  in nine places — four of which its own author had forgotten, and three of
+  which sat inside a git clone where `git clean -fdx` would have destroyed a
+  42,000-entry audit chain and the CA's private key. This protocol argues its
+  evidence survives root access; it did not survive tidying a repository.
+
+  **Nothing breaks.** An explicit `DOSYNC_*` variable always wins, an existing
+  database in the working directory keeps being used with a warning saying where
+  it belongs, and finding data in two places raises rather than choosing —
+  choosing wrong means writing to one chain while auditing another.
+
+  The PKI directory is created 0700; it previously inherited whatever it got.
+
+- **The hub says when it is only reachable locally.** Binding to loopback stays
+  the default, but a headless Raspberry Pi whose operator is on SSH now gets
+  told how to reach the dashboard from another machine, instead of a browser
+  that will not connect and no explanation. Found by installing from PyPI on a
+  clean machine and trying.
+
+### Documentation
+- `docs/DEPLOYMENT-LAYOUT.md` — where a deployment lives, how to migrate an
+  existing one, and backup as two directories instead of nine locations.
+  Deliberately not in the protocol spec: mandating Linux paths would tie an
+  implementation in Rust on FreeBSD to conventions it does not share.
+
 ## [0.4.2] — 2026-08-01
 
 A large release. Two of the five properties this project advertises were audited

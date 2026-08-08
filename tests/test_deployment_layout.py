@@ -19,6 +19,8 @@ import pytest
 
 from dosync import paths
 
+REPO = Path(__file__).resolve().parent.parent
+
 
 @pytest.fixture
 def clean_env(tmp_path, monkeypatch):
@@ -163,3 +165,45 @@ def test_absent_configuration_is_none_not_a_missing_path(clean_env):
     state and callers should not have to tell it from a path that happens not to
     exist."""
     assert paths.resolve_config("policies.json", "DOSYNC_POLICIES") is None
+
+
+# ── Found by installing from PyPI on a clean machine (2026-08-08) ───────────
+
+def test_the_hub_says_when_it_is_only_reachable_locally():
+    """The commonest deployment is a headless Raspberry Pi whose operator is on
+    SSH and wants the dashboard from their laptop. Binding to loopback is the
+    right default — a hub reachable from the whole network because nobody chose
+    that is worse than one needing a flag — but `Uvicorn running on
+    http://127.0.0.1` does not tell them why their browser cannot connect.
+
+    The default does not change. The silence does.
+    """
+    import inspect
+
+    from dosync import cli
+
+    src = inspect.getsource(cli)
+    assert "loopback only" in src
+    assert "--host 0.0.0.0" in src, "and must say exactly how to change it"
+    assert 'default=os.environ.get("DOSYNC_HOST", "127.0.0.1")' in src, \
+        "the safe default must stay"
+
+
+def test_the_published_version_and_the_source_version_cannot_silently_diverge():
+    """`paths.py` was added under 0.4.2 while 0.4.2 was already on PyPI — two
+    different artefacts with one number. Anyone reporting a bug "in 0.4.2" would
+    leave us unable to tell which one they have.
+
+    This pins the specific mistake: the version must move when behaviour does.
+    """
+    import re
+
+    import dosync
+
+    changelog = (REPO / "CHANGELOG.md").read_text()
+    versions = re.findall(r"^## \[([0-9]+\.[0-9]+\.[0-9]+)\]", changelog, re.M)
+
+    assert dosync.__version__ in versions or dosync.__version__ > max(versions), (
+        f"version {dosync.__version__} is neither released nor ahead of the "
+        f"latest changelog entry {max(versions)} — a behaviour change under an "
+        f"already-published number produces two artefacts with one name")

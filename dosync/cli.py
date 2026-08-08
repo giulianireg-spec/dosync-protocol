@@ -53,6 +53,24 @@ def hub(argv=None) -> None:
     os.environ["DOSYNC_PORT"] = str(args.port)
     os.environ["DOSYNC_HOST"] = args.host
 
+    # Binding to loopback is the right default — a hub reachable from the whole
+    # network because nobody chose that is worse than one that needs a flag. But
+    # the commonest deployment is a headless Raspberry Pi whose operator is on
+    # SSH and wants the dashboard from their laptop, and "Uvicorn running on
+    # http://127.0.0.1" does not tell them why their browser cannot connect.
+    #
+    # Found by installing from PyPI on a clean machine and trying to open the
+    # dashboard from another one. The default does not change; the silence does.
+    if args.host in ("127.0.0.1", "localhost", "::1"):
+        print()
+        print("  Listening on loopback only — reachable from this machine at")
+        print(f"      http://localhost:{args.port}")
+        print("  To reach it from another machine on your network:")
+        print(f"      dosync-hub --host 0.0.0.0 --port {args.port}")
+        print("  (that exposes the hub to your local network; it keeps requiring")
+        print("   a token, and TLS is a separate step — see setup_pki.sh)")
+        print()
+
     uvicorn.run("dosync.server:app", host=args.host, port=args.port,
                 reload=args.reload, log_level=args.log_level)
 
