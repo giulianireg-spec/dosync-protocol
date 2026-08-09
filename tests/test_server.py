@@ -21,6 +21,10 @@ Run: DOSYNC_AUTH=false python3 -m pytest tests/test_server.py -v
   or: DOSYNC_AUTH=false python3 tests/test_server.py
 """
 
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+
 import sys, os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -157,3 +161,41 @@ if __name__ == "__main__":
             failed += 1
     print(f"\n{passed}/{passed+failed} server tests passed.")
     sys.exit(1 if failed else 0)
+
+
+# ── A redirect that silently fails (2026-08-08) ─────────────────────────────
+
+def test_the_removed_intent_endpoint_refuses_rather_than_redirects():
+    """`POST /v1/intent` answered 308 pointing at `/v1/intent/async`, which
+    assumes every caller follows redirects on a POST. The most basic HTTP client
+    in the standard library does not: `urllib` raises `HTTPError(308)` and the
+    request never arrives — verified against a local server.
+
+    Observed on the reference deployment, where this project's own
+    `gpio_adapter.py` called the old path: **70 intents dropped in thirty
+    minutes**. Every motion detection logged its event and none of them acted,
+    so the audit chain showed a hub that saw movement and decided to do nothing.
+    Nothing in the hub reported a problem, because from its side nothing failed.
+
+    A redirect that silently fails is worse than a refusal that explains itself.
+    """
+    from fastapi.testclient import TestClient
+
+    import dosync.server as srv
+    c = TestClient(srv.app)
+
+    r = c.post("/v1/intent", json={"intent": "ensure_safety",
+                                   "urgency": "info", "context": {}})
+    assert r.status_code == 410, \
+        "a removed endpoint must refuse, not redirect a POST"
+    assert r.json()["use_instead"] == "/v1/intent/async", \
+        "and must say what to call instead, in the body where any client sees it"
+
+
+def test_the_shipped_gpio_adapter_uses_the_current_endpoint():
+    """The adapter this repository distributes called the deprecated path. A
+    project that deprecates an endpoint and keeps calling it from its own
+    example code has deprecated nothing."""
+    src = (REPO / "gpio_adapter.py").read_text()
+    assert 'hub_post("/v1/intent/async"' in src
+    assert 'hub_post("/v1/intent"' not in src

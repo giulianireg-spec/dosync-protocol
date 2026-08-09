@@ -1571,9 +1571,37 @@ async def delete_intent_class(name: str, auth: str = Depends(require_auth)):
 
 @app.post("/v1/intent", tags=["AI"], include_in_schema=False)
 async def execute_intent_legacy(req: IntentRequest, auth: str = Depends(require_auth)):
-    """Deprecated — use POST /v1/intent/async instead."""
-    from fastapi.responses import Response
-    return Response(status_code=308, headers={"Location": "/v1/intent/async"})
+    """Deprecated — use POST /v1/intent/async.
+
+    Answers 410 rather than a 308 redirect, and the change is deliberate.
+
+    A 308 assumes the caller follows redirects on a POST, and the most basic
+    HTTP client in the standard library does not: `urllib` raises
+    `HTTPError(308)` and the request never arrives. Verified against a local
+    server, and observed on the reference deployment — this project's own
+    `gpio_adapter.py` called this path, and **70 intents were dropped in thirty
+    minutes**. Every motion detection logged its event and none of them acted,
+    so the audit chain showed a hub that saw movement and correctly decided to
+    do nothing.
+
+    A redirect that silently fails is worse than a refusal that explains itself.
+    410 with the new path in the body cannot be mistaken for success by any
+    client, and says what to change.
+    """
+    from fastapi.responses import JSONResponse
+
+    logging.getLogger("dosync.server").warning(
+        "POST /v1/intent is gone — caller should use /v1/intent/async. "
+        "Refusing rather than redirecting: a 308 is not followed by every "
+        "client and the intent would be lost without either side noticing.")
+    return JSONResponse(
+        status_code=410,
+        content={
+            "error": "gone",
+            "detail": "POST /v1/intent was removed. Use POST /v1/intent/async, "
+                      "which takes the same body and returns an intent_id.",
+            "use_instead": "/v1/intent/async",
+        })
 
 
 @app.post("/v1/intent/async", tags=["AI"])

@@ -272,7 +272,11 @@ def test_invalid_params_rejected_via_http_intent_endpoint():
     # assert the endpoint path is reachable and returns a structured result; the
     # execute-level rejection is covered by test_full_execute_intent_yields_partial.
     # This pins that the HTTP intent endpoint exists and responds with a result.
-    r = client.post("/v1/intent", json={
+    # /v1/intent/async — the old /v1/intent answered 308 and now answers 410.
+    # This test used the deprecated path, which is its own small finding: a
+    # project's own suite exercising a route it tells users not to call is how a
+    # deprecation stays theoretical.
+    r = client.post("/v1/intent/async", json={
         "intent": "notify", "urgency": "info",
         "context": {"location": "test", "message": "test"},
     })

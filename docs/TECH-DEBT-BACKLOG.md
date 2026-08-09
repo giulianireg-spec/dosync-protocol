@@ -1833,3 +1833,34 @@ Linux paths would tie an implementation in Rust on FreeBSD to conventions it doe
 and H7 is precisely that such an implementation should exist.
 
 866 + 12 tests; the three critical rules verified to fail when removed.
+
+## DEPRECATION-BY-REDIRECT — 70 intents dropped in thirty minutes — SHIPPED 2026-08-08
+Found by noticing `308 Permanent Redirect` in the reference deployment's log after every
+motion detection, and asking what was emitting it.
+
+`POST /v1/intent` was deprecated by answering **308** pointing at `/v1/intent/async`. That
+assumes the caller follows redirects on a POST, and the most basic HTTP client in the Python
+standard library does not: `urllib` raises `HTTPError(308)` and the request never arrives.
+Verified by reproducing it against a local server — the server saw exactly one request.
+
+**And this project's own `gpio_adapter.py` called the deprecated path.** On the reference
+hub that meant 43 redirects against 2 executed intents in twenty minutes, and 70 logged
+failures in thirty. Every PIR detection recorded its event — 200 OK — and none of them acted.
+
+The failure mode is the one this project keeps hunting: **the audit chain showed a hub that
+saw movement and correctly decided to do nothing.** From the hub's side nothing failed; the
+intent never arrived. The only trace was `HTTP 308` in the GPIO service's own log, which
+nobody reads.
+
+Now **410 Gone**, with the replacement path in the body. A redirect that silently fails is
+worse than a refusal that explains itself: 410 cannot be mistaken for success by any client,
+and it names what to call. Logged at WARNING server-side as well, so the hub notices someone
+is still on the old path.
+
+Two smaller findings in the same thread, both the same shape — a deprecation that nothing
+enforced:
+- The adapter this repository distributes used the old route. A project that deprecates an
+  endpoint and keeps calling it from its own example code has deprecated nothing.
+- So did a test in this suite, which is how the deprecation stayed theoretical for weeks.
+
+882/882, with the 308 verified to fail the test when restored.

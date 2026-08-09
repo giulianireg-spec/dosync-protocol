@@ -93,7 +93,12 @@ def fire_intent(intent: str, urgency: str, context: dict = None):
         "urgency": urgency,
         "context": context or {},
     }
-    result = hub_post("/v1/intent", body)
+    # /v1/intent/async, not /v1/intent. The latter is deprecated and answers 308,
+    # which urllib does NOT follow on a POST — verified against a local server:
+    # it raises HTTPError(308) and the request never reaches the hub. On the
+    # reference deployment that silently dropped 70 intents in thirty minutes:
+    # every PIR detection logged its event and none of them acted.
+    result = hub_post("/v1/intent/async", body)
     if "error" not in result:
         actions = result.get("actions_taken", 0)
         log.info("Intent fired: %s [%s] → %d actions", intent, urgency, actions)
