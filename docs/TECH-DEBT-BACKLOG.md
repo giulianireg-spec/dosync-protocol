@@ -1864,3 +1864,84 @@ enforced:
 - So did a test in this suite, which is how the deprecation stayed theoretical for weeks.
 
 882/882, with the 308 verified to fail the test when restored.
+
+## EVALUATION-METRICS — The reviewer was right, for a different reason — SHIPPED 2026-08-09
+A WF-IoT 2026 reviewer rejected Table 3 of the submitted paper as internally inconsistent:
+rows reading precision 1.00 with recall 0.00, and its mirror. The observation is correct —
+precision 1.00 requires at least one selected device to be relevant, which forces recall
+above zero — and the reviewer inferred that undeclared empty-set conventions were at work.
+
+Reproducing it found **two defects, and only one was the one guessed**.
+
+**Rounding.** Selecting one correct device out of three hundred expected gives precision 1.0
+and recall 0.0033, which prints as 1.00 and 0.00. The arithmetic was right and the row was
+unreadable as anything but a contradiction. Rounding cannot be argued away, so every row now
+carries `tp`, `fp` and `fn`: a reader who sees `tp=1, fp=0, fn=299` can reconstruct both
+rates and needs no convention explained to them.
+
+**A convention that rewarded a false positive.** With nothing expected and something
+selected, `recall` returned 1.0 — the resolver actuated a device the ground truth said to
+leave alone, and the metric scored it perfectly. That is worse than a display problem: for a
+protocol whose central argument is governance, measuring an unwanted actuation as success is
+a contradiction in the instrument. Now 0.0 on both.
+
+The three empty-set cases are declared in `EMPTY_SET_CONVENTIONS` rather than implied by an
+expression, which is the actual failure the reviewer exposed: an evaluation whose rules live
+only inside a line of code has to be reverse-engineered by anyone checking it.
+
+Ordinary cases are unchanged, deliberately — the paper's good scenarios must stay comparable
+across the revision.
+
+**Still to do before any resubmission:** re-run the 15-scenario table with these conventions.
+The fixtures for it (`prod_registry.json`) live only on the reference deployment, which is
+its own finding — the evidence behind a published table is not reproducible from the
+repository. Anonymising that registry moves from a privacy chore to a prerequisite.
+
+889/889, with the old convention verified to fail the new tests.
+
+## MULTI-DOMAIN-EVALUATION — The tool could not measure the central claim — SHIPPED 2026-08-11
+Building the multi-domain corpus a previous panel asked for surfaced two findings that made
+the corpus itself secondary.
+
+**The benchmark never registered domain intent classes.** Zero calls. `line_shutdown` and
+`prepare_operating_room` fell through to the default behaviour and were scored as status
+queries — F1 0.00 for reasons unrelated to resolution.
+
+The consequence is larger than a broken tool: **a protocol claiming to be domain-agnostic had
+no way to evaluate that claim.** Every published evaluation covered the home domain, and the
+reading that the author simply measured his own house was wrong — the other intents were
+unmeasurable with the project's own tooling.
+
+**And a recall figure that mixed three phenomena.** Of twelve misses in the first
+multi-domain run, **ten were not the resolver**: eight were the unregistered-intent artifact
+and two were missing vocabulary. Each miss is now attributed — `intent_not_registered`,
+`vocabulary`, `not_in_registry`, `resolution` — and the report aggregates them, so a reader
+sees how much of a number is resolution without reading every row.
+
+With both fixed, the first honest multi-domain measurement this project has:
+
+| Domain | P | R | F1 |
+|---|---|---|---|
+| home | 1.00 | 1.00 | 1.00 |
+| industrial | 0.60 | 0.70 | 0.64 |
+| clinical | 0.55 | 0.70 | 0.61 |
+
+**The resolver scores perfectly on the domain its tags were tuned against and drops to ~0.62
+on domains it has not seen.** That is precisely what a WF-IoT reviewer suspected without
+being able to demonstrate it: *"if resolution quality depends on well-curated tags, the
+manual configuration burden has not been eliminated, it has moved."* It is now measurable.
+
+The corpus ships two synthetic registries — an industrial cell and an operating theatre —
+with their scenarios. Synthetic is a requirement rather than a compromise: a corpus has to
+live in the repository for a published table to be reproducible, and a real plant or hospital
+registry cannot. Both ground-truth files declare `independent_raters: 0` in their provenance,
+because the author writing the scenarios that evaluate his own resolver is the bias four
+reviewers named, and moving it to a new file does not fix it. Publishing the registries is
+what makes third-party annotation possible at all.
+
+Still open, and the reason a further panel was convened: the tag vocabulary that decides
+whether a device participates in an intent lives in `db.py` and appears **nowhere in the
+specification**. `control_access` requires the literal tag `lock`; an industrial registry
+tagged `access` + `security` scores F1 0.00, and 1.00 with one word added.
+
+893/893.

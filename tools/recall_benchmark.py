@@ -93,12 +93,121 @@ def load_registry(path: Path, hub: DoSyncHub) -> None:
         hub.registry.register(manifest)
 
 
+#: What precision and recall mean when a set is empty.
+#:
+#: Undeclared conventions produced a table that is impossible under standard
+#: definitions — a WF-IoT reviewer caught rows reading precision 1.00 with recall
+#: 0.00, and correctly observed that precision 1.00 requires at least one
+#: selected device to be relevant, which forces recall above zero.
+#:
+#: The reviewer inferred empty-set conventions. The actual cause was two separate
+#: defects:
+#:
+#:   1. ROUNDING. Selecting one correct device out of three hundred expected
+#:      gives precision 1.0 and recall 0.0033, which printed as 1.00 and 0.00 —
+#:      arithmetically fine, and unreadable as anything but a contradiction.
+#:
+#:   2. A CONVENTION THAT REWARDED A FALSE POSITIVE. With nothing expected and
+#:      something selected, recall returned 1.0: the resolver touched a device it
+#:      should not have and scored a perfect recall for it. In a protocol whose
+#:      argument is governance, scoring an unwanted actuation as success is worse
+#:      than a display bug.
+#:
+#: Both are fixed below, and every row now carries its raw tp/fp/fn counts so a
+#: reader can check the arithmetic instead of inferring it.
+EMPTY_SET_CONVENTIONS = {
+    "expected=∅, selected=∅": "precision 1.0, recall 1.0 — correctly did nothing",
+    "expected=∅, selected≠∅": "precision 0.0, recall 0.0 — acted when it should not have",
+    "expected≠∅, selected=∅": "precision 0.0, recall 0.0 — missed everything",
+}
+
+
 def _score(got: set, expected: set) -> tuple[float, float, float]:
+    """Precision, recall and F1, with empty-set behaviour stated rather than implied.
+
+    See EMPTY_SET_CONVENTIONS. The case worth naming: selecting devices when none
+    were expected now scores zero on both, where it previously scored recall 1.0.
+    """
     tp = got & expected
-    precision = len(tp) / len(got) if got else (1.0 if not expected else 0.0)
-    recall = len(tp) / len(expected) if expected else 1.0
+
+    if not expected and not got:
+        return 1.0, 1.0, 1.0            # asked to touch nothing, touched nothing
+    if not expected:
+        return 0.0, 0.0, 0.0            # acted when it should not have
+    if not got:
+        return 0.0, 0.0, 0.0            # missed everything
+
+    precision = len(tp) / len(got)
+    recall = len(tp) / len(expected)
     f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
     return precision, recall, f1
+
+
+def _counts(got: set, expected: set) -> dict:
+    """Raw counts, reported alongside every rate.
+
+    A rate rounded to two decimals can read as impossible while being correct —
+    0.0033 prints as 0.00. Counts cannot: a reader who sees tp=1, fp=0, fn=299
+    can do the arithmetic and needs no convention explained to them.
+    """
+    tp = got & expected
+    return {"tp": len(tp), "fp": len(got - expected), "fn": len(expected - got),
+            "selected": len(got), "expected": len(expected)}
+
+
+#: Why a device the ground truth expected did not appear in the plan.
+#:
+#: A benchmark reporting "F1 0.00" without saying whether the intent was never
+#: registered, the device lacked a tag, or the resolver simply chose otherwise is
+#: measuring three things and reporting their sum. Of twelve misses in the first
+#: multi-domain run, ten were not the resolver.
+MISS_CAUSES = {
+    "intent_not_registered": "the intent class does not exist in this hub",
+    "vocabulary": "the device lacks a tag the intent requires",
+    "resolution": "the resolver evaluated the device and chose otherwise",
+    "not_in_registry": "the device id is not in the registry at all",
+}
+
+
+def classify_miss(reason: str, intent_registered: bool) -> str:
+    """Attribute a miss to a cause, so a recall number means one thing.
+
+    Order matters: an unregistered intent explains every miss in its case, and
+    checking it first stops those from being blamed on the resolver.
+    """
+    if not intent_registered:
+        return "intent_not_registered"
+    if "required specific tags" in reason:
+        return "vocabulary"
+    if "not in registry" in reason:
+        return "not_in_registry"
+    return "resolution"
+
+
+def _register_domain_intents(hub, truth: dict) -> set:
+    """Register the intent classes a corpus declares, before evaluating it.
+
+    Without this the tool could only measure the five universal intents — which
+    is why every published evaluation of this project covered the home domain.
+    Not because the author chose it: `line_shutdown` and
+    `prepare_operating_room` fell through to the default behaviour and scored as
+    status queries. **A protocol claiming to be domain-agnostic had no way to
+    evaluate the claim.**
+    """
+    declared = truth.get("intent_classes") or {}
+    registered = set()
+    for name, spec in declared.items():
+        if hub.db.get_intent_class(name):
+            continue
+        hub.db.save_intent_class(
+            name=name,
+            urgency=spec.get("urgency", "info"),
+            resolution_tags=spec.get("target_tags", []),
+            resolution_actuators=spec.get("target_actuators", []),
+            description=spec.get("description", f"corpus intent {name}"),
+            domain=spec.get("domain", "corpus"))
+        registered.add(name)
+    return registered
 
 
 def evaluate(registry_path: Path, truth_path: Path,
@@ -112,6 +221,10 @@ def evaluate(registry_path: Path, truth_path: Path,
     """
     hub = DoSyncHub(db_path=":memory:")          # seeds the real universal intents
     load_registry(registry_path, hub)
+
+    truth = json.loads(truth_path.read_text())
+    _register_domain_intents(hub, truth)
+
     resolver = hub.resolver
 
     engine = None
@@ -121,7 +234,6 @@ def evaluate(registry_path: Path, truth_path: Path,
         engine = PolicyEngine()
         policy_config.load_into(engine, policies_path, hub=hub)
 
-    truth = json.loads(truth_path.read_text())
     per_intent = []
     for case in truth["cases"]:
         intent = Intent(
@@ -143,15 +255,21 @@ def evaluate(registry_path: Path, truth_path: Path,
             explanation = resolver.explain(intent)
             reasons = {d["device_id"]: d.get("reason", "?")
                        for d in explanation.get("excluded", [])}
+            registered = hub.db.get_intent_class(case["intent"]) is not None
             for dev in sorted(missing):
-                misses.append({"device_id": dev,
-                               "reason": reasons.get(dev, "not in registry / not excluded-listed")})
+                reason = reasons.get(dev, "not in registry / not excluded-listed")
+                misses.append({"device_id": dev, "reason": reason,
+                               "cause": classify_miss(reason, registered)})
 
         row = {
             "intent": case["intent"], "urgency": case.get("urgency", "info"),
             "expected": len(expected), "resolved": len(got),
             "precision": round(precision, 3), "recall": round(recall, 3),
             "f1": round(f1, 3),
+            # Raw counts alongside every rate. A reviewer reading precision 1.00
+            # next to recall 0.00 cannot tell rounding from a broken metric; tp,
+            # fp and fn make the row checkable without trusting the tool.
+            "counts": _counts(got, expected),
             "unexpected": sorted(got - expected),
             "misses": misses,
         }
@@ -187,6 +305,11 @@ def evaluate(registry_path: Path, truth_path: Path,
 
     n = len(per_intent)
     report = {
+        # Aggregated, so a reader sees how much of a recall figure is the
+        # resolver without reading every row.
+        "miss_causes": {k: sum(1 for c in per_intent
+                               for m in (c.get("misses") or []) if m.get("cause") == k)
+                        for k in MISS_CAUSES},
         "cases": per_intent,
         "mean_precision": round(sum(c["precision"] for c in per_intent) / n, 3),
         "mean_recall": round(sum(c["recall"] for c in per_intent) / n, 3),

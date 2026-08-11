@@ -1,0 +1,94 @@
+{
+  "_domain": "industrial",
+  "_provenance": {
+    "author": "project author",
+    "independent_raters": 0,
+    "warning": [
+      "Written by the same person who wrote the resolver. Four WF-IoT reviewers",
+      "named exactly this as the limit of the previous evaluation, and moving it",
+      "to a new file does not fix it.",
+      "",
+      "It is here so that independent raters have something to annotate: asking",
+      "someone to label a published registry is possible in a way that asking",
+      "for access to a real plant is not. Until raters exist and agreement is",
+      "reported, results from this file are the author's own expectations and",
+      "must be labelled as such in any paper."
+    ]
+  },
+  "cases": [
+    {
+      "intent": "line_shutdown",
+      "urgency": "emergency",
+      "context": {},
+      "expected": [
+        "conveyor-line2-01",
+        "press-line2-01",
+        "andon-floor2-01",
+        "notifier-shift-01"
+      ],
+      "_note": "Stop what moves, signal it, tell the supervisor. Extraction stays ON — stopping it during a shutdown traps fumes. The compressor is plant-wide and not part of a line stop."
+    },
+    {
+      "intent": "ensure_safety",
+      "urgency": "emergency",
+      "context": {},
+      "expected": [
+        "conveyor-line2-01",
+        "press-line2-01",
+        "extraction-floor2-01",
+        "andon-floor2-01",
+        "notifier-shift-01",
+        "lock-cell2-01"
+      ],
+      "_note": "Broader than a line stop: extraction goes to purge and the cell door releases for egress. Unlocking is correct here and wrong in the clinical registry — the same action, opposite answers by domain."
+    },
+    {
+      "intent": "alert_anomaly",
+      "urgency": "alert",
+      "context": {},
+      "expected": [
+        "andon-floor2-01",
+        "notifier-shift-01"
+      ],
+      "_note": "Signal and page. An anomaly is not yet a reason to stop production — that is the operator's call once informed."
+    },
+    {
+      "intent": "report_status",
+      "urgency": "info",
+      "context": {},
+      "expected": [
+        "sensor-temp-press01",
+        "sensor-particulate-01"
+      ],
+      "_note": "Sensors only. No actuator should move to answer a question."
+    },
+    {
+      "intent": "control_access",
+      "urgency": "alert",
+      "context": {},
+      "expected": [
+        "lock-cell2-01"
+      ],
+      "_note": "One device. A resolver that also pages the supervisor is over-reaching."
+    }
+  ],
+  "intent_classes": {
+    "line_shutdown": {
+      "urgency": "emergency",
+      "target_tags": [
+        "machinery",
+        "emergency",
+        "signal",
+        "notification"
+      ],
+      "target_actuators": [
+        "stop",
+        "alarm",
+        "notify"
+      ],
+      "description": "Emergency line shutdown",
+      "domain": "industrial"
+    }
+  },
+  "_note_intent_classes": "Declared here so the benchmark registers them before evaluating. Without this the tool could only measure the five universal intents, which is why every published evaluation of this project covered one domain."
+}

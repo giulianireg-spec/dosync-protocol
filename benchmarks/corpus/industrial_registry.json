@@ -1,0 +1,107 @@
+{
+  "_domain": "industrial",
+  "_note": [
+    "A synthetic production line. Synthetic is a requirement here, not a",
+    "weakness: a corpus has to live in the repository for anyone to reproduce a",
+    "published table, and a real plant's registry cannot.",
+    "",
+    "Modelled on what a small manufacturing cell actually contains — a conveyor,",
+    "a press with a guard interlock, extraction, an andon tower, and sensors",
+    "that report rather than act. Device ids follow the convention a PLC",
+    "integrator would use, not a smart-home one."
+  ],
+  "devices": [
+    {
+      "device_id": "conveyor-line2-01",
+      "device_name": "Line 2 conveyor",
+      "category": "actuator",
+      "tags": ["machinery", "conveyor", "emergency", "floor-2", "industrial"],
+      "emergency_capable": true,
+      "actuators": [
+        {"id": "stop", "type": "stop", "description": "immediate halt"},
+        {"id": "start", "type": "turn_on", "description": "resume"},
+        {"id": "speed", "type": "set_speed", "description": "metres per minute"}
+      ]
+    },
+    {
+      "device_id": "press-line2-01",
+      "device_name": "Line 2 hydraulic press",
+      "category": "actuator",
+      "tags": ["machinery", "press", "emergency", "floor-2", "industrial"],
+      "emergency_capable": true,
+      "actuators": [
+        {"id": "stop", "type": "stop", "description": "emergency stop"},
+        {"id": "release", "type": "unlock", "description": "release guard interlock"}
+      ]
+    },
+    {
+      "device_id": "extraction-floor2-01",
+      "device_name": "Floor 2 fume extraction",
+      "category": "actuator",
+      "tags": ["ventilation", "safety", "floor-2", "industrial"],
+      "emergency_capable": true,
+      "actuators": [
+        {"id": "on", "type": "turn_on", "description": "extraction on"},
+        {"id": "boost", "type": "set_speed", "description": "purge rate"}
+      ]
+    },
+    {
+      "device_id": "andon-floor2-01",
+      "device_name": "Floor 2 andon tower",
+      "category": "communication",
+      "tags": ["display", "signal", "emergency", "floor-2", "industrial"],
+      "emergency_capable": true,
+      "actuators": [
+        {"id": "alarm", "type": "alarm", "description": "red beacon and horn"},
+        {"id": "notify", "type": "notify", "description": "status colour"}
+      ]
+    },
+    {
+      "device_id": "notifier-shift-01",
+      "device_name": "Shift supervisor pager",
+      "category": "communication",
+      "tags": ["notification", "communication", "emergency", "industrial"],
+      "emergency_capable": true,
+      "actuators": [
+        {"id": "send", "type": "notify", "description": "page the supervisor"}
+      ]
+    },
+    {
+      "device_id": "lock-cell2-01",
+      "device_name": "Cell 2 access door",
+      "category": "actuator",
+      "tags": ["access", "security", "floor-2", "industrial"],
+      "emergency_capable": true,
+      "actuators": [
+        {"id": "lock", "type": "lock", "description": "lock the cell"},
+        {"id": "unlock", "type": "unlock", "description": "release for egress"}
+      ]
+    },
+    {
+      "device_id": "sensor-temp-press01",
+      "device_name": "Press hydraulic temperature",
+      "category": "sensor",
+      "tags": ["sensor", "temperature", "floor-2", "industrial"],
+      "emergency_capable": false,
+      "sensors": [{"id": "temperature", "type": "temperature", "kind": "device_state"}],
+      "actuators": []
+    },
+    {
+      "device_id": "sensor-particulate-01",
+      "device_name": "Floor 2 particulate monitor",
+      "category": "sensor",
+      "tags": ["sensor", "air-quality", "floor-2", "industrial"],
+      "emergency_capable": false,
+      "sensors": [{"id": "pm25", "type": "number", "kind": "environment"}],
+      "actuators": []
+    },
+    {
+      "device_id": "compressor-plant-01",
+      "device_name": "Plant air compressor",
+      "category": "actuator",
+      "tags": ["machinery", "utility", "industrial"],
+      "emergency_capable": false,
+      "actuators": [{"id": "off", "type": "turn_off", "description": "shut down"}]
+    }
+  ]
+}

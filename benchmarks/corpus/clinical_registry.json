@@ -1,0 +1,98 @@
+{
+  "_domain": "clinical",
+  "_note": [
+    "A synthetic operating-theatre suite. The domain matters to this corpus",
+    "because it inverts assumptions the home domain never tests: here a display",
+    "waking someone is harmful rather than helpful, and unlocking a door during",
+    "an emergency may be exactly wrong.",
+    "",
+    "Devices carry the emergency_capable flag a deployment would actually set,",
+    "not the one that flatters the resolver."
+  ],
+  "devices": [
+    {
+      "device_id": "or3-lights-main",
+      "device_name": "OR 3 surgical lighting",
+      "category": "actuator",
+      "tags": ["light", "surgical", "or-3", "clinical"],
+      "emergency_capable": true,
+      "actuators": [
+        {"id": "on", "type": "turn_on", "description": "full field"},
+        {"id": "level", "type": "set_brightness", "description": "0-100"}
+      ]
+    },
+    {
+      "device_id": "or3-hvac-01",
+      "device_name": "OR 3 laminar flow",
+      "category": "actuator",
+      "tags": ["ventilation", "sterile", "or-3", "clinical"],
+      "emergency_capable": false,
+      "actuators": [
+        {"id": "on", "type": "turn_on", "description": "positive pressure"},
+        {"id": "rate", "type": "set_speed", "description": "air changes per hour"}
+      ]
+    },
+    {
+      "device_id": "or3-table-01",
+      "device_name": "OR 3 operating table",
+      "category": "actuator",
+      "tags": ["equipment", "or-3", "clinical"],
+      "emergency_capable": false,
+      "actuators": [{"id": "position", "type": "set_position", "description": "preset"}]
+    },
+    {
+      "device_id": "or3-display-01",
+      "device_name": "OR 3 status display",
+      "category": "communication",
+      "tags": ["display", "or-3", "clinical"],
+      "emergency_capable": true,
+      "actuators": [{"id": "show", "type": "notify", "description": "theatre status"}]
+    },
+    {
+      "device_id": "lock-or3-door",
+      "device_name": "OR 3 door",
+      "category": "actuator",
+      "tags": ["access", "security", "or-3", "clinical"],
+      "emergency_capable": true,
+      "actuators": [
+        {"id": "lock", "type": "lock", "description": "restrict entry during procedure"},
+        {"id": "unlock", "type": "unlock", "description": "release"}
+      ]
+    },
+    {
+      "device_id": "pager-anaesthetist-01",
+      "device_name": "On-call anaesthetist pager",
+      "category": "communication",
+      "tags": ["notification", "communication", "emergency", "clinical"],
+      "emergency_capable": true,
+      "actuators": [{"id": "page", "type": "notify", "description": "page on-call"}]
+    },
+    {
+      "device_id": "ward2-display-01",
+      "device_name": "Ward 2 patient display",
+      "category": "communication",
+      "tags": ["display", "ward-2", "patient-facing", "clinical"],
+      "emergency_capable": false,
+      "_note": "Deliberately NOT emergency_capable. It could show a warning, and in a ward that means waking patients for an alert meant for staff. The device can; the deployment says it should not.",
+      "actuators": [{"id": "show", "type": "notify", "description": "patient information"}]
+    },
+    {
+      "device_id": "sensor-or3-temp",
+      "device_name": "OR 3 temperature",
+      "category": "sensor",
+      "tags": ["sensor", "temperature", "or-3", "clinical"],
+      "emergency_capable": false,
+      "sensors": [{"id": "temperature", "type": "temperature", "kind": "environment"}],
+      "actuators": []
+    },
+    {
+      "device_id": "sensor-or3-pressure",
+      "device_name": "OR 3 differential pressure",
+      "category": "sensor",
+      "tags": ["sensor", "sterile", "or-3", "clinical"],
+      "emergency_capable": false,
+      "sensors": [{"id": "pressure", "type": "number", "kind": "environment"}],
+      "actuators": []
+    }
+  ]
+}

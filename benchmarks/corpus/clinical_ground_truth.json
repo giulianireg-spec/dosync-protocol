@@ -1,0 +1,80 @@
+{
+  "_domain": "clinical",
+  "_provenance": {
+    "author": "project author",
+    "independent_raters": 0,
+    "warning": "Same limitation as the industrial file: written by the resolver's author, published so that others can annotate it."
+  },
+  "cases": [
+    {
+      "intent": "prepare_operating_room",
+      "urgency": "info",
+      "context": {},
+      "expected": [
+        "or3-lights-main",
+        "or3-hvac-01",
+        "or3-table-01",
+        "or3-display-01"
+      ],
+      "_note": "Everything in OR 3 that participates in setting up. The door is not touched: preparation is not access control."
+    },
+    {
+      "intent": "ensure_safety",
+      "urgency": "emergency",
+      "context": {},
+      "expected": [
+        "or3-lights-main",
+        "or3-display-01",
+        "pager-anaesthetist-01"
+      ],
+      "_note": "The interesting case, and the reason this domain is in the corpus. The ward display is NOT included though it can show a warning — waking patients for an alert meant for staff is harm. And the OR door is not unlocked: in a plant, egress; in a sterile field, contamination. Same intent, opposite answers."
+    },
+    {
+      "intent": "alert_anomaly",
+      "urgency": "alert",
+      "context": {},
+      "expected": [
+        "or3-display-01",
+        "pager-anaesthetist-01"
+      ]
+    },
+    {
+      "intent": "report_status",
+      "urgency": "info",
+      "context": {},
+      "expected": [
+        "sensor-or3-temp",
+        "sensor-or3-pressure"
+      ]
+    },
+    {
+      "intent": "control_access",
+      "urgency": "alert",
+      "context": {},
+      "expected": [
+        "lock-or3-door"
+      ]
+    }
+  ],
+  "intent_classes": {
+    "prepare_operating_room": {
+      "urgency": "info",
+      "target_tags": [
+        "surgical",
+        "sterile",
+        "equipment",
+        "display"
+      ],
+      "target_actuators": [
+        "turn_on",
+        "set_brightness",
+        "set_speed",
+        "set_position",
+        "notify"
+      ],
+      "description": "Prepare an operating room for a procedure",
+      "domain": "clinical"
+    }
+  },
+  "_note_intent_classes": "Declared here so the benchmark registers them before evaluating. Without this the tool could only measure the five universal intents, which is why every published evaluation of this project covered one domain."
+}
