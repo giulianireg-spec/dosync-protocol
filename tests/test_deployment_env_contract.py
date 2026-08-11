@@ -568,3 +568,24 @@ def test_the_declarative_examples_ship_with_the_package():
     decl = re.search(r"^dosync\s*=\s*\[(.+)\]", pyproject, re.M)
     assert decl and "examples" in decl.group(1), \
         "and be declared as package-data, or the wheel omits them"
+
+
+def test_the_ci_workflow_does_not_hard_code_the_version():
+    """CI was red on `main` for weeks because its own configuration asserted
+    `"v0.3" in output` — a string written when the workflow was created and
+    never updated as the project reached 0.4.x. The code was fine; the check
+    was stale.
+
+    Fifth instance in this project of one fact living in two places: the version
+    in four files, DOSYNC_DB vs DOSYNC_DB_PATH, requirements against pyproject,
+    the site's numbers, and now the workflow. The pattern is reliable enough to
+    be worth a test each time it appears.
+    """
+    import re
+
+    ci = (REPO / ".github" / "workflows" / "ci.yml").read_text()
+
+    hardcoded = re.findall(r'assert\s+"v\d+\.\d+', ci)
+    assert not hardcoded, (
+        f"CI asserts a literal version {hardcoded} — derive it from "
+        f"dosync.__version__ instead, or it goes stale on the next release")
