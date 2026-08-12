@@ -1,12 +1,16 @@
+# Template unit. Adjust WorkingDirectory, ExecStart, User and Group to
+# your installation: /opt/dosync and the dosync user are conventions,
+# not requirements. A unit file that carries one operator's home
+# directory cannot be copied by anyone else.
 [Unit]
 Description=DoSync Hub
 After=network.target
 [Service]
 Type=simple
-User=rgiuliani
-WorkingDirectory=/home/rgiuliani/dosync-protocol
+User=dosync
+WorkingDirectory=/opt/dosync
 Environment="HA_URL=http://localhost:8123" "HA_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2MDFiZWY0NTdlZWE0MGUxOTc5MjkxNGE1NDdhYmJiMyIsImlhdCI6MTc3ODg5OTkyMCwiZXhwIjoyMDk0MjU5OTIwfQ.gqsYvemtBJfs7Fe0_0OH8_PY6QfJYTZ67c6U0hYuD6I"
-ExecStart=/home/rgiuliani/dosync-protocol/venv/bin/uvicorn server:app \
+ExecStart=/opt/dosync/venv/bin/uvicorn server:app \
   --host 0.0.0.0 \
   --port 47200 \
   --ssl-keyfile certs/hub.key \

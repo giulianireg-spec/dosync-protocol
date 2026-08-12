@@ -60,7 +60,7 @@
       ]
     },
     {
-      "device_id": "notifier-sms-01",
+      "device_id": "notifier-01",
       "device_name": "SMS Notifier",
       "category": "communication",
       "tags": [

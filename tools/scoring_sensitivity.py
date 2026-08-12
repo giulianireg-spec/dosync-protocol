@@ -40,14 +40,14 @@ GROUND_TRUTH = {
             "light-zone3-01", "light-zone3-02", "light-zone4-01", "light-zone4-02",
             "light-zone2-01", "light-zone2-02", "light-zone1-01", "light-zone1-02",
             "light-zone6-01", "light-zone5-01",
-            "ha-light-tv_philips_ambilight",
+            "bridged-light-01",
         }
     },
     IntentClass.ALERT_ANOMALY: {
         "urgency": Urgency.ALERT,
         "expected": {
-            "notifier-01", "ha-media_player-tv_philips",
-            "ha-media_player-75_qled_qn75q7faagcfv",
+            "notifier-01", "bridged-mediaplayer-01",
+            "bridged-mediaplayer-02",
         }
     },
     IntentClass.CONTROL_ACCESS: {
@@ -57,8 +57,8 @@ GROUND_TRUTH = {
     IntentClass.NOTIFY_FAMILY: {
         "urgency": Urgency.INFO,
         "expected": {
-            "notifier-01", "ha-media_player-tv_philips",
-            "ha-media_player-75_qled_qn75q7faagcfv",
+            "notifier-01", "bridged-mediaplayer-01",
+            "bridged-mediaplayer-02",
         }
     },
     IntentClass.SAVE_ENERGY: {
@@ -67,7 +67,7 @@ GROUND_TRUTH = {
             "light-zone3-01", "light-zone3-02", "light-zone4-01", "light-zone4-02",
             "light-zone2-01", "light-zone2-02", "light-zone1-01", "light-zone1-02",
             "light-zone6-01", "light-zone5-01",
-            "ha-light-tv_philips_ambilight", "ha-switch-tv_philips_screen_state",
+            "bridged-light-01", "bridged-switch-01",
         }
     },
     IntentClass.BEDTIME_ROUTINE: {
@@ -76,7 +76,7 @@ GROUND_TRUTH = {
             "light-zone3-01", "light-zone3-02", "light-zone4-01", "light-zone4-02",
             "light-zone2-01", "light-zone2-02", "light-zone1-01", "light-zone1-02",
             "light-zone6-01", "light-zone5-01",
-            "ha-light-tv_philips_ambilight",
+            "bridged-light-01",
         }
     },
     IntentClass.MORNING_ROUTINE: {
@@ -85,7 +85,7 @@ GROUND_TRUTH = {
             "light-zone3-01", "light-zone3-02", "light-zone4-01", "light-zone4-02",
             "light-zone2-01", "light-zone2-02", "light-zone1-01", "light-zone1-02",
             "light-zone6-01", "light-zone5-01",
-            "ha-light-tv_philips_ambilight",
+            "bridged-light-01",
         }
     },
     IntentClass.CHILDREN_ARRIVED: {
@@ -101,7 +101,7 @@ GROUND_TRUTH = {
             "light-zone3-01", "light-zone3-02", "light-zone4-01", "light-zone4-02",
             "light-zone2-01", "light-zone2-02", "light-zone1-01", "light-zone1-02",
             "light-zone6-01", "light-zone5-01",
-            "ha-light-tv_philips_ambilight", "alarm-01",
+            "bridged-light-01", "alarm-01",
         }
     },
     IntentClass.SET_ENVIRONMENT: {
@@ -110,7 +110,7 @@ GROUND_TRUTH = {
             "light-zone3-01", "light-zone3-02", "light-zone4-01", "light-zone4-02",
             "light-zone2-01", "light-zone2-02", "light-zone1-01", "light-zone1-02",
             "light-zone6-01", "light-zone5-01",
-            "ha-light-tv_philips_ambilight", "sensor-climate-01",
+            "bridged-light-01", "sensor-climate-01",
         }
     },
     IntentClass.REPORT_STATUS: {
@@ -124,8 +124,8 @@ GROUND_TRUTH = {
     IntentClass.REMIND_CHORE: {
         "urgency": Urgency.INFO,
         "expected": {
-            "notifier-01", "ha-media_player-tv_philips",
-            "ha-media_player-75_qled_qn75q7faagcfv",
+            "notifier-01", "bridged-mediaplayer-01",
+            "bridged-mediaplayer-02",
         }
     },
 }

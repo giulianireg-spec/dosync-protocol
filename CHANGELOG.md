@@ -82,6 +82,22 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   once at startup, reporting how many settings it applied, and Twilio settings
   are read when used rather than frozen at first import.
 
+- **The operator-data check no longer reports clean while missing things.** Its
+  first published version scanned seven file extensions and four kinds of hit,
+  and an independent audit of the same commit found four categories it had
+  waved through: systemd units carrying `/home/<user>` and the deployment
+  address (`.service` was not scanned), a SQL export with room names (`.sql`
+  was not scanned), the reference deployment's device identifiers in the spec's
+  JSON schemas, `concepts.html` and an example policy file (nothing looked for
+  identifiers at all), and vendor brands in a benchmark `.py` (that check only
+  read `.json`).
+
+  A test that reports clean while missing four categories is worse than no test,
+  because it converts an unexamined repository into an examined one. It now
+  scans every tracked text file and looks for identifiers too, and the systemd
+  units ship as templates against `/opt/dosync` rather than one person's home
+  directory.
+
 ### Changed
 - **Location tags are stated as an open namespace.** The spec listed ten
   locations — `bedroom`, `kitchen`, `garage`, `basement` — in a normative

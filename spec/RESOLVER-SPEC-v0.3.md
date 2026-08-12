@@ -515,7 +515,7 @@ The hub sends a `POST` request to `{DOSYNC_RESOLVER_URL}/resolve`:
   },
   "registry": [
     {
-      "device_id":         "wiz-living1-01",
+      "device_id":         "light-zone3-01",
       "device_name":       "Living Room Light 1",
       "tags":              ["light", "living-room", "emergency"],
       "capabilities":      {"actuators": [{"id": "turn_on", "type": "turn_on"}], ...},
@@ -539,7 +539,7 @@ The service MUST respond with HTTP 200 and a JSON body matching `spec/schemas/ac
   "urgency":   "emergency",
   "actions": [
     {
-      "device_id":       "wiz-living1-01",
+      "device_id":       "light-zone3-01",
       "action":          "turn_on",
       "params":          {"brightness": 255, "color_temp": 6500},
       "relevance_score": 42.0

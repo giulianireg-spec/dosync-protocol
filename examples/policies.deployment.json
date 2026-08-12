@@ -51,8 +51,8 @@
         "ensure_safety"
       ],
       "excluded_device_ids": [
-        "ha-media_player-tv_philips",
-        "ha-media_player-75_qled_qn75q7faagcfv"
+        "bridged-mediaplayer-01",
+        "bridged-mediaplayer-02"
       ],
       "reason": "Operator preference: screens do not participate in notifications or emergencies",
       "_why_absolute": "bypass_on_emergency=false makes this ABSOLUTE. The default (true) would drop the exclusion during an emergency — reasonable when an exclusion is about convenience, wrong here: this operator's judgement is that a screen nobody will read adds nothing to an emergency. Set it to true if you would rather have every capable device act when it matters most. It is your building.",

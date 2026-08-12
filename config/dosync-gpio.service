@@ -1,3 +1,7 @@
+# Template unit. Adjust WorkingDirectory, ExecStart, User and Group to
+# your installation: /opt/dosync and the dosync user are conventions,
+# not requirements. A unit file that carries one operator's home
+# directory cannot be copied by anyone else.
 # DoSync — GPIO adapter (PIR HC-SR501 + DHT22) as a systemd service
 # =================================================================
 # This keeps the Pi's autonomous perception pipeline (PIR -> intent) alive
@@ -7,9 +11,9 @@
 #   1. Create the environment file with your real values (mode 600 — it holds a token):
 #        sudo mkdir -p /etc/dosync
 #        sudo sh -c 'cat > /etc/dosync/gpio.env' << 'ENV'
-#        DOSYNC_HUB_URL=https://192.168.100.109:47200
+#        DOSYNC_HUB_URL=https://<hub-address>:47200
 #        DOSYNC_TOKEN=<your-api-token>
-#        DOSYNC_CA_CERT=/home/rgiuliani/dosync-protocol/certs/ca.crt
+#        DOSYNC_CA_CERT=/opt/dosync/certs/ca.crt
 #        ENV
 #        sudo chmod 600 /etc/dosync/gpio.env
 #   2. Install and start:
@@ -31,11 +35,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=rgiuliani
+User=dosync
 Group=gpio
-WorkingDirectory=/home/rgiuliani/dosync-protocol
+WorkingDirectory=/opt/dosync
 EnvironmentFile=/etc/dosync/gpio.env
-ExecStart=/home/rgiuliani/dosync-protocol/venv/bin/python3 gpio_adapter.py
+ExecStart=/opt/dosync/venv/bin/python3 gpio_adapter.py
 Restart=always
 RestartSec=5
 # The adapter only needs GPIO + outbound HTTPS to the hub:

@@ -81,13 +81,13 @@
       "failure_policy": "continue",
       "actions": [
         {
-          "device_id": "wiz-living1-01",
+          "device_id": "light-zone3-01",
           "action": "turn_on",
           "params": {"brightness": 255, "color_temp": 6500},
           "relevance_score": 37.0
         },
         {
-          "device_id": "notifier-sms-01",
+          "device_id": "notifier-01",
           "action": "notify",
           "params": {"message": "Emergency detected at entrance"},
           "relevance_score": 34.0

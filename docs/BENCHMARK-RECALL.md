@@ -222,7 +222,7 @@ exclusion is visible in the emergency row: TVs out at EMERGENCY urgency, measure
 **Every remaining tenth has a name.** The gap from 0.743 to 1.0 is fully attributed, and the
 four causes are different in kind:
 
-1. **`ensure_safety` → `rpi-pir-01`** (1 device). The resolver reads the motion sensor during
+1. **`ensure_safety` → `sensor-motion-01`** (1 device). The resolver reads the motion sensor during
    a safety event; the operator GT did not list it. A read-only action with a defensible
    rationale (situational awareness) — this is a GT-vs-preference judgement for the operator:
    either the GT gains the PIR, or a policy excludes it. Not a bug on either side.

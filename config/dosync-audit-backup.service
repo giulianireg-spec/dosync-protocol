@@ -1,3 +1,7 @@
+# Template unit. Adjust WorkingDirectory, ExecStart, User and Group to
+# your installation: /opt/dosync and the dosync user are conventions,
+# not requirements. A unit file that carries one operator's home
+# directory cannot be copied by anyone else.
 # DoSync — periodic audit log backup (REL-2)
 # Installs alongside dosync-audit-backup.timer. Writes a timestamped, integrity-
 # checked backup of the audit log to /var/backups/dosync/ (rotated by the timer's
@@ -18,15 +22,15 @@ After=dosync.service
 
 [Service]
 Type=oneshot
-User=rgiuliani
-Group=rgiuliani
+User=dosync
+Group=dosync
 
 # 0027 -> backup files land as 0640, not world-readable. A backup IS the complete
 # tamper-evident audit record: who asked for what, when, and what the hub did. It
 # must not be readable by every account on the box.
 UMask=0027
 
-WorkingDirectory=/home/rgiuliani/dosync-protocol
+WorkingDirectory=/opt/dosync
 
 # The unit declares its own requirement rather than relying on a README step that
 # the next person will skip (2026-07-14: the documented `sudo mkdir` created the
@@ -35,7 +39,7 @@ WorkingDirectory=/home/rgiuliani/dosync-protocol
 # runs this as root regardless of User=; `install -d` is idempotent.
 ExecStartPre=+/usr/bin/install -d -o rgiuliani -g rgiuliani -m 0750 /var/backups/dosync
 # --db points at the hub's production DB; the backup is read-only w.r.t. the log.
-ExecStart=/bin/sh -c '/home/rgiuliani/dosync-protocol/venv/bin/python3 \
-  /home/rgiuliani/dosync-protocol/manage.py \
-  --db /home/rgiuliani/dosync-protocol/dosync.db \
+ExecStart=/bin/sh -c '/opt/dosync/venv/bin/python3 \
+  /opt/dosync/manage.py \
+  --db /opt/dosync/dosync.db \
   db audit-backup --out /var/backups/dosync/audit_backup_$(date +%%Y%%m%%d_%%H%%M%%S).json' 

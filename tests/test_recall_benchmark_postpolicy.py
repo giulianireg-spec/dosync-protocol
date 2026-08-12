@@ -39,7 +39,7 @@ def _files(tmp_path, truth_cases, policies=None):
 def test_without_policies_report_has_no_post_keys(tmp_path):
     """Backwards compatibility: the pre-policy report is unchanged."""
     reg, truth, _ = _files(tmp_path, [
-        {"intent": "notify", "urgency": "info", "expected": ["notifier-sms-01", "tv-display-01"]}])
+        {"intent": "notify", "urgency": "info", "expected": ["notifier-01", "tv-display-01"]}])
     report = rb.evaluate(reg, truth)
     assert "mean_precision_post" not in report
     assert "policy_decision" not in report["cases"][0]
@@ -51,7 +51,7 @@ def test_exclusion_raises_post_precision_when_gt_agrees(tmp_path):
     exclusion fixes it — and the post number measures exactly that."""
     reg, truth, pol = _files(
         tmp_path,
-        [{"intent": "notify", "urgency": "info", "expected": ["notifier-sms-01"]}],
+        [{"intent": "notify", "urgency": "info", "expected": ["notifier-01"]}],
         [{"type": "device_exclusion", "intent_classes": ["notify"],
           "excluded_device_ids": ["tv-display-01"], "bypass_on_emergency": False}])
     report = rb.evaluate(reg, truth, policies_path=pol)
@@ -67,7 +67,7 @@ def test_exclusion_lowers_post_recall_when_gt_disagrees(tmp_path):
     policy removes, post-recall drops. The tool must not paper over that."""
     reg, truth, pol = _files(
         tmp_path,
-        [{"intent": "notify", "urgency": "info", "expected": ["notifier-sms-01", "tv-display-01"]}],
+        [{"intent": "notify", "urgency": "info", "expected": ["notifier-01", "tv-display-01"]}],
         [{"type": "device_exclusion", "intent_classes": ["notify"],
           "excluded_device_ids": ["tv-display-01"], "bypass_on_emergency": False}])
     report = rb.evaluate(reg, truth, policies_path=pol)
@@ -80,7 +80,7 @@ def test_bypassable_exclusion_is_measured_as_bypassed_at_emergency(tmp_path):
     """bypass semantics are measured at each case's GT urgency, exactly as they
     run in production: bypass=true at emergency → plan unchanged, decision allow."""
     cases = [{"intent": "ensure_safety", "urgency": "emergency",
-              "expected": ["wiz-living-01", "wiz-bedroom-01", "wiz-mistagged-01", "notifier-sms-01", "lock-front-01", "tv-display-01"]}]
+              "expected": ["wiz-living-01", "wiz-bedroom-01", "wiz-mistagged-01", "notifier-01", "lock-front-01", "tv-display-01"]}]
     pol_bypass = [{"type": "device_exclusion", "intent_classes": ["ensure_safety"],
                    "excluded_device_ids": ["tv-display-01"], "bypass_on_emergency": True}]
     pol_abs = [{"type": "device_exclusion", "intent_classes": ["ensure_safety"],
@@ -102,7 +102,7 @@ def test_block_scores_as_nothing_executed(tmp_path):
     to 0 — that IS the deployment's operative behavior."""
     reg, truth, pol = _files(
         tmp_path,
-        [{"intent": "notify", "urgency": "info", "expected": ["notifier-sms-01"]}],
+        [{"intent": "notify", "urgency": "info", "expected": ["notifier-01"]}],
         [{"type": "block_intent", "intent_classes": ["notify"],
           "reason": "operator prohibited"}])
     report = rb.evaluate(reg, truth, policies_path=pol)
@@ -116,7 +116,7 @@ def test_broken_policy_file_fails_loudly(tmp_path):
     """The benchmark inherits the loader's fail-loudly: a typo'd policy file must
     not silently score as 'no policies'."""
     reg, truth, _ = _files(tmp_path, [
-        {"intent": "notify", "urgency": "info", "expected": ["notifier-sms-01"]}])
+        {"intent": "notify", "urgency": "info", "expected": ["notifier-01"]}])
     bad = tmp_path / "bad.json"
     bad.write_text(json.dumps({"version": 1, "policies": [{"type": "nope"}]}))
     with pytest.raises(PolicyConfigError):

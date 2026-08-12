@@ -15,7 +15,7 @@
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9_\\-]*$",
       "description": "Unique device identifier within a hub.",
-      "examples": ["wiz-living1-01", "rpi-pir-01"]
+      "examples": ["light-zone3-01", "sensor-motion-01"]
     },
     "device_name": {
       "type": "string",
@@ -120,7 +120,7 @@
   "examples": [
     {
       "dosync_version": "0.1",
-      "device_id": "wiz-living1-01",
+      "device_id": "light-zone3-01",
       "device_name": "Living Room Light 1",
       "manufacturer": "Philips",
       "model": "WiZ A60 RGBW",

@@ -397,11 +397,11 @@ if time > 14:00 and delivery_expected:
         <p>You add a new smoke detector to your home network. It registers with the hub. Thirty seconds later, when someone fires an <code>ensure_safety</code> intent, the detector is part of the response — no automation written, no rule updated, no developer intervention. How is that possible? The answer is capability abstraction — the design decision that separates systems that work with AI from systems that merely tolerate it.</p>
 
         <h2>The Capability Manifest — a declaration, not an API</h2>
-        <p>In DoSync, every device publishes a Capability Manifest when it joins the network. Here's a real one from the production deployment — a Philips WiZ bulb running on a Raspberry Pi 5:</p>
+        <p>In DoSync, every device publishes a Capability Manifest when it joins the network. Here's a real one from the production deployment — a generic WiZ bulb running on a Raspberry Pi 5:</p>
 <pre><code>{
-  "device_id": "wiz-living1-01",
+  "device_id": "light-zone3-01",
   "device_name": "Living Room — Bulb 1",
-  "manufacturer": "Philips",
+  "manufacturer": "generic",
   "model": "WiZ RGBW Tunable",
   "category": "actuator",
   "tags": ["light", "climate", "smart-plug", "emergency", "wiz"],

@@ -9,7 +9,7 @@
         "wiz-living-01",
         "wiz-bedroom-01",
         "wiz-mistagged-01",
-        "notifier-sms-01",
+        "notifier-01",
         "lock-front-01",
         "tv-display-01"
       ],
@@ -20,7 +20,7 @@
       "urgency": "alert",
       "context": {},
       "expected": [
-        "notifier-sms-01",
+        "notifier-01",
         "tv-display-01",
         "pir-hall-01",
         "dht-living-01"
@@ -51,7 +51,7 @@
         "message": "test"
       },
       "expected": [
-        "notifier-sms-01",
+        "notifier-01",
         "tv-display-01"
       ]
     }

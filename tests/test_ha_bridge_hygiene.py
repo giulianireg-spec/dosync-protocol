@@ -33,7 +33,7 @@ def test_real_sensors_still_import():
     named 'sunroom_temperature' must NOT be caught by 'sun_'."""
     b = _bridge()
     for eid in ("sensor.sunroom_temperature",
-                "binary_sensor.tv_philips_recording_ongoing",
+                "binary_sensor.bridged-tv_recording_ongoing",
                 "light.living_lamp"):
         assert _probe(b, eid) is not None, f"{eid} is a real device"
 

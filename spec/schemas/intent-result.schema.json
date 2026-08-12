@@ -93,8 +93,8 @@
       "status": "success",
       "failure_policy_applied": "continue",
       "results": [
-        {"device_id": "wiz-living1-01", "action": "turn_on", "success": true, "retries": 0},
-        {"device_id": "notifier-sms-01", "action": "notify", "success": true, "retries": 0}
+        {"device_id": "light-zone3-01", "action": "turn_on", "success": true, "retries": 0},
+        {"device_id": "notifier-01", "action": "notify", "success": true, "retries": 0}
       ],
       "failed_devices": [],
       "aborted_devices": []
@@ -105,10 +105,10 @@
       "status": "partial",
       "failure_policy_applied": "continue",
       "results": [
-        {"device_id": "wiz-living1-01", "action": "turn_on", "success": true, "retries": 0},
-        {"device_id": "wiz-living1-02", "action": "turn_on", "success": false, "error": "UDP timeout", "retries": 0}
+        {"device_id": "light-zone3-01", "action": "turn_on", "success": true, "retries": 0},
+        {"device_id": "light-zone3-02", "action": "turn_on", "success": false, "error": "UDP timeout", "retries": 0}
       ],
-      "failed_devices": ["wiz-living1-02"],
+      "failed_devices": ["light-zone3-02"],
       "aborted_devices": []
     }
   ]

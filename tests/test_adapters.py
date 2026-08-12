@@ -164,5 +164,5 @@ def test_ha_bridge_skips_all_wiz_entities():
         assert m is None, f"WiZ entity {eid} should be skipped, got {m}"
     # a non-WiZ light still imports
     m = bridge._state_to_manifest(
-        {"entity_id": "light.tv_philips_ambilight", "attributes": {}, "state": "on"})
-    assert m is not None and m.device_id == "ha-light-tv_philips_ambilight"
+        {"entity_id": "light.ambient_strip", "attributes": {}, "state": "on"})
+    assert m is not None and m.device_id == "ha-light-ambient_strip"

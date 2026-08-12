@@ -29,7 +29,13 @@ import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 
-SCAN_SUFFIXES = {".py", ".md", ".json", ".yml", ".yaml", ".sh", ".html", ".txt"}
+# Extensions deliberately wide. The first version scanned seven and missed four
+# real hits: systemd units carrying /home/<user> (.service), a SQL export with
+# room names (.sql), and config files. An audit that stops at the extensions you
+# happened to think of reports clean and is not.
+SCAN_SUFFIXES = {".py", ".md", ".json", ".yml", ".yaml", ".sh", ".html", ".txt",
+                 ".service", ".sql", ".conf", ".cfg", ".ini", ".toml", ".env",
+                 ".service.d", ".timer", ".css", ".js"}
 SKIP_DIRS = {".git", "venv", ".venv", "node_modules", "__pycache__", ".pytest_cache",
              "certs", "checkpoints", "audit-segments", "site-packages", ".mypy_cache"}
 
@@ -162,12 +168,44 @@ def test_no_operator_language_or_room_names():
         + "\n  ".join(hits[:20]))
 
 
+# Device identifiers from the reference deployment. Renamed to role-based ones
+# (light-zone1-01 …) so that fixtures, docs and the paper describe a topology
+# rather than one household. `wiz-a4c138`-style names stay legal: they are the
+# vendor's own factory names, used in docs to make a point about naming.
+DEPLOYMENT_DEVICE_IDS = [
+    "wiz-cocina", "wiz-comedor", "wiz-habitacion", "wiz-living1-", "wiz-living2-",
+    "wiz-ninos", "rpi-pir-01", "rpi-dht22-01", "notifier-sms-01", "alarm-test-01",
+    "tv_philips", "qn75q7faagcfv",
+]
+
+
+def test_no_device_identifiers_from_the_reference_deployment():
+    """The published tables must resolve against the published fixtures.
+
+    Renaming the fixtures and leaving the paper, the articles or the site
+    pointing at the old identifiers is worse than not renaming at all: the
+    evidence stops matching the data, and reproducibility was the point.
+    """
+    hits = []
+    for path in _files():
+        if _allowed(path):
+            continue
+        text = _read(path)
+        for dev in DEPLOYMENT_DEVICE_IDS:
+            if dev in text:
+                line = next((i for i, l in enumerate(text.splitlines(), 1) if dev in l), 0)
+                hits.append(f"{path.relative_to(REPO)}:{line} → {dev}")
+    assert not hits, (
+        "an identifier from the reference deployment is in the repository; use "
+        "role-based ones (light-zone1-01):\n  " + "\n  ".join(hits[:20]))
+
+
 def test_published_fixtures_carry_no_vendor_hardware():
     """A fixture describes a topology, not the brands someone happens to own."""
     brands = ["philips", "qled", "samsung", "signify", "sonoff", "shelly"]
     hits = []
-    for path in (p for p in _files()
-                 if p.suffix == ".json" and "benchmarks" in p.parts):
+    # Every tracked benchmark file, not only .json — the brands were in a .py.
+    for path in (p for p in _files() if "benchmarks" in p.parts):
         text = _read(path).lower()
         for brand in brands:
             # `"adapter": "wiz"` names a DoSync adapter, not the operator's brand.
