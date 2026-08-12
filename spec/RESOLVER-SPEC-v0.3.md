@@ -117,13 +117,21 @@ POST /v1/intent-classes
 {
   "name": "prepare_meeting_room",
   "urgency": "alert",
-  "resolution_tags": ["lighting", "climate", "access"],
+  "resolution_tags": ["light", "climate", "lock"],
   "resolution_actuators": ["turn_on", "unlock", "notify"],
   "domain": "commercial"
 }
 ```
 
 The resolver automatically discovers registered intent classes from the database — no code changes or hub restart required.
+
+**The tags in `resolution_tags` MUST come from the standard vocabulary**
+(`spec/TAG-VOCABULARY.md`) where one applies. This example previously read
+`["lighting", "climate", "access"]`; two of those three tags are not in the
+vocabulary, so a device tagged from the vocabulary — a lock tagged `lock` —
+would never have been selected by an intent written from this example. A
+resolution tag that no conforming device declares is a class that resolves to
+nothing, and nothing in the hub reports it.
 
 ### Urgency levels
 

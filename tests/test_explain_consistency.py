@@ -39,14 +39,45 @@ def _agree(r, intent):
     return in_plan, in_explain, exp
 
 
-def test_hard_filtered_device_is_excluded_in_both():
-    # specific tags demanded, device has none -> resolve gives 0.0; explain must agree
+def test_tagless_device_is_excluded_in_both():
+    # Specific tags demanded, device has none. Both paths must agree it is out.
+    #
+    # The exclusion REASON changed with the shared candidate set: this device is
+    # no longer scored-then-hard-filtered, it is never a candidate, and the
+    # reason says so. Asserting "hard filter" here would now be asserting a
+    # sentence rather than the behaviour — the behaviour is that resolve and
+    # explain agree, which is what this file exists to guard.
     r, intent = _setup(["light", "living-room"], {"tags": ["security", "lock"], "actuators": ["lock"]})
     in_plan, in_explain, exp = _agree(r, intent)
     assert in_plan is False
     assert in_explain is False, "explain contradicted resolve on the hard filter"
     reason = exp["excluded"][0]["reason"]
-    assert "hard filter" in reason
+    assert "not evaluated" in reason, reason
+
+
+def test_hard_filter_still_applies_to_emergency_forced_candidates():
+    """The one path where a device IS a candidate without any tag overlap.
+
+    An emergency_capable device is force-included as a candidate regardless of
+    tags, so it reaches scoring and the hard filter can still reject it. Without
+    this case the shared candidate set would quietly retire hard-filter coverage
+    — the filter would look dead while remaining live exactly where the stakes
+    are highest.
+    """
+    reg = CapabilityRegistry()
+    dev = _device(["light", "living-room"])
+    dev.emergency_capable = True
+    reg.register(dev)
+    r = CapabilityMatchingResolver(reg)
+    r._get_resolution = lambda intent: {"tags": ["security", "lock"],
+                                        "actuators": ["lock"]}
+    intent = Intent(intent_id="i1", intent=IntentClass("control_access"),
+                    urgency=Urgency.EMERGENCY, context={})
+    candidates = {d.device_id for d in r._candidates(intent, r._get_resolution(intent))}
+    assert "dev-x" in candidates, "emergency force-inclusion stopped working"
+    bd = r._score_breakdown(reg.get("dev-x"), intent, r._get_resolution(intent))
+    assert bd.hard_filtered is True
+    assert "hard filter" in bd.exclusion_reason()
 
 
 def test_matching_device_is_included_in_both():

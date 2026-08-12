@@ -420,6 +420,54 @@ class CapabilityMatchingResolver(BaseResolver):
     _W_ACTUATOR   = 12.0   # per matching actuator type
     _FORCED_SCORE = 50.0   # emergency force-inclusion floor (mirrors resolve())
 
+    def _candidates(self, intent: Intent, resolution: dict) -> list:
+        """The ONE answer to "which devices does this intent evaluate?".
+
+        resolve() used registry.find_by_tags(); explain() iterated
+        registry.active(). Two answers to one question — the sixth time this
+        project has held one fact in two places — and they disagreed in a way
+        that mattered: a device matching only on ACTUATOR scores 12 in explain
+        and was never a candidate in resolve, so the explain endpoint reported
+        devices as INCLUDED that the resolver structurally could not act on.
+        Measured on three registries: 2 in the reference deployment
+        (ensure_safety), 2 industrial, 5 clinical — among them an OR ventilation
+        unit and a patient-facing display, both listed as participating in an
+        emergency that never touches them.
+
+        That contradicts the project's first advertised property ("the score it
+        reports is the same value the resolver decided with"). v9 unified the
+        scoring FORMULA; it did not unify the candidate SET. This does.
+
+        An empty resolution is not handled here: it is a read-only status query
+        with its own branch in both callers (§6.4.1).
+        """
+        target_tags = set(resolution.get("tags", []))
+        if not target_tags:
+            return list(self.registry.active())
+        candidates = list(self.registry.find_by_tags(list(target_tags)))
+
+        # Emergency intents also evaluate every emergency_capable device, tags or
+        # not (F2b): a safety device must never be dropped by a tag filter. This
+        # extension lived only in resolve(), which is part of why the two sets
+        # drifted — it belongs to the definition of "candidate", not to one caller.
+        if intent.urgency == Urgency.EMERGENCY:
+            seen = {d.device_id for d in candidates}
+            for device in self.registry.find_emergency_capable():
+                if device.device_id not in seen:
+                    candidates.append(device)
+        return candidates
+
+    def _actuator_only_match(self, device: CapabilityManifest,
+                              resolution: dict) -> list:
+        """Actuator types this device declares that the resolution asks for.
+
+        Used to explain a NON-candidate usefully rather than dropping it: a
+        device whose actuators fit but whose tags do not is exactly the case an
+        operator wants to know about — it is one tag away from participating.
+        """
+        target_actuators = set(resolution.get("actuators", []))
+        return sorted(target_actuators & {a.type for a in device.actuators})
+
     def _score_breakdown(
         self,
         device: CapabilityManifest,
@@ -528,7 +576,36 @@ class CapabilityMatchingResolver(BaseResolver):
                          "The plan is read_sensors on every sensing device; actuators never fire."),
             }
 
+        # E1: the SAME candidate set resolve() evaluates. Iterating active()
+        # here is what let explain report devices the resolver never considered.
+        candidates = self._candidates(intent, resolution)
+        candidate_ids = {d.device_id for d in candidates}
+
+        # E2: a non-candidate is not silently dropped. A device whose ACTUATORS
+        # fit the resolution but whose tags do not is one tag away from
+        # participating, and that is precisely what an operator auditing "what
+        # will my system do?" needs to see — stated as excluded, with the tag
+        # that would change it. Reporting it as included (the old behavior) was
+        # worse than either.
         for device in self.registry.active():
+            if device.device_id in candidate_ids:
+                continue
+            fitting = self._actuator_only_match(device, resolution)
+            reason = ("no tag overlap with intent resolution tags — not evaluated"
+                      if not fitting else
+                      f"not evaluated: declares matching actuators {fitting} but none "
+                      f"of the resolution tags {sorted(target_tags)}; adding one of "
+                      f"those tags would make it participate")
+            excluded.append({
+                "device_id":   device.device_id,
+                "device_name": device.device_name,
+                "device_tags": sorted(device.tags),
+                "reason":      reason,
+                "actuators_fit_resolution": fitting,
+                "included":    False,
+            })
+
+        for device in candidates:
             # v9: consume the SAME breakdown resolve() decides with. No recompute,
             # nothing to keep in sync — the explanation IS the decision, narrated.
             bd = self._score_breakdown(device, intent, resolution)
@@ -711,7 +788,7 @@ class CapabilityMatchingResolver(BaseResolver):
         if target_tags:
             # Union index: candidates are devices with ANY of the target tags.
             # O(|target_tags| + |candidates|) with the inverted index.
-            candidates = self.registry.find_by_tags(list(target_tags))
+            candidates = self._candidates(intent, resolution)
         else:
             # Empty resolution (e.g. report_status) = a READ-ONLY status query
             # across the deployment (2026-07-11 panel decision, F4a): the plan is
@@ -763,15 +840,7 @@ class CapabilityMatchingResolver(BaseResolver):
                 urgency=intent.urgency,
             )
 
-        # Emergency intents: always include emergency_capable devices as candidates,
-        # even if their tags don't overlap with the intent's resolution tags.
-        # This ensures physical safety devices (lights at max brightness, alarms)
-        # are never excluded by the tag filter on emergency intents.
-        if intent.urgency == Urgency.EMERGENCY:
-            candidate_ids = {d.device_id for d in candidates}
-            for device in self.registry.find_emergency_capable():
-                if device.device_id not in candidate_ids:
-                    candidates.append(device)
+        # (Emergency force-inclusion now lives in _candidates, shared with explain.)
 
         # Score candidates only
         scored: list[tuple[float, CapabilityManifest]] = []

@@ -7,6 +7,56 @@ this implementation of it.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **The explanation and the decision now evaluate the same devices.** `explain()`
+  reported devices as *included* that `resolve()` structurally could not act on:
+  the two disagreed on who the candidates were. `resolve()` selected through the
+  tag index, `explain()` iterated every active device, so a device matching only
+  on **actuator** scored 12 in the explanation and was never a candidate in the
+  decision.
+
+  Measured across three registries: 2 in the reference deployment
+  (`ensure_safety`), 2 industrial, 5 clinical — including an operating-room
+  ventilation unit and a patient-facing display, both listed as participating in
+  an emergency that never touches them. An operator auditing *"what does my
+  system do in an emergency?"* planned around devices that would not move.
+
+  This contradicted the project's first advertised property: the score reported
+  is the score decided with. v9 (0.4.0) unified the scoring **formula** and left
+  the candidate **set** split. Both callers now share `_candidates()`, which also
+  owns the emergency force-inclusion that previously lived inside `resolve()`
+  alone — sharing the set without carrying that rule would have fixed one
+  divergence by creating another, in emergencies.
+
+  Found by measuring, not by reading: it surfaced while evaluating a proposal to
+  select devices by declared actuator, which measured zero change because the
+  hard filter was never the gate — the candidate index was.
+
+### Changed
+- **Excluded devices now say what would include them.** A device whose actuators
+  fit an intent but whose tags do not is reported as excluded with the tag that
+  would change that, plus a new `actuators_fit_resolution` field, instead of
+  being silently dropped. Correcting the divergence by simply removing those
+  devices would have discarded the one genuinely useful thing the wrong answer
+  contained.
+
+  **Consumers of `/v1/intent/explain` should note:** devices that only matched
+  on actuator move from `included` to `excluded`. No resolution changes —
+  benchmark precision, recall and F1 are unchanged across all four corpora
+  (home, industrial, clinical, and the reference deployment snapshot).
+
+- **The universal intent resolution contract is now in the specification.**
+  Spec §6.4.1 states the resolution tags and actuators of the five universal
+  intents normatively. They previously existed only in
+  `_seed_universal_intents()`, so a second implementation written from `spec/`
+  alone would resolve `control_access` differently and still pass certification.
+  Measured cost of the gap: an industrial door tagged `access` + `security`
+  (both standard vocabulary) scores F1 0.00 — roughly a quarter of the
+  multi-domain agnosticism gap. The table is pinned to the seed by a test that
+  parses it rather than restating it.
+
 ## [0.4.3] — 2026-08-08
 
 ### Changed

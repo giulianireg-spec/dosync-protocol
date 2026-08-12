@@ -60,7 +60,15 @@ def test_explanation_score_equals_decision_score(intent_class, urgency, context)
     exp = resolver.explain(intent)
     explained = {d["device_id"]: d["score"] for d in exp["included"]}
 
-    for device in hub.registry.all():
+    # The universe is the CANDIDATE SET, not the whole registry. This loop used
+    # to iterate registry.all() and assert that every device scoring above zero
+    # appeared as included — which encoded the divergence rather than the
+    # guarantee: a device matching only on ACTUATOR scores 12 and is not a
+    # candidate, so resolve() never acts on it. explain() listing it was the bug
+    # (see tests/test_explain_resolve_parity.py). The v9 property itself is
+    # unchanged and still asserted below: for every device actually evaluated,
+    # the explained score IS the decided score.
+    for device in resolver._candidates(intent, resolution):
         decided = resolver._relevance_score(device, intent, resolution)
         forced = (decided == 0.0 and urgency == Urgency.EMERGENCY
                   and device.emergency_capable)
@@ -72,6 +80,12 @@ def test_explanation_score_equals_decision_score(intent_class, urgency, context)
                 f"{device.device_id}: explain={explained[device.device_id]} decision={expected}"
         else:
             assert device.device_id not in explained
+
+    # And the other direction, which is what actually broke: nothing may be
+    # explained that was not evaluated.
+    candidate_ids = {d.device_id for d in resolver._candidates(intent, resolution)}
+    assert set(explained) <= candidate_ids, \
+        f"explain reports {sorted(set(explained) - candidate_ids)}, never evaluated"
 
 
 def test_breakdown_total_is_sum_of_components():

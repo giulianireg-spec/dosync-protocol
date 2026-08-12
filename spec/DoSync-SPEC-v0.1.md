@@ -329,6 +329,39 @@ Five intent classes are defined at the protocol level and seeded into every DoSy
 | `report_status` | `info` | Generate a status report of the environment |
 | `notify` | `info` | Push information to any target |
 
+#### 6.4.1 Resolution contract (normative)
+
+A conforming hub MUST seed these five classes with exactly the resolution tags
+and actuator types below. This is the contract that decides **which devices a
+universal intent selects**, and until v0.4.4 it existed only inside the
+reference implementation — so two hubs could both pass certification and
+resolve the same intent differently, which is the one thing a protocol cannot
+allow.
+
+| Intent class | `resolution_tags` | `resolution_actuators` |
+|---|---|---|
+| `ensure_safety` | `emergency`, `alarm`, `communication`, `notification` | `alarm`, `notify`, `call`, `turn_on`, `set_brightness` |
+| `alert_anomaly` | `communication`, `notification`, `sensor` | `notify`, `call` |
+| `control_access` | `lock` | `lock`, `unlock` |
+| `report_status` | *(none)* | *(none)* |
+| `notify` | `communication`, `notification`, `display` | `notify`, `display`, `call` |
+
+Two properties of this table are normative and easy to miss:
+
+- **`report_status` declares nothing on purpose.** An empty resolution is not
+  an omission: it selects every device that declares sensors and issues
+  read-only actions (§6.6). A hub that gives it tags changes what a status
+  query means.
+- **Tags rank, actuators gate.** A device is selected on tag match; the
+  actions built for it come from the actuator intersection. A device whose
+  tags match but whose actuators do not is selected and contributes no action
+  — except under `emergency`, where the full-capability fallback applies.
+
+This table is generated from and verified against the reference seed
+(`tests/test_universal_intent_contract.py`): if the implementation and this
+section ever disagree, the test fails. A specification that restates a fact
+the code also holds is how the two drift.
+
 These five are protected — they cannot be deleted or overridden. Any additional intent classes (e.g. `morning_routine`, `away_mode`, `prepare_operating_room`) are registered per deployment. See `docs/INTENT-CLASSES-GUIDE.md` for the full two-layer model and domain package examples.
 
 ### 6.5 Emergency escalation
