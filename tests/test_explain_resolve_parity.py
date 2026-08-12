@@ -146,8 +146,6 @@ def test_counts_are_consistent_with_the_lists(resolver):
     assert ex["devices_included"] == len(ex["included"])
     assert ex["devices_excluded"] == len(ex["excluded"])
     assert ex["devices_evaluated"] == len(ex["included"]) + len(ex["excluded"])
-<<<<<<< ours
-=======
 
 
 # ── Quarantine ───────────────────────────────────────────────────────────────
@@ -232,4 +230,3 @@ def test_quarantined_device_is_not_a_candidate_even_in_an_emergency():
             "force-inclusion beats the tag filter, not the operator's withdrawal")
         acted = {a.device_id for a in r.resolve(intent).actions}
         assert "siren-withdrawn" not in acted
->>>>>>> theirs

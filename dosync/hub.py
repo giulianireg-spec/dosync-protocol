@@ -444,9 +444,6 @@ class CapabilityMatchingResolver(BaseResolver):
         target_tags = set(resolution.get("tags", []))
         if not target_tags:
             return list(self.registry.active())
-<<<<<<< ours
-        candidates = list(self.registry.find_by_tags(list(target_tags)))
-=======
 
         # Quarantined devices are excluded here, once, for every caller.
         # active() filters them; find_by_tags() and find_emergency_capable() —
@@ -460,18 +457,10 @@ class CapabilityMatchingResolver(BaseResolver):
         # the same set and the totals stopped matching.
         candidates = [d for d in self.registry.find_by_tags(list(target_tags))
                       if not is_quarantined(d)]
->>>>>>> theirs
 
         # Emergency intents also evaluate every emergency_capable device, tags or
         # not (F2b): a safety device must never be dropped by a tag filter. This
         # extension lived only in resolve(), which is part of why the two sets
-<<<<<<< ours
-        # drifted — it belongs to the definition of "candidate", not to one caller.
-        if intent.urgency == Urgency.EMERGENCY:
-            seen = {d.device_id for d in candidates}
-            for device in self.registry.find_emergency_capable():
-                if device.device_id not in seen:
-=======
         # drifted — it belongs to the definition of "candidate", not to one
         # caller. Quarantine still wins over it: force-inclusion exists to beat
         # the TAG filter, not to resurrect a device the operator withdrew.
@@ -479,7 +468,6 @@ class CapabilityMatchingResolver(BaseResolver):
             seen = {d.device_id for d in candidates}
             for device in self.registry.find_emergency_capable():
                 if device.device_id not in seen and not is_quarantined(device):
->>>>>>> theirs
                     candidates.append(device)
         return candidates
 

@@ -34,8 +34,6 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   select devices by declared actuator, which measured zero change because the
   hard filter was never the gate — the candidate index was.
 
-<<<<<<< ours
-=======
 - **A withdrawn device is no longer planned into an emergency.** `active()`
   filters quarantined devices and its docstring states why — "it must not be
   planned into an emergency, because the operator already believes it is gone".
@@ -60,7 +58,6 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   once at startup, reporting how many settings it applied, and Twilio settings
   are read when used rather than frozen at first import.
 
->>>>>>> theirs
 ### Changed
 - **Excluded devices now say what would include them.** A device whose actuators
   fit an intent but whose tags do not is reported as excluded with the tag that
