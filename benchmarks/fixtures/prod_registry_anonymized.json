@@ -1,0 +1,1799 @@
+{
+  "count": 30,
+  "devices": [
+    {
+      "dosync_version": "0.1",
+      "device_id": "wiz-habitacion-ninos-01",
+      "device_name": "Bedroom 2 — Light",
+      "manufacturer": "Philips WiZ",
+      "model": "WiZ WiFi Bulb",
+      "firmware": "auto",
+      "category": "actuator",
+      "tags": [
+        "light",
+        "emergency",
+        "energy",
+        "bedroom"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "brightness",
+            "type": "integer",
+            "description": "Current brightness",
+            "unit": "%",
+            "range": null,
+            "poll_interval_ms": 30000
+          },
+          {
+            "id": "state",
+            "type": "boolean",
+            "description": "On/off",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [
+          {
+            "id": "turn_on",
+            "type": "turn_on",
+            "description": "Turn on",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "turn_off",
+            "type": "turn_off",
+            "description": "Turn off",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_brightness",
+            "type": "set_brightness",
+            "description": "Brillo 0-100%",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color",
+            "type": "set_color",
+            "description": "Color RGB",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color_temp",
+            "type": "set_color_temp",
+            "description": "Set color temperature",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_scene",
+            "type": "set_scene",
+            "description": "Escena WiZ predefinida",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": true,
+      "cert_tier": "standard",
+      "adapter": "wiz"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "wiz-living2-01",
+      "device_name": "Living 2 — Light 1",
+      "manufacturer": "Philips WiZ",
+      "model": "WiZ WiFi Bulb",
+      "firmware": "auto",
+      "category": "actuator",
+      "tags": [
+        "light",
+        "emergency",
+        "energy",
+        "living-room"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "brightness",
+            "type": "integer",
+            "description": "Current brightness",
+            "unit": "%",
+            "range": null,
+            "poll_interval_ms": 30000
+          },
+          {
+            "id": "state",
+            "type": "boolean",
+            "description": "On/off",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [
+          {
+            "id": "turn_on",
+            "type": "turn_on",
+            "description": "Turn on",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "turn_off",
+            "type": "turn_off",
+            "description": "Turn off",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_brightness",
+            "type": "set_brightness",
+            "description": "Brillo 0-100%",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color",
+            "type": "set_color",
+            "description": "Color RGB",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color_temp",
+            "type": "set_color_temp",
+            "description": "Set color temperature",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_scene",
+            "type": "set_scene",
+            "description": "Escena WiZ predefinida",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": true,
+      "cert_tier": "standard",
+      "adapter": "wiz"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "wiz-living2-02",
+      "device_name": "Living 2 — Light 2",
+      "manufacturer": "Philips WiZ",
+      "model": "WiZ WiFi Bulb",
+      "firmware": "auto",
+      "category": "actuator",
+      "tags": [
+        "light",
+        "emergency",
+        "energy",
+        "living-room"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "brightness",
+            "type": "integer",
+            "description": "Current brightness",
+            "unit": "%",
+            "range": null,
+            "poll_interval_ms": 30000
+          },
+          {
+            "id": "state",
+            "type": "boolean",
+            "description": "On/off",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [
+          {
+            "id": "turn_on",
+            "type": "turn_on",
+            "description": "Turn on",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "turn_off",
+            "type": "turn_off",
+            "description": "Turn off",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_brightness",
+            "type": "set_brightness",
+            "description": "Brillo 0-100%",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color",
+            "type": "set_color",
+            "description": "Color RGB",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color_temp",
+            "type": "set_color_temp",
+            "description": "Set color temperature",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_scene",
+            "type": "set_scene",
+            "description": "Escena WiZ predefinida",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": true,
+      "cert_tier": "standard",
+      "adapter": "wiz"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "wiz-comedor-01",
+      "device_name": "Dining room — Light 1",
+      "manufacturer": "Philips WiZ",
+      "model": "WiZ WiFi Bulb",
+      "firmware": "auto",
+      "category": "actuator",
+      "tags": [
+        "light",
+        "emergency",
+        "energy",
+        "dining-room"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "brightness",
+            "type": "integer",
+            "description": "Current brightness",
+            "unit": "%",
+            "range": null,
+            "poll_interval_ms": 30000
+          },
+          {
+            "id": "state",
+            "type": "boolean",
+            "description": "On/off",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [
+          {
+            "id": "turn_on",
+            "type": "turn_on",
+            "description": "Turn on",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "turn_off",
+            "type": "turn_off",
+            "description": "Turn off",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_brightness",
+            "type": "set_brightness",
+            "description": "Brillo 0-100%",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color",
+            "type": "set_color",
+            "description": "Color RGB",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color_temp",
+            "type": "set_color_temp",
+            "description": "Set color temperature",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_scene",
+            "type": "set_scene",
+            "description": "Escena WiZ predefinida",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": true,
+      "cert_tier": "standard",
+      "adapter": "wiz"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "wiz-cocina-01",
+      "device_name": "Kitchen — Light 1",
+      "manufacturer": "Philips WiZ",
+      "model": "WiZ WiFi Bulb",
+      "firmware": "auto",
+      "category": "actuator",
+      "tags": [
+        "light",
+        "emergency",
+        "energy",
+        "kitchen"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "brightness",
+            "type": "integer",
+            "description": "Current brightness",
+            "unit": "%",
+            "range": null,
+            "poll_interval_ms": 30000
+          },
+          {
+            "id": "state",
+            "type": "boolean",
+            "description": "On/off",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [
+          {
+            "id": "turn_on",
+            "type": "turn_on",
+            "description": "Turn on",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "turn_off",
+            "type": "turn_off",
+            "description": "Turn off",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_brightness",
+            "type": "set_brightness",
+            "description": "Brillo 0-100%",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color",
+            "type": "set_color",
+            "description": "Color RGB",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color_temp",
+            "type": "set_color_temp",
+            "description": "Set color temperature",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_scene",
+            "type": "set_scene",
+            "description": "Escena WiZ predefinida",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": true,
+      "cert_tier": "standard",
+      "adapter": "wiz"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "wiz-habitacion-principal",
+      "device_name": "Bedroom 1 — Light",
+      "manufacturer": "Philips WiZ",
+      "model": "WiZ WiFi Bulb",
+      "firmware": "auto",
+      "category": "actuator",
+      "tags": [
+        "light",
+        "emergency",
+        "energy",
+        "bedroom"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "brightness",
+            "type": "integer",
+            "description": "Current brightness",
+            "unit": "%",
+            "range": null,
+            "poll_interval_ms": 30000
+          },
+          {
+            "id": "state",
+            "type": "boolean",
+            "description": "On/off",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [
+          {
+            "id": "turn_on",
+            "type": "turn_on",
+            "description": "Turn on",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "turn_off",
+            "type": "turn_off",
+            "description": "Turn off",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_brightness",
+            "type": "set_brightness",
+            "description": "Brillo 0-100%",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color",
+            "type": "set_color",
+            "description": "Color RGB",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color_temp",
+            "type": "set_color_temp",
+            "description": "Set color temperature",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_scene",
+            "type": "set_scene",
+            "description": "Escena WiZ predefinida",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": true,
+      "cert_tier": "standard",
+      "adapter": "wiz"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "wiz-comedor-02",
+      "device_name": "Dining room — Light 2",
+      "manufacturer": "Philips WiZ",
+      "model": "WiZ WiFi Bulb",
+      "firmware": "auto",
+      "category": "actuator",
+      "tags": [
+        "light",
+        "emergency",
+        "energy",
+        "dining-room"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "brightness",
+            "type": "integer",
+            "description": "Current brightness",
+            "unit": "%",
+            "range": null,
+            "poll_interval_ms": 30000
+          },
+          {
+            "id": "state",
+            "type": "boolean",
+            "description": "On/off",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [
+          {
+            "id": "turn_on",
+            "type": "turn_on",
+            "description": "Turn on",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "turn_off",
+            "type": "turn_off",
+            "description": "Turn off",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_brightness",
+            "type": "set_brightness",
+            "description": "Brillo 0-100%",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color",
+            "type": "set_color",
+            "description": "Color RGB",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color_temp",
+            "type": "set_color_temp",
+            "description": "Set color temperature",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_scene",
+            "type": "set_scene",
+            "description": "Escena WiZ predefinida",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": true,
+      "cert_tier": "standard",
+      "adapter": "wiz"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "wiz-living1-01",
+      "device_name": "Living 1 — Light 1",
+      "manufacturer": "Philips WiZ",
+      "model": "WiZ WiFi Bulb",
+      "firmware": "auto",
+      "category": "actuator",
+      "tags": [
+        "light",
+        "emergency",
+        "energy",
+        "living-room"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "brightness",
+            "type": "integer",
+            "description": "Current brightness",
+            "unit": "%",
+            "range": null,
+            "poll_interval_ms": 30000
+          },
+          {
+            "id": "state",
+            "type": "boolean",
+            "description": "On/off",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [
+          {
+            "id": "turn_on",
+            "type": "turn_on",
+            "description": "Turn on",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "turn_off",
+            "type": "turn_off",
+            "description": "Turn off",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_brightness",
+            "type": "set_brightness",
+            "description": "Brillo 0-100%",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color",
+            "type": "set_color",
+            "description": "Color RGB",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color_temp",
+            "type": "set_color_temp",
+            "description": "Set color temperature",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_scene",
+            "type": "set_scene",
+            "description": "Escena WiZ predefinida",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": true,
+      "cert_tier": "standard",
+      "adapter": "wiz"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "wiz-living1-02",
+      "device_name": "Living 1 — Light 2",
+      "manufacturer": "Philips WiZ",
+      "model": "WiZ WiFi Bulb",
+      "firmware": "auto",
+      "category": "actuator",
+      "tags": [
+        "light",
+        "emergency",
+        "energy",
+        "living-room"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "brightness",
+            "type": "integer",
+            "description": "Current brightness",
+            "unit": "%",
+            "range": null,
+            "poll_interval_ms": 30000
+          },
+          {
+            "id": "state",
+            "type": "boolean",
+            "description": "On/off",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [
+          {
+            "id": "turn_on",
+            "type": "turn_on",
+            "description": "Turn on",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "turn_off",
+            "type": "turn_off",
+            "description": "Turn off",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_brightness",
+            "type": "set_brightness",
+            "description": "Brillo 0-100%",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color",
+            "type": "set_color",
+            "description": "Color RGB",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color_temp",
+            "type": "set_color_temp",
+            "description": "Set color temperature",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_scene",
+            "type": "set_scene",
+            "description": "Escena WiZ predefinida",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": true,
+      "cert_tier": "standard",
+      "adapter": "wiz"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "wiz-cocina-02",
+      "device_name": "Kitchen — Light 2",
+      "manufacturer": "Philips WiZ",
+      "model": "WiZ WiFi Bulb",
+      "firmware": "auto",
+      "category": "actuator",
+      "tags": [
+        "light",
+        "emergency",
+        "energy",
+        "kitchen"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "brightness",
+            "type": "integer",
+            "description": "Current brightness",
+            "unit": "%",
+            "range": null,
+            "poll_interval_ms": 30000
+          },
+          {
+            "id": "state",
+            "type": "boolean",
+            "description": "On/off",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [
+          {
+            "id": "turn_on",
+            "type": "turn_on",
+            "description": "Turn on",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "turn_off",
+            "type": "turn_off",
+            "description": "Turn off",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_brightness",
+            "type": "set_brightness",
+            "description": "Brillo 0-100%",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color",
+            "type": "set_color",
+            "description": "Color RGB",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color_temp",
+            "type": "set_color_temp",
+            "description": "Set color temperature",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_scene",
+            "type": "set_scene",
+            "description": "Escena WiZ predefinida",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": true,
+      "cert_tier": "standard",
+      "adapter": "wiz"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "rpi-pir-01",
+      "device_name": "PIR — Motion sensor",
+      "manufacturer": "DoSync GPIO",
+      "model": "HC-SR501",
+      "firmware": "1.0.0",
+      "category": "sensor",
+      "tags": [
+        "sensor",
+        "motion",
+        "security",
+        "emergency"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "motion",
+            "type": "motion_detected",
+            "description": "",
+            "unit": "boolean",
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "basic"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "rpi-dht22-01",
+      "device_name": "DHT22 — Temperature and humidity",
+      "manufacturer": "DoSync GPIO",
+      "model": "DHT22",
+      "firmware": "1.0.0",
+      "category": "sensor",
+      "tags": [
+        "sensor",
+        "climate",
+        "temperature",
+        "humidity"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "temperature",
+            "type": "temperature",
+            "description": "",
+            "unit": "celsius",
+            "range": null,
+            "poll_interval_ms": 30000
+          },
+          {
+            "id": "humidity",
+            "type": "humidity",
+            "description": "",
+            "unit": "percent",
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "basic"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-light-tv_philips_ambilight",
+      "device_name": "TV Philips Ambilight",
+      "manufacturer": "Home Assistant",
+      "model": "HA light",
+      "firmware": "auto",
+      "category": "hybrid",
+      "tags": [
+        "light"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "state",
+            "type": "boolean",
+            "description": "On/off",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          },
+          {
+            "id": "brightness",
+            "type": "integer",
+            "description": "Current brightness",
+            "unit": "%",
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [
+          {
+            "id": "turn_on",
+            "type": "turn_on",
+            "description": "Turn on",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "turn_off",
+            "type": "turn_off",
+            "description": "Turn off",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_brightness",
+            "type": "set_brightness",
+            "description": "Brillo 0-100%",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color",
+            "type": "set_color",
+            "description": "Color RGB",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_effect",
+            "type": "set_effect",
+            "description": "Efecto Ambilight",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "set_color_temp",
+            "type": "set_color_temp",
+            "description": "Set color temperature",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-media_player-tv_philips",
+      "device_name": "TV Philips",
+      "manufacturer": "Home Assistant",
+      "model": "HA media_player",
+      "firmware": "auto",
+      "category": "hybrid",
+      "tags": [
+        "communication",
+        "display"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "state",
+            "type": "string",
+            "description": "Estado",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [
+          {
+            "id": "turn_on",
+            "type": "turn_on",
+            "description": "Turn on",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "turn_off",
+            "type": "turn_off",
+            "description": "Turn off",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "display",
+            "type": "display",
+            "description": "Mostrar mensaje",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-switch-tv_philips_screen_state",
+      "device_name": "TV Philips Screen state",
+      "manufacturer": "Home Assistant",
+      "model": "HA switch",
+      "firmware": "auto",
+      "category": "actuator",
+      "tags": [
+        "appliance"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "state",
+            "type": "boolean",
+            "description": "Estado",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [
+          {
+            "id": "turn_on",
+            "type": "turn_on",
+            "description": "Turn on",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "turn_off",
+            "type": "turn_off",
+            "description": "Turn off",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-sensor-sun_next_dawn",
+      "device_name": "Sun Next dawn",
+      "manufacturer": "Home Assistant",
+      "model": "HA sensor",
+      "firmware": "auto",
+      "category": "sensor",
+      "tags": [
+        "sensor"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "value",
+            "type": "float",
+            "description": "Valor del sensor",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-sensor-sun_next_dusk",
+      "device_name": "Sun Next dusk",
+      "manufacturer": "Home Assistant",
+      "model": "HA sensor",
+      "firmware": "auto",
+      "category": "sensor",
+      "tags": [
+        "sensor"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "value",
+            "type": "float",
+            "description": "Valor del sensor",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-sensor-sun_next_midnight",
+      "device_name": "Sun Next midnight",
+      "manufacturer": "Home Assistant",
+      "model": "HA sensor",
+      "firmware": "auto",
+      "category": "sensor",
+      "tags": [
+        "sensor"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "value",
+            "type": "float",
+            "description": "Valor del sensor",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-sensor-sun_next_noon",
+      "device_name": "Sun Next noon",
+      "manufacturer": "Home Assistant",
+      "model": "HA sensor",
+      "firmware": "auto",
+      "category": "sensor",
+      "tags": [
+        "sensor"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "value",
+            "type": "float",
+            "description": "Valor del sensor",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-sensor-sun_next_rising",
+      "device_name": "Sun Next rising",
+      "manufacturer": "Home Assistant",
+      "model": "HA sensor",
+      "firmware": "auto",
+      "category": "sensor",
+      "tags": [
+        "sensor"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "value",
+            "type": "float",
+            "description": "Valor del sensor",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-sensor-sun_next_setting",
+      "device_name": "Sun Next setting",
+      "manufacturer": "Home Assistant",
+      "model": "HA sensor",
+      "firmware": "auto",
+      "category": "sensor",
+      "tags": [
+        "sensor"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "value",
+            "type": "float",
+            "description": "Valor del sensor",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-sensor-backup_backup_manager_state",
+      "device_name": "Backup Backup Manager state",
+      "manufacturer": "Home Assistant",
+      "model": "HA sensor",
+      "firmware": "auto",
+      "category": "sensor",
+      "tags": [
+        "sensor"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "value",
+            "type": "float",
+            "description": "Valor del sensor",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-sensor-backup_next_scheduled_automatic_backup",
+      "device_name": "Backup Next scheduled automatic backup",
+      "manufacturer": "Home Assistant",
+      "model": "HA sensor",
+      "firmware": "auto",
+      "category": "sensor",
+      "tags": [
+        "sensor"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "value",
+            "type": "float",
+            "description": "Valor del sensor",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-sensor-backup_last_successful_automatic_backup",
+      "device_name": "Backup Last successful automatic backup",
+      "manufacturer": "Home Assistant",
+      "model": "HA sensor",
+      "firmware": "auto",
+      "category": "sensor",
+      "tags": [
+        "sensor"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "value",
+            "type": "float",
+            "description": "Valor del sensor",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-sensor-backup_last_attempted_automatic_backup",
+      "device_name": "Backup Last attempted automatic backup",
+      "manufacturer": "Home Assistant",
+      "model": "HA sensor",
+      "firmware": "auto",
+      "category": "sensor",
+      "tags": [
+        "sensor"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "value",
+            "type": "float",
+            "description": "Valor del sensor",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-binary_sensor-tv_philips_recording_ongoing",
+      "device_name": "TV Philips Recording ongoing",
+      "manufacturer": "Home Assistant",
+      "model": "HA binary_sensor",
+      "firmware": "auto",
+      "category": "sensor",
+      "tags": [
+        "sensor"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "state",
+            "type": "boolean",
+            "description": "Estado",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-binary_sensor-tv_philips_new_recording_available",
+      "device_name": "TV Philips New recording available",
+      "manufacturer": "Home Assistant",
+      "model": "HA binary_sensor",
+      "firmware": "auto",
+      "category": "sensor",
+      "tags": [
+        "sensor"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "state",
+            "type": "boolean",
+            "description": "Estado",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "ha-media_player-75_qled_qn75q7faagcfv",
+      "device_name": "75&quot; QLED (QN75Q7FAAGCFV)",
+      "manufacturer": "Home Assistant",
+      "model": "HA media_player",
+      "firmware": "auto",
+      "category": "hybrid",
+      "tags": [
+        "communication",
+        "display"
+      ],
+      "capabilities": {
+        "sensors": [
+          {
+            "id": "state",
+            "type": "string",
+            "description": "Estado",
+            "unit": null,
+            "range": null,
+            "poll_interval_ms": 30000
+          }
+        ],
+        "actuators": [
+          {
+            "id": "turn_on",
+            "type": "turn_on",
+            "description": "Turn on",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "turn_off",
+            "type": "turn_off",
+            "description": "Turn off",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          },
+          {
+            "id": "display",
+            "type": "display",
+            "description": "Mostrar mensaje",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "standard",
+      "adapter": "homeassistant"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "alarm-test-01",
+      "device_name": "Main alarm (test)",
+      "manufacturer": "DoSync",
+      "model": "simulated-alarm",
+      "firmware": "auto",
+      "category": "actuator",
+      "tags": [
+        "emergency",
+        "alarm",
+        "security"
+      ],
+      "capabilities": {
+        "sensors": [],
+        "actuators": [
+          {
+            "id": "alarm",
+            "type": "alarm",
+            "description": "Activate alarm",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": true,
+      "cert_tier": "standard",
+      "adapter": "simulated"
+    },
+    {
+      "dosync_version": "0.1",
+      "device_id": "notifier-sms-01",
+      "device_name": "SMS — Notifications",
+      "manufacturer": "Twilio",
+      "model": "SMS Notifier",
+      "firmware": "1.0.0",
+      "category": "actuator",
+      "tags": [
+        "notification",
+        "communication",
+        "emergency"
+      ],
+      "capabilities": {
+        "sensors": [],
+        "actuators": [
+          {
+            "id": "notify",
+            "type": "notify",
+            "description": "Send SMS",
+            "params_schema": {},
+            "execution_model": "instant",
+            "supports_progress": false,
+            "supports_cancel": false,
+            "emits_telemetry": false
+          }
+        ],
+        "events": [],
+        "context_signals": []
+      },
+      "emergency_capable": false,
+      "cert_tier": "basic"
+    }
+  ],
+  "_provenance": "Anonymized snapshot of the reference deployment's registry (30 devices, July 2026, pre HA-housekeeping cleanup — it deliberately includes the sun/backup entities the paper's Table 3 was measured against). Device IDs unchanged (already public in prod_ground_truth_operator.json); names and descriptions genericized to English; the export carries no adapter_config or addresses by design (manifest privacy, G11). Tags and capabilities byte-identical to the original: they are what the benchmark measures."
+}

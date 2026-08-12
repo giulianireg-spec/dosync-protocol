@@ -63,3 +63,7 @@ checkpoints/
 audit-segments/
 audit_log_backup_*.json
 dosync-cert-*.json
+
+# The RAW production registry carries real room names; only the anonymized
+# snapshot (prod_registry_anonymized.json) belongs in the repository.
+benchmarks/fixtures/prod_registry.json
