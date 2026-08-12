@@ -149,7 +149,7 @@ DoSync earns its place in specific situations — and honestly gets in the way i
 ```
 User / AI says:  "there is an emergency at home"
                           │
-                    DoSync Hub v0.3.0
+                       DoSync Hub
                           │
           ┌───────────────┼───────────────┐
           ▼               ▼               ▼
@@ -514,7 +514,7 @@ git clone https://github.com/giulianireg-spec/dosync-protocol
 cd dosync-protocol
 python3 -m venv venv && source venv/bin/activate
 pip install -e '.[dev]'
-pytest                                  # 667 tests
+pytest                                  # runs the full suite
 dosync-hub --reload
 ```
 
@@ -583,7 +583,7 @@ python3 certify.py --host <hub-ip> --port 47200 --tier standard
 | Language | Location | Author | Certification |
 |---|---|---|---|
 | Python (reference) | `server.py` | this project | Standard 33/33 · Emergency 44/44 ✅ |
-| Node.js (companion) | [giulianireg-spec/dosync-node](https://github.com/giulianireg-spec/dosync-node) | this project | 33/33 Standard ✅ |
+| Node.js (companion) | [giulianireg-spec/dosync-node](https://github.com/giulianireg-spec/dosync-node) | this project | Standard 33/33, against the v0.3 suite — re-validation against the current 56-test suite pending |
 
 The Node.js implementation is a **companion** port that validates the protocol
 is implementable in a second language against the same certification suite —
@@ -631,4 +631,4 @@ Apache 2.0 — free to implement, free to extend, no royalties.
 
 ---
 
-*DoSync Protocol v0.3.0 · © 2026 Rodrigo Giuliani · rgiuliani@dosync.dev*
+*DoSync Protocol · © 2026 Rodrigo Giuliani · rgiuliani@dosync.dev*
