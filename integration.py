@@ -26,7 +26,7 @@ exercises the deployment. Keep them apart so each answers exactly one question.
 
 Usage:
     DOSYNC_TOKEN=<token> DOSYNC_CA_CERT=certs/ca.crt \\
-        python3 integration.py --host 192.168.100.109 --port 47200
+        python3 integration.py --host <hub-address> --port 47200
 
     # JSON report for the record:
     python3 integration.py --host <ip> --port 47200 --json integration-<date>.json

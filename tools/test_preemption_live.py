@@ -6,16 +6,16 @@ depends on the tags in the database), this drill:
 
   1. Fires ensure_safety [emergency] and waits for it to complete. The
      emergency claims every device it acts on (claim-first in the arbiter).
-  2. Picks a real WiZ from among the devices the emergency touched.
+  2. Picks one of the devices the emergency actually touched.
   3. Inside the grace window, fires a lower-urgency DIRECT ACTION
      (POST /v1/device/action, which the hub executes as urgency=info)
-     against that WiZ.
+     against that device.
   4. Verifies the action comes back SUPERSEDED (success=False +
      response.superseded) and that the audit chain recorded
      action_superseded_by_priority.
 
 That is exactly the normative guarantee of spec §3: a lower-urgency write to
-a device the emergency owns is discarded. Deterministic: the WiZ is claimed
+a device the emergency owns is discarded. Deterministic: the device is claimed
 with certainty because we just completed the emergency over it.
 
 Usage (on the hub host):
@@ -70,7 +70,7 @@ def main():
     ap.add_argument("--ca", default=os.environ.get("DOSYNC_CA_CERT", "certs/ca.crt"))
     ap.add_argument("--insecure", action="store_true")
     ap.add_argument("--device", default="",
-                    help="force a specific WiZ (device_id)")
+                    help="force a specific device (device_id)")
     args = ap.parse_args()
     token = os.environ.get("DOSYNC_TOKEN", "")
     if not token:
@@ -99,19 +99,16 @@ def main():
     results = res.get("results", []) or []
     print(f"  emergency → status={res.get('status')}  actions={res.get('actions_taken')}")
 
-    # 2. pick a WiZ from among the devices the emergency touched (∴ claimed)
+    # 2. pick one of the devices the emergency touched (∴ claimed)
     touched = [r.get("device_id", "") for r in results]
-    wiz_touched = [d for d in touched if "wiz" in d.lower()]
-    target = args.device or (wiz_touched[0] if wiz_touched
-                             else (touched[0] if touched else ""))
+    target = args.device or (touched[0] if touched else "")
     if not target:
         print("  Could not identify a device touched by the emergency (empty results).")
-        print("  Pass --device <wiz-id> to force one.")
+        print("  Pass --device <device-id> to force one.")
         sys.exit(1)
-    print(f"  claimed device chosen: {target}"
-          f"{'  (WiZ)' if 'wiz' in target.lower() else ''}\n")
+    print(f"  claimed device chosen: {target}\n")
 
-    # 3. LOWER-urgency direct action on that WiZ, inside the grace window
+    # 3. LOWER-urgency direct action on that device, inside the grace window
     print(f"→ direct action [info] turn_on brightness=10 on {target} "
           "(must come back superseded) ...")
     sa, ba = req("POST", f"{base}/v1/device/action", token,
@@ -148,7 +145,7 @@ def main():
         print("    - more than <grace> seconds passed between emergency and "
               "action (retry)")
         print("    - the chosen device was not claimed (try --device with a "
-              "touched WiZ)")
+              "device the emergency touched)")
         sys.exit(1)
 
 

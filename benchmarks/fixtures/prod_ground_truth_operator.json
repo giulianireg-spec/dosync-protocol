@@ -1,12 +1,12 @@
 {
-  "_comment": "OPERATOR ground truth \u2014 written from the deployment owner's stated intent (2026-07-12), independent of tags/resolver rules. Divergences vs the resolver are true semantic findings, not tautologies. See docs/BENCHMARK-RECALL.md.",
+  "_comment": "OPERATOR ground truth — written from the deployment owner's stated intent (2026-07-12), independent of tags/resolver rules. Divergences vs the resolver are true semantic findings, not tautologies. See docs/BENCHMARK-RECALL.md.",
   "_operator_notes": {
-    "ensure_safety": "10 WiZ + siren + SMS. TVs/Ambilight must NOT act in an emergency (operator's explicit exclusion; they are display-capable but excluded by preference).",
-    "alert_anomaly": "Notify SMS; consult PIR/DHT and the TV binary sensors. HA-internal Sun/Backup sensors not wanted in this deployment (other deployments may declare otherwise).",
-    "control_access": "No locks in this deployment \u2014 nothing acts.",
+    "ensure_safety": "10 lights + alarm + notifier. The bridged media players and the bridged light must NOT act in an emergency (the operator's explicit exclusion: they are display-capable but excluded by preference).",
+    "alert_anomaly": "Notify; consult the motion and climate sensors and the bridged binary sensors. The bridged housekeeping and solar sensors are not wanted in this deployment (another deployment may declare otherwise).",
+    "control_access": "No locks in this deployment — nothing acts.",
     "report_status": "Read everything that senses.",
-    "notify": "SMS only. TVs/Ambilight have no role here.",
-    "_pir_note": "PIR IS included where relevant (read in an emergency is useful): the operator has a PIR and wants it read. Another deployment without a PIR simply would not register one."
+    "notify": "Notifier only. The bridged media players have no role here.",
+    "_pir_note": "The motion sensor IS included where relevant (reading it in an emergency is useful): this operator has one and wants it read. A deployment without one simply would not register it."
   },
   "cases": [
     {
@@ -14,18 +14,18 @@
       "urgency": "emergency",
       "context": {},
       "expected": [
-        "wiz-cocina-01",
-        "wiz-cocina-02",
-        "wiz-comedor-01",
-        "wiz-comedor-02",
-        "wiz-habitacion-ninos-01",
-        "wiz-habitacion-principal",
-        "wiz-living1-01",
-        "wiz-living1-02",
-        "wiz-living2-01",
-        "wiz-living2-02",
-        "alarm-test-01",
-        "notifier-sms-01"
+        "light-zone1-01",
+        "light-zone1-02",
+        "light-zone2-01",
+        "light-zone2-02",
+        "light-zone5-01",
+        "light-zone6-01",
+        "light-zone3-01",
+        "light-zone3-02",
+        "light-zone4-01",
+        "light-zone4-02",
+        "alarm-01",
+        "notifier-01"
       ]
     },
     {
@@ -33,11 +33,11 @@
       "urgency": "alert",
       "context": {},
       "expected": [
-        "notifier-sms-01",
-        "rpi-pir-01",
-        "rpi-dht22-01",
-        "ha-binary_sensor-tv_philips_recording_ongoing",
-        "ha-binary_sensor-tv_philips_new_recording_available"
+        "notifier-01",
+        "sensor-motion-01",
+        "sensor-climate-01",
+        "bridged-binarysensor-01",
+        "bridged-binarysensor-02"
       ]
     },
     {
@@ -51,10 +51,10 @@
       "urgency": "info",
       "context": {},
       "expected": [
-        "rpi-pir-01",
-        "rpi-dht22-01",
-        "ha-binary_sensor-tv_philips_recording_ongoing",
-        "ha-binary_sensor-tv_philips_new_recording_available"
+        "sensor-motion-01",
+        "sensor-climate-01",
+        "bridged-binarysensor-01",
+        "bridged-binarysensor-02"
       ]
     },
     {
@@ -64,7 +64,7 @@
         "message": "test"
       },
       "expected": [
-        "notifier-sms-01"
+        "notifier-01"
       ]
     }
   ]

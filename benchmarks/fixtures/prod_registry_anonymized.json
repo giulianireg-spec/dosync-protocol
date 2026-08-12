@@ -3,10 +3,10 @@
   "devices": [
     {
       "dosync_version": "0.1",
-      "device_id": "wiz-habitacion-ninos-01",
-      "device_name": "Bedroom 2 — Light",
-      "manufacturer": "Philips WiZ",
-      "model": "WiZ WiFi Bulb",
+      "device_id": "light-zone5-01",
+      "device_name": "Zone 5 — Light",
+      "manufacturer": "generic",
+      "model": "generic",
       "firmware": "auto",
       "category": "actuator",
       "tags": [
@@ -88,7 +88,7 @@
           {
             "id": "set_scene",
             "type": "set_scene",
-            "description": "Escena WiZ predefinida",
+            "description": "Preset scene",
             "params_schema": {},
             "execution_model": "instant",
             "supports_progress": false,
@@ -105,10 +105,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "wiz-living2-01",
-      "device_name": "Living 2 — Light 1",
-      "manufacturer": "Philips WiZ",
-      "model": "WiZ WiFi Bulb",
+      "device_id": "light-zone4-01",
+      "device_name": "Zone 4 — Light 1",
+      "manufacturer": "generic",
+      "model": "generic",
       "firmware": "auto",
       "category": "actuator",
       "tags": [
@@ -190,7 +190,7 @@
           {
             "id": "set_scene",
             "type": "set_scene",
-            "description": "Escena WiZ predefinida",
+            "description": "Preset scene",
             "params_schema": {},
             "execution_model": "instant",
             "supports_progress": false,
@@ -207,10 +207,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "wiz-living2-02",
-      "device_name": "Living 2 — Light 2",
-      "manufacturer": "Philips WiZ",
-      "model": "WiZ WiFi Bulb",
+      "device_id": "light-zone4-02",
+      "device_name": "Zone 4 — Light 2",
+      "manufacturer": "generic",
+      "model": "generic",
       "firmware": "auto",
       "category": "actuator",
       "tags": [
@@ -292,7 +292,7 @@
           {
             "id": "set_scene",
             "type": "set_scene",
-            "description": "Escena WiZ predefinida",
+            "description": "Preset scene",
             "params_schema": {},
             "execution_model": "instant",
             "supports_progress": false,
@@ -309,10 +309,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "wiz-comedor-01",
-      "device_name": "Dining room — Light 1",
-      "manufacturer": "Philips WiZ",
-      "model": "WiZ WiFi Bulb",
+      "device_id": "light-zone2-01",
+      "device_name": "Zone 2 — Light 1",
+      "manufacturer": "generic",
+      "model": "generic",
       "firmware": "auto",
       "category": "actuator",
       "tags": [
@@ -394,7 +394,7 @@
           {
             "id": "set_scene",
             "type": "set_scene",
-            "description": "Escena WiZ predefinida",
+            "description": "Preset scene",
             "params_schema": {},
             "execution_model": "instant",
             "supports_progress": false,
@@ -411,10 +411,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "wiz-cocina-01",
-      "device_name": "Kitchen — Light 1",
-      "manufacturer": "Philips WiZ",
-      "model": "WiZ WiFi Bulb",
+      "device_id": "light-zone1-01",
+      "device_name": "Zone 1 — Light 1",
+      "manufacturer": "generic",
+      "model": "generic",
       "firmware": "auto",
       "category": "actuator",
       "tags": [
@@ -496,7 +496,7 @@
           {
             "id": "set_scene",
             "type": "set_scene",
-            "description": "Escena WiZ predefinida",
+            "description": "Preset scene",
             "params_schema": {},
             "execution_model": "instant",
             "supports_progress": false,
@@ -513,10 +513,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "wiz-habitacion-principal",
-      "device_name": "Bedroom 1 — Light",
-      "manufacturer": "Philips WiZ",
-      "model": "WiZ WiFi Bulb",
+      "device_id": "light-zone6-01",
+      "device_name": "Zone 6 — Light",
+      "manufacturer": "generic",
+      "model": "generic",
       "firmware": "auto",
       "category": "actuator",
       "tags": [
@@ -598,7 +598,7 @@
           {
             "id": "set_scene",
             "type": "set_scene",
-            "description": "Escena WiZ predefinida",
+            "description": "Preset scene",
             "params_schema": {},
             "execution_model": "instant",
             "supports_progress": false,
@@ -615,10 +615,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "wiz-comedor-02",
-      "device_name": "Dining room — Light 2",
-      "manufacturer": "Philips WiZ",
-      "model": "WiZ WiFi Bulb",
+      "device_id": "light-zone2-02",
+      "device_name": "Zone 2 — Light 2",
+      "manufacturer": "generic",
+      "model": "generic",
       "firmware": "auto",
       "category": "actuator",
       "tags": [
@@ -700,7 +700,7 @@
           {
             "id": "set_scene",
             "type": "set_scene",
-            "description": "Escena WiZ predefinida",
+            "description": "Preset scene",
             "params_schema": {},
             "execution_model": "instant",
             "supports_progress": false,
@@ -717,10 +717,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "wiz-living1-01",
-      "device_name": "Living 1 — Light 1",
-      "manufacturer": "Philips WiZ",
-      "model": "WiZ WiFi Bulb",
+      "device_id": "light-zone3-01",
+      "device_name": "Zone 3 — Light 1",
+      "manufacturer": "generic",
+      "model": "generic",
       "firmware": "auto",
       "category": "actuator",
       "tags": [
@@ -802,7 +802,7 @@
           {
             "id": "set_scene",
             "type": "set_scene",
-            "description": "Escena WiZ predefinida",
+            "description": "Preset scene",
             "params_schema": {},
             "execution_model": "instant",
             "supports_progress": false,
@@ -819,10 +819,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "wiz-living1-02",
-      "device_name": "Living 1 — Light 2",
-      "manufacturer": "Philips WiZ",
-      "model": "WiZ WiFi Bulb",
+      "device_id": "light-zone3-02",
+      "device_name": "Zone 3 — Light 2",
+      "manufacturer": "generic",
+      "model": "generic",
       "firmware": "auto",
       "category": "actuator",
       "tags": [
@@ -904,7 +904,7 @@
           {
             "id": "set_scene",
             "type": "set_scene",
-            "description": "Escena WiZ predefinida",
+            "description": "Preset scene",
             "params_schema": {},
             "execution_model": "instant",
             "supports_progress": false,
@@ -921,10 +921,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "wiz-cocina-02",
-      "device_name": "Kitchen — Light 2",
-      "manufacturer": "Philips WiZ",
-      "model": "WiZ WiFi Bulb",
+      "device_id": "light-zone1-02",
+      "device_name": "Zone 1 — Light 2",
+      "manufacturer": "generic",
+      "model": "generic",
       "firmware": "auto",
       "category": "actuator",
       "tags": [
@@ -1006,7 +1006,7 @@
           {
             "id": "set_scene",
             "type": "set_scene",
-            "description": "Escena WiZ predefinida",
+            "description": "Preset scene",
             "params_schema": {},
             "execution_model": "instant",
             "supports_progress": false,
@@ -1023,10 +1023,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "rpi-pir-01",
-      "device_name": "PIR — Motion sensor",
+      "device_id": "sensor-motion-01",
+      "device_name": "Motion sensor",
       "manufacturer": "DoSync GPIO",
-      "model": "HC-SR501",
+      "model": "generic",
       "firmware": "1.0.0",
       "category": "sensor",
       "tags": [
@@ -1055,10 +1055,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "rpi-dht22-01",
-      "device_name": "DHT22 — Temperature and humidity",
+      "device_id": "sensor-climate-01",
+      "device_name": "Temperature and humidity",
       "manufacturer": "DoSync GPIO",
-      "model": "DHT22",
+      "model": "generic",
       "firmware": "1.0.0",
       "category": "sensor",
       "tags": [
@@ -1095,10 +1095,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-light-tv_philips_ambilight",
-      "device_name": "TV Philips Ambilight",
+      "device_id": "bridged-light-01",
+      "device_name": "Bridged light",
       "manufacturer": "Home Assistant",
-      "model": "HA light",
+      "model": "generic",
       "firmware": "auto",
       "category": "hybrid",
       "tags": [
@@ -1194,10 +1194,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-media_player-tv_philips",
-      "device_name": "TV Philips",
+      "device_id": "bridged-mediaplayer-01",
+      "device_name": "Bridged media player 1",
       "manufacturer": "Home Assistant",
-      "model": "HA media_player",
+      "model": "generic",
       "firmware": "auto",
       "category": "hybrid",
       "tags": [
@@ -1256,10 +1256,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-switch-tv_philips_screen_state",
-      "device_name": "TV Philips Screen state",
+      "device_id": "bridged-switch-01",
+      "device_name": "Bridged switch",
       "manufacturer": "Home Assistant",
-      "model": "HA switch",
+      "model": "generic",
       "firmware": "auto",
       "category": "actuator",
       "tags": [
@@ -1307,10 +1307,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-sensor-sun_next_dawn",
-      "device_name": "Sun Next dawn",
+      "device_id": "bridged-sensor-solar-01",
+      "device_name": "Solar schedule sensor 01",
       "manufacturer": "Home Assistant",
-      "model": "HA sensor",
+      "model": "generic",
       "firmware": "auto",
       "category": "sensor",
       "tags": [
@@ -1337,10 +1337,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-sensor-sun_next_dusk",
-      "device_name": "Sun Next dusk",
+      "device_id": "bridged-sensor-solar-02",
+      "device_name": "Solar schedule sensor 02",
       "manufacturer": "Home Assistant",
-      "model": "HA sensor",
+      "model": "generic",
       "firmware": "auto",
       "category": "sensor",
       "tags": [
@@ -1367,10 +1367,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-sensor-sun_next_midnight",
-      "device_name": "Sun Next midnight",
+      "device_id": "bridged-sensor-solar-03",
+      "device_name": "Solar schedule sensor 03",
       "manufacturer": "Home Assistant",
-      "model": "HA sensor",
+      "model": "generic",
       "firmware": "auto",
       "category": "sensor",
       "tags": [
@@ -1397,10 +1397,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-sensor-sun_next_noon",
-      "device_name": "Sun Next noon",
+      "device_id": "bridged-sensor-solar-04",
+      "device_name": "Solar schedule sensor 04",
       "manufacturer": "Home Assistant",
-      "model": "HA sensor",
+      "model": "generic",
       "firmware": "auto",
       "category": "sensor",
       "tags": [
@@ -1427,10 +1427,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-sensor-sun_next_rising",
-      "device_name": "Sun Next rising",
+      "device_id": "bridged-sensor-solar-05",
+      "device_name": "Solar schedule sensor 05",
       "manufacturer": "Home Assistant",
-      "model": "HA sensor",
+      "model": "generic",
       "firmware": "auto",
       "category": "sensor",
       "tags": [
@@ -1457,10 +1457,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-sensor-sun_next_setting",
-      "device_name": "Sun Next setting",
+      "device_id": "bridged-sensor-solar-06",
+      "device_name": "Solar schedule sensor 06",
       "manufacturer": "Home Assistant",
-      "model": "HA sensor",
+      "model": "generic",
       "firmware": "auto",
       "category": "sensor",
       "tags": [
@@ -1487,10 +1487,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-sensor-backup_backup_manager_state",
-      "device_name": "Backup Backup Manager state",
+      "device_id": "bridged-sensor-housekeeping-01",
+      "device_name": "Housekeeping sensor 01",
       "manufacturer": "Home Assistant",
-      "model": "HA sensor",
+      "model": "generic",
       "firmware": "auto",
       "category": "sensor",
       "tags": [
@@ -1517,10 +1517,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-sensor-backup_next_scheduled_automatic_backup",
-      "device_name": "Backup Next scheduled automatic backup",
+      "device_id": "bridged-sensor-housekeeping-04",
+      "device_name": "Housekeeping sensor 04",
       "manufacturer": "Home Assistant",
-      "model": "HA sensor",
+      "model": "generic",
       "firmware": "auto",
       "category": "sensor",
       "tags": [
@@ -1547,10 +1547,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-sensor-backup_last_successful_automatic_backup",
-      "device_name": "Backup Last successful automatic backup",
+      "device_id": "bridged-sensor-housekeeping-03",
+      "device_name": "Housekeeping sensor 03",
       "manufacturer": "Home Assistant",
-      "model": "HA sensor",
+      "model": "generic",
       "firmware": "auto",
       "category": "sensor",
       "tags": [
@@ -1577,10 +1577,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-sensor-backup_last_attempted_automatic_backup",
-      "device_name": "Backup Last attempted automatic backup",
+      "device_id": "bridged-sensor-housekeeping-02",
+      "device_name": "Housekeeping sensor 02",
       "manufacturer": "Home Assistant",
-      "model": "HA sensor",
+      "model": "generic",
       "firmware": "auto",
       "category": "sensor",
       "tags": [
@@ -1607,10 +1607,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-binary_sensor-tv_philips_recording_ongoing",
-      "device_name": "TV Philips Recording ongoing",
+      "device_id": "bridged-binarysensor-01",
+      "device_name": "Bridged binary sensor 1",
       "manufacturer": "Home Assistant",
-      "model": "HA binary_sensor",
+      "model": "generic",
       "firmware": "auto",
       "category": "sensor",
       "tags": [
@@ -1637,10 +1637,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-binary_sensor-tv_philips_new_recording_available",
-      "device_name": "TV Philips New recording available",
+      "device_id": "bridged-binarysensor-02",
+      "device_name": "Bridged binary sensor 2",
       "manufacturer": "Home Assistant",
-      "model": "HA binary_sensor",
+      "model": "generic",
       "firmware": "auto",
       "category": "sensor",
       "tags": [
@@ -1667,10 +1667,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "ha-media_player-75_qled_qn75q7faagcfv",
-      "device_name": "75&quot; QLED (QN75Q7FAAGCFV)",
+      "device_id": "bridged-mediaplayer-02",
+      "device_name": "Bridged media player 2",
       "manufacturer": "Home Assistant",
-      "model": "HA media_player",
+      "model": "generic",
       "firmware": "auto",
       "category": "hybrid",
       "tags": [
@@ -1729,10 +1729,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "alarm-test-01",
-      "device_name": "Main alarm (test)",
+      "device_id": "alarm-01",
+      "device_name": "Main alarm",
       "manufacturer": "DoSync",
-      "model": "simulated-alarm",
+      "model": "generic",
       "firmware": "auto",
       "category": "actuator",
       "tags": [
@@ -1763,10 +1763,10 @@
     },
     {
       "dosync_version": "0.1",
-      "device_id": "notifier-sms-01",
-      "device_name": "SMS — Notifications",
+      "device_id": "notifier-01",
+      "device_name": "SMS notifier",
       "manufacturer": "Twilio",
-      "model": "SMS Notifier",
+      "model": "generic",
       "firmware": "1.0.0",
       "category": "actuator",
       "tags": [
@@ -1795,5 +1795,5 @@
       "cert_tier": "basic"
     }
   ],
-  "_provenance": "Anonymized snapshot of the reference deployment's registry (30 devices, July 2026, pre HA-housekeeping cleanup — it deliberately includes the sun/backup entities the paper's Table 3 was measured against). Device IDs unchanged (already public in prod_ground_truth_operator.json); names and descriptions genericized to English; the export carries no adapter_config or addresses by design (manifest privacy, G11). Tags and capabilities byte-identical to the original: they are what the benchmark measures."
+  "_provenance": "Anonymized snapshot of a real 30-device deployment (July 2026). Device IDs, names, manufacturers and models are genericized: a protocol fixture must not carry one operator's room names, brands or hardware. What IS preserved is what makes this fixture worth having and no synthetic corpus reproduces — the structure of an installation nobody designed to look good: inconsistent tags, bridged entities nobody curated, housekeeping sensors left registered. Tags and capabilities are byte-identical to the original; only identifiers changed, verified by running the benchmark against both and comparing every metric."
 }
