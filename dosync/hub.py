@@ -444,16 +444,42 @@ class CapabilityMatchingResolver(BaseResolver):
         target_tags = set(resolution.get("tags", []))
         if not target_tags:
             return list(self.registry.active())
+<<<<<<< ours
         candidates = list(self.registry.find_by_tags(list(target_tags)))
+=======
+
+        # Quarantined devices are excluded here, once, for every caller.
+        # active() filters them; find_by_tags() and find_emergency_capable() —
+        # the two index lookups resolution actually went through — did not. So a
+        # device the operator believes is gone was planned into intents,
+        # including emergencies, which is precisely what active()'s contract
+        # forbids ("must not be planned into an emergency, because the operator
+        # already believes it is gone"). Found on the reference deployment: a
+        # quarantined, emergency_capable light appeared in ensure_safety, and it
+        # only became visible because explain() and resolve() started reporting
+        # the same set and the totals stopped matching.
+        candidates = [d for d in self.registry.find_by_tags(list(target_tags))
+                      if not is_quarantined(d)]
+>>>>>>> theirs
 
         # Emergency intents also evaluate every emergency_capable device, tags or
         # not (F2b): a safety device must never be dropped by a tag filter. This
         # extension lived only in resolve(), which is part of why the two sets
+<<<<<<< ours
         # drifted — it belongs to the definition of "candidate", not to one caller.
         if intent.urgency == Urgency.EMERGENCY:
             seen = {d.device_id for d in candidates}
             for device in self.registry.find_emergency_capable():
                 if device.device_id not in seen:
+=======
+        # drifted — it belongs to the definition of "candidate", not to one
+        # caller. Quarantine still wins over it: force-inclusion exists to beat
+        # the TAG filter, not to resurrect a device the operator withdrew.
+        if intent.urgency == Urgency.EMERGENCY:
+            seen = {d.device_id for d in candidates}
+            for device in self.registry.find_emergency_capable():
+                if device.device_id not in seen and not is_quarantined(device):
+>>>>>>> theirs
                     candidates.append(device)
         return candidates
 
@@ -851,12 +877,19 @@ class CapabilityMatchingResolver(BaseResolver):
 
         scored.sort(key=lambda x: x[0], reverse=True)
 
-        # Emergency: always include ALL emergency-capable devices
+        # Emergency: every emergency-capable CANDIDATE is force-scored.
+        #
+        # This iterated find_emergency_capable() directly, a third answer to
+        # "who participates?" beside _candidates() and active() — so filtering
+        # quarantine in _candidates() alone still let a withdrawn device be
+        # planned into an emergency here. Reading from the candidate set instead
+        # keeps the rule in one place: force-inclusion overrides the TAG filter,
+        # never quarantine.
         forced_ids: set = set()
         if intent.urgency == Urgency.EMERGENCY:
             scored_ids = {d.device_id for _, d in scored}
-            for device in self.registry.find_emergency_capable():
-                if device.device_id not in scored_ids:
+            for device in candidates:
+                if device.emergency_capable and device.device_id not in scored_ids:
                     scored.append((50.0, device))
                     forced_ids.add(device.device_id)
 

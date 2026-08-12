@@ -183,7 +183,13 @@ def test_shipped_example_file_actually_loads():
     assert "require_confirmation" in names
 
 
-def test_configured_path_reads_env(monkeypatch):
+def test_configured_path_reads_env(monkeypatch, tmp_path):
+    # config_dirs() cascades to /etc/dosync, so "no policies configured" is only
+    # true on a machine that is not configured. Asserting it without isolating
+    # the cascade made this test pass on a development laptop and fail on the
+    # reference deployment, where /etc/dosync/policies.json legitimately exists.
+    from dosync import paths
+    monkeypatch.setattr(paths, "config_dirs", lambda: [tmp_path / "dosync"])
     monkeypatch.delenv("DOSYNC_POLICIES", raising=False)
     assert configured_path() is None      # no policies is a legitimate state
     monkeypatch.setenv("DOSYNC_POLICIES", "/etc/dosync/policies.json")

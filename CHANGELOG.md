@@ -34,6 +34,33 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   select devices by declared actuator, which measured zero change because the
   hard filter was never the gate — the candidate index was.
 
+<<<<<<< ours
+=======
+- **A withdrawn device is no longer planned into an emergency.** `active()`
+  filters quarantined devices and its docstring states why — "it must not be
+  planned into an emergency, because the operator already believes it is gone".
+  `find_by_tags()` and `find_emergency_capable()` are raw indexes and filtered
+  nothing, so `resolve()` planned them regardless: the contract was documented
+  in one method and broken in two.
+
+  Found on the reference deployment by counting, once explain and resolve shared
+  a candidate set: 21 devices reported for `ensure_safety`, 20 for every other
+  intent. The extra one was `luz-declarativa`, quarantined after its declarative
+  file was removed and entering every emergency since — through the emergency
+  force-inclusion, carrying no emergency tag, so no tag audit would have shown
+  it. Force-inclusion exists to beat the tag filter, not the operator.
+
+- **Importing a module no longer mutates the environment.** The notifications
+  adapter read a `.env` at import time and applied it with
+  `os.environ.setdefault`, silently, inside a bare `except Exception: pass`.
+  Two tests failed on the reference deployment and passed everywhere else: they
+  deleted `DOSYNC_POLICIES` with monkeypatch, an import ran, and `setdefault`
+  put it straight back — a test cannot isolate an environment that an import
+  un-isolates. Loading is now an explicit `load_env_file()` call the hub makes
+  once at startup, reporting how many settings it applied, and Twilio settings
+  are read when used rather than frozen at first import.
+
+>>>>>>> theirs
 ### Changed
 - **Excluded devices now say what would include them.** A device whose actuators
   fit an intent but whose tags do not is reported as excluded with the tag that

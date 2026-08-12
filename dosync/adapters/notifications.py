@@ -24,22 +24,54 @@ from . import DoSyncAdapter
 
 log = logging.getLogger("dosync.notifications")
 
-# Cargar .env si existe
-try:
-    from pathlib import Path
-    env_file = Path(__file__).parent.parent.parent / ".env"
-    if env_file.exists():
-        for line in env_file.read_text().splitlines():
-            if "=" in line and not line.startswith("#"):
-                key, val = line.split("=", 1)
-                os.environ.setdefault(key.strip(), val.strip())
-except Exception:
-    pass
+def load_env_file(path=None) -> int:
+    """Populate the environment from a .env file. Returns how many keys it set.
 
-TWILIO_SID     = os.environ.get("TWILIO_ACCOUNT_SID", "")
-TWILIO_TOKEN   = os.environ.get("TWILIO_AUTH_TOKEN", "")
-TWILIO_FROM    = os.environ.get("TWILIO_FROM", "")
-EMERGENCY_TO   = os.environ.get("DOSYNC_EMERGENCY_CONTACT", "")
+    This used to run at IMPORT time, which made importing a module mutate global
+    process state from a file on disk — and did it silently, inside a bare
+    `except Exception: pass`.
+
+    It broke two tests on the reference deployment and nowhere else: they
+    deleted DOSYNC_POLICIES with monkeypatch, then something imported this
+    module, and `setdefault` put the variable straight back. A test that
+    isolates its environment cannot defend against an import that un-isolates
+    it. Green on the development laptop, red on the deployment — and the
+    deployment is the machine whose behaviour we are asserting.
+
+    Explicit call, so the mutation happens where a reader can see it: the hub
+    does it once at startup, tests do not do it at all.
+    """
+    from pathlib import Path
+    env_file = Path(path) if path else Path(__file__).parent.parent.parent / ".env"
+    if not env_file.exists():
+        return 0
+    applied = 0
+    try:
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, val = line.split("=", 1)
+            key, val = key.strip(), val.strip()
+            if key not in os.environ:
+                os.environ[key] = val
+                applied += 1
+    except OSError as exc:
+        # Narrow, and audible: an unreadable .env is worth a line in the log.
+        log.warning("could not read %s: %s", env_file, exc)
+    return applied
+
+
+def _twilio_config() -> tuple[str, str, str, str]:
+    """Read Twilio settings at CALL time, not at import time.
+
+    Module-level constants froze whatever the environment held at first import,
+    so a hub that loaded its .env afterwards kept the empty strings forever.
+    """
+    return (os.environ.get("TWILIO_ACCOUNT_SID", ""),
+            os.environ.get("TWILIO_AUTH_TOKEN", ""),
+            os.environ.get("TWILIO_FROM", ""),
+            os.environ.get("DOSYNC_EMERGENCY_CONTACT", ""))
 
 # Intents que disparan notificaciones
 EMERGENCY_INTENTS = {"ensure_safety", "alert_anomaly", "notify"}
@@ -62,16 +94,19 @@ class NotificationAdapter(DoSyncAdapter):
     """Sends SMS via Twilio for critical DoSync intents."""
 
     def __init__(self):
-        self._available = bool(TWILIO_SID and TWILIO_TOKEN and TWILIO_FROM)
+        sid, token, from_number, emergency_to = _twilio_config()
+        self._sid, self._token = sid, token
+        self._from, self._emergency_to = from_number, emergency_to
+        self._available = bool(sid and token and from_number)
         if not self._available:
             log.warning("Twilio not configured — SMS notifications disabled")
         else:
-            log.info("NotificationAdapter ready — SMS to %s", EMERGENCY_TO or "?")
+            log.info("NotificationAdapter ready — SMS to %s", self._emergency_to or "?")
 
     def _get_client(self):
         try:
             from twilio.rest import Client
-            return Client(TWILIO_SID, TWILIO_TOKEN)
+            return Client(self._sid, self._token)
         except ImportError:
             log.error("twilio not installed — run: pip install twilio")
             return None
@@ -133,7 +168,7 @@ class NotificationAdapter(DoSyncAdapter):
             log.warning("SMS not sent — Twilio not configured")
             return False
 
-        destination = to or EMERGENCY_TO
+        destination = to or self._emergency_to
         if not destination:
             log.warning("SMS not sent — no destination number configured")
             return False
@@ -151,7 +186,7 @@ class NotificationAdapter(DoSyncAdapter):
         try:
             msg = client.messages.create(
                 body=message,
-                from_=TWILIO_FROM,
+                from_=self._from,
                 to=destination,
             )
             log.info("SMS sent to %s — SID: %s", destination, msg.sid)

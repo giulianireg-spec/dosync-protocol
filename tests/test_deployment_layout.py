@@ -160,10 +160,22 @@ def test_configuration_is_found_in_the_config_directory(clean_env):
         cfg / "policies.json"
 
 
-def test_absent_configuration_is_none_not_a_missing_path(clean_env):
+def test_absent_configuration_is_none_not_a_missing_path(clean_env, monkeypatch):
     """A hub with no deployment policies is conforming — absence is a normal
     state and callers should not have to tell it from a path that happens not to
-    exist."""
+    exist.
+
+    The system leg of the cascade is isolated here, and only here: this is the
+    one test whose premise is that NOTHING is configured, and /etc/dosync is
+    part of "everything". Left live, it asserted a property of the host rather
+    than of the code — green on a development laptop, red on the reference
+    deployment, whose only sin was having /etc/dosync/policies.json. The
+    cascade's real system path stays asserted, unmocked, in
+    test_config_cascades_from_user_to_system.
+    """
+    tmp, _ = clean_env
+    monkeypatch.setattr(paths, "config_dirs",
+                        lambda: [tmp / "cfg" / "dosync", tmp / "etc" / "dosync"])
     assert paths.resolve_config("policies.json", "DOSYNC_POLICIES") is None
 
 

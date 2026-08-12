@@ -146,3 +146,90 @@ def test_counts_are_consistent_with_the_lists(resolver):
     assert ex["devices_included"] == len(ex["included"])
     assert ex["devices_excluded"] == len(ex["excluded"])
     assert ex["devices_evaluated"] == len(ex["included"]) + len(ex["excluded"])
+<<<<<<< ours
+=======
+
+
+# ── Quarantine ───────────────────────────────────────────────────────────────
+
+def test_quarantined_device_is_never_a_candidate():
+    """A withdrawn device must not be planned into anything, emergencies least of all.
+
+    `active()` filters quarantined devices and its docstring is explicit that
+    such a device "must not be planned into an emergency, because the operator
+    already believes it is gone". But resolution went through `find_by_tags()`
+    and `find_emergency_capable()`, neither of which filtered — so the contract
+    held only for callers that happened to use `active()`.
+
+    Found on the reference deployment, not here: a quarantined emergency_capable
+    light was being planned into ensure_safety. No fixture in any of the four
+    corpora contains a quarantined device, which is why the benchmark could not
+    have caught it — it surfaced because explain() and resolve() began reporting
+    the same set and the device counts stopped matching between intents.
+    """
+    from dosync.hub import QUARANTINE_KEY
+
+    registry = CapabilityRegistry()
+    live = _device("siren-live", ["emergency", "alarm"], ["alarm"], emergency=True)
+    gone = _device("siren-withdrawn", ["emergency", "alarm"], ["alarm"], emergency=True)
+    gone.adapter_config = {QUARANTINE_KEY: "declarative file deleted"}
+    registry.register(live)
+    registry.register(gone)
+    resolver = CapabilityMatchingResolver(registry)
+    resolver._get_resolution = lambda intent: dict(RESOLUTION)
+
+    for urgency in (Urgency.ALERT, Urgency.EMERGENCY):
+        intent = Intent(intent=IntentClass("ensure_safety"), urgency=urgency, context={})
+        candidates = {d.device_id for d in resolver._candidates(intent, RESOLUTION)}
+        assert "siren-live" in candidates
+        assert "siren-withdrawn" not in candidates, (
+            f"a quarantined device is a candidate under {urgency.value} — "
+            "emergency force-inclusion must beat the tag filter, not quarantine")
+        planned = {a.device_id for a in resolver.resolve(intent).actions}
+        assert "siren-withdrawn" not in planned, \
+            "a device the operator withdrew was planned into an intent"
+
+
+# ── Found on the reference deployment, 2026-08-12 ────────────────────────────
+
+def test_quarantined_device_is_not_a_candidate_even_in_an_emergency():
+    """A device the operator withdrew must not be planned into an emergency.
+
+    `active()` says so in its own docstring; `find_by_tags()` and
+    `find_emergency_capable()` are raw indexes that filtered nothing, so
+    resolve() planned quarantined devices anyway — the contract was documented
+    in one method and broken in two.
+
+    Found by counting: the deployment's explain reported 21 devices for
+    ensure_safety and 20 for every other intent. The extra one was
+    `luz-declarativa`, quarantined after its declarative file was removed and
+    still entering every emergency — through force-inclusion, carrying no
+    emergency tag, so no tag audit would ever have shown it.
+    """
+    from dosync.hub import QUARANTINE_KEY, is_quarantined
+
+    registry = CapabilityRegistry()
+    live = _device("siren-live", ["emergency", "alarm"], ["alarm"], emergency=True)
+    withdrawn = _device("siren-withdrawn", ["emergency", "alarm"], ["alarm"],
+                        emergency=True)
+    withdrawn.adapter_config = {QUARANTINE_KEY: True,
+                                "quarantine_reason": "declarative file removed"}
+    registry.register(live)
+    registry.register(withdrawn)
+    assert is_quarantined(withdrawn), "fixture does not actually quarantine"
+
+    r = CapabilityMatchingResolver(registry)
+    resolution = {"tags": ["emergency", "alarm"], "actuators": ["alarm"]}
+    r._get_resolution = lambda intent: dict(resolution)
+
+    for urgency in (Urgency.ALERT, Urgency.EMERGENCY):
+        intent = Intent(intent=IntentClass("ensure_safety"),
+                        urgency=urgency, context={})
+        ids = {d.device_id for d in r._candidates(intent, resolution)}
+        assert "siren-live" in ids
+        assert "siren-withdrawn" not in ids, (
+            f"a quarantined device is a candidate at urgency={urgency.value} — "
+            "force-inclusion beats the tag filter, not the operator's withdrawal")
+        acted = {a.device_id for a in r.resolve(intent).actions}
+        assert "siren-withdrawn" not in acted
+>>>>>>> theirs

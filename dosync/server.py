@@ -290,7 +290,13 @@ except Exception:
 
 # ── Notification adapter ──────────────────────────────────────────────────────
 try:
-    from dosync.adapters.notifications import NotificationAdapter
+    from dosync.adapters.notifications import NotificationAdapter, load_env_file
+    # Explicit, once, at startup — importing a module must not mutate the
+    # environment (that silently defeated test isolation on the deployment).
+    applied = load_env_file()
+    if applied:
+        logging.getLogger("dosync.server").info(
+            "loaded %d setting(s) from .env", applied)
     notifier = NotificationAdapter()
     executor.register(notifier)
     logging.getLogger("dosync.server").info("NotificationAdapter registered")
