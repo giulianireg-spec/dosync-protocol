@@ -151,3 +151,52 @@ def test_resolver_spec_example_uses_vocabulary_tags():
         for tag in re.findall(r'"([^"]+)"', block):
             assert tag in vocabulary, (
                 f"RESOLVER-SPEC example uses `{tag}`, absent from TAG-VOCABULARY.md")
+
+
+def test_location_tags_are_an_open_namespace():
+    """The protocol does not know or care where a device is.
+
+    Location is a fact about one installation, not shared vocabulary: a
+    deployment names its own places and the resolver compares strings. The spec
+    used to list ten locations, all residential, in a normative document that an
+    industrial or clinical implementer reads — which taught that the protocol
+    was a house even though the code never restricted anything.
+
+    Asserted with a location no list would ever contain, on purpose: if this
+    passes, no enumeration crept in.
+    """
+    from dosync.hub import CapabilityMatchingResolver, CapabilityRegistry
+    from dosync.models import (ActuatorSpec, CapabilityManifest, DeviceCategory,
+                               Intent, IntentClass, Urgency)
+
+    registry = CapabilityRegistry()
+    registry.register(CapabilityManifest(
+        device_id="alarm-deathstar-01", device_name="alarm", manufacturer="t",
+        model="t", firmware="1", category=DeviceCategory.ACTUATOR,
+        tags=["alarm", "emergency", "death-star"], emergency_capable=False,
+        sensors=[], actuators=[ActuatorSpec(id="alarm", type="alarm", description="a")]))
+    registry.register(CapabilityManifest(
+        device_id="alarm-elsewhere-01", device_name="alarm", manufacturer="t",
+        model="t", firmware="1", category=DeviceCategory.ACTUATOR,
+        tags=["alarm", "emergency", "sector-7g"], emergency_capable=False,
+        sensors=[], actuators=[ActuatorSpec(id="alarm", type="alarm", description="a")]))
+
+    resolver = CapabilityMatchingResolver(registry)
+    resolution = {"tags": ["emergency", "alarm"], "actuators": ["alarm"]}
+    resolver._get_resolution = lambda intent: dict(resolution)
+    intent = Intent(intent=IntentClass("ensure_safety"), urgency=Urgency.ALERT,
+                    context={"location": "death-star"})
+
+    scored = {d["device_id"]: d["score"]
+              for d in resolver.explain(intent).get("included", [])}
+    assert "alarm-deathstar-01" in scored, \
+        "a device was rejected for declaring a location outside the spec's examples"
+    assert scored["alarm-deathstar-01"] > scored["alarm-elsewhere-01"], \
+        "the location bonus did not apply to an operator-defined location"
+
+
+def test_the_spec_says_location_is_open():
+    """The property above must be discoverable by reading, not only by testing."""
+    text = (SPEC.parent / "TAG-VOCABULARY.md").read_text(encoding="utf-8")
+    assert "open namespace" in text and "MUST NOT reject a location tag" in text, \
+        "TAG-VOCABULARY no longer states that locations are deployment-defined"

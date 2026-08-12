@@ -83,6 +83,20 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   are read when used rather than frozen at first import.
 
 ### Changed
+- **Location tags are stated as an open namespace.** The spec listed ten
+  locations — `bedroom`, `kitchen`, `garage`, `basement` — in a normative
+  document that an industrial or clinical implementer reads, and defined
+  `appliance` as a *home* appliance. The code never restricted anything:
+  `location_hit` is string equality against `context.location`, which is why the
+  clinical and industrial corpora work today with `or-3` and `cell-2`. But the
+  document taught that the protocol was a house.
+
+  §5 now says what the mechanism already did: the deployment defines its
+  locations, a conforming hub MUST NOT reject one for being absent from any
+  list, and the residential names are examples alongside industrial and clinical
+  ones. Pinned by a test that resolves an intent against a device tagged
+  `death-star` — if an enumeration ever creeps in, it fails.
+
 - **Excluded devices now say what would include them.** A device whose actuators
   fit an intent but whose tags do not is reported as excluded with the tag that
   would change that, plus a new `actuators_fit_resolution` field, instead of

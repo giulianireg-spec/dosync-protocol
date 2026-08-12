@@ -34,7 +34,7 @@ This document defines the standard vocabulary. Implementors **SHOULD** use these
 | `camera` | Image or video capture device | IP camera, video doorbell |
 | `display` | Screen for information output | Smart TV, information display, e-ink panel |
 | `speaker` | Audio output device | Smart speaker, soundbar |
-| `appliance` | Generic home appliance with on/off control | Washing machine, dishwasher, coffee maker |
+| `appliance` | Generic on/off appliance with no more specific role | Washing machine, industrial dryer, coffee maker |
 
 ---
 
@@ -79,23 +79,42 @@ These tags determine which intent classes include the device. They should be com
 
 ### 5. Location — where the device is installed
 
-Location tags enable the resolver's location-match scoring bonus. A device and an intent context that share a location tag score higher than one without a match.
+**Location tags are an open namespace. The deployment defines them; the protocol
+does not.** Unlike the categories above — which are a shared vocabulary precisely
+so that an intent written for one deployment means the same thing in another — a
+location is a fact about one installation. The protocol has no opinion about
+where your devices are, and no list it would accept or reject.
 
-| Tag | Description |
+The mechanism is deliberately trivial: a device declares location tags, an intent
+carries `context.location`, and the resolver awards its location bonus when the
+two strings are equal. There is no enumeration, no normalisation, and no
+validation. `ward-2`, `cell-3`, `deck-b`, `sector-7g` and `death-star` all work
+exactly as well as `kitchen`, because the resolver is comparing strings, not
+interpreting places. A conforming hub MUST NOT reject a location tag for not
+appearing in any list, including this one.
+
+Two consequences worth stating:
+
+- **A location tag is only useful if the same string appears on both sides.**
+  Whoever tags the devices and whoever writes the intents must agree. That
+  agreement is a deployment convention, not a protocol rule.
+- **Consistency inside a deployment matters more than which words it picks.**
+  `floor-2` and `Floor 2` are different tags. Pick one form and keep it.
+
+Examples from three real registries, to show the range rather than prescribe it:
+
+| Deployment | Location tags in use |
 |---|---|
-| `entrance` | Main entrance, front door area, or access point |
-| `bedroom` | Bedroom (any) |
-| `living-room` | Living room or main common area |
-| `kitchen` | Kitchen |
-| `bathroom` | Bathroom |
-| `hallway` | Corridor or hallway |
-| `office` | Home office or study |
-| `garage` | Garage |
-| `outdoor` | Outdoor area (garden, terrace, porch) |
-| `dining-room` | Dining room |
-| `basement` | Basement or utility room |
+| Residential | `entrance`, `bedroom`, `living-room`, `kitchen`, `bathroom`, `hallway`, `office`, `garage`, `outdoor`, `dining-room`, `basement` |
+| Industrial | `floor-2`, `line-2`, `cell-2`, `plant` |
+| Clinical | `or-3`, `ward-2`, `corridor-b` |
 
-> **Deployment note:** Location tags are optional but strongly recommended. A hub without location tags cannot use the resolver's location-match scoring — all devices of the same type score equally regardless of where they are installed.
+The residential row is the longest only because the reference deployment is
+residential — it carries no more weight than the others.
+
+> **Deployment note:** Location tags are optional but strongly recommended. A hub
+> without location tags cannot use the resolver's location-match scoring — all
+> devices of the same type score equally regardless of where they are installed.
 
 ---
 

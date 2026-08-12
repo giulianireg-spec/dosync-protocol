@@ -22,6 +22,7 @@ Exceptions belong in ALLOWED below, each with a reason. The point is not that
 there are no exceptions — it is that they are visible and argued.
 """
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -69,7 +70,27 @@ ALLOWED: dict[str, str] = {
 
 
 def _files():
-    for path in REPO.rglob("*"):
+    """Only files git tracks — the repository, not the working directory.
+
+    The first version walked the filesystem, and failed on the reference
+    deployment over nine signed certification reports sitting in the working
+    directory. Those are gitignored operator artefacts: they were never going to
+    be published, and flagging them made the suite red on the one machine that
+    actually runs the protocol — the inverted form of the very defect this file
+    exists to prevent, and it would have blocked the pre-push hook over nothing.
+
+    What belongs in the repository is what git tracks. Local artefacts are the
+    operator's business; .gitignore is what keeps them out.
+    """
+    try:
+        out = subprocess.run(["git", "ls-files", "-z"], cwd=REPO,
+                             capture_output=True, text=True, timeout=60, check=True)
+    except (OSError, subprocess.SubprocessError):
+        pytest.skip("git is unavailable; cannot determine what the repository tracks")
+    for name in out.stdout.split("\0"):
+        if not name:
+            continue
+        path = REPO / name
         if path.suffix.lower() not in SCAN_SUFFIXES or not path.is_file():
             continue
         if any(part in SKIP_DIRS for part in path.parts):
@@ -145,7 +166,8 @@ def test_published_fixtures_carry_no_vendor_hardware():
     """A fixture describes a topology, not the brands someone happens to own."""
     brands = ["philips", "qled", "samsung", "signify", "sonoff", "shelly"]
     hits = []
-    for path in (REPO / "benchmarks").rglob("*.json"):
+    for path in (p for p in _files()
+                 if p.suffix == ".json" and "benchmarks" in p.parts):
         text = _read(path).lower()
         for brand in brands:
             # `"adapter": "wiz"` names a DoSync adapter, not the operator's brand.
