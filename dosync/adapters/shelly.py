@@ -67,7 +67,7 @@ def shelly_manifest(
         device_type:      tipo: "relay" | "dimmer" | "plug" | "rgbw"
         gen:              generación de la API: 1 o 2
         tags:             tags adicionales
-        room:             habitación (se agrega como tag)
+        room:             location (added as a tag)
         emergency_capable: si puede actuar en emergencias
     """
     from ..models import (
@@ -310,7 +310,7 @@ class ShellyAdapter(DoSyncAdapter):
 
     async def _execute_http(self, ip: str, gen: int,
                             device_type: str, action: DeviceAction) -> dict:
-        """Ejecuta la acción via HTTP según la generación del dispositivo."""
+        """Execute the action over HTTP, per the device generation."""
         import asyncio
 
         def _sync_call():

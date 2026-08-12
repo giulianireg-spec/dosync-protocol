@@ -33,6 +33,7 @@ Uso:
 """
 
 from __future__ import annotations
+import os
 import logging
 from typing import Optional, TYPE_CHECKING
 
@@ -473,11 +474,16 @@ class HABridge(DoSyncAdapter):
         """Infer location and type tags from the device name."""
         tags  = []
         name  = (friendly_name + " " + entity_id).lower()
-        rooms = [
-            "living", "sala", "bedroom", "dormitorio", "kitchen", "cocina",
-            "bathroom", "baño", "garage", "garden", "outdoor", "exterior",
-            "office", "oficina", "hallway", "entrance", "entrada",
-        ]
+        # Location tags from spec/TAG-VOCABULARY.md, plus the operator's own
+        # vocabulary via DOSYNC_HA_LOCATION_TAGS (comma-separated). The list used
+        # to be a bilingual hard-coded set of house rooms — one deployment's
+        # language baked into a product surface, and useless to a deployment
+        # whose locations are cells, wards or flight zones.
+        rooms = ["entrance", "bedroom", "living-room", "kitchen", "bathroom",
+                 "hallway", "office", "garage", "outdoor", "dining-room",
+                 "basement"]
+        extra = os.environ.get("DOSYNC_HA_LOCATION_TAGS", "")
+        rooms += [t.strip().lower() for t in extra.split(",") if t.strip()]
         for room in rooms:
             if room in name:
                 tags.append(room)
@@ -494,7 +500,7 @@ class HABridge(DoSyncAdapter):
                             "brightness": 200}},
             {"entity_id": "light.bedroom_lamp",
              "state": "off",
-             "attributes": {"friendly_name": "Dormitorio — Lámpara"}},
+             "attributes": {"friendly_name": "Zone 5 — Lamp"}},
             {"entity_id": "climate.main_thermostat",
              "state": "heat",
              "attributes": {"friendly_name": "Termostato principal",

@@ -149,8 +149,8 @@ def build_energy_devices() -> list[CapabilityManifest]:
         sensors=[
             SensorSpec("total_watts",   "float",   "Consumo total del hogar", unit="W"),
             SensorSpec("baseline_watts","float",   "Consumo base historico",  unit="W"),
-            SensorSpec("circuit_a",     "float",   "Circuito A (cocina)",     unit="W"),
-            SensorSpec("circuit_b",     "float",   "Circuito B (dormitorios)",unit="W"),
+            SensorSpec("circuit_a",     "float",   "Circuito A (zone1)",     unit="W"),
+            SensorSpec("circuit_b",     "float",   "Circuito B (zone5s)",unit="W"),
         ],
         events=[
             EventSpec("power_spike",   Urgency.WARNING, "Consumo supera 150% del baseline"),
@@ -267,7 +267,7 @@ async def scenario_power_spike(hub: DoSyncHub, executor: SimulatedExecutor):
     print("  ESCENARIO 3: Pico de consumo → alerta e investigacion")
     print("="*60)
 
-    # El medidor detecta consumo anormal en el circuito de cocina
+    # El medidor detecta consumo anormal en el circuito de zone1
     event = DeviceEvent(
         device_id="power-meter-main-01",
         event_id="power_spike",
@@ -276,7 +276,7 @@ async def scenario_power_spike(hub: DoSyncHub, executor: SimulatedExecutor):
             "total_watts":    2840.0,
             "baseline_watts": 380.0,
             "ratio":          7.47,
-            "circuit_a":      2450.0,   # cocina: posible horno + microondas + pava electrica
+            "circuit_a":      2450.0,   # zone1: posible horno + microondas + pava electrica
             "circuit_b":      390.0,
             "sustained_seconds": 45,
         },
@@ -290,10 +290,10 @@ async def scenario_power_spike(hub: DoSyncHub, executor: SimulatedExecutor):
         context={
             "trigger":   "power_spike",
             "message":   "Consumo electrico inusual detectado: 2840W "
-                         "(7.5x el baseline). Circuito de cocina: 2450W. "
+                         "(7.5x el baseline). Circuito de zone1: 2450W. "
                          "Verifica que no haya algo encendido innecesariamente.",
             "device_id": "power-meter-main-01",
-            "circuit":   "cocina",
+            "circuit":   "zone1",
         },
     )
     result = await hub.execute_intent(intent, executor)

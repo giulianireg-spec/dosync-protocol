@@ -116,7 +116,7 @@ class Discovery:
         wiz_devices = await discover_wiz(self.wiz_timeout)
         found_all.extend(wiz_devices)
 
-        # Futuros discoverers se agregan aquí:
+        # Future discoverers are added here:
         # shelly_devices = await discover_shelly()
         # found_all.extend(shelly_devices)
 
@@ -148,7 +148,7 @@ class Discovery:
             )
             self.hub.register_device(manifest)
 
-            # Si hay executor, asegurarse que el WiZAdapter esté registrado
+            # If an executor is present, make sure the WiZAdapter is registered
             if self.executor and "wiz" not in self.executor.registered_adapters():
                 from .adapters.wiz import WiZAdapter
                 self.executor.register(WiZAdapter(hub=self.hub))

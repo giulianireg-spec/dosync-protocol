@@ -82,3 +82,9 @@ settings exist for deployments whose needs differ from that, not as a checklist.
 | `DOSYNC_EMERGENCY_CONTACT` | _unset_ |
 | `DOSYNC_RESOLVER_URL` | _unset_ |
 | `DOSYNC_RESOLVER_CA_CERT` | _unset_ |
+
+## Other
+
+| Setting | Default |
+|---|---|
+| `DOSYNC_HA_LOCATION_TAGS` | _unset_ |

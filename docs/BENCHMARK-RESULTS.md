@@ -1,6 +1,6 @@
 # DoSync Resolver — Benchmark Results
 
-**Registry:** 38 real devices from production hub (Raspberry Pi 5 @ 192.168.100.109)  
+**Registry:** 38 real devices from production hub (Raspberry Pi 5 @ <hub-address>)  
 **Date:** May 2026 · **Iterations:** 500 per resolver · **Seed:** 42 (reproducible)
 
 ---
@@ -115,7 +115,7 @@ The resolver adds less than 1% overhead to total execution time in any real depl
 python3 benchmarks/benchmark_resolver.py
 
 # Against a live hub
-python3 benchmarks/benchmark_resolver.py --hub https://192.168.100.109:47200 --token <token>
+python3 benchmarks/benchmark_resolver.py --hub https://<hub-address>:47200 --token <token>
 ```
 
 Source: [`benchmarks/benchmark_resolver.py`](../benchmarks/benchmark_resolver.py)  

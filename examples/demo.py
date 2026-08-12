@@ -1,7 +1,7 @@
 """
 DoSync — Ejemplo de uso completo
 
-Escenario 1: Detección de caída de la abuela → emergencia
+Escenario 1: Detección de caída de la a monitored person → emergencia
 Escenario 2: Avería de heladera → notificación familiar
 """
 

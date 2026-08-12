@@ -121,7 +121,7 @@ intent = Intent(
 )
 
 # The resolver builds an action plan:
-# → turn_off: wiz-living-01..10
+# → turn_off: light-zone-01..10
 # → turn_off: wiz-hallway-01       ← this one is excluded by policy
 # → set_temperature: thermostat-01
 
@@ -130,7 +130,7 @@ intent = Intent(
 # ContextualWeightingPolicy: 02:00 on a weekday → weight reduced but ALLOW
 
 # The executor receives the modified plan:
-# → turn_off: wiz-living-01..10
+# → turn_off: light-zone-01..10
 # → set_temperature: thermostat-01
 ```
 

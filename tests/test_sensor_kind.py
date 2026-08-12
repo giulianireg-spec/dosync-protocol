@@ -169,7 +169,7 @@ def test_migration_patches_come_from_the_adapters():
     already-correct sensors untouched."""
     from manage import _sensor_kind_patches
 
-    wiz = _legacy("wiz-cocina-01", "wiz", "Philips WiZ",
+    wiz = _legacy("light-zone1-01", "wiz", "Philips WiZ",
                   [{"id": "brightness", "type": "integer"},
                    {"id": "state", "type": "boolean"}])
     assert sorted(_sensor_kind_patches(wiz)) == [
@@ -186,7 +186,7 @@ def test_migration_patches_come_from_the_adapters():
                         [{"id": "state", "type": "boolean"}], category="sensor")
     assert _sensor_kind_patches(ha_binary) == []            # environment already
 
-    dht = _legacy("rpi-dht22-01", "gpio", "custom",
+    dht = _legacy("sensor-climate-01", "gpio", "custom",
                   [{"id": "temperature", "type": "temperature"}], category="sensor")
     assert _sensor_kind_patches(dht) == []                  # not ours to touch
 
@@ -205,10 +205,10 @@ def test_migration_end_to_end_only_adds_kind(tmp_path):
     repo = Path(__file__).resolve().parent.parent
     dbp = tmp_path / "mig.db"
     db = DoSyncDB(str(dbp)); db.init()
-    wiz = _legacy("wiz-cocina-01", "wiz", "Philips WiZ",
+    wiz = _legacy("light-zone1-01", "wiz", "Philips WiZ",
                   [{"id": "brightness", "type": "integer", "unit": "%"},
                    {"id": "state", "type": "boolean"}],
-                  tags=["light", "cocina", "emergency"],
+                  tags=["light", "zone1", "emergency"],
                   adapter_config={"ip": "192.168.100.12", "port": 38899})
     db.save_device(wiz["device_id"], copy.deepcopy(wiz))
 
@@ -222,7 +222,7 @@ def test_migration_end_to_end_only_adds_kind(tmp_path):
     kinds = {s["id"]: s["kind"] for s in m["capabilities"]["sensors"]}
     assert kinds == {"brightness": "device_state", "state": "device_state"}
     assert m["adapter_config"] == {"ip": "192.168.100.12", "port": 38899}
-    assert m["tags"] == ["light", "cocina", "emergency"]
+    assert m["tags"] == ["light", "zone1", "emergency"]
     assert m["capabilities"]["sensors"][0]["unit"] == "%"
 
     r2 = subprocess.run([sys.executable, "manage.py", "--db", str(dbp),

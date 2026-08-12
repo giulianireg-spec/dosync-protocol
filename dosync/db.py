@@ -213,7 +213,7 @@ class DoSyncDB:
     # ── Device registry ───────────────────────────────────────────────────────
 
     def save_device(self, device_id: str, manifest: dict) -> None:
-        """Guarda o actualiza un dispositivo."""
+        """Insert or update a device."""
         now = time.time()
         with self._cursor() as cur:
             cur.execute("""
@@ -226,7 +226,7 @@ class DoSyncDB:
         log.debug("Saved device: %s", device_id)
 
     def delete_device(self, device_id: str) -> None:
-        """Elimina un dispositivo del registry."""
+        """Remove a device from the registry."""
         with self._cursor() as cur:
             cur.execute("DELETE FROM devices WHERE device_id = ?", (device_id,))
         log.debug("Deleted device: %s", device_id)
@@ -248,7 +248,7 @@ class DoSyncDB:
     # ── Family profile ────────────────────────────────────────────────────────
 
     def save_family_profile(self, profile: dict) -> None:
-        """Guarda el perfil familiar (unico, siempre id=1)."""
+        """Store the deployment profile (single row, always id=1)."""
         now = time.time()
         with self._cursor() as cur:
             cur.execute("""
@@ -274,7 +274,7 @@ class DoSyncDB:
 
     def append_audit(self, entry: dict) -> None:
         """
-        Persiste una entrada del audit log.
+        Persist an audit log entry.
         El hash ya viene calculado dentro del entry dict.
         """
         with self._cursor() as cur:
@@ -430,7 +430,7 @@ class DoSyncDB:
     # ── Presence signals ──────────────────────────────────────────────────────
 
     def save_presence_signal(self, device_id: str, signal: dict) -> None:
-        """Guarda o actualiza la señal de presencia de un dispositivo."""
+        """Insert or update a device's presence signal."""
         now = signal.get("timestamp", time.time())
         with self._cursor() as cur:
             cur.execute("""
@@ -442,7 +442,7 @@ class DoSyncDB:
             """, (device_id, json.dumps(signal), now))
 
     def load_presence_signals(self) -> list[dict]:
-        """Carga todas las señales de presencia activas."""
+        """Load every active presence signal."""
         with self._cursor() as cur:
             cur.execute(
                 "SELECT signal_json FROM presence_signals ORDER BY timestamp"
@@ -474,7 +474,7 @@ class DoSyncDB:
     # ── API Keys ──────────────────────────────────────────────────────────────
 
     def save_api_key(self, key_hash: str, label: str) -> None:
-        """Guarda una API key (almacenamos el hash, nunca la key en texto plano)."""
+        """Store an API key. The hash is stored; the key itself never is."""
         with self._cursor() as cur:
             cur.execute("""
                 INSERT OR IGNORE INTO api_keys (key_hash, label, created_at)
@@ -482,7 +482,7 @@ class DoSyncDB:
             """, (key_hash, label, time.time()))
 
     def verify_api_key(self, key_hash: str) -> bool:
-        """Verifica si una API key existe y actualiza last_used_at."""
+        """Check whether an API key exists, and update last_used_at."""
         with self._cursor() as cur:
             cur.execute(
                 "SELECT key_hash FROM api_keys WHERE key_hash = ?", (key_hash,)
@@ -512,7 +512,7 @@ class DoSyncDB:
         ]
 
     def delete_api_key(self, key_hash: str) -> bool:
-        """Elimina una API key. Retorna True si existía."""
+        """Delete an API key. Returns True if it existed."""
         with self._cursor() as cur:
             cur.execute("DELETE FROM api_keys WHERE key_hash = ?", (key_hash,))
             return cur.rowcount > 0
@@ -526,7 +526,7 @@ class DoSyncDB:
     # ── Device State (StateAwareResolver persistence) ─────────────────────────
 
     def save_device_state(self, device_id: str, state: dict) -> None:
-        """Persiste el estado de un dispositivo. Upsert por device_id."""
+        """Persist a device state. Upsert keyed on device_id."""
         with self._cursor() as cur:
             cur.execute(
                 """
@@ -562,7 +562,7 @@ class DoSyncDB:
 
     def record_execution(self, device_id: str, action: str,
                          success: bool, error: str = None) -> None:
-        """Registra el resultado de una ejecución. Llamar tras cada adapter.execute()."""
+        """Record an execution outcome. Call after every adapter.execute()."""
         with self._cursor() as cur:
             cur.execute(
                 """INSERT INTO device_health (device_id, action, success, error, timestamp)
@@ -628,7 +628,7 @@ class DoSyncDB:
             if health["total"] >= min_executions:
                 results.append(health)
 
-        # Peores primero (tasa de éxito ascendente), None al final
+        # Worst first (ascending success rate); unknown rates last
         results.sort(key=lambda x: x["success_rate"] if x["success_rate"] is not None else 1.1)
         return results
 
@@ -795,7 +795,7 @@ class DoSyncDB:
         self._conn.commit()
 
     def save_operation(self, op_dict: dict, terminal: bool) -> None:
-        """Inserta o actualiza una operación. `op_dict` es Operation.to_dict();
+        """Insert or update an operation. `op_dict` is Operation.to_dict();
         `terminal` indica si la operación llegó a un estado terminal (para que
         get_active_operations la excluya sin reinterpretar el estado)."""
         import time, json
@@ -818,7 +818,7 @@ class DoSyncDB:
         self._conn.commit()
 
     def get_active_operations(self) -> list[dict]:
-        """Devuelve las operaciones NO terminales — las que siguen vivas y deben
+        """Return the NON-terminal operations — those still alive and to be
         reconciliarse tras un reinicio. Cada elemento es el Operation.to_dict()
         original, listo para rehidratar."""
         import json
@@ -830,7 +830,7 @@ class DoSyncDB:
         return [json.loads(r[0]) for r in cur.fetchall()]
 
     def get_operation(self, operation_id: str) -> dict | None:
-        """Recupera una operación puntual por id (terminal o no)."""
+        """Fetch a single operation by id, terminal or not."""
         import json
         cur = self._conn.execute(
             "SELECT data FROM operations WHERE operation_id = ?", (operation_id,)

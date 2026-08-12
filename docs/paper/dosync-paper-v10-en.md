@@ -179,13 +179,13 @@ A manual ground truth was defined for 15 representative scenarios over the 38-de
 
 | Device | OK | Total | Rate |
 |---|---|---|---|
-| notifier-sms-01 | 6 | 6 | 100% |
-| wiz-habitacion-principal | 1 | 1 | 100% |
-| wiz-habitacion-ninos-01 | 0 | 12 | 0% |
-| wiz-living1-01 | 0 | 12 | 0% |
-| wiz-living1-02 | 0 | 12 | 0% |
-| wiz-living2-01 | 0 | 12 | 0% |
-| wiz-living2-02 | 0 | 12 | 0% |
+| notifier-01 | 6 | 6 | 100% |
+| light-zone6-01 | 1 | 1 | 100% |
+| light-zone5-01 | 0 | 12 | 0% |
+| light-zone3-01 | 0 | 12 | 0% |
+| light-zone3-02 | 0 | 12 | 0% |
+| light-zone4-01 | 0 | 12 | 0% |
+| light-zone4-02 | 0 | 12 | 0% |
 
 *Note: data reflects early accumulation period; patterns are preliminary.*
 

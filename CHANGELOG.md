@@ -10,6 +10,30 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The repository no longer carries one deployment's configuration.** An audit
+  found the reference deployment across the tree: its LAN address in the
+  certification CLI's own `--help`, in `setup_pki.sh`, in the benchmark docs and
+  in the public site; `/home/<user>/...` hard-coded in a sensitivity tool that
+  therefore ran on exactly one machine; the operator's device inventory inside
+  the **normative tag vocabulary**; and room names — one of them a child's
+  bedroom — in evaluation fixtures, demos, the GPIO adapter and `index.html`.
+
+  A protocol that calls itself domain-agnostic cannot ship one household as its
+  worked example. Identifiers are now role-based and domain-neutral
+  (`light-zone1-01`, not `wiz-cocina-01`), addresses are placeholders or
+  documentation ranges, and the paper and docs were renamed in step so the
+  published tables still resolve against the published fixtures. Benchmark
+  metrics are unchanged, which is how the rename was verified.
+
+  Also translated the remaining Spanish docstrings and comments in the core and
+  the adapters: the project requires English, and one contributor's language in
+  a product surface is the same defect in a different form.
+
+  The rule is now written in CONTRIBUTING.md and enforced by
+  `tests/test_no_operator_data.py`, with an allow-list that must carry a reason.
+  Two prior design panels had already decided this and the repository drifted
+  anyway — a rule without a test is an intention.
+
 - **The explanation and the decision now evaluate the same devices.** `explain()`
   reported devices as *included* that `resolve()` structurally could not act on:
   the two disagreed on who the candidates were. `resolve()` selected through the

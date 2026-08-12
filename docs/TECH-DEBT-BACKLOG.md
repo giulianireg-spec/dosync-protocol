@@ -94,7 +94,7 @@ successful probe, so recovery is detected within one interval WITHOUT executing 
            timing out. Unknown devices rejected 404 (a heartbeat asserts identity). Tests
            pin the asymmetry and verify the clear-on-recovery; validated end to end against
            a running hub. **CONFIRMED in production 2026-07-21:** POST /v1/heartbeat for
-           rpi-dht22-01 acknowledged; /v1/health/reachability shows last_heartbeat stamped,
+           sensor-climate-01 acknowledged; /v1/health/reachability shows last_heartbeat stamped,
            note "last confirmed by a device-initiated heartbeat", and the self-report
            {uptime_s, firmware} stored verbatim.
   DONE (c) distinguish "powered off" from "network-unreachable" — SHIPPED 2026-07-21. The
@@ -336,7 +336,7 @@ that anchor behavior to concrete numbers — the self-consistency check alone be
 tautological once both paths read one source (caught by testing: a broken weight passed the
 coincidence test but failed the absolute tests, which is the real regression guard).
 **CONFIRMED in production 2026-07-21:** /v1/intents/ensure_safety/explain returns 20
-evaluated / 17 included with coherent, decomposable scores (notifier-sms-01=42 = emergency
+evaluated / 17 included with coherent, decomposable scores (notifier-01=42 = emergency
 30 + notify actuator 12; WiZ bulbs=34), all now sourced from the single _score_breakdown
 the resolver decides with. Internal refactor, no wire-format change; the explain endpoint's
 numbers can no longer diverge from the decision.
@@ -445,7 +445,7 @@ coming back green against expectation. The discipline caught what the green suit
 **CONFIRMED in production 2026-07-21** (intent int-1784683484-82f1c0): a cross-device binding
 declared in the intent context (WiZ bulb verified against the DHT22, deliberately impossible
 expected value) resolved onto the actions, ran, and appended 4 first-class chain entries —
-`action_unverifiable | wiz-living2-01 / turn_on | sensor: rpi-dht22-01:temperature |
+`action_unverifiable | light-zone4-01 / turn_on | sensor: sensor-climate-01:temperature |
 expected: impossible-value | observed: None | independent_device`. Binding resolution,
 verification execution, audit provenance, and the independence grading all work end to end.
 

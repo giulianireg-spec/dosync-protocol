@@ -68,7 +68,7 @@ def wiz_manifest(
         device_name: nombre visible (ej: "Lámpara sala")
         ip:          IP de la lamparita en la red local (ej: "192.168.1.45")
         tags:        tags adicionales (se agregan a ["light", "wiz"])
-        room:        habitación (se agrega como tag si se provee)
+        room:        location (added as a tag when provided)
     """
     from ..models import (
         ActuatorSpec, CapabilityManifest, CertTier, DeviceCategory,
@@ -156,7 +156,7 @@ class WiZAdapter(DoSyncAdapter):
         return "wiz"
 
     def _get_ip(self, action: DeviceAction) -> Optional[str]:
-        """Obtiene la IP del dispositivo desde el registry del hub."""
+        """Get the device address from the hub registry."""
         # The device IP is stored in adapter_config of the manifest
         from .. import models   # avoid circular import
         return None  # se resuelve en execute via action.params o manifest

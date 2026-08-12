@@ -319,6 +319,22 @@ The intersection method exists in `CapabilityRegistry` as a utility for external
 
 **Emergency-capable devices are always candidates on emergency intents.** Regardless of tag overlap, any device with `emergency_capable=True` is included in the candidate set when `urgency == EMERGENCY`. This is a hard safety guarantee: the tag filter must never silently exclude a device that was explicitly configured to respond to emergencies.
 
+**The one exception, and it is not a tag filter: quarantine.** A device the
+operator has withdrawn — a declarative device whose file was deleted, for
+instance — is not a candidate for any intent, emergency included. Force-inclusion
+exists to beat the *tag* filter, not to act on hardware the operator believes is
+gone. Acting on a withdrawn device in an emergency would be the worse failure:
+the operator planned around its absence.
+
+The consequence is worth stating plainly, because it cuts against the guarantee
+above: **a quarantined device will not respond to an emergency, even with
+`emergency_capable=True`, and nothing about the emergency will announce that.**
+Quarantine is therefore an operator decision with a safety consequence, and the
+registry surfaces quarantined devices in the inventory (rather than hiding them)
+precisely so that the decision stays visible. This was found in the reference
+deployment, where a quarantined light had been entering every emergency for
+weeks — the resolver had never filtered it, and `active()` said it should.
+
 **Candidate reduction in practice** (1000-device deployment, realistic tag distribution):
 
 | Intent | Candidates with index | Without index |

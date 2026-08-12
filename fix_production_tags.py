@@ -13,18 +13,18 @@ import json
 import argparse
 
 CORRECTIONS = {
-    "wiz-living1-01":           ["light", "emergency", "energy", "living-room"],
-    "wiz-living1-02":           ["light", "emergency", "energy", "living-room"],
-    "wiz-living2-01":           ["light", "emergency", "energy", "living-room"],
-    "wiz-living2-02":           ["light", "emergency", "energy", "living-room"],
-    "wiz-comedor-01":           ["light", "emergency", "energy", "dining-room"],
-    "wiz-comedor-02":           ["light", "emergency", "energy", "dining-room"],
-    "wiz-cocina-01":            ["light", "emergency", "energy", "kitchen"],
-    "wiz-cocina-02":            ["light", "emergency", "energy", "kitchen"],
-    "wiz-habitacion-ninos-01":  ["light", "emergency", "energy", "bedroom"],
-    "wiz-habitacion-principal": ["light", "emergency", "energy", "bedroom"],
-    "rpi-pir-01":               ["sensor", "motion", "security", "emergency", "entrance"],
-    "notifier-sms-01":          ["notification", "communication", "emergency"],
+    "light-zone3-01":           ["light", "emergency", "energy", "living-room"],
+    "light-zone3-02":           ["light", "emergency", "energy", "living-room"],
+    "light-zone4-01":           ["light", "emergency", "energy", "living-room"],
+    "light-zone4-02":           ["light", "emergency", "energy", "living-room"],
+    "light-zone2-01":           ["light", "emergency", "energy", "dining-room"],
+    "light-zone2-02":           ["light", "emergency", "energy", "dining-room"],
+    "light-zone1-01":            ["light", "emergency", "energy", "kitchen"],
+    "light-zone1-02":            ["light", "emergency", "energy", "kitchen"],
+    "light-zone5-01":  ["light", "emergency", "energy", "bedroom"],
+    "light-zone6-01": ["light", "emergency", "energy", "bedroom"],
+    "sensor-motion-01":               ["sensor", "motion", "security", "emergency", "entrance"],
+    "notifier-01":          ["notification", "communication", "emergency"],
 }
 
 def fix_tags(db_path: str, dry_run: bool):

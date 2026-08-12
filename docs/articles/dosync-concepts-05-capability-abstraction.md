@@ -32,7 +32,7 @@ In DoSync, every device publishes a Capability Manifest when it joins the networ
 
 ```json
 {
-  "device_id": "wiz-living1-01",
+  "device_id": "light-zone3-01",
   "device_name": "Living Room — Bulb 1",
   "manufacturer": "Philips",
   "model": "WiZ RGBW Tunable",
@@ -40,10 +40,10 @@ In DoSync, every device publishes a Capability Manifest when it joins the networ
   "category": "actuator",
   "tags": ["light", "climate", "smart-plug", "emergency", "wiz"],
   "actuators": [
-    { "id": "wiz-living1-01-turn_on",       "type": "turn_on",       "description": "Turn on" },
-    { "id": "wiz-living1-01-turn_off",      "type": "turn_off",      "description": "Turn off" },
-    { "id": "wiz-living1-01-set_brightness","type": "set_brightness", "description": "Set brightness 0-100%" },
-    { "id": "wiz-living1-01-set_color",     "type": "set_color",     "description": "Set RGB color" }
+    { "id": "light-zone3-01-turn_on",       "type": "turn_on",       "description": "Turn on" },
+    { "id": "light-zone3-01-turn_off",      "type": "turn_off",      "description": "Turn off" },
+    { "id": "light-zone3-01-set_brightness","type": "set_brightness", "description": "Set brightness 0-100%" },
+    { "id": "light-zone3-01-set_color",     "type": "set_color",     "description": "Set RGB color" }
   ],
   "sensors": [],
   "emergency_capable": true,

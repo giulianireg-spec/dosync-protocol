@@ -10,7 +10,7 @@ Uso:
     # Arrancar como servidor MCP standalone (stdio — para Claude Desktop)
     PYTHONPATH=. python3 dosync/mcp_server.py
 
-    # Con autenticación
+    # With authentication
     DOSYNC_TOKEN=<tu-token> PYTHONPATH=. python3 dosync/mcp_server.py
 
 Configuración en Claude Desktop (~/.config/claude/claude_desktop_config.json):
@@ -63,7 +63,7 @@ try:
 except ImportError:
     HTTP_AVAILABLE = False
 
-# ── Configuración ─────────────────────────────────────────────────────────────
+# ── Configuration ─────────────────────────────────────────────────────────────
 
 HUB_URL   = os.environ.get("DOSYNC_HUB_URL", "http://localhost:47200")
 HUB_TOKEN = os.environ.get("DOSYNC_TOKEN", "")
@@ -155,7 +155,7 @@ async def _intent_property_schema() -> dict:
         pass
     # Fallback: hub unreachable. Free-form string — the hub validates on fire.
     return {"type": "string",
-            "description": base_desc + " (hub no consultado — el hub validará)"}
+            "description": base_desc + " (hub not queried — the hub will validate)"}
 
 
 @server.list_tools()
@@ -204,7 +204,7 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "subject": {
                         "type": "string",
-                        "description": "Sujeto de la intención (ej: 'abuela', 'niños')",
+                        "description": "Subject of the intent (e.g. an operator-defined group or role)",
                     },
                     "message": {
                         "type": "string",
@@ -212,7 +212,7 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "location": {
                         "type": "string",
-                        "description": "Ubicación relevante (ej: 'dormitorio', 'sala')",
+                        "description": "Relevant location tag, as declared by the deployment",
                     },
                 },
                 "required": ["intent"],
@@ -292,7 +292,7 @@ async def list_tools() -> list[types.Tool]:
             name="dosync_get_audit_log",
             description=(
                 "Obtiene las últimas entradas del audit log del hub. "
-                "El log es tamper-evident: cada entrada está encadenada "
+                "The log is tamper-evident: every entry is chained "
                 "con SHA-256. Incluye verificación de integridad."
             ),
             inputSchema={
@@ -338,7 +338,7 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "action": {
                         "type": "string",
-                        "description": "Acción a ejecutar",
+                        "description": "Action to execute",
                         "enum": ["turn_on", "turn_off", "set_brightness",
                                  "set_color", "set_color_temp", "set_effect"],
                     },
@@ -594,7 +594,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         text += f"   Total: {total} entradas | "
         text += f"Integridad: {'✓ íntegra' if integrity else '✗ comprometida'}\n\n"
 
-        # Mostrar las últimas N
+        # Show the most recent N
         for entry in list(reversed(entries))[:last_n]:
             kind  = entry.get("type", "?")
             hash_ = entry.get("hash", "")[:10]

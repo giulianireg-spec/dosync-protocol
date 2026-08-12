@@ -1083,8 +1083,8 @@ Examples:
   python3 certify.py --host localhost --port 47200 --tier basic
   python3 certify.py --host localhost --port 47200 --tier standard
   python3 certify.py --host localhost --port 47200 --tier emergency
-  python3 certify.py --host 192.168.100.109 --port 47200 --tier emergency --output cert.json
-  python3 certify.py --host 192.168.100.109 --port 47200 --tier conformance --output cert.json
+  python3 certify.py --host <hub-address> --port 47200 --tier emergency --output cert.json
+  python3 certify.py --host <hub-address> --port 47200 --tier conformance --output cert.json
 
 Environment variables:
   DOSYNC_TOKEN     API token for authenticated requests

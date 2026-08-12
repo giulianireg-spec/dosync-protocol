@@ -86,7 +86,7 @@ def build_all_devices():
     return [
         # Seguridad
         CapabilityManifest(
-            device_id="camera-bedroom-01", device_name="Cámara dormitorio",
+            device_id="camera-bedroom-01", device_name="Zone 5 camera",
             manufacturer="SafeHome", model="Cam-4K", firmware="1.2",
             category=DeviceCategory.HYBRID,
             tags=["camera", "bedroom", "emergency", "motion"],
@@ -279,7 +279,7 @@ def build_family_profile():
 
 async def demo_fall(hub, executor, fast):
     header("Escenario 1 — Caída detectada · Emergencia")
-    print(f"  {C.DIM}La cámara del dormitorio detecta que la abuela se cayó.{C.RESET}")
+    print(f"  {C.DIM}La cámara del zone5 detecta que la a monitored person se cayó.{C.RESET}")
     print(f"  {C.DIM}No hay nadie en casa. La IA actúa en menos de 100ms.{C.RESET}")
     pause(1.5, fast)
 
@@ -287,15 +287,15 @@ async def demo_fall(hub, executor, fast):
     await hub.receive_event(DeviceEvent(
         device_id="camera-bedroom-01", event_id="fall_detected",
         severity=Urgency.EMERGENCY,
-        data={"confidence": 0.97, "location": "dormitorio"},
+        data={"confidence": 0.97, "location": "zone5"},
     ))
     pause(0.5, fast)
 
     section("IA resuelve intent: ensure_safety [EMERGENCY]")
     intent = Intent(
         intent=IntentClass.ENSURE_SAFETY, urgency=Urgency.EMERGENCY,
-        subject="abuela",
-        context={"trigger":"fall_detected","location":"dormitorio",
+        subject="a monitored person",
+        context={"trigger":"fall_detected","location":"zone5",
                  "emergency_number":"911",
                  "message":"Emergencia: persona caída. Puerta abierta para emergencias."},
     )
@@ -366,7 +366,7 @@ async def demo_smoke(hub, executor, fast):
                       PhaseAction("lights-main-01",   "set_brightness", {"brightness":100}),
                       PhaseAction("lock-backdoor-01", "unlock",         {"duration_seconds":600}),
                   ]),
-            Phase("ACCESO — entrada para bomberos", delay_after_ms=0,
+            Phase("ACCESO — entrance para bomberos", delay_after_ms=0,
                   actions=[
                       PhaseAction("lock-frontdoor-01",  "unlock", {"duration_seconds":600}),
                       PhaseAction("camera-exterior-01", "record", {"reason":"fire_emergency"}),
@@ -457,8 +457,8 @@ async def demo_laundry(hub, executor, fast):
 
 def show_audit(hub):
     header("Audit Log — registro tamper-evident")
-    print(f"  {C.DIM}Cada entrada está encadenada con SHA-256.{C.RESET}")
-    print(f"  {C.DIM}Modificar cualquier entrada rompe toda la cadena.{C.RESET}\n")
+    print(f"  {C.DIM}Cada entrance está encadenada con SHA-256.{C.RESET}")
+    print(f"  {C.DIM}Modificar cualquier entrance rompe toda la cadena.{C.RESET}\n")
     entries = hub.audit_log.entries()
     type_colors = {
         "device_registered": C.DIM,
@@ -484,7 +484,7 @@ def show_audit(hub):
         print(f"  {C.DIM}[{h}]{C.RESET} {color}{kind}{C.RESET}{C.DIM}{extra}{C.RESET}")
 
     integrity = hub.audit_log.verify()
-    print(f"\n  {C.DIM}Total: {len(entries)} entradas{C.RESET}")
+    print(f"\n  {C.DIM}Total: {len(entries)} entrances{C.RESET}")
     if integrity:
         print(f"  {C.GREEN}{C.BOLD}✓ Integridad verificada — cadena SHA-256 íntegra{C.RESET}")
     else:

@@ -117,7 +117,7 @@ ensure_safety [emergency]
   → lock-frontdoor-01    unlock  (emergency_capable, entrance tag)
   → alarm-main-01        alarm   (emergency_capable)
   → phone-family-01      call    (communication tag)
-  → wiz-living-01..10    turn_on (light tag, full brightness)
+  → light-zone-01..10    turn_on (light tag, full brightness)
 All in parallel. Under 100ms. No internet. No cloud.
 ```
 

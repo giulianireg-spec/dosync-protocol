@@ -10,8 +10,9 @@ DoSync — Scoring weights sensitivity analysis
 Varies each weight ±50% and measures precision/recall impact
 over the 15 scenarios from the IEEE paper (Table 3).
 """
-import sys, statistics
-sys.path.insert(0, '/home/rgiuliani/dosync-protocol')
+import argparse
+import os
+import statistics
 import logging
 logging.disable(logging.CRITICAL)
 
@@ -21,7 +22,12 @@ from dosync.models import (
     CapabilityManifest, ActuatorSpec
 )
 
-hub = DoSyncHub(db_path='/home/rgiuliani/dosync-protocol/dosync.db')
+_ap = argparse.ArgumentParser(description="Scoring weights sensitivity analysis (DEPRECATED)")
+_ap.add_argument("--db", default=os.environ.get("DOSYNC_DB", "dosync.db"),
+                 help="hub database to analyse (default: DOSYNC_DB or ./dosync.db)")
+_args = _ap.parse_args()
+
+hub = DoSyncHub(db_path=_args.db)
 reg = hub.registry
 
 # ── Ground truth — 15 scenarios from paper Table 3 ───────────────────────────
@@ -30,17 +36,17 @@ GROUND_TRUTH = {
     IntentClass.ENSURE_SAFETY: {
         "urgency": Urgency.EMERGENCY,
         "expected": {
-            "alarm-test-01", "notifier-sms-01", "rpi-pir-01",
-            "wiz-living1-01", "wiz-living1-02", "wiz-living2-01", "wiz-living2-02",
-            "wiz-comedor-01", "wiz-comedor-02", "wiz-cocina-01", "wiz-cocina-02",
-            "wiz-habitacion-principal", "wiz-habitacion-ninos-01",
+            "alarm-01", "notifier-01", "sensor-motion-01",
+            "light-zone3-01", "light-zone3-02", "light-zone4-01", "light-zone4-02",
+            "light-zone2-01", "light-zone2-02", "light-zone1-01", "light-zone1-02",
+            "light-zone6-01", "light-zone5-01",
             "ha-light-tv_philips_ambilight",
         }
     },
     IntentClass.ALERT_ANOMALY: {
         "urgency": Urgency.ALERT,
         "expected": {
-            "notifier-sms-01", "ha-media_player-tv_philips",
+            "notifier-01", "ha-media_player-tv_philips",
             "ha-media_player-75_qled_qn75q7faagcfv",
         }
     },
@@ -51,60 +57,60 @@ GROUND_TRUTH = {
     IntentClass.NOTIFY_FAMILY: {
         "urgency": Urgency.INFO,
         "expected": {
-            "notifier-sms-01", "ha-media_player-tv_philips",
+            "notifier-01", "ha-media_player-tv_philips",
             "ha-media_player-75_qled_qn75q7faagcfv",
         }
     },
     IntentClass.SAVE_ENERGY: {
         "urgency": Urgency.INFO,
         "expected": {
-            "wiz-living1-01", "wiz-living1-02", "wiz-living2-01", "wiz-living2-02",
-            "wiz-comedor-01", "wiz-comedor-02", "wiz-cocina-01", "wiz-cocina-02",
-            "wiz-habitacion-principal", "wiz-habitacion-ninos-01",
+            "light-zone3-01", "light-zone3-02", "light-zone4-01", "light-zone4-02",
+            "light-zone2-01", "light-zone2-02", "light-zone1-01", "light-zone1-02",
+            "light-zone6-01", "light-zone5-01",
             "ha-light-tv_philips_ambilight", "ha-switch-tv_philips_screen_state",
         }
     },
     IntentClass.BEDTIME_ROUTINE: {
         "urgency": Urgency.INFO,
         "expected": {
-            "wiz-living1-01", "wiz-living1-02", "wiz-living2-01", "wiz-living2-02",
-            "wiz-comedor-01", "wiz-comedor-02", "wiz-cocina-01", "wiz-cocina-02",
-            "wiz-habitacion-principal", "wiz-habitacion-ninos-01",
+            "light-zone3-01", "light-zone3-02", "light-zone4-01", "light-zone4-02",
+            "light-zone2-01", "light-zone2-02", "light-zone1-01", "light-zone1-02",
+            "light-zone6-01", "light-zone5-01",
             "ha-light-tv_philips_ambilight",
         }
     },
     IntentClass.MORNING_ROUTINE: {
         "urgency": Urgency.INFO,
         "expected": {
-            "wiz-living1-01", "wiz-living1-02", "wiz-living2-01", "wiz-living2-02",
-            "wiz-comedor-01", "wiz-comedor-02", "wiz-cocina-01", "wiz-cocina-02",
-            "wiz-habitacion-principal", "wiz-habitacion-ninos-01",
+            "light-zone3-01", "light-zone3-02", "light-zone4-01", "light-zone4-02",
+            "light-zone2-01", "light-zone2-02", "light-zone1-01", "light-zone1-02",
+            "light-zone6-01", "light-zone5-01",
             "ha-light-tv_philips_ambilight",
         }
     },
     IntentClass.CHILDREN_ARRIVED: {
         "urgency": Urgency.INFO,
         "expected": {
-            "wiz-habitacion-ninos-01", "wiz-living1-01", "wiz-living1-02",
-            "wiz-living2-01", "wiz-living2-02", "notifier-sms-01",
+            "light-zone5-01", "light-zone3-01", "light-zone3-02",
+            "light-zone4-01", "light-zone4-02", "notifier-01",
         }
     },
     IntentClass.AWAY_MODE: {
         "urgency": Urgency.INFO,
         "expected": {
-            "wiz-living1-01", "wiz-living1-02", "wiz-living2-01", "wiz-living2-02",
-            "wiz-comedor-01", "wiz-comedor-02", "wiz-cocina-01", "wiz-cocina-02",
-            "wiz-habitacion-principal", "wiz-habitacion-ninos-01",
-            "ha-light-tv_philips_ambilight", "alarm-test-01",
+            "light-zone3-01", "light-zone3-02", "light-zone4-01", "light-zone4-02",
+            "light-zone2-01", "light-zone2-02", "light-zone1-01", "light-zone1-02",
+            "light-zone6-01", "light-zone5-01",
+            "ha-light-tv_philips_ambilight", "alarm-01",
         }
     },
     IntentClass.SET_ENVIRONMENT: {
         "urgency": Urgency.INFO,
         "expected": {
-            "wiz-living1-01", "wiz-living1-02", "wiz-living2-01", "wiz-living2-02",
-            "wiz-comedor-01", "wiz-comedor-02", "wiz-cocina-01", "wiz-cocina-02",
-            "wiz-habitacion-principal", "wiz-habitacion-ninos-01",
-            "ha-light-tv_philips_ambilight", "rpi-dht22-01",
+            "light-zone3-01", "light-zone3-02", "light-zone4-01", "light-zone4-02",
+            "light-zone2-01", "light-zone2-02", "light-zone1-01", "light-zone1-02",
+            "light-zone6-01", "light-zone5-01",
+            "ha-light-tv_philips_ambilight", "sensor-climate-01",
         }
     },
     IntentClass.REPORT_STATUS: {
@@ -113,12 +119,12 @@ GROUND_TRUTH = {
     },
     IntentClass.MONITOR_HEALTH: {
         "urgency": Urgency.INFO,
-        "expected": {"rpi-pir-01", "rpi-dht22-01"}
+        "expected": {"sensor-motion-01", "sensor-climate-01"}
     },
     IntentClass.REMIND_CHORE: {
         "urgency": Urgency.INFO,
         "expected": {
-            "notifier-sms-01", "ha-media_player-tv_philips",
+            "notifier-01", "ha-media_player-tv_philips",
             "ha-media_player-75_qled_qn75q7faagcfv",
         }
     },

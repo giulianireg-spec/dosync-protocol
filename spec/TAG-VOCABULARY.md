@@ -141,7 +141,7 @@ Devices should declare multiple tags when they serve multiple roles. The resolve
 **Correct — bulb with emergency role:**
 ```json
 {
-  "device_id": "wiz-living1-01",
+  "device_id": "light-zone1-01",
   "tags": ["light", "emergency", "living-room", "energy"],
   "emergency_capable": true
 }
@@ -150,7 +150,7 @@ Devices should declare multiple tags when they serve multiple roles. The resolve
 **Correct — PIR sensor:**
 ```json
 {
-  "device_id": "rpi-pir-01",
+  "device_id": "sensor-motion-01",
   "tags": ["sensor", "motion", "security", "emergency", "entrance"],
   "emergency_capable": true
 }
@@ -159,7 +159,7 @@ Devices should declare multiple tags when they serve multiple roles. The resolve
 **Correct — SMS notifier:**
 ```json
 {
-  "device_id": "notifier-sms-01",
+  "device_id": "notifier-01",
   "tags": ["notification", "communication", "emergency"],
   "emergency_capable": true
 }
@@ -180,20 +180,23 @@ The following tag patterns are **NOT** part of the standard vocabulary and reduc
 
 ---
 
-## Production deployment reference
+## Applying this vocabulary to an existing deployment
 
-The following table shows the recommended tags for the devices in the DoSync reference deployment, including corrections to the current configuration:
+A deployment that predates this vocabulary will have tags that do not match it.
+Retagging is worth doing — resolution quality depends on it — and the common
+corrections are the same everywhere:
 
-| Device | Current tags | Recommended tags | Change |
-|---|---|---|---|
-| WiZ bulbs (living 1+2) | `light, emergency, climate, smart-plug, wiz` | `light, emergency, energy, living-room` | Remove `climate`, `smart-plug`, `wiz`; add location |
-| WiZ bulbs (comedor 1+2) | `light, emergency, climate, smart-plug, wiz` | `light, emergency, energy, dining-room` | Remove `climate`, `smart-plug`, `wiz`; add location |
-| WiZ bulb (bedroom) | `light, emergency, climate, smart-plug, wiz` | `light, emergency, energy, bedroom` | Remove `climate`, `smart-plug`, `wiz`; add location |
-| WiZ bulbs (kitchen) | `light, emergency, climate, smart-plug, wiz` | `light, emergency, energy, kitchen` | Remove `climate`, `smart-plug`, `wiz`; add location |
-| PIR sensor | `sensor, motion, security, emergency` | `sensor, motion, security, emergency, entrance` | Add location |
-| DHT22 sensor | `sensor, climate, temperature, humidity` | `sensor, temperature, humidity` | Remove `climate` (not a climate controller) |
-| SMS notifier | `communication, notification, children_arrival` | `notification, communication, emergency` | Add `emergency`; remove domain-specific `children_arrival` |
-| Alarm | `emergency, alarm, security` | `emergency, alarm, security` | ✓ Correct |
+| Symptom | Correction |
+|---|---|
+| A tag naming the **vendor or protocol** (`wiz`, `zigbee`, `tuya`) | Remove it. How a device is reached is the adapter's concern, not the resolver's. |
+| A tag naming a **capability the device does not have** (`climate` on a bulb) | Remove it. It makes the device score on intents it cannot serve. |
+| A tag naming **one deployment's scenario** (`children_arrival`, `night_shift`) | Remove it, or register a custom intent class that declares it. A resolution tag no other deployment would write belongs to that deployment, not to the vocabulary. |
+| A device with a role but **no location tag** | Add one. Location is what makes a targeted intent targeted. |
+
+The reference deployment went through exactly this: bulbs carrying `wiz`,
+`smart-plug` and `climate`, and a notifier carrying a scenario tag from the
+deployment that installed it. The inventory of one deployment is not
+specification material, so it is not reproduced here.
 
 ---
 

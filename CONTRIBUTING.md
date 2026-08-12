@@ -62,11 +62,42 @@ If the Pi diverges: `git reset --hard origin/main`
 ```bash
 DOSYNC_TOKEN=<your-token> \
 DOSYNC_CA_CERT=~/dosync-protocol/certs/ca.crt \
-python3 certify.py --host 192.168.100.109 --port 47200 --tier standard
+python3 certify.py --host <hub-address> --port 47200 --tier standard
 # Expected: 32/32 CERTIFIED
 ```
 
 ---
+
+## Nothing here may depend on the machine it was written on
+
+**Nothing in this repository should work, make sense, or be verifiable only on
+the machine of whoever wrote it.** DoSync is domain-agnostic infrastructure: it
+is not built for one house, one plant, or one operator's hardware. Anything that
+narrows an artefact to a single installation is a defect, not a detail.
+
+**Does not enter the repository:**
+
+| | Instead |
+|---|---|
+| IP addresses of real machines | `<hub-address>`, or a documentation range (`192.0.2.0/24`, `192.168.1.100`) |
+| Absolute user paths (`/home/<name>`, `/Users/<name>`) | A CLI argument or environment variable with a relative default |
+| Device identifiers copied from a real registry | Generic, role-based identifiers (`light-zone1-01`, `sensor-motion-01`) |
+| Room names, people's names, an operator's brands and models | Neutral terms that do not presume a domain — `zone1`, not `kitchen` |
+| Any language other than English, in code, comments, docs or fixtures | English |
+
+**Is welcome:** the *characteristics* of the reference deployment. "Raspberry Pi
+5, Python 3.11, 30 heterogeneous devices, in production" is provenance, and
+provenance is what makes a benchmark credible. Its address, its room names and
+its owner's hardware brands add nothing a reader can use.
+
+A specific caution about fixtures: `benchmarks/` invites you to drop evaluation
+data in it, and evaluation data tends to be a dump of a real registry. Anonymise
+before committing — see `benchmarks/fixtures/README.md`. Raw production
+registries are gitignored, but do not rely on that.
+
+`tests/test_no_operator_data.py` enforces this mechanically. If you need an
+exception, add it to the allow-list in that file **with a reason** — the point is
+that exceptions are visible, not that there are none.
 
 ## CI pipeline
 

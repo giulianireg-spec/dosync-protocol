@@ -3,7 +3,7 @@
 #
 # Usage:
 #   bash rotate_pki.sh                        # rotate hub cert (IP auto-detected)
-#   bash rotate_pki.sh 192.168.100.109        # rotate hub cert with explicit IP
+#   bash rotate_pki.sh <hub-address>        # rotate hub cert with explicit IP
 #   bash rotate_pki.sh --check                # check status only, no rotation
 #   bash rotate_pki.sh --force                # rotate even if not near expiry
 #

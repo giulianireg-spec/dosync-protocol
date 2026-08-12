@@ -15,7 +15,7 @@ Fase 2 — EVACUACION (2 segundos despues):
   → Apertura de puertas de escape
 
 Fase 3 — ACCESO para bomberos (3 segundos despues):
-  → Desbloquear entrada principal
+  → Desbloquear entrance principal
   → Camara exterior activa para orientar a bomberos
 """
 
@@ -212,7 +212,7 @@ async def scenario_smoke_emergency(hub: DoSyncHub, executor: SimulatedExecutor):
             ),
 
             Phase(
-                name="ACCESO — entrada para bomberos",
+                name="ACCESO — entrance para bomberos",
                 delay_after_ms=0,
                 actions=[
                     PhaseAction("lock-frontdoor-01",  "unlock", {"duration_seconds": 600}),

@@ -1,7 +1,7 @@
 #!/bin/bash
 # DoSync PKI Setup — corre una sola vez en la Pi
 # Uso: bash setup_pki.sh
-# Con IP explícita: bash setup_pki.sh 192.168.100.109
+# Con IP explícita: bash setup_pki.sh <hub-address>
 
 set -e
 

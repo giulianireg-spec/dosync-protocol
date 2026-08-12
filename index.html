@@ -395,11 +395,11 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
           <div><span class="t-prompt">user → </span><span class="t-cmd">"there is an emergency at home"</span></div>
           <div style="margin-top:8px"><span class="t-comment"># DoSync hub receives intent</span></div>
           <div><span class="t-comment"># ensure_safety [emergency]</span></div>
-          <div style="margin-top:8px"><span class="t-device">wiz-living1-01</span> <span class="t-action">turn_on</span> <span style="color:#8A8A82">brightness=100</span> <span class="t-success">✓</span></div>
-          <div><span class="t-device">wiz-living1-02</span> <span class="t-action">turn_on</span> <span style="color:#8A8A82">brightness=100</span> <span class="t-success">✓</span></div>
-          <div><span class="t-device">wiz-living2-01</span> <span class="t-action">turn_on</span> <span style="color:#8A8A82">brightness=100</span> <span class="t-success">✓</span></div>
-          <div><span class="t-device">alarm-test-01</span> <span class="t-action">alarm</span> <span style="color:#8A8A82">pattern=emergency</span> <span class="t-success">✓</span></div>
-          <div><span class="t-device">notifier-sms-01</span> <span class="t-action">notify</span> <span style="color:#8A8A82">→ +1555012...</span> <span class="t-success">✓</span></div>
+          <div style="margin-top:8px"><span class="t-device">light-zone3-01</span> <span class="t-action">turn_on</span> <span style="color:#8A8A82">brightness=100</span> <span class="t-success">✓</span></div>
+          <div><span class="t-device">light-zone3-02</span> <span class="t-action">turn_on</span> <span style="color:#8A8A82">brightness=100</span> <span class="t-success">✓</span></div>
+          <div><span class="t-device">light-zone4-01</span> <span class="t-action">turn_on</span> <span style="color:#8A8A82">brightness=100</span> <span class="t-success">✓</span></div>
+          <div><span class="t-device">alarm-01</span> <span class="t-action">alarm</span> <span style="color:#8A8A82">pattern=emergency</span> <span class="t-success">✓</span></div>
+          <div><span class="t-device">notifier-01</span> <span class="t-action">notify</span> <span style="color:#8A8A82">→ +1555012...</span> <span class="t-success">✓</span></div>
           <div style="margin-top:8px"><span class="t-comment"># 18 actions · 8 devices · 79ms</span></div>
           <div><span class="t-comment"># audit log updated · SHA-256 chain intact</span></div>
         </div>
@@ -556,15 +556,15 @@ var TL_STEPS=[
   {id:'tl-s2',delay:1050,dot:'#EF9F27', time:'t=3ms',  tag:'Policy Engine',tagBg:'#1E1405',tagColor:'#EF9F27', title:'Emergency bypass',          sub:'urgency=emergency · <b>confirmation skipped</b> · all policies bypassed'},
   {id:'tl-s3',delay:1400,dot:'#534AB7', time:'t=4ms',  tag:'Hub',         tagBg:'#1A1830', tagColor:'#AFA9EC', title:'ActionPlan built',          sub:'8 actions · <b>parallel execution</b> · AdapterExecutor dispatched'},
   {id:'tl-s4',delay:1800,dot:'#7F77DD', time:'t=12–18ms',tag:'WiZ UDP',  tagBg:'#1A1830', tagColor:'#AFA9EC', title:'5 bulbs — full brightness', sub:'', bulbs:true},
-  {id:'tl-s5',delay:2600,dot:'#7F77DD', time:'t=18ms', tag:'Alarm',       tagBg:'#1A1830', tagColor:'#AFA9EC', title:'Emergency pattern activated',sub:'alarm-test-01 · <b>pattern=emergency</b> · ✓'},
-  {id:'tl-s6',delay:3000,dot:'#E24B4A', time:'t=51ms', tag:'SMS',         tagBg:'#1F0808', tagColor:'#E24B4A', title:'Family notified',           sub:'notifier-sms-01 · Twilio → <b>+1555012...</b> · ✓'},
+  {id:'tl-s5',delay:2600,dot:'#7F77DD', time:'t=18ms', tag:'Alarm',       tagBg:'#1A1830', tagColor:'#AFA9EC', title:'Emergency pattern activated',sub:'alarm-01 · <b>pattern=emergency</b> · ✓'},
+  {id:'tl-s6',delay:3000,dot:'#E24B4A', time:'t=51ms', tag:'SMS',         tagBg:'#1F0808', tagColor:'#E24B4A', title:'Family notified',           sub:'notifier-01 · Twilio → <b>+1555012...</b> · ✓'},
   {id:'tl-s7',delay:3600,dot:'#888780', time:'t=79ms', tag:'Audit log',   tagBg:'#1A1A18', tagColor:'#888780', title:'SHA-256 chain updated',     sub:'entry #692 · <b>chain intact</b> · tamper-evident'},
   {id:'tl-s8',delay:3900,dot:'#888780', time:'t=80ms', tag:'WebSocket',   tagBg:'#1A1A18', tagColor:'#888780', title:'Dashboard updated',         sub:'broadcast → <b>all connected clients</b> · real-time feed'},
 ];
 var BULBS=[
-  {id:'wiz-living1-01',ms:12},{id:'wiz-living1-02',ms:14},
-  {id:'wiz-living2-01',ms:15},{id:'wiz-comedor-01',ms:16},
-  {id:'wiz-ninos-01',ms:18}
+  {id:'light-zone3-01',ms:12},{id:'light-zone3-02',ms:14},
+  {id:'light-zone4-01',ms:15},{id:'light-zone2-01',ms:16},
+  {id:'light-zone5-01',ms:18}
 ];
 var TOTAL=4200;
 var tlRunning=false;

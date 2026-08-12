@@ -63,7 +63,7 @@ def matter_manifest(
         entity_id:        entity_id en Home Assistant (ej: "light.matter_bulb")
         device_type:      tipo: "light" | "switch" | "cover" | "lock" | "climate"
         tags:             tags adicionales
-        room:             habitación
+        room:             location
         emergency_capable: si puede actuar en emergencias
     """
     from ..models import (

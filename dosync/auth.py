@@ -102,7 +102,7 @@ class AuthManager:
         return token
 
     def verify(self, token: str) -> bool:
-        """Verifica un token. Retorna True si es válido."""
+        """Verify a token. Returns True if it is valid."""
         if not self.enabled:
             return True
         key_hash = hash_token(token)

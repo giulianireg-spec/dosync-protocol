@@ -1,6 +1,7 @@
 """
 DoSync Resolver Benchmark — con registry real de producción
-38 dispositivos exactos del hub Raspberry Pi 5 @ 192.168.100.109
+38 devices mirroring the reference deployment (Raspberry Pi 5, Python 3.11).
+Identifiers are generic: a benchmark fixture describes a topology, not an address.
 Generado: 18 mayo 2026
 """
 
@@ -71,49 +72,49 @@ class ActionPlan:
 # ── Registry real (38 dispositivos del hub) ───────────────────────────────────
 
 REAL_REGISTRY = [
-    CapabilityManifest("wiz-habitacion-ninos-01",   "Habitación niños — Luz",
+    CapabilityManifest("light-zone5-01",   "Zone 5 — Light",
         ["wiz","light","climate","notification"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
-    CapabilityManifest("wiz-living2-01",            "Living 2 — Luz 1",
+    CapabilityManifest("light-zone4-01",            "Zone 4 — Light 1",
         ["wiz","light","climate","notification"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
-    CapabilityManifest("wiz-living2-02",            "Living 2 — Luz 2",
+    CapabilityManifest("light-zone4-02",            "Zone 4 — Light 2",
         ["wiz","light","climate","notification"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
-    CapabilityManifest("wiz-comedor-01",            "Comedor — Luz 1",
+    CapabilityManifest("light-zone2-01",            "Zone 2 — Light 1",
         ["wiz","light","climate"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
-    CapabilityManifest("wiz-cocina-01",             "Cocina — Luz 1",
+    CapabilityManifest("light-zone1-01",             "Zone 1 — Light 1",
         ["wiz","light","climate"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
-    CapabilityManifest("wiz-habitacion-principal",  "Habitación principal — Luz",
+    CapabilityManifest("light-zone6-01",  "Zone 6 — Light",
         ["wiz","light","climate"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
-    CapabilityManifest("wiz-comedor-02",            "Comedor — Luz 2",
+    CapabilityManifest("light-zone2-02",            "Zone 2 — Light 2",
         ["wiz","light","climate"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
-    CapabilityManifest("wiz-living1-01",            "Living 1 — Luz 1",
+    CapabilityManifest("light-zone3-01",            "Zone 3 — Light 1",
         ["wiz","light","climate","notification"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
-    CapabilityManifest("wiz-living1-02",            "Living 1 — Luz 2",
+    CapabilityManifest("light-zone3-02",            "Zone 3 — Light 2",
         ["wiz","light","climate","notification"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
-    CapabilityManifest("wiz-cocina-02",             "Cocina — Luz 2",
+    CapabilityManifest("light-zone1-02",             "Zone 1 — Light 2",
         ["wiz","light","climate"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","set_brightness","set_color","set_color_temp","set_scene"]],
         emergency_capable=True, adapter="wiz"),
-    CapabilityManifest("rpi-pir-01",                "PIR — Sensor de movimiento",
+    CapabilityManifest("sensor-motion-01",                "PIR — Sensor de movimiento",
         ["sensor","motion","security","emergency"], [], emergency_capable=False, adapter="simulated"),
-    CapabilityManifest("rpi-dht22-01",              "DHT22 — Temperatura y Humedad",
+    CapabilityManifest("sensor-climate-01",              "DHT22 — Temperatura y Humedad",
         ["sensor","climate","temperature","humidity"], [], emergency_capable=False, adapter="simulated"),
     CapabilityManifest("ha-light-tv_philips_ambilight", "TV Philips Ambilight",
         ["climate","light"],
@@ -127,7 +128,7 @@ REAL_REGISTRY = [
         ["appliance","smart-plug"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off"]],
         emergency_capable=False, adapter="homeassistant"),
-    CapabilityManifest("notifier-sms-01",           "SMS — Notificaciones familia",
+    CapabilityManifest("notifier-01",           "SMS — Notificaciones familia",
         ["communication","notification","notification"],
         [ActuatorSpec("notify")],
         emergency_capable=False, adapter="notifications"),
@@ -175,7 +176,7 @@ REAL_REGISTRY = [
         ["communication","display"],
         [ActuatorSpec(a) for a in ["turn_on","turn_off","display"]],
         emergency_capable=False, adapter="homeassistant"),
-    CapabilityManifest("alarm-test-01",             "Alarma principal (test)",
+    CapabilityManifest("alarm-01",             "Alarma principal (test)",
         ["emergency","alarm","security"],
         [ActuatorSpec("alarm")],
         emergency_capable=True, adapter="simulated"),
@@ -254,7 +255,7 @@ class StateAwareResolver(CapabilityMatchingResolver):
 
 ALL_INTENTS   = list(IntentClass)
 ALL_URGENCIES = [Urgency.info, Urgency.alert, Urgency.emergency]
-LOCATIONS     = ["cocina", "living", "comedor", "habitacion", ""]
+LOCATIONS     = ["zone1", "zone2", "zone3", "zone4", ""]
 
 def make_intent(idx=0):
     return Intent(
@@ -385,7 +386,7 @@ def main():
     N = 500
     print("=" * 64)
     print("  DoSync Resolver Benchmark — registry real de producción")
-    print("  38 dispositivos · hub Raspberry Pi 5")
+    print("  38 devices · Raspberry Pi 5 class hardware")
     print("=" * 64)
 
     results = {}

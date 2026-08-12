@@ -1,7 +1,7 @@
 # DoSync — Concurrent Load Benchmark
 
 **Date:** June 2026  
-**Hub:** Raspberry Pi 5 @ 192.168.100.109:47200  
+**Hub:** Raspberry Pi 5 @ <hub-address>:47200  
 **Devices:** 41 registered (10 physical WiZ, 1 HA bridge, 1 PIR, 1 DHT22, 1 SMS, rest simulated)  
 **Repeats:** 20 per concurrency level  
 **Tool:** aiohttp async client — non-blocking TLS connections

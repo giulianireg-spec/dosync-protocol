@@ -28,7 +28,7 @@ Uso rápido:
     # Emitir certificado para un adapter nuevo
     python3 -m dosync.security issue --name gpio --ip 127.0.0.1
 
-    # Verificar que los certs son válidos y no han expirado
+    # Verify the certificates are valid and have not expired
     python3 -m dosync.security verify
 
     # Ver info de un certificado
@@ -59,7 +59,7 @@ from typing import Optional
 
 log = logging.getLogger("dosync.security")
 
-# ── Configuración ─────────────────────────────────────────────────────────────
+# ── Configuration ─────────────────────────────────────────────────────────────
 
 from .paths import certs_dir as _certs_dir
 CERTS_DIR       = _certs_dir()
@@ -93,7 +93,7 @@ HUB_SUBJECT = (
 
 @dataclass
 class CertInfo:
-    """Información de un certificado."""
+    """Details of a certificate."""
     subject: str
     issuer: str
     not_before: str
@@ -157,7 +157,7 @@ def _ensure_dirs() -> None:
 
 
 def _cert_info(cert_path: Path) -> Optional[CertInfo]:
-    """Extrae información de un certificado PEM."""
+    """Extract details from a PEM certificate."""
     if not cert_path.exists():
         return None
     try:
@@ -175,7 +175,7 @@ def _cert_info(cert_path: Path) -> Optional[CertInfo]:
                 k, _, v = line.partition("=")
                 info[k.strip().lower().replace(" ", "_")] = v.strip()
 
-        # Parsear fecha de expiración
+        # Parse the expiry date
         not_after_str = info.get("notafter", "")
         try:
             not_after = datetime.datetime.strptime(
@@ -417,7 +417,7 @@ def issue_adapter_cert(
 
 
 def verify_chain(cert_path: Path) -> bool:
-    """Verifica que un certificado fue firmado por la CA local."""
+    """Verify a certificate was signed by the local CA."""
     if not CA_CERT_PATH.exists():
         return False
     result = _run(
@@ -528,7 +528,7 @@ def renew_adapter_cert(name: str, adapter_ip: str = "127.0.0.1") -> tuple[Path, 
     return issue_adapter_cert(name=name, adapter_ip=adapter_ip, force=True)
 
 
-# ── Detección automática de IP ────────────────────────────────────────────────
+# ── Automatic address detection ───────────────────────────────────────────────
 
 def detect_hub_ip() -> str:
     """
@@ -629,7 +629,7 @@ Examples:
   python3 -m dosync.security setup
 
   # Setup with explicit IP
-  python3 -m dosync.security setup --ip 192.168.100.109
+  python3 -m dosync.security setup --ip <hub-address>
 
   # Issue cert for a new adapter
   python3 -m dosync.security issue --name shelly-01 --ip 192.168.100.50

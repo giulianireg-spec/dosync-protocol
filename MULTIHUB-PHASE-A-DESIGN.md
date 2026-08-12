@@ -3,7 +3,7 @@
 **Status:** Design (pre-implementation)
 **Scope:** Phase A of §11 implementation — hub coordination with operator-assisted failover
 **Validated by:** architecture panel (assisted-failover over naive auto-promotion)
-**Test topology:** Pi (`192.168.100.109`) = primary · Mac (`192.168.100.108`) = standby
+**Test topology:** Pi (`<hub-address>`) = primary · Mac (`<standby-address>`) = standby
 
 ---
 
@@ -55,7 +55,7 @@ only observes a peer and signals.
 
 ```
 DOSYNC_HUB_ROLE=standby
-DOSYNC_PRIMARY_URL=https://192.168.100.109:47200   # the peer to watch
+DOSYNC_PRIMARY_URL=https://<hub-address>:47200   # the peer to watch
 DOSYNC_HEARTBEAT_INTERVAL=5      # seconds (spec recommended)
 DOSYNC_FAILURE_THRESHOLD=3       # consecutive misses before "primary may be down"
 ```
@@ -134,7 +134,7 @@ active warning. The operator is told exactly what promotion would cost.
    {
      "role": "standby",
      "monitor_state": "WATCHING",
-     "primary_url": "https://192.168.100.109:47200",
+     "primary_url": "https://<hub-address>:47200",
      "primary_last_seen": "2026-06-13T19:44:39Z",
      "consecutive_misses": 0,
      "primary_devices_last_known": 34,

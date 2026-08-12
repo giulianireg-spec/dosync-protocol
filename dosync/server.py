@@ -519,7 +519,7 @@ def on_event(event: DeviceEvent):
 hub.on_event(on_event)
 
 
-# ── Schemas de entrada ────────────────────────────────────────────────────────
+# ── Request schemas ───────────────────────────────────────────────────────────
 
 class SensorIn(BaseModel):
     id: str
@@ -582,7 +582,7 @@ class EventRequest(BaseModel):
     data: dict[str, Any] = {}
 
 
-# Heartbeat report bounds (parada técnica 2026-07-21, Sosa). Module-level, not
+# Heartbeat report bounds (maintenance review 2026-07-21). Module-level, not
 # class attributes: in Pydantic v2 a name starting with "_" inside a BaseModel
 # becomes a ModelPrivateAttr, not an int. Bounds fit a generous real self-report
 # (battery, rssi, firmware, uptime, a few custom fields) with wide margin while
@@ -1200,7 +1200,7 @@ async def explain_intent(
         context=context,
     )
 
-    # Obtener explicación del resolver
+    # Get the resolver explanation
     explanation = hub.resolver.explain(intent)
     return explanation
 
@@ -1445,7 +1445,7 @@ def list_provisioned_devices(auth: str = Depends(require_auth)):
 
 @app.delete("/v1/devices/{device_id}/token", tags=["Devices"])
 def revoke_device_token(device_id: str, auth: str = Depends(require_auth)):
-    """Revoca el token de un dispositivo — deberá ser re-provisionado."""
+    """Revoke a device token — the device must be re-provisioned."""
     from dosync.auth import get_device_auth_manager
     device_auth = get_device_auth_manager()
     if not device_auth:

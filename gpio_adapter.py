@@ -109,7 +109,7 @@ def register_devices():
     """Registra los dispositivos GPIO en el hub."""
     devices = [
         {
-            "device_id":   "rpi-pir-01",
+            "device_id":   "sensor-motion-01",
             "device_name": "PIR — Sensor de movimiento",
             "manufacturer": "DoSync GPIO",
             "model":       "HC-SR501",
@@ -122,7 +122,7 @@ def register_devices():
             "cert_tier":   "basic",
         },
         {
-            "device_id":   "rpi-dht22-01",
+            "device_id":   "sensor-climate-01",
             "device_name": "DHT22 — Temperatura y Humedad",
             "manufacturer": "DoSync GPIO",
             "model":       "DHT22",
@@ -182,7 +182,7 @@ async def pir_loop():
 
                     # Enviar evento al hub
                     send_event(
-                        device_id="rpi-pir-01",
+                        device_id="sensor-motion-01",
                         event_id="motion_detected",
                         severity="info",
                         data={"timestamp": datetime.now().isoformat()},
@@ -194,9 +194,9 @@ async def pir_loop():
                         urgency="info",
                         context={
                             "trigger":   "motion_detected",
-                            "device_id": "rpi-pir-01",
-                            "location":  "entrada",
-                            "member":    "Los niños",
+                            "device_id": "sensor-motion-01",
+                            "location":  "entrance",
+                            "member":    "Group A",
                         },
                     )
 
@@ -235,7 +235,7 @@ async def dht_loop():
                 log.info("DHT22: %.1f°C  %.1f%%", temp, hum)
 
                 send_event(
-                    device_id="rpi-dht22-01",
+                    device_id="sensor-climate-01",
                     event_id="sensor_reading",
                     severity="info",
                     data={
@@ -254,7 +254,7 @@ async def dht_loop():
                         context={
                             "trigger":     "high_temperature",
                             "temperature": temp,
-                            "device_id":   "rpi-dht22-01",
+                            "device_id":   "sensor-climate-01",
                         },
                     )
 

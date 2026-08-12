@@ -68,8 +68,8 @@ When the AI fires a semantic intent — `ensure_safety / emergency` — the reso
 ensure_safety [emergency]
   → lock-frontdoor-01    unlock   (emergency_capable, entrance tag)
   → alarm-main-01        activate (emergency_capable)
-  → wiz-living-01..10    turn_on  (light tag, full brightness)
-  → notifier-sms-01      notify   (communication tag)
+  → light-zone-01..10    turn_on  (light tag, full brightness)
+  → notifier-01      notify   (communication tag)
 All in parallel. No rules written for this scenario.
 ```
 

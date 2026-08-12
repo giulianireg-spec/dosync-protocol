@@ -213,7 +213,7 @@ The response structure:
   "devices_excluded": 23,
   "included": [
     {
-      "device_id": "wiz-living1-01",
+      "device_id": "light-zone3-01",
       "device_tags": ["light", "climate", "children_arrival", "wiz"],
       "score": 36.0,
       "score_breakdown": {
@@ -226,7 +226,7 @@ The response structure:
   ],
   "excluded": [
     {
-      "device_id": "rpi-pir-01",
+      "device_id": "sensor-motion-01",
       "device_tags": ["emergency", "motion", "security", "sensor"],
       "reason": "required specific tags {'blinds', 'smart-plug'} not in device tags {...}"
     }
@@ -253,7 +253,7 @@ curl -s -X POST https://<hub-ip>:47200/v1/devices/register \
   -H "Content-Type: application/json" \
   --cacert certs/ca.crt \
   -d '{
-    "device_id": "wiz-living1-01",
+    "device_id": "light-zone3-01",
     "tags": ["light", "smart-plug"],
     "actuators": [
       { "type": "turn_on" },
