@@ -455,6 +455,34 @@ class ActionResult:
     # verification.status=CONTRADICTED is a real, valuable state: the device
     # accepted the command but the world did not change.
     verification: Optional["VerificationResult"] = None
+    # SIMULATION: whether the hub actually reached the device, kept separate
+    # from `success` because they answer different questions. `success=False`
+    # means something went wrong; `simulated=True` means nothing went anywhere.
+    # Before this field the two were indistinguishable to every reader: a
+    # device with no adapter fell to the SimulatedExecutor and came back
+    # success=True, and the reference deployment ran an SMS notifier that way
+    # for an unknown length of time while every log line said the intent had
+    # executed. The Data layer does not lie — including by omission.
+    #
+    # Three adapters already marked simulation inside `response`; that is the
+    # right instinct in the wrong place. A caller should not have to know which
+    # adapter answered in order to learn whether anything happened.
+    simulated: bool                   = False
+    #: Why, when simulated. One of SIMULATION_REASONS — the operator's reaction
+    #: differs: a missing adapter is a registration mistake, an unavailable one
+    #: is an install or a network problem, and a deliberate simulation is fine.
+    simulated_reason: Optional[str]   = None
+
+
+#: Why an action was simulated rather than executed.
+SIMULATION_REASONS = (
+    "no_adapter_declared",    # the manifest names no adapter for this device
+    "adapter_unavailable",    # an adapter is named but could not act (missing
+                              # library, unreachable device, simulated mode)
+    "explicit_simulation",    # simulation was asked for — certification,
+                              # evaluation corpora, development without hardware
+)
+
 
 @dataclass
 class IntentResult:

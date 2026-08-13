@@ -46,7 +46,14 @@ class SimulatedExecutor(DeviceExecutor):
                              latency_ms: int = 50) -> None:
         self._custom[device_id] = {"always_fail": always_fail, "latency_ms": latency_ms}
 
-    async def execute(self, action: DeviceAction, urgency: Urgency) -> ActionResult:
+    async def execute(self, action: DeviceAction, urgency: Urgency,
+                      reason: str = "explicit_simulation") -> ActionResult:
+        """Simulate the action and SAY SO in the result.
+
+        `reason` is why simulation happened, and the caller is the only one who
+        knows: an AdapterExecutor falling back passes "no_adapter_declared",
+        while a hub built for certification or a corpus gets the default.
+        """
         behavior = self._custom.get(action.device_id, {})
         latency  = behavior.get("latency_ms", 50) / 1000
         await asyncio.sleep(latency)
@@ -58,21 +65,26 @@ class SimulatedExecutor(DeviceExecutor):
                 action=action.action,
                 success=False,
                 error="Simulated device failure",
+                simulated=True,
+                simulated_reason=reason,
             )
 
         response = self._simulate_response(action, urgency)
-        log.info("Executed: %s.%s → %s", action.device_id, action.action, response)
+        log.info("Simulated (%s): %s.%s → %s", reason, action.device_id,
+                 action.action, response)
 
         return ActionResult(
             device_id=action.device_id,
             action=action.action,
             success=True,
             response=response,
+            simulated=True,
+            simulated_reason=reason,
         )
 
     def _simulate_response(self, action: DeviceAction, urgency: Urgency) -> dict:
         responses = {
-            # Seguridad
+            # Safety
             "unlock":          {"status": "unlocked", "duration_seconds": action.params.get("duration_seconds", 300)},
             "lock":            {"status": "locked"},
             "call":            {"status": "calling", "number": action.params.get("number", "911")},

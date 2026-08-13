@@ -13,6 +13,22 @@ that does not hold.
 
 ---
 
+## What entries before 2026-08-13 do not distinguish
+
+Until 0.4.4, an `intent_executed` entry recorded how many actions ran and not
+how many of them reached a device. A device whose manifest named no adapter fell
+back to the simulator, returned success, and was counted as an action taken —
+so entries written before that date **cannot be read as evidence that a physical
+device acted**, only that the hub decided it should and nothing reported an
+error.
+
+The chain is not rewritten to correct this. Rewriting history to make the past
+look better is the exact attack the chain exists to detect, and a project cannot
+run it on itself and keep the guarantee. From 0.4.4 on, `intent_executed`
+carries `actions_simulated`, `direct_action_executed` carries `simulated` and
+`simulated_reason`, and an action that never left the hub says so.
+
+
 ## The claim, stated precisely
 
 > Every action DoSync takes on a device is recorded in a SHA-256 hash chain. Any

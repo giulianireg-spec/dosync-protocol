@@ -250,7 +250,7 @@ class AdapterExecutor:
                 result = await self._adapters[adapter_name].execute(action, urgency)
                 if result.success:
                     self._update_resolver_state(action)
-                # Device Health Monitor — registrar resultado
+                # Device Health Monitor — record the outcome
                 self._record_health(action, result)
                 return result
             except Exception as e:
@@ -267,13 +267,19 @@ class AdapterExecutor:
                 self._record_health(action, err_result)
                 return err_result
 
-        # Fallback
+        # Fallback. WARNING, not INFO, and the result says it was simulated:
+        # this branch is how a device that declares actuators nobody can execute
+        # still reports success. The reference deployment ran an SMS notifier
+        # here for an unknown length of time, and every log line read like an
+        # execution.
         if self._simulated:
-            log.info(
-                "No adapter for '%s' (device %s) — using SimulatedExecutor",
-                adapter_name or "none", action.device_id,
+            reason = ("no_adapter_declared" if not adapter_name
+                      else "adapter_unavailable")
+            log.warning(
+                "Simulating %s.%s — %s (adapter=%s). Nothing was sent to the device.",
+                action.device_id, action.action, reason, adapter_name or "none",
             )
-            return await self._simulated.execute(action, urgency)
+            return await self._simulated.execute(action, urgency, reason=reason)
 
         return ActionResult(
             device_id=action.device_id,
@@ -283,7 +289,7 @@ class AdapterExecutor:
         )
 
     def _record_health(self, action: DeviceAction, result) -> None:
-        """Registra el resultado en el Device Health Monitor."""
+        """Record the outcome in the Device Health Monitor."""
         try:
             db = getattr(self._hub, 'db', None)
             if db:

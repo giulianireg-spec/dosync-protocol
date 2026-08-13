@@ -9,6 +9,35 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **An action that never left the hub says so.** `ActionResult` carries
+  `simulated` and `simulated_reason`; `intent_executed` carries
+  `actions_simulated`; `direct_action_executed` carries both; and the intent API
+  reports them per action and in aggregate.
+
+  The reference deployment ran an SMS notifier whose manifest named no adapter.
+  Every `notify` fell back to the simulator, returned `success=True`, and was
+  logged at INFO as `Executed:` — for an unknown length of time, on the
+  deployment whose drills are this project's evidence. `success` and `simulated`
+  answer different questions: `success=False` means something went wrong,
+  `simulated=True` means nothing went anywhere. Collapsing them made the Data
+  layer mislead by omission, and mislead the AI layer reasoning on top of it —
+  an agent told that `notify` succeeded during an emergency concludes the people
+  who needed to know were told.
+
+  Three adapters already marked simulation inside `response`. That was the right
+  instinct in the wrong place: a caller should not have to know which adapter
+  answered to learn whether anything happened.
+
+  `fallback_to_simulated` stays on by default. Simulating was never the problem
+  — certification, evaluation corpora and development without hardware all need
+  it. Not saying so was.
+
+- **Registration says when nothing can execute a device.** A manifest that
+  declares actuators and names no adapter — or names one that is not registered
+  — logs a warning at registration. It was discoverable at that moment and was
+  being discovered, when at all, months later in a log.
+
 ### Fixed
 - **The public site advertised four things that were no longer true.** Its
   roadmap still read *"IEEE WF-IoT 2026 — submitted, decision pending"* a month

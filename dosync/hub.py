@@ -2289,6 +2289,7 @@ class DoSyncHub:
         if existing is None:
             self.registry.register(manifest)
             self.db.save_device(manifest.device_id, manifest.to_dict())
+            self._warn_if_unexecutable(manifest)
             self.audit_log.append({
                 "type":        "device_registered",
                 "device_id":   manifest.device_id,
@@ -3413,6 +3414,11 @@ class DoSyncHub:
             "urgency":          intent.urgency.value,
             "source":           getattr(intent, "source", "api"),
             "actions":          len(plan.actions),
+            # The chain answers "what did this system do". An action that never
+            # left the hub is part of that answer and used not to be: entries
+            # written before 2026-08-13 do not distinguish execution from
+            # simulation, and are not rewritten — see AUDIT-THREAT-MODEL.md.
+            "actions_simulated": sum(1 for r in results if getattr(r, "simulated", False)),
             "failed":           failed,
             "aborted":          aborted,
             "failure_policy":   policy_applied,
@@ -3421,6 +3427,35 @@ class DoSyncHub:
         })
 
         return intent_result
+
+    def _warn_if_unexecutable(self, manifest) -> None:
+        """Say so at registration when nothing can carry out this device's actions.
+
+        A device that declares actuators and names no adapter is registered,
+        resolved, selected and reported as acting — and every one of its actions
+        is simulated. That is discoverable at the moment of registration and was
+        being discovered, when at all, by an operator reading a log months
+        later. The reference deployment's SMS notifier was in exactly this state.
+
+        A warning, not a rejection: registering a device before its adapter is
+        installed is a legitimate order of operations, and the protocol does not
+        get to refuse a manifest it merely cannot serve yet.
+        """
+        actuators = list(getattr(manifest, "actuators", []) or [])
+        if not actuators:
+            return
+        adapter = getattr(manifest, "adapter", None)
+        executor = getattr(self, "executor", None)
+        known = getattr(executor, "_adapters", None)
+        if not adapter:
+            log.warning(
+                "%s declares %d actuator(s) and no adapter — its actions will be "
+                "simulated, not executed. Set 'adapter' on the manifest.",
+                manifest.device_id, len(actuators))
+        elif isinstance(known, dict) and adapter not in known:
+            log.warning(
+                "%s declares adapter '%s', which is not registered — its actions "
+                "will be simulated, not executed.", manifest.device_id, adapter)
 
     # ── Event handling (device → AI) ─────────────────────────────────────────
 

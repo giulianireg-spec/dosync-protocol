@@ -1718,10 +1718,14 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
                 "intent_id":      result.intent_id,
                 "success":        result.success,
                 "actions_taken":  len(result.results),
+                # A count of actions that includes simulated ones and does not
+                # say so is the same omission as a success flag that does not.
+                "actions_simulated": sum(1 for r in result.results if r.simulated),
                 "failed_devices": result.failed_devices,
                 "results": [
                     {"device_id": r.device_id, "action": r.action, "success": r.success,
-                     "response": r.response, "error": r.error}
+                     "response": r.response, "error": r.error,
+                     "simulated": r.simulated, "simulated_reason": r.simulated_reason}
                     for r in result.results
                 ],
             },
@@ -2374,6 +2378,8 @@ async def device_action(
         "urgency":   urgency.value,
         "success":   result.success,
         "error":     result.error,
+        "simulated": result.simulated,
+        "simulated_reason": result.simulated_reason,
         "source":    "direct_action_endpoint",
     })
 
