@@ -33,10 +33,19 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   — certification, evaluation corpora and development without hardware all need
   it. Not saying so was.
 
-- **Registration says when nothing can execute a device.** A manifest that
+- **The hub says at boot which devices nothing can act on.** A manifest that
   declares actuators and names no adapter — or names one that is not registered
-  — logs a warning at registration. It was discoverable at that moment and was
-  being discovered, when at all, months later in a log.
+  — is reported: at registration for new arrivals, and once at startup for the
+  whole fleet.
+
+  The startup sweep exists because the registration check alone was not enough,
+  and hardware validation is what showed it: the reference deployment restarted
+  with the check in place and printed nothing, because devices restored from the
+  database go straight into the registry and never take the registration path.
+  The check covered new arrivals and missed the entire existing fleet — which is
+  exactly where a device sits misconfigured for months. The sweep runs after the
+  adapters register, since running it earlier would report every device as
+  unexecutable.
 
 ### Fixed
 - **The public site advertised four things that were no longer true.** Its

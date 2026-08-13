@@ -3428,6 +3428,49 @@ class DoSyncHub:
 
         return intent_result
 
+    def report_unexecutable_devices(self) -> list[dict]:
+        """Report every registered device whose actions nobody can carry out.
+
+        `_warn_if_unexecutable` only fires when a device registers, and devices
+        restored from the database at startup do not take that path — they go
+        straight into the registry. So the check covered new arrivals and missed
+        the entire existing fleet, which is precisely where a device can sit
+        misconfigured for months: the reference deployment's SMS notifier was
+        found this way, by hand, long after the fact.
+
+        Called once at startup AFTER the adapters have registered — running it
+        earlier would report every device as unexecutable, since no adapter
+        exists yet.
+
+        Returns the affected devices so a caller can surface them; also logs,
+        because an operator reading the boot log is the reader this is for.
+        """
+        executor = getattr(self, "executor", None)
+        known = getattr(executor, "_adapters", None)
+        if not isinstance(known, dict):
+            return []   # no adapter executor — nothing to compare against
+        found = []
+        for device in self.registry.active():
+            actuators = list(getattr(device, "actuators", []) or [])
+            if not actuators:
+                continue
+            adapter = getattr(device, "adapter", None)
+            if not adapter:
+                reason = "no_adapter_declared"
+            elif adapter not in known:
+                reason = "adapter_unavailable"
+            else:
+                continue
+            found.append({"device_id": device.device_id, "reason": reason,
+                          "adapter": adapter, "actuators": len(actuators)})
+        if found:
+            log.warning(
+                "%d registered device(s) declare actuators that nothing can "
+                "execute — their actions will be simulated: %s",
+                len(found), ", ".join(f"{d['device_id']} ({d['reason']})"
+                                      for d in found))
+        return found
+
     def _warn_if_unexecutable(self, manifest) -> None:
         """Say so at registration when nothing can carry out this device's actions.
 

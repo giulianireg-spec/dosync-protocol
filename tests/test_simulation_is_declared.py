@@ -128,3 +128,79 @@ def test_a_sensor_only_device_does_not_warn(caplog):
             sensors=[SensorSpec(id="motion", type="boolean", description="m")],
             actuators=[]))
     assert not any("no adapter" in r.message.lower() for r in caplog.records)
+
+
+def test_the_startup_sweep_covers_devices_restored_from_the_database():
+    """The gap hardware validation found, and tests could not.
+
+    `_warn_if_unexecutable` runs on registration. Devices restored at startup
+    never take that path — they go straight into the registry — so the check
+    covered new arrivals and missed the whole existing fleet, which is exactly
+    where a device sits misconfigured for months. The reference deployment
+    restarted with the fix applied and produced no warning at all: the notifier
+    that motivated the work was invisible to it.
+    """
+    from dosync.adapters import AdapterExecutor
+    from dosync.hub import DoSyncHub
+    from dosync.models import (ActuatorSpec, CapabilityManifest, DeviceCategory)
+
+    hub = DoSyncHub(db_path=":memory:")
+    # Straight into the registry, exactly as _restore_state does.
+    hub.registry.register(CapabilityManifest(
+        device_id="restored-notifier", device_name="n", manufacturer="t",
+        model="t", firmware="1", category=DeviceCategory.ACTUATOR,
+        tags=["notification"], emergency_capable=False, sensors=[],
+        actuators=[ActuatorSpec(id="notify", type="notify", description="n")]))
+    hub.executor = AdapterExecutor(hub, fallback_to_simulated=True)
+
+    found = hub.report_unexecutable_devices()
+    assert [d["device_id"] for d in found] == ["restored-notifier"]
+    assert found[0]["reason"] == "no_adapter_declared"
+
+
+def test_the_sweep_ignores_devices_an_adapter_can_serve():
+    from dosync.adapters import AdapterExecutor, DoSyncAdapter
+    from dosync.hub import DoSyncHub
+    from dosync.models import (ActionResult, ActuatorSpec, CapabilityManifest,
+                               DeviceCategory)
+
+    class ServedAdapter(DoSyncAdapter):
+        adapter_name = "served"
+
+        async def execute(self, action, urgency):
+            return ActionResult(device_id=action.device_id,
+                                action=action.action, success=True)
+
+    hub = DoSyncHub(db_path=":memory:")
+    m = CapabilityManifest(
+        device_id="served-01", device_name="s", manufacturer="t", model="t",
+        firmware="1", category=DeviceCategory.ACTUATOR, tags=["light"],
+        emergency_capable=False, sensors=[],
+        actuators=[ActuatorSpec(id="turn_on", type="turn_on", description="on")])
+    m.adapter = "served"
+    hub.registry.register(m)
+    executor = AdapterExecutor(hub, fallback_to_simulated=True)
+    executor.register(ServedAdapter())
+    hub.executor = executor
+
+    assert hub.report_unexecutable_devices() == []
+
+
+def test_the_sweep_flags_an_adapter_that_is_named_but_not_registered():
+    """A manifest naming an adapter nobody installed is the second reason."""
+    from dosync.adapters import AdapterExecutor
+    from dosync.hub import DoSyncHub
+    from dosync.models import (ActuatorSpec, CapabilityManifest, DeviceCategory)
+
+    hub = DoSyncHub(db_path=":memory:")
+    m = CapabilityManifest(
+        device_id="ghost-01", device_name="g", manufacturer="t", model="t",
+        firmware="1", category=DeviceCategory.ACTUATOR, tags=["light"],
+        emergency_capable=False, sensors=[],
+        actuators=[ActuatorSpec(id="turn_on", type="turn_on", description="on")])
+    m.adapter = "not-installed"
+    hub.registry.register(m)
+    hub.executor = AdapterExecutor(hub, fallback_to_simulated=True)
+
+    found = hub.report_unexecutable_devices()
+    assert found and found[0]["reason"] == "adapter_unavailable"

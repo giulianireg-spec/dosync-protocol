@@ -630,6 +630,14 @@ async def lifespan(app: FastAPI):
     log.info("DoSync Hub started — port %s, database %s",
              os.environ.get("DOSYNC_PORT", "47200"),
              ":memory: (certify mode)" if _certify_mode else _resolve_db_path())
+    # After every adapter has registered: say which devices nothing can act on.
+    # Cheap, once, and it turns a discovery that took months into a boot line.
+    try:
+        hub.executor = executor
+        hub.report_unexecutable_devices()
+    except Exception as _sweep_e:      # never block startup over a report
+        log.warning("could not check device executability: %s", _sweep_e)
+
     first_token = _auth_manager.ensure_default_key()
     if first_token:
         print("\n" + "="*60)
