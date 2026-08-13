@@ -10,6 +10,37 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The public site advertised four things that were no longer true.** Its
+  roadmap still read *"IEEE WF-IoT 2026 — submitted, decision pending"* a month
+  after the decision arrived; it offered `pip install dosync` at 0.4.2 with
+  0.4.3 on PyPI; it claimed 894 automated tests against 930; and it listed the
+  Node.js implementation as Done, which the README had requalified the day
+  before.
+
+  The first one is the one that matters, and not because of the paper. The page
+  carries a section titled *"We audited the five properties we advertise. Two of
+  them were false."* A line announcing a pending decision that resolved a month
+  earlier is exactly what that section promises does not happen here.
+
+  The test count had been corrected twenty-four hours earlier — 866 to 894 — and
+  was stale again by morning. An exact number in a static page is a promise to
+  update it every week and nobody keeps it, so the site now states a floor that
+  writing more tests cannot falsify, and `tests/test_public_claims.py` checks
+  the floor, the version, the conformance figure, that no decision is described
+  as pending, and that the README and the site describe dosync-node the same way.
+
+- **The Concepts series taught the tag antipattern.** Part 5 presents a
+  Capability Manifest as the worked example of how to declare a device, and the
+  example carried `["light", "climate", "smart-plug", "emergency", "wiz"]` —
+  three tags the project's own vocabulary lists as deprecated: a vendor name, a
+  role the device does not have, and a capability a bulb does not have. The
+  material teaching people to tag devices was teaching them to tag devices
+  wrong.
+
+  Corrected, and the original kept as the lesson: those three are the three
+  mistakes everyone makes, and the deployment that wrote this protocol had all
+  of them for two months.
+
 - **A working notification template no longer breaks the notification.** The
   first implementation passed the protocol's own fields as keywords alongside
   `**context`, so a template using `{location}` with a context that carried one

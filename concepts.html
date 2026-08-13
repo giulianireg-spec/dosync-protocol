@@ -397,14 +397,14 @@ if time > 14:00 and delivery_expected:
         <p>You add a new smoke detector to your home network. It registers with the hub. Thirty seconds later, when someone fires an <code>ensure_safety</code> intent, the detector is part of the response — no automation written, no rule updated, no developer intervention. How is that possible? The answer is capability abstraction — the design decision that separates systems that work with AI from systems that merely tolerate it.</p>
 
         <h2>The Capability Manifest — a declaration, not an API</h2>
-        <p>In DoSync, every device publishes a Capability Manifest when it joins the network. Here's a real one from the production deployment — a generic WiZ bulb running on a Raspberry Pi 5:</p>
+        <p>In DoSync, every device publishes a Capability Manifest when it joins the network. Here's one from the reference deployment — an RGBW bulb on a hub running on a Raspberry Pi 5:</p>
 <pre><code>{
   "device_id": "light-zone3-01",
-  "device_name": "Living Room — Bulb 1",
+  "device_name": "Zone 3 — Bulb 1",
   "manufacturer": "generic",
-  "model": "WiZ RGBW Tunable",
+  "model": "RGBW Tunable",
   "category": "actuator",
-  "tags": ["light", "climate", "smart-plug", "emergency", "wiz"],
+  "tags": ["light", "energy", "emergency", "zone3"],
   "actuators": [
     { "type": "turn_on",       "description": "Turn on" },
     { "type": "turn_off",      "description": "Turn off" },
@@ -415,6 +415,16 @@ if time > 14:00 and delivery_expected:
   "adapter": "wiz",
   "adapter_config": { "ip": "192.168.1.x" }
 }</code></pre>
+
+        <p>Those four tags are the corrected set. The deployment originally
+        carried <code>["light", "climate", "smart-plug", "emergency", "wiz"]</code>,
+        and three of them were wrong in ways worth naming, because they are the
+        three mistakes everyone makes: <code>wiz</code> names the vendor, which no
+        other hub can act on; <code>smart-plug</code> claims a role the device does
+        not have; <code>climate</code> claims a capability a bulb does not have. Each
+        one makes the bulb score on intents it cannot serve. The vocabulary lists
+        all three as deprecated — and the deployment that wrote this protocol had
+        them anyway for two months.</p>
         <p>This isn't an API specification. It's a declaration of identity and relevance. The resolver reads every registered manifest, scores each device for relevance — weighting tag overlap, location context, emergency bonus, and actuator match — and builds the action plan. The bulb is included because of its <code>emergency</code> tag and <code>emergency_capable: true</code> — not because anyone hardcoded it.</p>
 
         <h2><code>emergency_capable</code> is a contract, not a flag</h2>

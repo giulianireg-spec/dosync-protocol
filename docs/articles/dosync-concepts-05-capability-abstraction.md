@@ -33,12 +33,12 @@ In DoSync, every device publishes a Capability Manifest when it joins the networ
 ```json
 {
   "device_id": "light-zone3-01",
-  "device_name": "Living Room — Bulb 1",
+  "device_name": "Zone 3 — Bulb 1",
   "manufacturer": "Philips",
-  "model": "WiZ RGBW Tunable",
+  "model": "RGBW Tunable",
   "firmware": "1.0.0",
   "category": "actuator",
-  "tags": ["light", "climate", "smart-plug", "emergency", "wiz"],
+  "tags": ["light", "energy", "emergency", "zone3"],
   "actuators": [
     { "id": "light-zone3-01-turn_on",       "type": "turn_on",       "description": "Turn on" },
     { "id": "light-zone3-01-turn_off",      "type": "turn_off",      "description": "Turn off" },
@@ -51,6 +51,15 @@ In DoSync, every device publishes a Capability Manifest when it joins the networ
   "adapter_config": { "ip": "192.168.100.28" }
 }
 ```
+
+Those four tags are the corrected set. The deployment originally carried
+`["light", "climate", "smart-plug", "emergency", "wiz"]`, and three of them were
+wrong in ways worth naming, because they are the three mistakes everyone makes:
+`wiz` names the vendor, which no other hub can act on; `smart-plug` claims a role
+the device does not have; `climate` claims a capability a bulb does not have.
+Each one makes the bulb score on intents it cannot serve. The vocabulary lists
+all three as deprecated — and the deployment that wrote this protocol had them
+anyway for two months.
 
 This isn't an API specification. It's a declaration of identity and relevance. The device is answering three questions at once:
 
