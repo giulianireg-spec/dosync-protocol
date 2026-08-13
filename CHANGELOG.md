@@ -9,6 +9,21 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **A working notification template no longer breaks the notification.** The
+  first implementation passed the protocol's own fields as keywords alongside
+  `**context`, so a template using `{location}` with a context that carried one
+  — most emergencies — raised `TypeError`, and the exception escaped
+  `_build_message` and took the whole notification with it.
+
+  The fallback for *broken* templates had been written and tested; the case
+  where a template *works* had not, and it was the reference deployment that
+  would have found out, during an emergency. Context now provides the base
+  fields and the protocol's override them, `TypeError` and `ValueError` join
+  the caught set — a template must never be able to silence an alert — and
+  `tests/test_notification_templates.py` covers the rendering paths that were
+  missing.
+
 ### Removed
 - **A country's emergency number is no longer inside the protocol.** The SMS
   body for `ensure_safety` ended with `Llamar al 107 (SAME)` — one country's

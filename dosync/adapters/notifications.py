@@ -166,10 +166,17 @@ class NotificationAdapter(DoSyncAdapter):
 
         template = (self.templates or {}).get(intent)
         if template:
+            # The context comes first and the protocol's own fields override
+            # it: passing both as keywords raised TypeError whenever a context
+            # carried "location" — which is most emergencies — and the
+            # exception escaped, taking the whole notification with it. Caught
+            # here as well now: a template must never be able to silence an
+            # alert.
+            fields = dict(context)
+            fields.update(intent=intent, urgency=urgency, location=location)
             try:
-                return template.format(intent=intent, urgency=urgency,
-                                       location=location, **context)
-            except (KeyError, IndexError) as exc:
+                return template.format(**fields)
+            except (KeyError, IndexError, ValueError, TypeError) as exc:
                 # A broken template must not silence an emergency notification.
                 log.warning("notification template for %s is invalid (%s) — "
                             "falling back to the default body", intent, exc)
