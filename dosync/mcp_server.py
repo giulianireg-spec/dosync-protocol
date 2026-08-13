@@ -13,7 +13,7 @@ Uso:
     # With authentication
     DOSYNC_TOKEN=<tu-token> PYTHONPATH=. python3 dosync/mcp_server.py
 
-Configuración en Claude Desktop (~/.config/claude/claude_desktop_config.json):
+Claude Desktop configuration (~/.config/claude/claude_desktop_config.json):
     {
       "mcpServers": {
         "dosync": {
@@ -28,11 +28,11 @@ Configuración en Claude Desktop (~/.config/claude/claude_desktop_config.json):
     }
 
 Herramientas expuestas al LLM:
-    dosync_fire_intent      — ejecutar una intención semántica
+    dosync_fire_intent      — execute a semantic intent
     dosync_list_devices     — listar dispositivos registrados
-    dosync_get_status       — estado del hub + ocupación
+    dosync_get_status       — hub state and inferred occupancy
     dosync_send_event       — enviar un evento de dispositivo
-    dosync_get_audit_log    — últimas entradas del audit log
+    dosync_get_audit_log    — most recent audit log entries
     dosync_get_scenarios    — listar escenarios disponibles
 """
 
@@ -135,7 +135,7 @@ async def _intent_property_schema() -> dict:
     `enum` (hub reachable) or a plain string (hub unreachable — degrade gracefully;
     the hub validates anyway). Also surfaces, in the description, which intents are
     compositions so the AI knows they need geographic context."""
-    base_desc = "Clase de intención semántica (declarada en el hub)"
+    base_desc = "Semantic intent class, as declared on the hub"
     try:
         listing = await hub_request("GET", "/v1/intent-classes")
         classes = listing.get("intent_classes") if isinstance(listing, dict) else None
@@ -176,9 +176,9 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="dosync_fire_intent",
             description=(
-                "Ejecuta una intención semántica en el hub DoSync. "
-                "El hub resuelve automáticamente qué dispositivos actúan y cómo, "
-                "basándose en sus capacidades declaradas. "
+                "Execute a semantic intent on the DoSync hub. "
+                "The hub resolves which devices act and how, "
+                "from their declared capabilities. "
                 "Usar para: emergencias, rutinas, control del ambiente, notificaciones."
             ),
             inputSchema={
@@ -257,8 +257,8 @@ async def list_tools() -> list[types.Tool]:
             name="dosync_send_event",
             description=(
                 "Send an event from a device to the hub. "
-                "Usar para simular eventos de sensores (caída detectada, "
-                "movimiento, avería, etc.) o para integrar dispositivos "
+                "Use to inject sensor events (a detected fall, "
+                "motion, a fault) or to integrate devices "
                 "que no tienen adapter nativo."
             ),
             inputSchema={
@@ -292,7 +292,7 @@ async def list_tools() -> list[types.Tool]:
             description=(
                 "Read the most recent entries of the hub audit log. "
                 "The log is tamper-evident: every entry is chained "
-                "con SHA-256. Incluye verificación de integridad."
+                "with SHA-256. Includes an integrity check."
             ),
             inputSchema={
                 "type": "object",
@@ -409,7 +409,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         intent_id = fire_result.get("intent_id")
         if not intent_id:
             return [types.TextContent(type="text",
-                text=f"❌ Hub no retornó intent_id para '{intent}'")]
+                text=f"❌ The hub returned no intent_id for '{intent}'")]
 
         # Poll until completed or timeout
         # Timeout = DOSYNC_INTENT_TIMEOUT + 3s network margin
@@ -484,7 +484,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         text += f"  Acciones completadas: {actions}\n"
 
         if failed:
-            text += f"  Sin respuesta ({len(failed)} dispositivos físicamente apagados) — excluidos automáticamente por ~30 min\n"
+            text += f"  No response from {len(failed)} device(s) — excluded for ~30 min\n"
         if aborted:
             text += f"  Cancelados por FailurePolicy: {len(aborted)} dispositivos\n"
 
@@ -492,7 +492,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
                    if r.get("success") and r.get("action") in
                    ("unlock","alarm","call","notify","turn_on","set_brightness")]
         if critical:
-            text += "\nAcciones críticas ejecutadas:\n"
+            text += "\nCritical actions executed:\n"
             for r in critical[:8]:
                 resp = r.get("response", {})
                 status_val = resp.get("status","ok") if isinstance(resp, dict) else "ok"
@@ -551,9 +551,9 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         text  = f"🏠 DoSync Hub v{result.get('version', '?')}\n\n"
         text += f"  Protocolo:    {result.get('protocol', '?')}\n"
         text += f"  Dispositivos: {result.get('devices', 0)}\n"
-        text += f"  Ocupación:    {'Sí, hay alguien en casa' if occupied else 'Casa vacía'}\n"
+        text += f"  Occupancy:    {'occupied' if occupied else 'unoccupied'}\n"
         text += f"  Audit log:    {result.get('audit_entries', 0)} entradas "
-        text += f"({'✓ íntegro' if integrity else '✗ comprometido'})\n"
+        text += f"({'✓ intact' if integrity else '✗ compromised'})\n"
         text += f"  WS clientes:  {ws_clients}\n"
         text += f"  DB:           {db.get('db_size_kb', '?')} KB en {db.get('db_path', '?')}\n"
         if result.get("family_profile"):
@@ -596,7 +596,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
         text  = f"📋 Audit Log DoSync\n"
         text += f"   Total: {total} entradas | "
-        text += f"Integridad: {'✓ íntegra' if integrity else '✗ comprometida'}\n\n"
+        text += f"Integridad: {'✓ intact' if integrity else '✗ compromised'}\n\n"
 
         # Show the most recent N
         for entry in list(reversed(entries))[:last_n]:
@@ -621,20 +621,20 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         text = """🏠 Escenarios disponibles en DoSync:
 
 EMERGENCIAS (urgency=emergency):
-  ensure_safety    — Alguien se cayó, hay peligro. Abre puertas, llama emergencias, activa alarma.
+  ensure_safety    — Someone is in danger. Opens access, alerts, sounds alarms.
   (+ send_event)   — Enviar evento smoke_detected para emergencia de incendio (3 fases).
 
 NOTIFICACIONES (urgency=warning/info):
   notify           — Push information to any target (people, displays, channels).
-  alert_anomaly    — Consumo eléctrico anormal, algo inesperado detectado.
-  remind_chore     — Recordar una tarea doméstica (lavarropas terminó, etc.).
+  alert_anomaly    — An unexpected condition was detected.
+  remind_chore     — Remind about a completed or pending task.
 
-ENERGÍA:
+ENERGY:
   save_energy      — Nadie en casa, activar modo ahorro (luces, clima).
   away_mode        — Todos salieron, armar seguridad y bajar consumo.
 
 RUTINAS:
-  morning_routine  — Buenos días: persianas, cafetera, clima.
+  morning_routine  — Start-of-day routine declared by the deployment.
   bedtime_routine  — Hora de dormir: atenuar luces, bajar persianas.
   # Domain-specific intents (e.g. children arrival, shift change) can be registered via POST /v1/intent-classes
 
@@ -643,14 +643,14 @@ AMBIENTE:
   control_access   — Bloquear/desbloquear puertas.
   monitor_health   — Activar monitoreo continuo de una persona.
 
-INFORMACIÓN:
+INFORMATION:
   report_status    — Read the state of every sensor.
 
 Niveles de urgencia:
   info      — rutinas, recordatorios
-  warning   — alertas no críticas
-  alert     — situación que requiere atención
-  emergency — actúa inmediatamente sin confirmación
+  warning   — non-critical alerts
+  alert     — a condition that needs attention
+  emergency — acts immediately, without confirmation
 """
         return [types.TextContent(type="text", text=text)]
 
@@ -708,7 +708,7 @@ Niveles de urgencia:
         elif result.get("success"):
             text = f"✅ {device_id}: {action} ejecutado correctamente"
         else:
-            text = f"⚠️ {device_id}: {action} falló"
+            text = f"⚠️ {device_id}: {action} failed"
 
         return [types.TextContent(type="text", text=text)]
 

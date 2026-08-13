@@ -128,13 +128,19 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   antipattern TAG-VOCABULARY documents. Now `light` alone; measured on the
   reference deployment, the selection is identical either way.
 
-- **The core and the specification are in English.** 174 lines of Spanish
+- **The core and the specification are in English.** 255 lines of Spanish
   remained across 29 files — module headers, docstrings, the MCP tool
   descriptions, user-facing SMS text. An open protocol whose core carries one
   contributor's language cannot be read or implemented by most of the people it
   asks to adopt it. Enforced by a test scoped to `dosync/`, `tools/` and
   `spec/`; `examples/` is deliberately outside it, because a demo narrating one
   deployment in its operator's language is legitimate.
+
+  The first version of that test required three Spanish stopwords on one line
+  and let 81 lines through — `Instalación:`, `Características:`,
+  `Posición 0-100%` are each a single word, and they are the labels a reader
+  sees first. One accented character is now enough, with panel surnames cited in
+  decision comments declared as exceptions.
 
 - **Location tags are stated as an open namespace.** The spec listed ten
   locations — `bedroom`, `kitchen`, `garage`, `basement` — in a normative

@@ -51,7 +51,7 @@ class FailurePolicy(str, Enum):
 
     CONTINUE  — compntes
     ABORT     — detiene las acciones pendientes al primer fallo
-    RETRY     — reintenta la acción fallida N veces antes de continuar
+    RETRY     — retry the failed action N times before continuing
     """
     CONTINUE = "continue"
     ABORT    = "abort"

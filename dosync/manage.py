@@ -1,7 +1,7 @@
 """
 DoSync — Management CLI
 =======================
-Herramienta de administración del hub DoSync.
+Administration tool for a DoSync hub.
 
 Uso:
     PYTHONPATH=. python3 manage.py keys list

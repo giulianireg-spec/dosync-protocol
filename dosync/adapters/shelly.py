@@ -3,15 +3,15 @@ DoSync — Shelly Adapter
 =======================
 Adapter para dispositivos Shelly via HTTP local (Gen1 y Gen2).
 
-Características:
-- Comunicación 100% local — sin nube, sin internet requerido
+Features:
+- Fully local communication — no cloud, no internet required
 - Compatible con Shelly 1, 1PM, 2.5, Plug S, Dimmer, RGBW2, Pro series
 - Gen1: API /relay/0, /light/0 via GET requests
 - Gen2: API RPC via POST /rpc/Switch.Set, /rpc/Light.Set
 - No requiere dependencias externas — usa requests (ya en requirements.txt)
 
-Instalación:
-    No requiere instalación adicional.
+Installation:
+    No additional installation required.
 
 Registro de un dispositivo Shelly en DoSync:
     from dosync.adapters.shelly import ShellyAdapter, shelly_manifest
@@ -61,11 +61,11 @@ def shelly_manifest(
     Build a CapabilityManifest ready to register a Shelly device.
 
     Args:
-        device_id:        identificador único (ej: "shelly-living-01")
+        device_id:        unique identifier (e.g. "shelly-zone1-01")
         device_name:      nombre visible (ej: "Shelly Living Room")
         ip:               IP del dispositivo en la red local
         device_type:      tipo: "relay" | "dimmer" | "plug" | "rgbw"
-        gen:              generación de la API: 1 o 2
+        gen:              API generation: 1 or 2
         tags:             tags adicionales
         room:             location (added as a tag)
         emergency_capable: si puede actuar en emergencias
@@ -79,7 +79,7 @@ def shelly_manifest(
     # "smart-plug", no imprecise "climate". Per TAG-VOCABULARY.md.
     base_tags = []
 
-    # Tags según tipo de dispositivo
+    # Tags by device type
     type_tags = {
         "relay":  ["light", "appliance"],
         "dimmer": ["light"],
@@ -92,7 +92,7 @@ def shelly_manifest(
     if room:
         base_tags.append(room)
 
-    # Actuadores según tipo
+    # Actuators by type
     actuators_map = {
         "relay":  [("turn_on", "Encender relay"), ("turn_off", "Apagar relay")],
         "dimmer": [("turn_on", "Encender dimmer"), ("turn_off", "Apagar dimmer"),

@@ -3,13 +3,13 @@ DoSync — WiZ Adapter
 ====================
 Adapter para lamparitas Philips WiZ via protocolo UDP local.
 
-Características:
-- Comunicación 100% local — sin nube, sin internet requerido
+Features:
+- Fully local communication — no cloud, no internet required
 - Works with any WiFi WiZ bulb
 - Soporta: encender, apagar, brillo, color RGB, temperatura de color
-- Discovery automático de IPs via broadcast (opcional)
+- Optional address discovery via broadcast
 
-Instalación:
+Installation:
     pip install pywizlight
 
 Registro de un dispositivo WiZ en DoSync:
@@ -23,7 +23,7 @@ Registro de un dispositivo WiZ en DoSync:
     # Registrar la lamparita en el hub
     hub.register_device(wiz_manifest(
         device_id="wiz-living-01",
-        device_name="Lámpara sala",
+        device_name="Zone 1 lamp",
         ip="192.168.1.45",
         tags=["light", "living-room", "climate"],
     ))
@@ -64,8 +64,8 @@ def wiz_manifest(
     Build a CapabilityManifest ready to register a WiZ bulb.
 
     Args:
-        device_id:   identificador único (ej: "wiz-living-01")
-        device_name: nombre visible (ej: "Lámpara sala")
+        device_id:   unique identifier (e.g. "wiz-zone1-01")
+        device_name: display name (e.g. "Zone 1 lamp")
         ip:          bulb address on the local network (e.g. "192.168.1.45")
         tags:        tags adicionales (se agregan a ["light", "wiz"])
         room:        location (added as a tag when provided)
@@ -358,5 +358,5 @@ WIZ_SCENES = {
     26: "Golden white",
     27: "Pulse",
     28: "Steampunk",
-    29: "Rhythm",     # sincroniza con música
+    29: "Rhythm",     # syncs to music
 }

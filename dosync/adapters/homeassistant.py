@@ -7,12 +7,12 @@ Exposes Home Assistant entities as certifiable DoSync devices.
 Requiere:
     pip install aiohttp
 
-Configuración:
+Configuration:
     HA_URL   = "http://homeassistant.local:8123"
     HA_TOKEN = "<long-lived access token>"
 
-Cómo obtener el token en HA:
-    1. Perfil (ícono abajo izquierda) → Long-Lived Access Tokens
+Getting a token from Home Assistant:
+    1. Profile (bottom-left icon) → Long-Lived Access Tokens
     2. "Create Token" → copiar el token
 
 Uso:
@@ -125,14 +125,14 @@ HA_DOMAIN_MAP = {
         "category": DeviceCategory.ACTUATOR,
         "tags":      ["blinds", "climate"],
         "actuators": [
-            ActuatorSpec("set_position", "set_position", "Posición 0-100%",
+            ActuatorSpec("set_position", "set_position", "Position 0-100%",
                          {"type": "object",
                           "properties": {"position": {"type": "integer", "minimum": 0, "maximum": 100}},
                           "required": ["position"]}),
             ActuatorSpec("turn_on",  "turn_on",  "Abrir"),
             ActuatorSpec("turn_off", "turn_off", "Cerrar"),
         ],
-        "sensors": [SensorSpec("position", "integer", "Posición actual", unit="%",
+        "sensors": [SensorSpec("position", "integer", "Current position", unit="%",
                                 kind="device_state")],
         "emergency_capable": False,
     },
@@ -165,7 +165,7 @@ HA_DOMAIN_MAP = {
         "category": DeviceCategory.HYBRID,
         "tags":      ["camera", "emergency"],
         "actuators": [
-            ActuatorSpec("record", "record", "Iniciar grabación"),
+            ActuatorSpec("record", "record", "Start recording"),
             ActuatorSpec("stream", "stream", "Activar streaming"),
         ],
         "sensors":   [SensorSpec("state", "boolean", "Activa", kind="device_state")],
@@ -277,7 +277,7 @@ class HABridge(DoSyncAdapter):
     """
     Bridge entre DoSync y Home Assistant.
 
-    Actúa como:
+    Acts as:
     1. Scanner — importa dispositivos de HA como manifests DoSync
     2. Adapter — ejecuta acciones DoSync traducidas a servicios HA
     """
@@ -526,7 +526,7 @@ class HABridge(DoSyncAdapter):
              "attributes": {"friendly_name": "TV sala"}},
             {"entity_id": "camera.front_door",
              "state": "idle",
-             "attributes": {"friendly_name": "Cámara puerta principal"}},
+             "attributes": {"friendly_name": "Front door camera"}},
         ]
         count = 0
         for state in simulated_states:

@@ -616,7 +616,7 @@ class DoSyncDB:
     def get_all_health(self, last_n: int = 100, min_executions: int = 1) -> list:
         """
         Health statistics for every device with at least min_executions.
-        Ordenado por tasa de éxito ascendente (peores primero).
+        Ordered by ascending success rate — worst first.
         """
         with self._cursor() as cur:
             cur.execute("SELECT DISTINCT device_id FROM device_health")

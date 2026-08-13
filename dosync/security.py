@@ -4,7 +4,7 @@ DoSync Security — Layer 2
 PKI local + TLS/mTLS para el hub DoSync.
 
 Arquitectura:
-    - La Pi actúa como Certificate Authority (CA) local
+    - The hub host acts as a local Certificate Authority (CA)
     - El hub tiene su propio certificado firmado por la CA
     - Los adapters externos (gpio_adapter, adapters de terceros)
       reciben certificados firmados por la misma CA
@@ -21,7 +21,7 @@ Archivos generados (en certs/):
         ├── gpio.key    — clave privada del gpio_adapter
         └── gpio.crt    — certificado del gpio_adapter (firmado por CA)
 
-Uso rápido:
+Quick start:
     # Generar PKI completa (primera vez)
     python3 -m dosync.security setup
 
@@ -34,10 +34,10 @@ Uso rápido:
     # Ver info de un certificado
     python3 -m dosync.security info --cert certs/hub.crt
 
-Integración con uvicorn (HTTPS):
+Integration with uvicorn (HTTPS):
     uvicorn server:app --ssl-keyfile certs/hub.key --ssl-certfile certs/hub.crt
 
-Integración con uvicorn (mTLS — requiere cert de cliente):
+Integration with uvicorn (mTLS — requires a client certificate):
     uvicorn server:app \\
         --ssl-keyfile certs/hub.key \\
         --ssl-certfile certs/hub.crt \\
@@ -70,8 +70,8 @@ HUB_CERT_PATH   = CERTS_DIR / "hub.crt"
 HUB_CSR_PATH    = CERTS_DIR / "hub.csr"
 ADAPTERS_DIR    = CERTS_DIR / "adapters"
 
-CA_VALIDITY_DAYS  = 3650   # 10 años
-CERT_VALIDITY_DAYS = 365   # 1 año (renovación anual)
+CA_VALIDITY_DAYS  = 3650   # 10 years
+CERT_VALIDITY_DAYS = 365   # 1 year, renewed annually
 KEY_SIZE          = 4096   # bits RSA
 
 CA_SUBJECT = (

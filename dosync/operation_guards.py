@@ -82,7 +82,7 @@ class GeofenceGuard(BaseGuard):
     before dispatch; this checks where the vehicle ACTUALLY is, every tick — catching
     a vehicle blown off course by wind, GPS drift, or any drift the pre-flight check
     could not foresee. Both call the same is_within_perimeter (dosync/geo.py): one
-    rule, two moments (admission + monitoring). Cinturón y airbag.
+    rule, two moments (admission + monitoring): belt and airbag.
     """
 
     def __init__(self, center_lat: float, center_lon: float,

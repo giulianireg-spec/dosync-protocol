@@ -11,7 +11,7 @@ Para agregar un nuevo dispositivo:
     2. Register the device with adapter="my_brand" in its CapabilityManifest
     3. The hub treats it like any other device — no core changes needed
 
-Publicación de adapters de terceros:
+Publishing third-party adapters:
     pip install dosync-adapter-philipshue
     pip install dosync-adapter-shelly
     pip install dosync-adapter-matter
@@ -31,7 +31,7 @@ log = logging.getLogger("dosync.adapters")
 
 class DoSyncAdapter(ABC):
     """
-    Interfaz base para adapters de dispositivos físicos.
+    Base interface for physical device adapters.
 
     Cada adapter traduce acciones DoSync al protocolo nativo
     del dispositivo (UDP, HTTP, GPIO, BLE, etc.).

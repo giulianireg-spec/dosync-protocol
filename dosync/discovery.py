@@ -1,14 +1,14 @@
 """
 DoSync — Discovery Module
 =========================
-Descubre dispositivos en la red local automáticamente.
+Discovers devices on the local network automatically.
 
 Soporta:
     - WiZ: broadcast UDP (pywizlight)
     - DoSync native: broadcast UDP en puerto 47201
     - Extensible: cualquier adapter puede registrar su propio discoverer
 
-Uso básico:
+Basic usage:
     from dosync.discovery import Discovery
 
     discovery = Discovery(hub, executor)
@@ -107,7 +107,7 @@ class Discovery:
     async def run(self) -> int:
         """
         Ejecuta un ciclo de discovery completo.
-        Retorna el número de dispositivos nuevos registrados.
+        Returns how many new devices were registered.
         """
         log.info("Starting device discovery...")
         found_all: list[DiscoveredDevice] = []
@@ -168,7 +168,7 @@ class Discovery:
 
     async def run_periodic(self, interval_seconds: int = 300) -> None:
         """
-        Corre discovery periódicamente en background.
+        Runs discovery periodically in the background.
         Useful for catching devices that appear or change address.
 
         Uso:
@@ -189,7 +189,7 @@ class Discovery:
     async def scan_and_print(self) -> None:
         """
         Escanea y muestra los dispositivos encontrados sin registrarlos.
-        Útil para diagnóstico.
+        Useful for diagnostics.
         """
         print("\n── DoSync Device Discovery ───────────────────────")
         print(f"  Scanning for WiZ bulbs (timeout: {self.wiz_timeout}s)...")

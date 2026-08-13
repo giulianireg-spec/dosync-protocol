@@ -1,7 +1,7 @@
 """
 DoSync — Notification Adapter (SMS via Twilio)
 ===============================================
-Envía SMS cuando se disparan intents de emergencia o alertas.
+Sends SMS when emergency or alert intents fire.
 
 Uso:
     # Agregar al servidor como middleware de notificaciones
@@ -12,8 +12,8 @@ Uso:
 Variables de entorno (.env):
     TWILIO_ACCOUNT_SID   — Account SID de Twilio
     TWILIO_AUTH_TOKEN    — Auth Token de Twilio
-    TWILIO_FROM          — Número Twilio (+1XXXXXXXXXX)
-    DOSYNC_EMERGENCY_CONTACT — Número destino (+54XXXXXXXXXX)
+    TWILIO_FROM          — Twilio number (+1XXXXXXXXXX)
+    DOSYNC_EMERGENCY_CONTACT — destination number, E.164 format
 """
 
 from __future__ import annotations
@@ -182,7 +182,7 @@ class NotificationAdapter(DoSyncAdapter):
     async def execute(self, action, urgency):
         from ..models import ActionResult
         params = action.params or {}
-        message = params.get('message', 'Notificación DoSync')
+        message = params.get('message', 'DoSync notification')
         try:
             await self.notify(
                 intent=action.action,

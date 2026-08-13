@@ -557,7 +557,7 @@ class RegisterDeviceRequest(BaseModel):
     cert_tier: str = "basic"
     adapter:         Optional[str] = None  # which adapter drives this device (e.g. "mavlink", "wiz")
     adapter_config:  dict = {}             # adapter-specific config (e.g. {"connection": "udp:127.0.0.1:14550"})
-    device_token:    Optional[str] = None  # token de autenticación del dispositivo
+    device_token:    Optional[str] = None  # the device's authentication token
     certificate_pem: Optional[str] = None  # PEM certificate for mTLS auth (optional)
 
 class PresenceSignalRequest(BaseModel):

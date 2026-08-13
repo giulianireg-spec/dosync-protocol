@@ -15,8 +15,8 @@ Modo 2 — via python-matter-server (standalone, experimental):
     Conecta directamente a un python-matter-server corriendo localmente.
     Requiere: pip install matter-server-client
 
-Instalación:
-    Modo HA:     No requiere instalación adicional
+Installation:
+    HA mode:     no additional installation required
     Modo standalone: pip install matter-server-client (experimental)
 
 Registro de un dispositivo Matter en DoSync:
@@ -58,7 +58,7 @@ def matter_manifest(
     Build a CapabilityManifest for a Matter device.
 
     Args:
-        device_id:        identificador único (ej: "matter-light-01")
+        device_id:        unique identifier (e.g. "matter-light-01")
         device_name:      nombre visible
         entity_id:        entity_id en Home Assistant (ej: "light.matter_bulb")
         device_type:      tipo: "light" | "switch" | "cover" | "lock" | "climate"
@@ -92,7 +92,7 @@ def matter_manifest(
                     ("set_brightness", "Brillo"), ("set_color", "Color")],
         "switch":  [("turn_on", "Encender"), ("turn_off", "Apagar")],
         "cover":   [("open", "Abrir"), ("close", "Cerrar"),
-                    ("set_position", "Posición 0-100%")],
+                    ("set_position", "Position 0-100%")],
         "lock":    [("lock", "Cerrar"), ("unlock", "Abrir")],
         "climate": [("set_temperature", "Temperatura"), ("turn_on", "Encender"),
                     ("turn_off", "Apagar")],
@@ -262,7 +262,7 @@ class MatterAdapter(DoSyncAdapter):
 
     def _call_ha(self, device_type: str,
                  action: DeviceAction, entity_id: str) -> dict:
-        """Traduce acción DoSync a servicio HA."""
+        """Translate a DoSync action into an HA service call."""
         a = action.action
         p = action.params
 

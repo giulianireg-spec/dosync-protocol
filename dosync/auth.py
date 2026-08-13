@@ -61,7 +61,7 @@ class AuthManager:
         Args:
             db:      instancia de DoSyncDB
             enabled: when False, every request passes unverified.
-                     Útil para desarrollo local.
+                     Useful for local development.
         """
         self.db      = db
         self.enabled = enabled
@@ -170,7 +170,7 @@ def get_auth_manager() -> AuthManager:
 
 class DeviceAuthManager:
     """
-    Gestiona tokens de autenticación por dispositivo.
+    Manages per-device authentication tokens.
 
     Flujo:
         1. Operador pre-registra un dispositivo → obtiene device_token
@@ -178,7 +178,7 @@ class DeviceAuthManager:
         3. Hub valida el token → solo permite el device_id autorizado
 
     Backward compatible: when device_token is absent from the manifest,
-    el registro procede sin validación (modo legacy).
+    registration proceeds unvalidated (legacy mode).
     Configurable via DOSYNC_DEVICE_AUTH=strict para requerir token siempre.
     """
 
