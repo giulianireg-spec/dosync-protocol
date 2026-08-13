@@ -5,7 +5,7 @@ API key simple para proteger el hub.
 
 - Las keys se generan con secrets.token_urlsafe(32)
 - Solo almacenamos el SHA-256 del token, nunca el token en texto plano
-- El primer arranque genera una key automáticamente y la muestra en consola
+- The first start generates a key automatically and prints it once
 - Las keys adicionales se crean via API o CLI
 
 Flujo:
@@ -53,14 +53,14 @@ def hash_token(token: str) -> str:
 class AuthManager:
     """
     Gestiona API keys para el hub DoSync.
-    Se integra con DoSyncDB para persistencia.
+    Backed by DoSyncDB for persistence.
     """
 
     def __init__(self, db, enabled: bool = True):
         """
         Args:
             db:      instancia de DoSyncDB
-            enabled: si False, todas las requests pasan sin verificación.
+            enabled: when False, every request passes unverified.
                      Útil para desarrollo local.
         """
         self.db      = db
@@ -110,13 +110,13 @@ class AuthManager:
 
     def ensure_default_key(self) -> Optional[str]:
         """
-        Si no hay ninguna key, genera una y la retorna para mostrarla.
-        Si ya hay keys, retorna None (no genera otra).
+        With no keys present, generate one and return it to be displayed.
+        With keys already present, return None — no second key is generated.
         Llamar al iniciar el hub.
 
-        Si DOSYNC_DEMO_TOKEN está definido en el entorno, usa ese valor
-        como token inicial en lugar de generar uno aleatorio. Útil para
-        despliegues Docker donde el token debe ser conocido de antemano.
+        When DOSYNC_DEMO_TOKEN is set, that value is used as the initial
+        token instead of a random one. Useful for Docker deployments
+        where the token must be known in advance.
         """
         if not self.enabled:
             return None
@@ -155,7 +155,7 @@ class AuthManager:
 
 # ── FastAPI dependency ────────────────────────────────────────────────────────
 
-# Referencia global al auth manager — se setea al iniciar el servidor
+# Global auth manager reference — set when the server starts
 _auth_manager: Optional[AuthManager] = None
 
 def set_auth_manager(manager: AuthManager) -> None:
@@ -177,7 +177,7 @@ class DeviceAuthManager:
         2. Dispositivo incluye device_token al registrar su manifest
         3. Hub valida el token → solo permite el device_id autorizado
 
-    Backward compatible: si device_token no se incluye en el manifest,
+    Backward compatible: when device_token is absent from the manifest,
     el registro procede sin validación (modo legacy).
     Configurable via DOSYNC_DEVICE_AUTH=strict para requerir token siempre.
     """
@@ -188,8 +188,8 @@ class DeviceAuthManager:
 
     def provision(self, device_id: str, label: str = "") -> str:
         """
-        Pre-registra un device_id y genera su token de acceso.
-        Retorna el token en texto plano — mostrar UNA SOLA VEZ al operador.
+        Pre-register a device_id and generate its access token.
+        Returns the plaintext token — show it to the operator ONCE.
         """
         token = secrets.token_urlsafe(32)
         token_hash = hash_token(token)
@@ -199,7 +199,7 @@ class DeviceAuthManager:
 
     def verify(self, device_id: str, token: str) -> tuple[bool, str]:
         """
-        Verifica que el token corresponde al device_id declarado.
+        Verify the token matches the declared device_id.
         Retorna (valid: bool, reason: str).
         """
         token_hash = hash_token(token)

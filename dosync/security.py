@@ -208,10 +208,10 @@ def _cert_info(cert_path: Path) -> Optional[CertInfo]:
 def generate_ca(force: bool = False) -> None:
     """
     Genera la CA local (Certificate Authority).
-    Sólo se hace UNA VEZ. La clave privada nunca sale de la Pi.
+    Done ONCE. The private key never leaves the hub host.
     
     Args:
-        force: si True, regenera aunque ya exista (DESTRUYE la PKI existente)
+        force: when True, regenerate even if present — DESTROYS the existing PKI
     """
     _ensure_dirs()
 
@@ -233,7 +233,7 @@ def generate_ca(force: bool = False) -> None:
 
     log.info("Generating CA self-signed certificate (valid %d days)...", CA_VALIDITY_DAYS)
     # Config file completo — requerido por OpenSSL 3.0 en Debian/Raspberry Pi OS
-    # El approach con -subj + -extensions falla en OpenSSL 3.0 sin -config
+    # The -subj + -extensions approach fails on OpenSSL 3.0 without -config
     ca_ext_file = CERTS_DIR / "ca_ext.cnf"
     ca_ext_file.write_text(
         "[req]\n"
@@ -278,11 +278,11 @@ def generate_hub_cert(
     force: bool = False,
 ) -> None:
     """
-    Genera el certificado del hub, firmado por la CA local.
+    Generate the hub certificate, signed by the local CA.
     
     Args:
-        hub_ip:       IP del hub (para el SAN)
-        hub_hostname: hostname del hub (para el SAN)
+        hub_ip:       hub address, for the SAN
+        hub_hostname: hub hostname, for the SAN
         force:        regenerar aunque ya exista
     """
     _ensure_dirs()
@@ -355,12 +355,12 @@ def issue_adapter_cert(
     force: bool = False,
 ) -> tuple[Path, Path]:
     """
-    Emite un certificado para un adapter externo.
-    El adapter usa este certificado para autenticarse con el hub (mTLS).
+    Issue a certificate for an external adapter.
+    The adapter uses it to authenticate to the hub over mTLS.
     
     Args:
         name:       nombre del adapter (ej: "gpio", "shelly-01")
-        adapter_ip: IP del adapter (para el SAN)
+        adapter_ip: adapter address, for the SAN
         force:      regenerar aunque ya exista
     
     Returns:
@@ -436,7 +436,7 @@ def setup(
     force: bool = False,
 ) -> PKIStatus:
     """
-    Configura la PKI completa de DoSync en una sola llamada.
+    Set up the complete DoSync PKI in a single call.
     
     Genera:
         1. CA local
@@ -446,11 +446,11 @@ def setup(
     Args:
         hub_ip:      IP del hub en la red local
         hub_hostname: hostname del hub
-        issue_gpio:  si True, emite también el cert para gpio_adapter
+        issue_gpio:  when True, also issue the GPIO adapter certificate
         force:       regenerar todo aunque ya exista
     
     Returns:
-        PKIStatus con el estado final de la PKI
+        PKIStatus describing the resulting PKI
     """
     if not _openssl_available():
         raise RuntimeError("openssl not found. Install with: apt-get install openssl")
@@ -479,7 +479,7 @@ def setup(
 
 
 def get_status() -> PKIStatus:
-    """Retorna el estado actual de la PKI."""
+    """Return the current PKI state."""
     status = PKIStatus()
 
     status.ca_exists = CA_CERT_PATH.exists()
@@ -516,14 +516,14 @@ def get_status() -> PKIStatus:
 
 
 def renew_hub_cert(hub_ip: str = "127.0.0.1", hub_hostname: str = "localhost") -> None:
-    """Renueva el certificado del hub manteniendo la misma CA."""
+    """Renew the hub certificate, keeping the same CA."""
     log.info("Renewing hub certificate...")
     generate_hub_cert(hub_ip=hub_ip, hub_hostname=hub_hostname, force=True)
     log.info("Hub certificate renewed. Restart the hub to apply.")
 
 
 def renew_adapter_cert(name: str, adapter_ip: str = "127.0.0.1") -> tuple[Path, Path]:
-    """Renueva el certificado de un adapter."""
+    """Renew an adapter certificate."""
     log.info("Renewing cert for adapter '%s'...", name)
     return issue_adapter_cert(name=name, adapter_ip=adapter_ip, force=True)
 
@@ -532,8 +532,8 @@ def renew_adapter_cert(name: str, adapter_ip: str = "127.0.0.1") -> tuple[Path, 
 
 def detect_hub_ip() -> str:
     """
-    Intenta detectar la IP local de la Pi en la red.
-    Fallback a 127.0.0.1 si no puede determinarla.
+    Try to detect the host's local network address.
+    Falls back to 127.0.0.1 when it cannot be determined.
     """
     import socket
     try:

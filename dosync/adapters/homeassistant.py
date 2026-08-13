@@ -2,7 +2,7 @@
 DoSync — Home Assistant Bridge
 ===============================
 Conecta DoSync con Home Assistant via su API REST local.
-Expone todos los dispositivos de HA como gadgets DoSync certificables.
+Exposes Home Assistant entities as certifiable DoSync devices.
 
 Requiere:
     pip install aiohttp
@@ -24,7 +24,7 @@ Uso:
         hub=hub,
     )
 
-    # Importar todos los dispositivos de HA al hub
+    # Import every HA entity into the hub
     count = await bridge.import_devices()
     print(f"Imported {count} devices")
 
@@ -50,7 +50,7 @@ from ..models import (
 log = logging.getLogger("dosync.adapters.ha")
 
 # ── Domain → DoSync mapping ───────────────────────────────────────────────────
-# Cada dominio de HA se mapea a tags, actuadores y sensores DoSync
+# Each HA domain maps to DoSync tags, actuators and sensors
 
 HA_DOMAIN_MAP = {
     "light": {
@@ -195,7 +195,7 @@ HA_DOMAIN_MAP = {
     },
 }
 
-# Dominios que ignoramos (no tienen sentido como gadgets DoSync)
+# Domains we skip — they do not map to DoSync devices
 # ── HA housekeeping (HA-BRIDGE-HYGIENE, 2026-07-19) ──────────────────────────
 # Home Assistant's own internals — sunrise/sunset times from the `sun`
 # integration, backup status from `backup` — surface as sensor.* entities and
@@ -296,7 +296,7 @@ class HABridge(DoSyncAdapter):
             ha_url:    URL de HA (ej: http://homeassistant.local:8123)
             ha_token:  Long-lived access token de HA
             hub:       instancia del DoSyncHub
-            simulated: si True, usa datos de ejemplo sin conectar a HA real
+            simulated: when True, use sample data instead of connecting to HA
         """
         self._url       = ha_url.rstrip("/")
         self._token     = ha_token
@@ -407,7 +407,7 @@ class HABridge(DoSyncAdapter):
         return {"new": new_count, "updated": updated_count, "skipped": skipped_count, "total": total}
 
     def _state_to_manifest(self, state: dict) -> Optional[CapabilityManifest]:
-        """Convierte un estado de HA en un CapabilityManifest DoSync."""
+        """Convert an HA state object into a DoSync CapabilityManifest."""
         entity_id  = state.get("entity_id", "")
         domain     = entity_id.split(".")[0] if "." in entity_id else ""
         attributes = state.get("attributes", {})
@@ -492,7 +492,7 @@ class HABridge(DoSyncAdapter):
     # ── Simulated mode ────────────────────────────────────────────────────────
 
     def _import_simulated(self) -> int:
-        """Importa dispositivos de ejemplo para testing sin HA real."""
+        """Import sample devices for testing without a live HA instance."""
         simulated_states = [
             {"entity_id": "light.living_room_main",
              "state": "on",

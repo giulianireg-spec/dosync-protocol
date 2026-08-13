@@ -9,6 +9,22 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+- **A country's emergency number is no longer inside the protocol.** The SMS
+  body for `ensure_safety` ended with `Llamar al 107 (SAME)` — one country's
+  medical emergency service, hard-coded in the notifications adapter. An
+  operator anywhere else received, during a real emergency, a number that does
+  not answer. It was the only finding of its audit with a physical consequence.
+
+  It was **not** made configurable. An option for "who to call" still assumes
+  there is someone to call: an industrial deployment stops a line, an aerial one
+  notifies a ground station. The five hand-written message templates went with
+  it. What remains is what the hub can state truthfully in any domain — which
+  intent fired, at what urgency, where, and any message the caller passed — and
+  a deployment that wants its own wording supplies
+  `DOSYNC_NOTIFICATION_TEMPLATES`. A broken template logs and falls back rather
+  than silencing an emergency notification.
+
 ### Fixed
 - **The repository no longer carries one deployment's configuration.** An audit
   found the reference deployment across the tree: its LAN address in the
@@ -99,6 +115,27 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   directory.
 
 ### Changed
+- **The MCP tool descriptions describe the protocol, not one catalogue.** They
+  were in Spanish, named a vendor (*"Para luces WiZ soporta…"*) in the contract
+  of a generic tool, and documented `all_lights` — a convenience identifier the
+  specification does not define — without saying so. An LLM reads those strings
+  as the tool's contract. They now state that available actions come from the
+  device's own capability manifest, that direct actions are governed under the
+  reserved `direct_control` class, and that `all_lights` is client-side fan-out
+  rather than a protocol feature.
+
+  `all_lights` also selected on `["light", "wiz"]` — a vendor tag, the
+  antipattern TAG-VOCABULARY documents. Now `light` alone; measured on the
+  reference deployment, the selection is identical either way.
+
+- **The core and the specification are in English.** 174 lines of Spanish
+  remained across 29 files — module headers, docstrings, the MCP tool
+  descriptions, user-facing SMS text. An open protocol whose core carries one
+  contributor's language cannot be read or implemented by most of the people it
+  asks to adopt it. Enforced by a test scoped to `dosync/`, `tools/` and
+  `spec/`; `examples/` is deliberately outside it, because a demo narrating one
+  deployment in its operator's language is legitimate.
+
 - **Location tags are stated as an open namespace.** The spec listed ten
   locations — `bedroom`, `kitchen`, `garage`, `basement` — in a normative
   document that an industrial or clinical implementer reads, and defined

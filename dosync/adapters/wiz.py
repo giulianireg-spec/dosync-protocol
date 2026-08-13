@@ -5,7 +5,7 @@ Adapter para lamparitas Philips WiZ via protocolo UDP local.
 
 Características:
 - Comunicación 100% local — sin nube, sin internet requerido
-- Compatible con todas las lamparitas WiZ con WiFi
+- Works with any WiFi WiZ bulb
 - Soporta: encender, apagar, brillo, color RGB, temperatura de color
 - Discovery automático de IPs via broadcast (opcional)
 
@@ -61,12 +61,12 @@ def wiz_manifest(
     room: str = "",
 ):
     """
-    Genera un CapabilityManifest listo para registrar una lamparita WiZ.
+    Build a CapabilityManifest ready to register a WiZ bulb.
 
     Args:
         device_id:   identificador único (ej: "wiz-living-01")
         device_name: nombre visible (ej: "Lámpara sala")
-        ip:          IP de la lamparita en la red local (ej: "192.168.1.45")
+        ip:          bulb address on the local network (e.g. "192.168.1.45")
         tags:        tags adicionales (se agregan a ["light", "wiz"])
         room:        location (added as a tag when provided)
     """
@@ -84,7 +84,7 @@ def wiz_manifest(
     if room:
         base_tags.append(room)
 
-    # Guardamos la IP en adapter_config para que el AdapterExecutor la encuentre
+    # Store the address in adapter_config so the AdapterExecutor can find it
     manifest = CapabilityManifest(
         device_id=device_id,
         device_name=device_name,
@@ -164,8 +164,8 @@ class WiZAdapter(DoSyncAdapter):
     def __init__(self, hub=None):
         """
         Args:
-            hub: referencia al DoSyncHub para leer adapter_config del manifest.
-                 Opcional — si no se pasa, la IP debe venir en action.params.
+            hub: a DoSyncHub reference, to read adapter_config from the manifest.
+                 Optional — without it, the address must come in action.params.
         """
         self._hub = hub
 

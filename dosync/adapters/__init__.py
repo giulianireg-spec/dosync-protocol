@@ -1,15 +1,15 @@
 """
 DoSync — Adapter Layer
 ======================
-Capa de traducción entre el protocolo DoSync y dispositivos físicos reales.
+Translation layer between the DoSync protocol and real physical devices.
 
 Modelo:
     DoSync Hub → AdapterExecutor → [WiZAdapter | GPIOAdapter | ShellyAdapter | ...]
 
 Para agregar un nuevo dispositivo:
     1. Crear adapters/mi_marca.py implementando DoSyncAdapter
-    2. Registrar el dispositivo con adapter="mi_marca" en su CapabilityManifest
-    3. El hub lo maneja igual que cualquier otro dispositivo — sin cambios al núcleo
+    2. Register the device with adapter="my_brand" in its CapabilityManifest
+    3. The hub treats it like any other device — no core changes needed
 
 Publicación de adapters de terceros:
     pip install dosync-adapter-philipshue
@@ -27,7 +27,7 @@ from ..models import ActionResult, DeviceAction, Urgency
 log = logging.getLogger("dosync.adapters")
 
 
-# ── Interfaz base que todo adapter debe implementar ───────────────────────────
+# ── Base interface every adapter must implement ───────────────────────────────
 
 class DoSyncAdapter(ABC):
     """
@@ -160,16 +160,16 @@ class DoSyncAdapter(ABC):
 class AdapterExecutor:
     """
     Ejecutor central que delega acciones al adapter correcto
-    según el campo 'adapter' del CapabilityManifest del dispositivo.
+    based on the 'adapter' field of the device's CapabilityManifest.
 
-    Si un dispositivo no tiene adapter registrado, cae al SimulatedExecutor.
+    A device with no registered adapter falls back to the SimulatedExecutor.
 
     Uso:
         executor = AdapterExecutor(hub)
         executor.register(WiZAdapter())
         executor.register(GPIOAdapter())
 
-        # El hub usa este executor en lugar del SimulatedExecutor
+        # The hub uses this executor instead of the SimulatedExecutor
         result = await hub.execute_intent(intent, executor)
     """
 
@@ -191,7 +191,7 @@ class AdapterExecutor:
             self._simulated = None
 
     def register(self, adapter: DoSyncAdapter) -> None:
-        """Registra un adapter por su nombre."""
+        """Register an adapter under its name."""
         self._adapters[adapter.adapter_name] = adapter
         log.info("Adapter registered: %s", adapter.adapter_name)
 
@@ -206,8 +206,8 @@ class AdapterExecutor:
 
     async def execute(self, action: DeviceAction, urgency: Urgency) -> ActionResult:
         """
-        Ejecuta una acción buscando el adapter correcto para el dispositivo.
-        Fallback al SimulatedExecutor si el dispositivo no tiene adapter.
+        Execute an action, looking up the right adapter for the device.
+        Falls back to the SimulatedExecutor when the device has no adapter.
         """
         device = self._hub.registry.get(action.device_id)
 
@@ -298,7 +298,7 @@ class AdapterExecutor:
                         action.device_id, _e)
 
     def _update_resolver_state(self, action: DeviceAction) -> None:
-        """Notifica al StateAwareResolver el nuevo estado tras una accion exitosa."""
+        """Tell the StateAwareResolver the new state after a successful action."""
         from ..hub import StateAwareResolver
         resolver = getattr(self._hub, 'resolver', None)
         if not isinstance(resolver, StateAwareResolver):

@@ -15,7 +15,7 @@ Uso básico:
     found = await discovery.run()
     print(f"Encontrados: {found} dispositivos")
 
-Uso con auto-registro al iniciar el hub:
+Usage with auto-registration at hub startup:
     discovery = Discovery(hub, executor)
     asyncio.create_task(discovery.run_periodic(interval_seconds=300))
 """
@@ -87,10 +87,10 @@ async def discover_wiz(timeout: float = 5.0) -> list[DiscoveredDevice]:
 
 class Discovery:
     """
-    Descubre dispositivos en la red local y los registra en el hub.
+    Discover devices on the local network and register them with the hub.
 
-    Los dispositivos ya registrados no se duplican — se actualizan
-    si su configuración cambió (ej: IP cambió por DHCP).
+    Devices already registered are not duplicated — they are updated
+    when their configuration changed (an address reassigned by DHCP).
     """
 
     def __init__(
@@ -134,7 +134,7 @@ class Discovery:
     def _register(self, discovered: DiscoveredDevice) -> int:
         """
         Registra un dispositivo descubierto en el hub.
-        Retorna 1 si es nuevo, 0 si ya existía.
+        Returns 1 when new, 0 when already present.
         """
         existing = self.hub.registry.get(discovered.device_id)
         is_new   = existing is None
@@ -169,7 +169,7 @@ class Discovery:
     async def run_periodic(self, interval_seconds: int = 300) -> None:
         """
         Corre discovery periódicamente en background.
-        Ideal para detectar lamparitas que se agregan o cambian de IP.
+        Useful for catching devices that appear or change address.
 
         Uso:
             asyncio.create_task(discovery.run_periodic(interval_seconds=300))

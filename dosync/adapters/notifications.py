@@ -19,6 +19,7 @@ Variables de entorno (.env):
 from __future__ import annotations
 import logging
 import os
+import json
 
 from . import DoSyncAdapter
 
@@ -62,6 +63,25 @@ def load_env_file(path=None) -> int:
     return applied
 
 
+def _load_templates() -> dict:
+    """Read the deployment's message templates, if it declared any."""
+    path = os.environ.get("DOSYNC_NOTIFICATION_TEMPLATES", "")
+    if not path:
+        return {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        if not isinstance(data, dict):
+            log.warning("%s does not contain an object — ignoring templates", path)
+            return {}
+        return data
+    except (OSError, ValueError) as exc:
+        # Audible, and never fatal: a missing template file must not stop the
+        # hub from notifying, it just means the default body is used.
+        log.warning("could not read notification templates from %s: %s", path, exc)
+        return {}
+
+
 def _twilio_config() -> tuple[str, str, str, str]:
     """Read Twilio settings at CALL time, not at import time.
 
@@ -93,7 +113,17 @@ class NotificationAdapter(DoSyncAdapter):
     adapter_name = "notifications"
     """Sends SMS via Twilio for critical DoSync intents."""
 
-    def __init__(self):
+    def __init__(self, templates: dict | None = None):
+        """`templates` maps an intent class to a message template.
+
+        Templates are the deployment's words, not the protocol's. A template is
+        a str.format string over the intent context, e.g.
+            {"ensure_safety": "EMERGENCY at {location} — check now"}
+        Loaded from the JSON file named by DOSYNC_NOTIFICATION_TEMPLATES when no
+        dict is passed. Absent templates are the normal case, not a misconfigured
+        one: the default body is already true and complete.
+        """
+        self.templates = templates if templates is not None else _load_templates()
         sid, token, from_number, emergency_to = _twilio_config()
         self._sid, self._token = sid, token
         self._from, self._emergency_to = from_number, emergency_to
@@ -112,39 +142,42 @@ class NotificationAdapter(DoSyncAdapter):
             return None
 
     def _build_message(self, intent: str, urgency: str, context: dict) -> str:
-        """Build the SMS message body for the given intent."""
-        location = context.get("location", "")
-        trigger  = context.get("trigger", "")
-        temp     = context.get("temperature")
+        """Build the SMS body: what the protocol knows, and nothing else.
 
-        if intent == "ensure_safety":
-            loc = f" en {location}" if location else ""
-            member = context.get("member", "")
-            if member:
-                return (
-                    f"DoSync — {member} llegaron a casa.\n"
-                    f"El sensor de movimiento los detecto y el hogar respondio automaticamente."
-                )
-            return (
-                f"DOSYNC EMERGENCIA{loc}\n"
-                f"Se detecto una situacion de emergencia en el hogar.\n"
-                f"El sistema activo el protocolo de seguridad.\n"
-                f"Verificar inmediatamente. Llamar al 107 (SAME) si es necesario."
-            )
-        elif intent == "alert_anomaly" and temp:
-            return (
-                f"DOSYNC ALERTA\n"
-                f"Temperatura anormal: {temp}C\n"
-                f"Verificar el hogar."
-            )
-        elif intent == "report_status" and trigger == "motion_detected":
-            loc = f" en {location}" if location else ""
-            return f"DOSYNC INFO\nMovimiento detectado{loc}."
-        elif intent == "notify":
-            msg = context.get("message", "Notification from DoSync")
-            return f"DOSYNC\n{msg}"
-        else:
-            return f"DOSYNC {urgency.upper()}\nIntent: {intent}"
+        This used to hold five hand-written templates, in Spanish, describing a
+        home — and the emergency one ended with "Llamar al 107 (SAME)", the
+        medical emergency number of one country, hard-coded into a protocol that
+        claims to work anywhere. An operator elsewhere received, during a real
+        emergency, a number that does not answer.
+
+        It was not made configurable on purpose. An option for "who to call"
+        still assumes there is someone to call: an industrial deployment stops a
+        line, an aerial one notifies a ground station, a clinical one pages a
+        team. The protocol has no business having a view on that.
+
+        What is left is what the hub actually knows and can state truthfully in
+        any domain: which intent fired, at what urgency, where if a location was
+        given, and any message the caller passed. A deployment that wants its own
+        wording supplies templates (see `templates` below); the default is short,
+        factual and promises nothing.
+        """
+        location = context.get("location", "")
+        at = f" at {location}" if location else ""
+
+        template = (self.templates or {}).get(intent)
+        if template:
+            try:
+                return template.format(intent=intent, urgency=urgency,
+                                       location=location, **context)
+            except (KeyError, IndexError) as exc:
+                # A broken template must not silence an emergency notification.
+                log.warning("notification template for %s is invalid (%s) — "
+                            "falling back to the default body", intent, exc)
+
+        if intent == "notify":
+            msg = context.get("message", "")
+            return f"DOSYNC\n{msg}" if msg else f"DOSYNC{at}"
+        return f"DOSYNC {urgency.upper()}{at}\nIntent: {intent}"
 
     async def execute(self, action, urgency):
         from ..models import ActionResult

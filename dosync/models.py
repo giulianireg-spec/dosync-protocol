@@ -47,9 +47,9 @@ class CertTier(str, Enum):
 
 class FailurePolicy(str, Enum):
     """
-    Define el comportamiento del executor cuando una acción falla.
+    Defines executor behaviour when an action fails.
 
-    CONTINUE  — comportamiento actual: continúa con las acciones restantes
+    CONTINUE  — compntes
     ABORT     — detiene las acciones pendientes al primer fallo
     RETRY     — reintenta la acción fallida N veces antes de continuar
     """
@@ -188,7 +188,7 @@ class EventSpec:
 @dataclass
 class ContextSignal:
     """
-    Declara que este dispositivo contribuye a inferencias de contexto.
+    Declares that this device contributes to context inference.
     Ejemplo: un smartwatch contribuye a PRESENCE y HEALTH.
     """
     type: ContextSignalType
@@ -278,7 +278,7 @@ class PresenceSignal:
 @dataclass
 class OccupancyState:
     """
-    Estado inferido de ocupacion del hogar, calculado por el hub
+    Inferred occupancy state of the deployment, computed by the hub
     a partir de multiples PresenceSignals.
     """
     occupied: bool

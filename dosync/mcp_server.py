@@ -4,7 +4,7 @@ DoSync — MCP Server
 Expone el hub DoSync como un servidor MCP (Model Context Protocol).
 
 Con esto, cualquier LLM que soporte MCP (Claude, ChatGPT, Cursor, etc.)
-puede controlar el hogar via DoSync sin configuración adicional.
+can then act through DoSync with no further configuration.
 
 Uso:
     # Arrancar como servidor MCP standalone (stdio — para Claude Desktop)
@@ -118,7 +118,7 @@ async def hub_request(method: str, path: str, body: dict = None) -> dict:
 
 
 def fmt(data: dict) -> str:
-    """Formatea la respuesta del hub para el LLM."""
+    """Format the hub response for the LLM."""
     if "error" in data:
         return f"Error: {data['error']}"
     return json.dumps(data, indent=2, ensure_ascii=False)
@@ -160,7 +160,7 @@ async def _intent_property_schema() -> dict:
 
 @server.list_tools()
 async def list_tools() -> list[types.Tool]:
-    """Define las herramientas disponibles para el LLM."""
+    """Declare the tools available to the LLM."""
     # Read the available intent classes from the hub — the single source of truth.
     # The hub declares them in /v1/intent-classes; the MCP reflects that rather than
     # carrying its own hardcoded copy (which inevitably diverges — that is how
@@ -222,19 +222,19 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="dosync_list_devices",
             description=(
-                "Lista todos los dispositivos registrados en el hub DoSync "
-                "con sus capacidades, tags, y estado del adapter."
+                "List every device registered on the DoSync hub, with its "
+                "capabilities, tags and adapter state."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "filter_tag": {
                         "type": "string",
-                        "description": "Filtrar por tag (ej: 'emergency', 'light', 'sensor')",
+                        "description": "Filter by tag (e.g. 'emergency', 'light', 'sensor')",
                     },
                     "emergency_only": {
                         "type": "boolean",
-                        "description": "Mostrar solo dispositivos con emergency_capable=true",
+                        "description": "Show only devices with emergency_capable=true",
                         "default": False,
                     },
                 },
@@ -244,9 +244,8 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="dosync_get_status",
             description=(
-                "Obtiene el estado actual del hub DoSync: "
-                "cantidad de dispositivos, ocupación del hogar, "
-                "integridad del audit log, y estadísticas de la base de datos."
+                "Current state of the DoSync hub: device count, inferred "
+                "occupancy, audit log integrity, and database statistics."
             ),
             inputSchema={
                 "type": "object",
@@ -257,7 +256,7 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="dosync_send_event",
             description=(
-                "Envía un evento desde un dispositivo al hub. "
+                "Send an event from a device to the hub. "
                 "Usar para simular eventos de sensores (caída detectada, "
                 "movimiento, avería, etc.) o para integrar dispositivos "
                 "que no tienen adapter nativo."
@@ -267,7 +266,7 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {
                     "device_id": {
                         "type": "string",
-                        "description": "ID del dispositivo que emite el evento",
+                        "description": "ID of the device emitting the event",
                     },
                     "event_id": {
                         "type": "string",
@@ -291,7 +290,7 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="dosync_get_audit_log",
             description=(
-                "Obtiene las últimas entradas del audit log del hub. "
+                "Read the most recent entries of the hub audit log. "
                 "The log is tamper-evident: every entry is chained "
                 "con SHA-256. Incluye verificación de integridad."
             ),
@@ -311,7 +310,7 @@ async def list_tools() -> list[types.Tool]:
             name="dosync_get_scenarios",
             description=(
                 "Devuelve la lista de escenarios disponibles en DoSync "
-                "con descripción de cuándo usar cada uno."
+                "with a description of when each one applies."
             ),
             inputSchema={
                 "type": "object",
@@ -322,19 +321,24 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="dosync_control_device",
             description=(
-                "Control directo de un dispositivo específico. "
-                "Usar cuando el usuario pide controlar un dispositivo concreto: "
-                "'apagá las luces', 'poné las luces en rojo', 'subí el brillo', etc. "
-                "Para luces WiZ soporta: turn_on, turn_off, set_brightness (0-100), "
-                "set_color (r/g/b 0-255), set_color_temp (kelvin 2200-6500). "
-                "Para apagar TODAS las luces, llamar con device_id='all_lights'."
+                "Act directly on one named device. Use this when the request "
+                "names the device or the action, rather than a goal — for a "
+                "goal, fire an intent instead and let the hub resolve it. "
+                "Which actions a device accepts comes from its own capability "
+                "manifest; the enum below is the set this tool can express. "
+                "Direct actions are governed like any other: they pass the "
+                "policy engine under the reserved 'direct_control' class, the "
+                "device arbiter, and the audit log. "
+                "Convenience: device_id='all_lights' applies the action to "
+                "every device tagged 'light' (client-side fan-out, one request "
+                "per device — not a protocol feature)."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "device_id": {
                         "type": "string",
-                        "description": "ID del dispositivo o 'all_lights' para todas las luces",
+                        "description": "Device ID, or 'all_lights' for every device tagged 'light'",
                     },
                     "action": {
                         "type": "string",
@@ -367,7 +371,7 @@ async def list_tools() -> list[types.Tool]:
 
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
-    """Ejecuta una herramienta y retorna el resultado al LLM."""
+    """Execute a tool and return the result to the LLM."""
 
     # ── dosync_fire_intent ────────────────────────────────────────────────────
     if name == "dosync_fire_intent":
@@ -514,7 +518,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
         if not devices:
             return [types.TextContent(type="text",
-                    text="No se encontraron dispositivos con los filtros aplicados.")]
+                    text="No devices matched the given filters.")]
 
         text = f"📡 {len(devices)} dispositivo(s) registrado(s):\n\n"
         for d in devices:
@@ -640,7 +644,7 @@ AMBIENTE:
   monitor_health   — Activar monitoreo continuo de una persona.
 
 INFORMACIÓN:
-  report_status    — Leer el estado de todos los sensores.
+  report_status    — Read the state of every sensor.
 
 Niveles de urgencia:
   info      — rutinas, recordatorios
@@ -667,16 +671,21 @@ Niveles de urgencia:
             devices_result = await hub_request("GET", "/v1/devices")
             if "error" in devices_result:
                 return [types.TextContent(type="text",
-                        text=f"Error obteniendo dispositivos: {devices_result['error']}")]
+                        text=f"Error listing devices: {devices_result['error']}")]
 
             light_devices = [
                 d["device_id"] for d in devices_result.get("devices", [])
-                if any(t in d.get("tags", []) for t in ["light", "wiz"])
+                # Selected on the role tag only. This used to read
+                # ["light", "wiz"] — a vendor tag, the antipattern
+                # TAG-VOCABULARY documents. Measured on the reference
+                # deployment: identical selection either way, because no device
+                # entered through the vendor tag alone.
+                if "light" in d.get("tags", [])
             ]
 
             if not light_devices:
                 return [types.TextContent(type="text",
-                        text="No se encontraron dispositivos de luz registrados.")]
+                        text="No devices tagged 'light' are registered.")]
 
             results = []
             for did in light_devices:
@@ -686,7 +695,7 @@ Niveles de urgencia:
                 results.append(f"  {icon} {did}")
 
             icon_on = "✅" if action == "turn_on" else "🌑"
-            text  = f"{icon_on} {action} en {len(light_devices)} luces:\n"
+            text  = f"{icon_on} {action} on {len(light_devices)} devices:\n"
             text += "\n".join(results)
             return [types.TextContent(type="text", text=text)]
 
@@ -717,8 +726,8 @@ async def main():
 
     if not HUB_TOKEN:
         log.warning(
-            "DOSYNC_TOKEN no configurado — los requests al hub pueden fallar "
-            "si la autenticación está habilitada. "
+            "DOSYNC_TOKEN is not set — requests to the hub may fail "
+            "if authentication is enabled. "
             "Usar: DOSYNC_AUTH=false para deshabilitar, o "
             "DOSYNC_TOKEN=<token> para autenticar."
         )

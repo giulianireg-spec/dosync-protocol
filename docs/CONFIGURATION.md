@@ -88,3 +88,4 @@ settings exist for deployments whose needs differ from that, not as a checklist.
 | Setting | Default |
 |---|---|
 | `DOSYNC_HA_LOCATION_TAGS` | _unset_ |
+| `DOSYNC_NOTIFICATION_TEMPLATES` | _unset_ |

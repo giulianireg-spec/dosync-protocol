@@ -538,8 +538,8 @@ class CapabilityMatchingResolver(BaseResolver):
 
     def explain(self, intent: Intent) -> dict:
         """
-        Explica el razonamiento del resolver para un intent dado.
-        Muestra el score de cada dispositivo y por qué fue incluido o excluido.
+        Explain the resolver's reasoning for a given intent.
+        Shows each device's score and why it was included or excluded.
         Calculado on-demand — refleja el estado actual del registry.
         """
         resolution = self._get_resolution(intent)
@@ -684,9 +684,9 @@ class CapabilityMatchingResolver(BaseResolver):
     def _profile_params(self, device: CapabilityManifest,
                          actuator_type: str, intent: Intent) -> dict | None:
         """
-        Si el intent tiene acciones explicitas del FamilyProfile en el context,
+        When the intent carries explicit profile actions in its context,
         busca los params correspondientes a este dispositivo y actuator.
-        Retorna None si no hay match — el caller usara los defaults.
+        Returns None when there is no match — the caller uses the defaults.
         """
         profile_actions = intent.context.get("actions", [])
         if not profile_actions:
@@ -2099,7 +2099,7 @@ class DoSyncHub:
 
     def _restore_from_db(self) -> None:
         """
-        Al iniciar el hub, restaura el estado desde SQLite.
+        Restore state from SQLite when the hub starts.
         Los dispositivos, perfil y audit log sobreviven reinicios.
         """
         from .models import (
@@ -3454,7 +3454,7 @@ class DoSyncHub:
     ) -> list[IntentResult]:
         """
         Ejecuta un PhasedActionPlan: cada fase en paralelo,
-        las fases en secuencia con delay entre ellas.
+        the phases in sequence, with a delay between them.
         Ideal para emergencias donde el orden importa.
         """
         all_results = []
@@ -3565,7 +3565,7 @@ class OccupancyEngine:
     def get_occupancy(self) -> OccupancyState:
         """
         Calcula el estado de ocupacion actual.
-        Retorna occupied=True si la confianza ponderada de presencia >= 0.5.
+        Returns occupied=True when weighted presence confidence >= 0.5.
         """
         signals = self._active_signals()
         if not signals:

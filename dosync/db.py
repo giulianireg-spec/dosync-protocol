@@ -107,7 +107,7 @@ CREATE INDEX IF NOT EXISTS idx_rate_limit_device_ts ON rate_limit_log (device_id
 
 class DoSyncDB:
     """
-    Capa de persistencia SQLite para el DoSync Hub.
+    SQLite persistence layer for the DoSync hub.
 
     Uso:
         db = DoSyncDB("dosync.db")
@@ -116,7 +116,7 @@ class DoSyncDB:
         # Guardar un dispositivo
         db.save_device("lock-01", manifest_dict)
 
-        # Cargar todos los dispositivos al iniciar el hub
+        # Load every device when the hub starts
         devices = db.load_devices()
     """
 
@@ -127,7 +127,7 @@ class DoSyncDB:
     # ── Conexion ──────────────────────────────────────────────────────────────
 
     def init(self) -> None:
-        """Abre la conexion y crea las tablas si no existen."""
+        """Open the connection and create the tables if they do not exist."""
         self._conn = sqlite3.connect(
             str(self.db_path),
             check_same_thread=False,   # FastAPI usa multiples threads
@@ -261,7 +261,7 @@ class DoSyncDB:
         log.debug("Saved family profile")
 
     def load_family_profile(self) -> Optional[dict]:
-        """Carga el perfil familiar, o None si no existe."""
+        """Load the deployment profile, or None if there is none."""
         with self._cursor() as cur:
             cur.execute("SELECT profile_json FROM family_profile WHERE id = 1")
             row = cur.fetchone()
@@ -275,7 +275,7 @@ class DoSyncDB:
     def append_audit(self, entry: dict) -> None:
         """
         Persist an audit log entry.
-        El hash ya viene calculado dentro del entry dict.
+        The hash arrives already computed inside the entry dict.
         """
         with self._cursor() as cur:
             cur.execute("""
@@ -462,7 +462,7 @@ class DoSyncDB:
     # ── Stats ─────────────────────────────────────────────────────────────────
 
     def stats(self) -> dict:
-        """Resumen del estado de la base de datos."""
+        """Summary of the database state."""
         return {
             "db_path":        str(self.db_path.resolve()),
             "db_size_kb":     round(self.db_path.stat().st_size / 1024, 1)
@@ -497,7 +497,7 @@ class DoSyncDB:
         return False
 
     def list_api_keys(self) -> list[dict]:
-        """Lista todas las API keys registradas (sin el hash completo)."""
+        """List every registered API key, without the full hash."""
         with self._cursor() as cur:
             cur.execute("SELECT key_hash, label, created_at, last_used_at FROM api_keys")
             rows = cur.fetchall()
@@ -518,7 +518,7 @@ class DoSyncDB:
             return cur.rowcount > 0
 
     def has_any_key(self) -> bool:
-        """True si hay al menos una API key registrada."""
+        """True when at least one API key is registered."""
         with self._cursor() as cur:
             cur.execute("SELECT COUNT(*) as n FROM api_keys")
             return cur.fetchone()["n"] > 0
@@ -540,7 +540,7 @@ class DoSyncDB:
             )
 
     def load_device_state(self, device_id: str) -> dict:
-        """Carga el estado de un dispositivo. Retorna {} si no existe."""
+        """Load a device state. Returns {} when there is none."""
         with self._cursor() as cur:
             cur.execute(
                 "SELECT state_json FROM device_state WHERE device_id = ?",
@@ -572,7 +572,7 @@ class DoSyncDB:
 
     def get_device_health(self, device_id: str, last_n: int = 100) -> dict:
         """
-        Estadísticas de salud de un dispositivo.
+        Health statistics for one device.
         Retorna: {device_id, total, success, failed, success_rate, last_error, last_seen}
         """
         with self._cursor() as cur:
@@ -615,7 +615,7 @@ class DoSyncDB:
 
     def get_all_health(self, last_n: int = 100, min_executions: int = 1) -> list:
         """
-        Estadísticas de salud de todos los dispositivos con al menos min_executions.
+        Health statistics for every device with at least min_executions.
         Ordenado por tasa de éxito ascendente (peores primero).
         """
         with self._cursor() as cur:
@@ -634,8 +634,8 @@ class DoSyncDB:
 
     def get_health_alerts(self, threshold: float = 0.7, last_n: int = 100) -> list:
         """
-        Dispositivos cuya tasa de éxito está por debajo del umbral.
-        threshold=0.7 significa alertar cuando menos del 70% de las ejecuciones son exitosas.
+        Devices whose success rate is below the threshold.
+        threshold=0.7 alerts when fewer than 70% of executions succeed.
         """
         all_health = self.get_all_health(last_n=last_n, min_executions=3)
         return [
@@ -796,8 +796,8 @@ class DoSyncDB:
 
     def save_operation(self, op_dict: dict, terminal: bool) -> None:
         """Insert or update an operation. `op_dict` is Operation.to_dict();
-        `terminal` indica si la operación llegó a un estado terminal (para que
-        get_active_operations la excluya sin reinterpretar el estado)."""
+        `terminal` records whether the operation reached a terminal state, so
+        get_active_operations can exclude it without reinterpreting the state."""
         import time, json
         self._conn.execute("""
             INSERT OR REPLACE INTO operations
@@ -819,7 +819,7 @@ class DoSyncDB:
 
     def get_active_operations(self) -> list[dict]:
         """Return the NON-terminal operations — those still alive and to be
-        reconciliarse tras un reinicio. Cada elemento es el Operation.to_dict()
+        reconciled after a restart. Each element is the Operation.to_dict()
         original, listo para rehidratar."""
         import json
         cur = self._conn.execute("""
@@ -840,8 +840,8 @@ class DoSyncDB:
 
     def clear_old_operations(self, max_age_hours: int = 24) -> int:
         """Limpia operaciones terminales o muy antiguas. Las operaciones activas
-        (terminal=0) NUNCA se borran por antigüedad — una operación vieja pero
-        viva es justamente la que hay que preservar para reconciliar."""
+        (terminal=0) are NEVER aged out — an old but live operation is exactly
+        the one that must be preserved in order to reconcile."""
         import time
         cutoff = time.time() - (max_age_hours * 3600)
         cur = self._conn.execute("""

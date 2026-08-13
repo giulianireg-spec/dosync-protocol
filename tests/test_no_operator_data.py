@@ -221,3 +221,40 @@ def test_the_rule_is_written_down():
     text = (REPO / "CONTRIBUTING.md").read_text(encoding="utf-8")
     assert "depend on the machine it was written on" in text, \
         "CONTRIBUTING.md no longer states the rule this file enforces"
+
+
+def test_the_core_and_the_spec_are_in_english():
+    """The protocol, its adapters and its specification are written in English.
+
+    Not style: reach. An open protocol whose core carries one contributor's
+    language cannot be read, audited or implemented by most of the people it
+    asks to adopt it — and the project requires English in code, comments and
+    docs for exactly that reason.
+
+    Measured on 2026-08-12: 174 lines of Spanish across 29 files, including
+    module headers, the MCP tool descriptions an LLM reads as a contract, and
+    user-facing SMS text.
+
+    Scope: dosync/, tools/ and spec/ — the protocol and what implements it.
+    examples/ is deliberately excluded: the demos narrate one deployment in its
+    operator's own language, which is legitimate for a demo and not for a
+    protocol.
+    """
+    spanish = re.compile(
+        r"\b(el|la|los|las|una|para|con|por|del|que|desde|hasta|cada|"
+        r"dispositivo|dispositivos|acción|ejecutar|hogar|luces|clave|"
+        r"archivo|estado|entre)\b", re.I)
+    accented = re.compile(r"[áéíóúñ¡¿]")
+    hits = []
+    for path in _files():
+        rel = str(path.relative_to(REPO))
+        if not rel.startswith(("dosync/", "tools/", "spec/")):
+            continue
+        if _allowed(path):
+            continue
+        for i, line in enumerate(_read(path).splitlines(), 1):
+            if len(spanish.findall(line)) >= 3 and accented.search(line):
+                hits.append(f"{rel}:{i} → {line.strip()[:70]}")
+    assert not hits, (
+        "the protocol core or its specification contains Spanish prose:\n  "
+        + "\n  ".join(hits[:20]))

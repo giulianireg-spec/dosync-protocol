@@ -58,7 +58,7 @@ def shelly_manifest(
     emergency_capable: bool = False,
 ):
     """
-    Genera un CapabilityManifest listo para registrar un dispositivo Shelly.
+    Build a CapabilityManifest ready to register a Shelly device.
 
     Args:
         device_id:        identificador único (ej: "shelly-living-01")

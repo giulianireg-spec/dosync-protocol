@@ -447,7 +447,7 @@ class ConnectionManager:
         )
 
     async def broadcast(self, event_type: str, data: dict) -> None:
-        """Emite un evento a todos los clientes conectados."""
+        """Broadcast an event to every connected client."""
         if not self._connections:
             return
         message = json.dumps({"type": event_type, "data": data})
@@ -668,7 +668,7 @@ async def lifespan(app: FastAPI):
             log.warning("STARTUP RECOVERY: %d emergency intent(s) were active before shutdown", len(active))
             for snap in active:
                 age_minutes = ((__import__('time').time() - snap['fired_at']) / 60)
-                if age_minutes < 60:  # solo re-disparar si fue hace menos de 1 hora
+                if age_minutes < 60:  # only re-fire when it happened less than an hour ago
                     log.warning("Re-firing intent '%s' (was active %.1f min ago)", snap['intent_class'], age_minutes)
                     try:
                         from dosync.models import Intent, IntentClass, Urgency
@@ -900,7 +900,7 @@ app = FastAPI(
     title="DoSync Hub",
     description=(
         "DoSync Protocol — REST API\n\n"
-        "El hub central que conecta la IA con los gadgets del hogar.\n"
+        "The hub that connects an AI to physical devices.\n"
         "Protocolo abierto · Apache 2.0 · github.com/dosync/protocol"
     ),
     version=__version__,
@@ -1153,18 +1153,18 @@ async def explain_intent(
     auth=Depends(require_auth),
 ):
     """
-    Explainability endpoint — muestra el razonamiento del resolver para un intent.
+    Explainability endpoint — the resolver's reasoning for one intent.
 
     Para cada dispositivo registrado, detalla:
     - Score total y desglose (tag overlap, location bonus, emergency bonus, actuator match)
-    - Por qué fue incluido o excluido del ActionPlan
-    - Tags que matchearon con las resolution tags del intent
+    - Why it was included in or excluded from the ActionPlan
+    - Which tags matched the intent's resolution tags
 
-    Nota: este endpoint muestra el scoring del resolver. El PolicyEngine puede
-    modificar el plan antes de la ejecución — ver el audit log para el resultado real.
+    Note: this endpoint shows the resolver's scoring. The PolicyEngine may
+    modify the plan before execution — see the audit log for what happened.
 
-    Diseñado para ser consumido tanto por humanos como por sistemas de IA
-    que interpreten el comportamiento del hub. Ver docs/DESIGN-PRINCIPLES.md.
+    Meant to be read by humans and by AI systems interpreting hub
+    behaviour alike. See docs/DESIGN-PRINCIPLES.md.
     """
     from dosync.models import Intent, IntentClass, Urgency as _Urgency
     import uuid, time as _time
@@ -1334,8 +1334,8 @@ def get_device(device_id: str, auth: str = Depends(require_auth)):
 @app.post("/v1/devices/provision", tags=["Devices"])
 def provision_device(body: dict, auth: str = Depends(require_auth)):
     """
-    Pre-registra un device_id y genera su token de autenticación.
-    El token se muestra UNA SOLA VEZ — guardarlo de inmediato.
+    Pre-register a device_id and generate its authentication token.
+    The token is shown ONCE — store it immediately.
     """
     from dosync.auth import get_device_auth_manager
     device_auth = get_device_auth_manager()

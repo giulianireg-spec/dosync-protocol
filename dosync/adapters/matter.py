@@ -3,12 +3,12 @@ DoSync — Matter Adapter
 =======================
 Adapter para dispositivos Matter via python-matter-server o Home Assistant bridge.
 
-Matter es el estándar de interoperabilidad IoT de la Connectivity Standards Alliance.
+Matter is the Connectivity Standards Alliance IoT interoperability standard.
 Este adapter soporta dos modos:
 
 Modo 1 — via Home Assistant (recomendado para v0.2):
-    Aprovecha el HABridge existente. Si HA tiene integración Matter,
-    los dispositivos Matter aparecen como entidades HA y se controlan
+    Reuses the existing HABridge: when HA has the Matter integration,
+    Matter devices appear as HA entities and are controlled
     via el HABridge. No requiere setup adicional.
 
 Modo 2 — via python-matter-server (standalone, experimental):
@@ -55,7 +55,7 @@ def matter_manifest(
     emergency_capable: bool = False,
 ):
     """
-    Genera un CapabilityManifest para un dispositivo Matter.
+    Build a CapabilityManifest for a Matter device.
 
     Args:
         device_id:        identificador único (ej: "matter-light-01")
