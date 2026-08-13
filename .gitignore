@@ -65,3 +65,9 @@ audit-segments/
 # The RAW production registry carries real room names; only the anonymized
 # snapshot (prod_registry_anonymized.json) belongs in the repository.
 benchmarks/fixtures/prod_registry.json
+
+# Notification message templates are the deployment's own words — they carry
+# the operator's language, phone numbers and scenarios. DOSYNC_NOTIFICATION_TEMPLATES
+# may point anywhere; this covers the obvious place.
+notification-templates.json
+notification-templates.*.json
