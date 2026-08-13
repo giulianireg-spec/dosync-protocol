@@ -3428,6 +3428,14 @@ class DoSyncHub:
 
         return intent_result
 
+    #: Adapter names that mean "simulate this on purpose". A manifest carrying
+    #: one is making a deliberate choice, not a mistake, and must not be
+    #: reported as a problem — see report_unexecutable_devices.
+    #: `"none"` is deliberately NOT here: a manifest saying "none" is saying it
+    #: has no adapter, which is the misconfiguration this reports, not a request
+    #: to simulate.
+    DECLARED_SIMULATION_ADAPTERS = frozenset({"simulated", "simulation"})
+
     def report_unexecutable_devices(self) -> list[dict]:
         """Report every registered device whose actions nobody can carry out.
 
@@ -3442,6 +3450,14 @@ class DoSyncHub:
         earlier would report every device as unexecutable, since no adapter
         exists yet.
 
+        A device whose manifest names the adapter `"simulated"` is NOT reported.
+        Declaring simulation is a legitimate choice — a test alarm, a device
+        whose hardware has not arrived, a certification fixture — and it is the
+        third of SIMULATION_REASONS for exactly that reason. The first run of
+        this sweep on the reference deployment flagged such a device alongside
+        the genuinely misconfigured one, which is how a useful warning becomes
+        noise an operator learns to skip, taking the real finding with it.
+
         Returns the affected devices so a caller can surface them; also logs,
         because an operator reading the boot log is the reader this is for.
         """
@@ -3455,6 +3471,8 @@ class DoSyncHub:
             if not actuators:
                 continue
             adapter = getattr(device, "adapter", None)
+            if adapter in self.DECLARED_SIMULATION_ADAPTERS:
+                continue          # simulation was asked for; nothing is wrong
             if not adapter:
                 reason = "no_adapter_declared"
             elif adapter not in known:
@@ -3488,6 +3506,8 @@ class DoSyncHub:
         if not actuators:
             return
         adapter = getattr(manifest, "adapter", None)
+        if adapter in self.DECLARED_SIMULATION_ADAPTERS:
+            return              # simulation was asked for; nothing is wrong
         executor = getattr(self, "executor", None)
         known = getattr(executor, "_adapters", None)
         if not adapter:

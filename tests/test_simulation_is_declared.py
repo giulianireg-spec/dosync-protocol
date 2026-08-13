@@ -204,3 +204,56 @@ def test_the_sweep_flags_an_adapter_that_is_named_but_not_registered():
 
     found = hub.report_unexecutable_devices()
     assert found and found[0]["reason"] == "adapter_unavailable"
+
+
+def test_a_deliberately_simulated_device_is_not_reported_as_a_problem():
+    """Declaring simulation is a choice, and the sweep must not cry wolf.
+
+    The first hardware run of the sweep flagged two devices on the reference
+    deployment: a notifier with no adapter — the real finding — and a test alarm
+    whose manifest said `adapter: "simulated"`, which is a test alarm behaving
+    exactly as its operator asked. Reporting both at the same severity is how a
+    useful warning becomes noise an operator skips, taking the real finding with
+    it.
+    """
+    from dosync.adapters import AdapterExecutor
+    from dosync.hub import DoSyncHub
+    from dosync.models import (ActuatorSpec, CapabilityManifest, DeviceCategory)
+
+    hub = DoSyncHub(db_path=":memory:")
+    for device_id, adapter in (("alarm-sim-01", "simulated"),
+                               ("notifier-x", None)):
+        m = CapabilityManifest(
+            device_id=device_id, device_name=device_id, manufacturer="t",
+            model="t", firmware="1", category=DeviceCategory.ACTUATOR,
+            tags=["emergency"], emergency_capable=True, sensors=[],
+            actuators=[ActuatorSpec(id="alarm", type="alarm", description="a")])
+        if adapter:
+            m.adapter = adapter
+        hub.registry.register(m)
+    hub.executor = AdapterExecutor(hub, fallback_to_simulated=True)
+
+    reported = [d["device_id"] for d in hub.report_unexecutable_devices()]
+    assert "notifier-x" in reported, "the real misconfiguration went unreported"
+    assert "alarm-sim-01" not in reported, \
+        "a device that asked to be simulated was reported as a problem"
+
+
+def test_the_string_none_is_a_missing_adapter_not_a_request_to_simulate():
+    """"none" reads like "I have no adapter" — the case being reported."""
+    from dosync.adapters import AdapterExecutor
+    from dosync.hub import DoSyncHub
+    from dosync.models import (ActuatorSpec, CapabilityManifest, DeviceCategory)
+
+    hub = DoSyncHub(db_path=":memory:")
+    m = CapabilityManifest(
+        device_id="ambiguous-01", device_name="a", manufacturer="t", model="t",
+        firmware="1", category=DeviceCategory.ACTUATOR, tags=["light"],
+        emergency_capable=False, sensors=[],
+        actuators=[ActuatorSpec(id="turn_on", type="turn_on", description="on")])
+    m.adapter = "none"
+    hub.registry.register(m)
+    hub.executor = AdapterExecutor(hub, fallback_to_simulated=True)
+
+    assert [d["device_id"] for d in hub.report_unexecutable_devices()] == \
+        ["ambiguous-01"]

@@ -38,6 +38,15 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   — is reported: at registration for new arrivals, and once at startup for the
   whole fleet.
 
+  A device whose manifest names the adapter `"simulated"` is not reported:
+  declaring simulation is a legitimate choice — a test device, hardware that has
+  not arrived, a certification fixture. The sweep's first hardware run flagged
+  one of those alongside a genuinely misconfigured notifier, which is how a
+  useful warning becomes noise an operator learns to skip, taking the real
+  finding with it. `"none"` is deliberately not treated as such a request: a
+  manifest saying "none" is saying it has no adapter, which is the case being
+  reported.
+
   The startup sweep exists because the registration check alone was not enough,
   and hardware validation is what showed it: the reference deployment restarted
   with the check in place and printed nothing, because devices restored from the
