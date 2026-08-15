@@ -9,6 +9,19 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **The discoverer registry was consulted and never filled.** The scan loop
+  shipped; the registration did not. A `str.replace` whose anchor did not match
+  left the file untouched and reported nothing — `replace` returns the original
+  string rather than failing — so the endpoint asked a registry no code ever
+  built.
+
+  On the reference deployment the scan returned 200 with mDNS in neither
+  `searched` nor `not_searchable`: absent entirely, which is the one outcome the
+  searched/skipped reporting exists to make impossible. Every unit test passed
+  throughout, because they exercised the pieces and none asserted the pieces
+  were connected. There are now tests for the wiring itself.
+
 ### Added
 - **mDNS/DNS-SD discovery, and a place for discoverers to live.** The scan
   endpoint already argued, in its own docstring, that discovery must not be an

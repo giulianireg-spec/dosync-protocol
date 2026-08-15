@@ -638,6 +638,22 @@ async def lifespan(app: FastAPI):
     log.info("DoSync Hub started — port %s, database %s",
              os.environ.get("DOSYNC_PORT", "47200"),
              ":memory: (certify mode)" if _certify_mode else _resolve_db_path())
+    # Transport discoverers: they find, they do not execute. Registered
+    # separately from adapters so a component that executes nothing does not
+    # have to pretend to be an executor in order to be searched.
+    try:
+        from dosync.discoverers import DiscovererRegistry
+        _discoverers = DiscovererRegistry()
+        try:
+            from dosync.discoverers_mdns import MDNSDiscoverer, ZEROCONF_AVAILABLE
+            if ZEROCONF_AVAILABLE:
+                _discoverers.register(MDNSDiscoverer())
+        except Exception as _mdns_e:
+            log.info("mDNS discovery unavailable: %s", _mdns_e)
+        hub.discoverers = _discoverers
+    except Exception as _disc_e:        # never block startup over discovery
+        log.warning("could not register transport discoverers: %s", _disc_e)
+
     # After every adapter has registered: say which devices nothing can act on.
     # Cheap, once, and it turns a discovery that took months into a boot line.
     try:

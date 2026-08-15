@@ -12,8 +12,11 @@ device — a WiFi 3D printer — surfaced that a scan would not see it. The gap 
 coverage, not design.
 """
 import asyncio
+from pathlib import Path
 
 import pytest
+
+REPO = Path(__file__).resolve().parent.parent
 
 from dosync.discoverers import DiscovererRegistry, TransportDiscoverer
 from dosync.discovery import DiscoveredDevice
@@ -122,3 +125,55 @@ def test_the_service_list_is_not_a_product_catalogue():
         "the scan no longer asks the network what else it offers"
     for service in SERVICE_TYPES:
         assert service.startswith("_") and service.endswith(".local."), service
+
+
+def test_the_server_actually_registers_its_discoverers():
+    """The unit tests all passed while nothing was wired up.
+
+    The scan loop shipped and the registration did not: a `str.replace` whose
+    anchor did not match left the file untouched and said nothing, so the
+    endpoint consulted a registry no code ever filled. On the reference
+    deployment the scan returned 200 with mDNS in neither `searched` nor
+    `not_searchable` — absent entirely, which is the one outcome the
+    searched/skipped reporting was built to make impossible.
+
+    Every test in this file passed throughout. They exercised the pieces; none
+    asserted the pieces were connected.
+    """
+    source = (REPO / "dosync" / "server.py").read_text(encoding="utf-8")
+    assert "DiscovererRegistry" in source, \
+        "the server imports no discoverer registry — nothing will ever be searched"
+    assert "hub.discoverers" in source, \
+        "the server builds a registry and never gives it to the hub"
+    assert "MDNSDiscoverer" in source, \
+        "no discoverer is registered, so the registry is always empty"
+
+
+def test_the_scan_consults_the_discoverer_registry():
+    source = (REPO / "dosync" / "server.py").read_text(encoding="utf-8")
+    # Anchor on the DECORATOR, not the path: the path also appears in a
+    # neighbouring docstring, and slicing from there cut the body away — the
+    # first version of this test failed against correct code for that reason.
+    start = source.index('@app.get("/v1/discovery/scan"')
+    end = source.find("\n@app.", start + 10)
+    scan = source[start:end if end != -1 else len(source)]
+    assert 'getattr(hub, "discoverers"' in scan or "hub.discoverers" in scan, \
+        "the scan endpoint does not ask the discoverers anything"
+
+
+def test_a_discoverer_reports_as_searched_or_skipped_but_never_vanishes():
+    """Absence is the failure this reporting exists to prevent."""
+    registry = DiscovererRegistry()
+    ready = _Fake(found=[DiscoveredDevice(adapter="", device_id="d",
+                                          device_name="d", ip="192.0.2.1",
+                                          extra={}, service_type="_x._tcp")])
+    unready = _Fake(ready=False)
+    unready.name = "unready"
+    registry.register(ready)
+    registry.register(unready)
+
+    names = {d.name for d in registry.all()}
+    ready_names = {d.name for d in registry.ready()}
+    assert names == {"fake", "unready"}
+    # Everything registered is accounted for: searched or skipped, never missing.
+    assert names - ready_names == {"unready"}
