@@ -57,6 +57,17 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unexecutable.
 
 ### Fixed
+- **The README carried the access section twice.** Two versions of "how to set
+  or disable the API token" sat one after the other, saying nearly the same
+  thing in different words — a rewrite that never deleted the original. The
+  second is the better one (it notes that `DOSYNC_AUTH` in the environment wins
+  over the dashboard, and that changing access is recorded in the audit chain),
+  so the first was removed.
+
+- **The README understated its own API by more than three times**, listing "12+
+  endpoints" against 44. Of all the numbers a project can get wrong, this is the
+  one that costs it something.
+
 - **The public site advertised four things that were no longer true.** Its
   roadmap still read *"IEEE WF-IoT 2026 — submitted, decision pending"* a month
   after the decision arrived; it offered `pip install dosync` at 0.4.2 with

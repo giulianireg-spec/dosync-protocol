@@ -358,35 +358,6 @@ pip install 'dosync[mqtt]'     # MQTT devices
 pip install 'dosync[all]'      # everything
 ```
 
-### Access: token, your own password, or none
-
-The hub prints an API token the first time it starts and stores only a hash of
-it, so it cannot show you that one again. Three ways to deal with that,
-depending on who you are:
-
-```bash
-# 1. Choose your own, like a password — for a person who has to type it
-dosync-manage keys create --token "my-house-2026-kitchen" --label dashboard
-
-# 2. Let it generate one — for a program that will store it
-dosync-manage keys create --label my-integration
-
-# 3. Turn authentication off entirely
-DOSYNC_AUTH=false dosync-hub
-```
-
-**Option 3 is legitimate and not a trap door.** On a home network, behind a
-router, with no port forwarding, requiring a token protects against nobody who
-is not already inside your house. It is the wrong default for a clinic and a
-reasonable choice for a workshop, so DoSync provides it plainly instead of
-pretending everyone has the same threat model. What it is not suitable for is
-any hub reachable from outside its own network.
-
-Tokens are checked without rate limiting or lockout, so a chosen one must be at
-least 12 characters and a passphrase of several words is better than a short
-clever string. Existing keys: `dosync-manage keys list` (previews only — they
-are hashed), `dosync-manage keys revoke <preview>`, `dosync-manage keys reset`.
-
 ### Access: a password you choose, or none at all
 
 The hub prints a token on first start and stores only a hash of it, so it cannot
@@ -524,7 +495,7 @@ dosync-hub --reload
 
 | Component | Status |
 |---|---|
-| REST API (12+ endpoints) | ✅ |
+| REST API (40+ endpoints) | ✅ |
 | WebSocket real-time events | ✅ |
 | Web dashboard | ✅ |
 | API key authentication + SHA-256 audit log | ✅ |
