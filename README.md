@@ -233,11 +233,19 @@ That is a working hub on `http://127.0.0.1:47200`. It starts with a simulated
 executor, so you can drive the whole protocol — register devices, fire intents,
 read the audit chain — before you own a single smart device.
 
+The hub prints an API key on that first start and stores only a hash of it, so
+it is shown once. Save it — every command below needs it:
+
+```bash
+export DOSYNC_TOKEN=<the key printed on first start>
+```
+
 Register something and give it a goal:
 
 ```bash
 # 1. A device declares what it CAN DO (not what commands it takes)
 curl -X POST http://127.0.0.1:47200/v1/devices/register \
+  -H "Authorization: Bearer $DOSYNC_TOKEN" \
   -H 'Content-Type: application/json' -d '{
     "device_id": "siren-hall", "device_name": "Hall Siren",
     "manufacturer": "acme", "model": "S1", "firmware": "1.0",
@@ -248,14 +256,17 @@ curl -X POST http://127.0.0.1:47200/v1/devices/register \
 
 # 2. An AI expresses a GOAL — not a command, and it names no device
 curl -X POST http://127.0.0.1:47200/v1/intent/async \
+  -H "Authorization: Bearer $DOSYNC_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"intent": "ensure_safety", "urgency": "emergency", "context": {}}'
 
 # 3. Ask WHY those devices were chosen
-curl http://127.0.0.1:47200/v1/intents/ensure_safety/explain
+curl http://127.0.0.1:47200/v1/intents/ensure_safety/explain \
+  -H "Authorization: Bearer $DOSYNC_TOKEN"
 
 # 4. Read the tamper-evident record of what happened
-curl http://127.0.0.1:47200/v1/audit?limit=10
+curl "http://127.0.0.1:47200/v1/audit?limit=10" \
+  -H "Authorization: Bearer $DOSYNC_TOKEN"
 ```
 
 Step 3 is the one worth pausing on: the hub tells you which devices it

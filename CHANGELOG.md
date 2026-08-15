@@ -57,6 +57,24 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unexecutable.
 
 ### Fixed
+- **The Quick Start did not run as written.** A clean-room install — `pipx
+  install dosync` on a machine with nothing on it — worked: the package
+  installed, the hub started, printed its key, and the protocol did everything
+  it claims. Then all four documented `curl` commands returned `401 Missing
+  Authorization header`, because none of them carried the token the hub had just
+  printed, and nothing told the reader to keep it.
+
+  Nothing was broken. The first minute of a stranger's experience simply looked
+  like it was, immediately after the page said "that is a working hub" — which
+  is the worst shape a defect can take for a project with no users yet.
+
+  `tests/test_quickstart_is_runnable.py` now checks that every documented
+  request to an authenticated endpoint carries a token, and that the reader is
+  told where that token comes from. Its own first version was vacuous: it listed
+  `"/"` among the public paths and matched with `startswith`, so every path
+  counted as public and the check passed while the header was missing — the same
+  false positive as a grep for "FOUND" matching "NOT FOUND".
+
 - **The README carried the access section twice.** Two versions of "how to set
   or disable the API token" sat one after the other, saying nearly the same
   thing in different words — a rewrite that never deleted the original. The
