@@ -135,7 +135,14 @@ else:
         from dosync.adapters import AdapterExecutor
         from dosync.adapters.wiz import WiZAdapter
         executor = AdapterExecutor(hub, fallback_to_simulated=True)
-        executor.register(WiZAdapter(hub=hub))
+        # WiZ is a REFERENCE adapter — one vendor's product, shipped as a
+        # worked example (see the adapter taxonomy in the README). It registers
+        # only when its library is present, exactly like BLE and MAVLink. It
+        # used to register unconditionally and warn every operator to install
+        # pywizlight, including the ones who own nothing from that vendor.
+        from dosync.adapters.wiz import WIZ_AVAILABLE
+        if WIZ_AVAILABLE:
+            executor.register(WiZAdapter(hub=hub))
         # BLE adapter — registered whenever the library is importable, and
         # switched OFF with DOSYNC_BLE_ENABLED=false.
         #
@@ -184,7 +191,8 @@ else:
             executor.register(ha_bridge)
             logging.getLogger("dosync.server").info("HABridge registered")
         logging.getLogger("dosync.server").info(
-            "AdapterExecutor initialized with WiZAdapter"
+            "AdapterExecutor initialized — %d adapter(s) registered",
+            len(getattr(executor, "_adapters", {}) or {})
         )
     except Exception as _e:
         logging.getLogger("dosync.server").warning(
@@ -2251,6 +2259,24 @@ async def scan_devices(auth: str = Depends(require_auth)):
         except Exception as e:
             log.info("Discovery via %s did not run: %s", name, e)
 
+    # Transport discoverers: components that find without executing.
+    registry = getattr(hub, "discoverers", None)
+    for discoverer in (registry.all() if registry else []):
+        label = f"{discoverer.name} ({discoverer.transport})"
+        try:
+            if not discoverer.can_discover():
+                skipped.append(label)
+                continue
+            found.extend(await discoverer.discover(timeout=5.0))
+            searched.append(label)
+        except Exception as e:
+            log.info("Discovery via %s did not run: %s", discoverer.name, e)
+
+    # Likely-actionable first: a scan that returns forty unranked entries costs
+    # the reader more than it saves them.
+    found.sort(key=lambda d: (not getattr(d, "likely_actionable", False),
+                              getattr(d, "service_type", ""), d.device_name))
+
     wiz_devices = found
     return {
         "found": [
@@ -2259,6 +2285,11 @@ async def scan_devices(auth: str = Depends(require_auth)):
                 "device_id":   d.device_id,
                 "device_name": d.device_name,
                 "ip":          d.ip,
+                # What it announced itself AS. An address says where something
+                # is; this says what it claims to be, and it is the part a
+                # person can act on.
+                "service_type": getattr(d, "service_type", ""),
+                "likely_actionable": getattr(d, "likely_actionable", False),
                 "registered":  hub.registry.get(d.device_id) is not None,
             }
             for d in wiz_devices

@@ -257,3 +257,39 @@ def test_the_string_none_is_a_missing_adapter_not_a_request_to_simulate():
 
     assert [d["device_id"] for d in hub.report_unexecutable_devices()] == \
         ["ambiguous-01"]
+
+
+def test_a_reference_adapter_is_silent_when_its_vendor_library_is_absent():
+    """The protocol does not presume the operator's hardware.
+
+    The WiZ adapter logged a WARNING at import time — "pywizlight not installed,
+    install with pip install pywizlight" — on every hub, including the ones whose
+    operator owns nothing from that vendor and never will. It was also the only
+    adapter registered unconditionally: BLE checks its library, MAVLink is
+    opt-in, Home Assistant needs a token.
+
+    An operator who HAS a WiZ device is told, by the startup sweep, using the
+    name of their own device. An operator who has none hears nothing.
+    """
+    import importlib
+    import logging
+
+    records = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record):
+            records.append(record)
+
+    handler = _Capture(level=logging.INFO)
+    logging.getLogger("dosync.adapters.wiz").addHandler(handler)
+    try:
+        import dosync.adapters.wiz as wiz
+        importlib.reload(wiz)
+    finally:
+        logging.getLogger("dosync.adapters.wiz").removeHandler(handler)
+
+    nagging = [r for r in records
+               if r.levelno >= logging.WARNING and "pywizlight" in r.getMessage()]
+    assert not nagging, (
+        "importing a reference adapter told the operator to install a vendor "
+        f"library: {[r.getMessage() for r in nagging]}")

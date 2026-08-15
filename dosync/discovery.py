@@ -42,6 +42,18 @@ class DiscoveredDevice:
     device_name:  str
     ip:           str
     extra:        dict
+    #: What the device announced itself AS — an mDNS service type
+    #: (`_octoprint._tcp`), an SSDP device type, a BLE service UUID. An address
+    #: says where something is; this says what it claims to be, and it is the
+    #: only part a person can act on. A scan that returns forty addresses and no
+    #: types is worse than one that returns nothing, because the reader has to
+    #: go find out what each one is.
+    service_type: str = ""
+    #: Rough, honest ranking for presentation: a device announcing a control API
+    #: is more likely to be worth adopting than a phone announcing AirPlay. Not
+    #: a claim about compatibility — DoSync does not keep a catalogue of
+    #: products, and this never decides anything, it only orders a list.
+    likely_actionable: bool = False
 
 
 # ── Discoverers individuales ──────────────────────────────────────────────────

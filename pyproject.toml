@@ -52,6 +52,10 @@ dependencies = [
     # transport as not searchable rather than failing), so a constrained
     # deployment can `pip uninstall bleak` and lose only BLE discovery.
     "bleak>=0.21",
+    # Same rule, other transport: mDNS/DNS-SD is how most WiFi devices with a
+    # local API announce themselves, and asking someone to install a library
+    # before they can find out what they own is the same circle.
+    "zeroconf>=0.130",
     # Same reasoning: the shipped device examples are YAML, and examples are how
     # someone writes their first adapter. A user who must first discover that
     # they need a YAML library has been handed the problem instead of the answer.

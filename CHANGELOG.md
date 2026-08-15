@@ -10,6 +10,47 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **mDNS/DNS-SD discovery, and a place for discoverers to live.** The scan
+  endpoint already argued, in its own docstring, that discovery must not be an
+  IP-only idea — and then reached exactly two transports, because the only way
+  for a component to be searched was to be an *adapter*. Anything that finds
+  without executing had to implement `execute` to be seen, which deformed the
+  model to fit the plumbing.
+
+  A hub now registers **transport discoverers** alongside adapters. A discoverer
+  only listens and reports; it has a different lifecycle (its library is enough
+  — no credentials), a different failure mode (you do not know what you have,
+  rather than a device not moving), and a different trust property: enumerating
+  someone's network is the first thing an attacker would want.
+
+  `MDNSDiscoverer` covers the class of devices that announce a local API —
+  printers, NAS, cameras, Shelly, Tasmota, ESPHome, Matter commissionables — with
+  one implementation instead of an adapter per vendor, which is the path the
+  project declined when it labelled WiZ and Shelly as reference adapters. The
+  service list decides **where to listen**, never what a device can do, and it
+  asks the network to enumerate its own types so unknown ones still surface.
+  `zeroconf` ships in the core under the rule `pyproject.toml` already states:
+  discovery libraries are needed *before* the knowledge that would justify
+  installing them.
+
+  **What this deliberately does not do** is turn a discovered service into a
+  capability manifest. A `_octoprint._tcp` on the network is not yet a DoSync
+  device, because DoSync resolves over declared capabilities and nobody has
+  declared any. Who writes that manifest is a separate design question, left
+  open.
+
+- **A finding reports what a device announced itself as.** `service_type` and a
+  `likely_actionable` ordering hint. An address says where something is; the
+  service type says what it claims to be, and it is the part a person can act
+  on. Ordering is presentation only — a device outside the hint is still
+  reported, just not first — because a scan returning forty unranked entries
+  costs the reader more than it saves them.
+
+  Found from the user's chair: preparing a from-scratch install with a real WiFi
+  3D printer surfaced that a scan would not see it. The gap was coverage, not
+  design.
+
+### Added
 - **An action that never left the hub says so.** `ActionResult` carries
   `simulated` and `simulated_reason`; `intent_executed` carries
   `actions_simulated`; `direct_action_executed` carries both; and the intent API
@@ -57,6 +98,23 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unexecutable.
 
 ### Fixed
+- **A reference adapter no longer presumes the operator's hardware.** The WiZ
+  adapter logged a WARNING at import time on every hub — *"pywizlight not
+  installed. Install with: pip install pywizlight"* — including on hubs whose
+  operator owns nothing from that vendor and never will. It was also the only
+  adapter registered unconditionally: BLE checks whether its library imports,
+  MAVLink is opt-in, the Home Assistant bridge needs a token.
+
+  That contradicted the project's own adapter taxonomy, which calls WiZ and
+  Shelly *reference* adapters — worked examples of how an adapter is written,
+  not endorsement. A worked example does not get to tell a stranger what to
+  install.
+
+  It now registers only when its library is present and says nothing when it is
+  not. An operator who has registered a WiZ device is told where it matters
+  instead: the startup sweep names their device and says its actions will be
+  simulated.
+
 - **The Quick Start did not run as written.** A clean-room install — `pipx
   install dosync` on a machine with nothing on it — worked: the package
   installed, the hub started, printed its key, and the protocol did everything

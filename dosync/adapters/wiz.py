@@ -45,10 +45,14 @@ try:
     WIZ_AVAILABLE = True
 except ImportError:
     WIZ_AVAILABLE = False
-    log.warning(
-        "pywizlight not installed — WiZAdapter running in simulated mode. "
-        "Install with: pip install pywizlight"
-    )
+    # Deliberately silent. This is a REFERENCE adapter: a worked example of how
+    # an adapter is written, for one vendor's product. A hub whose operator owns
+    # no WiZ device must never be told to install a vendor library — that
+    # presumes a configuration the protocol has no business presuming, and it
+    # was the only adapter doing it. An operator who HAS registered a WiZ device
+    # hears about it where it matters instead: the startup sweep names their
+    # device and says its actions will be simulated.
+    log.debug("pywizlight not installed — the WiZ reference adapter is inactive")
 
 
 # ── Manifest helper ───────────────────────────────────────────────────────────

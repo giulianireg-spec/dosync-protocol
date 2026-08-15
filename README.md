@@ -288,7 +288,13 @@ Matter, BLE, MAVLink, and the Home Assistant bridge, which is the widest door of
 all: anything HA already integrates, DoSync can reach. **Reference** adapters
 (WiZ, Shelly) implement one vendor's product and ship as worked examples of how
 an adapter is written — not as endorsement, partnership, or a promise to track
-anyone's firmware. **Infrastructure** is notifications.
+anyone's firmware. **They register only when their vendor library is installed,
+and say nothing when it is not.** A hub whose operator owns nothing from that
+vendor should never be told to install anything: the protocol does not presume
+your hardware, and a reference adapter that nagged for `pip install pywizlight`
+on every start was presuming it. If you do register a device that names an
+adapter the hub cannot load, the startup check names that device and tells you
+its actions will be simulated. **Infrastructure** is notifications.
 
 **If your device is not covered, describe it in a file.** A declarative adapter
 is YAML or JSON — no code, no release of DoSync to wait for:
