@@ -40,8 +40,11 @@ except ImportError:                              # pragma: no cover
 #: entry is a published, vendor-neutral service name, and the list decides only
 #: WHERE TO LISTEN, never what a device can do. `_services._dns-sd._udp` asks the
 #: network to enumerate its own service types, so unknown ones still surface.
+#: Asks the network to name every service type it offers. Browsed separately
+#: from the list below, because its answers are TYPES, not devices.
+META_QUERY = "_services._dns-sd._udp.local."
+
 SERVICE_TYPES = (
-    "_services._dns-sd._udp.local.",   # enumerate everything else on offer
     "_http._tcp.local.",
     "_https._tcp.local.",
     "_octoprint._tcp.local.",
@@ -87,11 +90,31 @@ class MDNSDiscoverer:
             return []
 
         found: dict[str, DiscoveredDevice] = {}
+        seen_types: set[str] = set()
         azc = AsyncZeroconf()
+
+        browsers: list = []
 
         def _on_change(zeroconf: Zeroconf, service_type: str, name: str,
                        state_change: "ServiceStateChange") -> None:
             if state_change is not ServiceStateChange.Added:
+                return
+            # The meta-query does not return devices: it returns the SERVICE
+            # TYPES this network offers. Each one has to be browsed in turn or
+            # the query buys nothing — which is what happened on its first real
+            # run, where the scan reported only the types hard-coded below and
+            # the docstring's promise that "unknown types still surface" was
+            # simply false.
+            if service_type == META_QUERY:
+                discovered_type = f"{name}."
+                if discovered_type in SERVICE_TYPES or discovered_type in seen_types:
+                    return
+                seen_types.add(discovered_type)
+                try:
+                    browsers.append(AsyncServiceBrowser(
+                        zeroconf, [discovered_type], handlers=[_on_change]))
+                except Exception as exc:
+                    log.debug("could not browse %s: %s", discovered_type, exc)
                 return
             asyncio.ensure_future(_resolve(zeroconf, service_type, name))
 
@@ -112,7 +135,13 @@ class MDNSDiscoverer:
                     except (UnicodeDecodeError, AttributeError):
                         continue
                 device_id = name.removesuffix("." + service_type).strip(".")
-                found[f"{device_id}|{short}"] = DiscoveredDevice(
+                # One host announcing on loopback, LAN and a docker bridge is
+                # one finding, not three. Keyed on identity, not on address;
+                # the first real scan returned the hub itself three times.
+                key = f"{device_id}|{short}"
+                if key in found and found[key].ip:
+                    return
+                found[key] = DiscoveredDevice(
                     adapter="",                 # unknown: nothing declared yet
                     device_id=device_id,
                     device_name=properties.get("fn") or device_id,
@@ -126,19 +155,25 @@ class MDNSDiscoverer:
             except Exception as exc:            # one bad record must not end a scan
                 log.debug("could not resolve %s: %s", name, exc)
 
-        browser = None
         try:
-            browser = AsyncServiceBrowser(
-                azc.zeroconf, list(SERVICE_TYPES), handlers=[_on_change])
-            await asyncio.sleep(timeout)
+            browsers.append(AsyncServiceBrowser(
+                azc.zeroconf, [META_QUERY, *SERVICE_TYPES], handlers=[_on_change]))
+            # Two windows: the first lets the network name its service types,
+            # the second lets the browsers opened for those types answer.
+            await asyncio.sleep(timeout / 2)
+            await asyncio.sleep(timeout / 2)
         except Exception as exc:
             log.info("mDNS scan did not complete: %s", exc)
         finally:
-            if browser is not None:
-                await browser.async_cancel()
+            for browser in browsers:
+                try:
+                    await browser.async_cancel()
+                except Exception:
+                    pass
             await azc.async_close()
 
-        results = list(found.values())
+        # Loopback is the hub finding itself, which tells the operator nothing.
+        results = [d for d in found.values() if d.ip not in ("127.0.0.1", "::1")]
         results.sort(key=lambda d: (not d.likely_actionable, d.service_type,
                                     d.device_name))
         log.info("mDNS scan: %d service(s) announced, %d likely actionable",

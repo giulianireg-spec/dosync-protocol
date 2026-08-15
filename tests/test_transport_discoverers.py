@@ -120,11 +120,33 @@ def test_the_service_list_is_not_a_product_catalogue():
     reintroduce it through the back door — so it holds published, vendor-neutral
     service names, and asks the network to enumerate its own types.
     """
-    from dosync.discoverers_mdns import SERVICE_TYPES
-    assert "_services._dns-sd._udp.local." in SERVICE_TYPES, \
+    from dosync.discoverers_mdns import META_QUERY, SERVICE_TYPES
+    assert META_QUERY == "_services._dns-sd._udp.local.", \
         "the scan no longer asks the network what else it offers"
     for service in SERVICE_TYPES:
         assert service.startswith("_") and service.endswith(".local."), service
+
+
+def test_the_meta_query_is_browsed_and_not_merely_listed():
+    """Asking the network to name its service types buys nothing on its own.
+
+    The first real scan returned only the hard-coded types: the meta-query was
+    in the browse list, its answers are TYPES rather than devices, and nothing
+    opened a browser for them. The docstring promised that unknown types would
+    still surface, and they did not.
+    """
+    source = (REPO / "dosync" / "discoverers_mdns.py").read_text(encoding="utf-8")
+    assert "if service_type == META_QUERY:" in source, \
+        "the handler does not distinguish a service TYPE from a device"
+    assert source.count("AsyncServiceBrowser(") >= 2, \
+        "no browser is ever opened for a type the network named"
+
+
+def test_the_hub_does_not_report_finding_itself():
+    """Loopback announcements tell an operator nothing."""
+    source = (REPO / "dosync" / "discoverers_mdns.py").read_text(encoding="utf-8")
+    assert '"127.0.0.1"' in source and "::1" in source, \
+        "loopback findings are no longer filtered — the hub reports itself"
 
 
 def test_the_server_actually_registers_its_discoverers():

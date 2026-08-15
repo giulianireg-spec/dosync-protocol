@@ -10,6 +10,17 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The mDNS meta-query was asked and never used.** `_services._dns-sd._udp`
+  asks a network to name every service type it offers, and its answers are
+  *types*, not devices — so a scan has to open a browser for each one. Nothing
+  did. The first real run returned only the types hard-coded in the list, while
+  the docstring promised that unknown ones would still surface and a test
+  asserted the query was present. The query was present and inert.
+
+  Two smaller things the same run showed: one host announcing on loopback, the
+  LAN and a docker bridge came back as three findings instead of one, and the
+  hub reported finding itself.
+
 - **The discoverer registry was consulted and never filled.** The scan loop
   shipped; the registration did not. A `str.replace` whose anchor did not match
   left the file untouched and reported nothing — `replace` returns the original
