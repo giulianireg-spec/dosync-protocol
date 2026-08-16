@@ -942,9 +942,9 @@ async function scanDevices() {
     // the problem is elsewhere. Silence would leave the user unable to tell
     // this apart from a broken page.
     alert("No devices answered on this network.\n\n" +
-          "Only some adapters can discover — WiZ today. Anything else is " +
-          "registered directly with POST /v1/devices/register, which is a " +
-          "normal path, not a failure.");
+          "Not every transport can be searched — the scan reports which ones " +
+          "it covered. Anything it cannot reach is registered directly with " +
+          "POST /v1/devices/register, which is a normal path, not a failure.");
     return;
   }
   if (!fresh.length) {
@@ -955,15 +955,24 @@ async function scanDevices() {
 
   let adopted = 0;
   for (const d of fresh) {
+    // What it announced itself as is the useful part: "3dprinter" tells a
+    // person what they are looking at; an address does not. Findings from a
+    // transport discoverer carry no adapter, so say that plainly rather than
+    // printing an empty pair of brackets.
+    const how = d.adapter ? d.adapter : (d.service_type || "unidentified");
+    const note = d.adapter ? "" :
+      "\n\nNothing has declared what this device can do yet, so adding it " +
+      "records it in your inventory — the hub will say so rather than act on it.";
     const name = prompt(
-      "Found: " + (d.device_name || d.device_id) + "  (" + d.adapter + " @ " + d.ip + ")\n\n" +
+      "Found: " + (d.device_name || d.device_id) + "  (" + how + " @ " + d.ip + ")" +
+      note + "\n\n" +
       "Name it to add it — this is the name you will see everywhere else.\n" +
       "Leave empty to skip this one.", d.device_name || '');
     if (!name || !name.trim()) continue;
     try {
       await api('POST', '/v1/discovery/adopt', {
         adapter: d.adapter, device_id: d.device_id, ip: d.ip,
-        device_name: name.trim() });
+        service_type: d.service_type, device_name: name.trim() });
       adopted++;
     } catch (e) {
       alert("Could not add " + d.device_id + ": " + (e.message || e));

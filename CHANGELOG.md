@@ -9,6 +9,46 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **SSDP discovery, written from a capture rather than a specification.** A real
+  device — a 3D printer on a home network — announced continuously and was
+  invisible to the mDNS scan, because it does not use mDNS. Its announcement
+  taught two things a reading of the standard would not have.
+
+  **The port is not always 1900.** That printer announces on **2021**. A
+  discoverer joining only the standard group would have reported "nothing found"
+  about a device shouting every few seconds — the exact false negative the
+  searched/skipped reporting exists to prevent, arriving through a different
+  door.
+
+  **A vendor-namespaced device type is still a device type.**
+  `urn:bambulab-com:device:3dprinter:1` is not a standard URN and it says
+  *3dprinter*, which is what a person needs to decide whether to adopt it. The
+  vendor namespace is dropped; the vendor's own headers are kept verbatim and
+  uninterpreted, because interpreting them is where a product catalogue starts.
+
+  The capture is the test fixture, serial and address redacted. And the same
+  announcement showed the limit of all of this: the printer was bound to its
+  vendor's cloud, where no local hub can command it. Discovery found it and
+  could not have driven it. Finding is not controlling.
+
+- **A discovered device can be kept even when nothing has declared what it
+  does.** `/v1/discovery/adopt` required an adapter, written when the only
+  discoverer was WiZ and a finding always carried one. Generalising discovery
+  exposed the assumption in the worst possible place: the scan would show
+  someone their printer and then refuse to let them keep it.
+
+  Such a device is now adopted as **inventory** — known, named, visible in the
+  registry, openly unable to act. That is honest only because of work landed
+  this week: an adapter-less device is reported as unexecutable at every start,
+  and any action on it returns `simulated`. Without those two, adopting an inert
+  device would be a trap rather than a step.
+
+  The dashboard shows what the device announced itself as — `3dprinter` tells a
+  person what they are looking at, an address does not — and says plainly that
+  adding it records it rather than making it actionable. Its empty-scan message
+  no longer claims that only WiZ can discover.
+
 ### Fixed
 - **The mDNS meta-query was asked and never used.** `_services._dns-sd._udp`
   asks a network to name every service type it offers, and its answers are

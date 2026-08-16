@@ -650,6 +650,11 @@ async def lifespan(app: FastAPI):
                 _discoverers.register(MDNSDiscoverer())
         except Exception as _mdns_e:
             log.info("mDNS discovery unavailable: %s", _mdns_e)
+        try:
+            from dosync.discoverers_ssdp import SSDPDiscoverer
+            _discoverers.register(SSDPDiscoverer())
+        except Exception as _ssdp_e:
+            log.info("SSDP discovery unavailable: %s", _ssdp_e)
         hub.discoverers = _discoverers
     except Exception as _disc_e:        # never block startup over discovery
         log.warning("could not register transport discoverers: %s", _disc_e)
@@ -2127,11 +2132,10 @@ async def adopt_device(req: dict, auth: str = Depends(require_auth)):
     Adoption is appended to the audit chain. "How did this device get here" is
     the same class of question as "who turned authentication off".
     """
-    adapter = req.get("adapter")
+    adapter = (req.get("adapter") or "").strip()
     device_id = req.get("device_id")
-    if not adapter or not device_id:
-        raise HTTPException(status_code=422,
-                            detail="adapter and device_id are required")
+    if not device_id:
+        raise HTTPException(status_code=422, detail="device_id is required")
 
     if hub.registry.get(device_id):
         return {"adopted": False, "reason": "already registered",
@@ -2148,6 +2152,32 @@ async def adopt_device(req: dict, auth: str = Depends(require_auth)):
             device_id=device_id, device_name=name,
             ip=req.get("ip", ""), tags=req.get("tags"),
             room=req.get("room", ""))
+    elif not adapter:
+        # A device found by a transport discoverer — mDNS, SSDP — announced an
+        # address and a service type and nothing else. Nobody has declared what
+        # it can do, so it is adopted as INVENTORY: known, named, visible, and
+        # openly unable to act.
+        #
+        # Rejecting it was the previous behaviour, written when the only
+        # discoverer was WiZ and a finding always carried an adapter.
+        # Generalising discovery exposed the assumption in the worst place: a
+        # scan would show someone their printer and refuse to let them keep it.
+        #
+        # Adopting it is honest only because the hub now says what it cannot do:
+        # an adapter-less device is reported as unexecutable at every start, and
+        # any action on it comes back `simulated`. Without those, this is a trap.
+        from dosync.models import CapabilityManifest, DeviceCategory
+        service = (req.get("service_type") or "").strip()
+        manifest = CapabilityManifest(
+            device_id=device_id, device_name=name,
+            manufacturer=req.get("manufacturer", "unknown"),
+            model=req.get("model", "unknown"), firmware="unknown",
+            category=DeviceCategory.ACTUATOR,
+            tags=[t for t in (req.get("tags") or []) if t],
+            emergency_capable=False, sensors=[], actuators=[],
+            adapter_config={"discovered_as": service,
+                            "address": req.get("ip", "")} if service or req.get("ip")
+                           else {})
     else:
         raise HTTPException(
             status_code=422,

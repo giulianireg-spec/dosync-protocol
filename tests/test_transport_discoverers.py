@@ -199,3 +199,103 @@ def test_a_discoverer_reports_as_searched_or_skipped_but_never_vanishes():
     assert names == {"fake", "unready"}
     # Everything registered is accounted for: searched or skipped, never missing.
     assert names - ready_names == {"unready"}
+
+
+# ── SSDP: written against a capture from a real device ───────────────────────
+
+#: Verbatim from a Bambu Lab A1 mini on a home network, 2026-08-15, with its
+#: serial and address redacted. Kept as the fixture because a parser written
+#: from a specification and one written from what hardware actually sends are
+#: different parsers, and this project prefers the second.
+BAMBU_ANNOUNCEMENT = (
+    b"NOTIFY * HTTP/1.1\r\n"
+    b"HOST: 239.255.255.250:1900\r\n"
+    b"Server: UPnP/1.0\r\n"
+    b"Location: 192.0.2.91\r\n"
+    b"NT: urn:bambulab-com:device:3dprinter:1\r\n"
+    b"USN: SERIAL-REDACTED\r\n"
+    b"Cache-Control: max-age=1800\r\n"
+    b"DevModel.bambu.com: N1\r\n"
+    b"DevVersion.bambu.com: 01.08.01.00\r\n"
+    b"DevConnect.bambu.com: cloud\r\n"
+)
+
+
+def test_a_real_announcement_parses():
+    from dosync.discoverers_ssdp import _parse
+    headers = _parse(BAMBU_ANNOUNCEMENT)
+    assert headers["location"] == "192.0.2.91"
+    assert headers["usn"] == "SERIAL-REDACTED"
+    assert headers["devmodel.bambu.com"] == "N1"
+
+
+def test_the_device_type_survives_a_vendor_namespace():
+    """`urn:bambulab-com:device:3dprinter:1` is not a standard URN and still
+    says what the thing is. Dropping the vendor keeps this from becoming the
+    first line of a product catalogue."""
+    from dosync.discoverers_ssdp import _device_type, _parse
+    assert _device_type(_parse(BAMBU_ANNOUNCEMENT)) == "3dprinter"
+
+
+def test_a_urn_without_a_device_segment_is_reported_as_is():
+    from dosync.discoverers_ssdp import _device_type
+    assert _device_type({"nt": "upnp:rootdevice"}) == "upnp:rootdevice"
+    assert _device_type({}) == ""
+
+
+def test_the_non_standard_port_is_listened_on():
+    """The capture arrived on 2021, not 1900. A discoverer that assumed the
+    default would have reported "nothing found" about a device announcing every
+    few seconds — the false negative this reporting design exists to prevent,
+    arriving through a different door."""
+    from dosync.discoverers_ssdp import PORTS
+    assert 1900 in PORTS and 2021 in PORTS
+
+
+def test_ssdp_needs_no_optional_dependency():
+    from dosync.discoverers_ssdp import SSDPDiscoverer
+    assert SSDPDiscoverer().can_discover() is True
+
+
+def test_the_server_registers_the_ssdp_discoverer():
+    source = (REPO / "dosync" / "server.py").read_text(encoding="utf-8")
+    assert "SSDPDiscoverer" in source, "SSDP is implemented and never registered"
+
+
+# ── Adoption of a device nothing has declared yet ────────────────────────────
+
+def test_adoption_accepts_a_finding_with_no_adapter():
+    """The scan would show someone their printer and refuse to let them keep it.
+
+    `/v1/discovery/adopt` required an adapter — written when the only discoverer
+    was WiZ, where a finding always carried one. Generalising discovery exposed
+    the assumption: mDNS and SSDP report an address and a service type, and
+    nothing has declared what the device can do.
+
+    Adopting it as inventory is honest only because the hub now says what it
+    cannot do: an adapter-less device is reported as unexecutable at every
+    start, and any action on it comes back `simulated`.
+    """
+    source = (REPO / "dosync" / "server.py").read_text(encoding="utf-8")
+    adopt = source[source.index('async def adopt_device'):]
+    adopt = adopt[:adopt.index("\n@app.")] if "\n@app." in adopt else adopt
+    assert 'detail="device_id is required"' in adopt, \
+        "adopt still demands an adapter, so a discovered device cannot be kept"
+    assert "elif not adapter:" in adopt, \
+        "there is no path for a finding that declares no adapter"
+
+
+def test_an_adopted_inventory_device_keeps_what_it_announced():
+    source = (REPO / "dosync" / "server.py").read_text(encoding="utf-8")
+    assert '"discovered_as": service' in source, \
+        "the service type a device announced is discarded on adoption"
+
+
+def test_the_dashboard_sends_the_service_type_and_explains_the_limit():
+    dashboard = (REPO / "dosync" / "dashboard.html").read_text(encoding="utf-8")
+    assert "service_type: d.service_type" in dashboard, \
+        "the dashboard adopts without passing what the device announced"
+    assert "Nothing has declared what this device can do yet" in dashboard, \
+        "the dashboard lets someone adopt an inert device without saying so"
+    assert "WiZ today" not in dashboard, \
+        "the empty-scan message still claims only WiZ can discover"
