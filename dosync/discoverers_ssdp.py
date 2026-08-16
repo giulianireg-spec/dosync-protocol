@@ -112,6 +112,46 @@ def _name(headers: dict, device_type: str, address: str) -> str:
     return device_type or address
 
 
+async def _describe(location: str, timeout: float = 2.0) -> dict:
+    """Read the UPnP description document a `Location` points at.
+
+    SSDP headers carry an address and a type; the document at that address
+    carries `friendlyName`, `manufacturer` and `modelName` — the fields a person
+    actually recognises. A television on a test network announced itself as
+    `IPControlServer` in the headers and as `75" QLED` by Samsung in the
+    document, and only one of those is worth showing someone.
+
+    Best-effort by design: a device that does not serve the document, serves it
+    slowly, or serves something else is still a finding. Discovery must not
+    depend on a second request succeeding.
+    """
+    if not location.startswith(("http://", "https://")):
+        return {}
+    try:
+        import urllib.request
+        loop = asyncio.get_running_loop()
+
+        def _fetch() -> str:
+            with urllib.request.urlopen(location, timeout=timeout) as resp:
+                return resp.read(16384).decode("utf-8", errors="replace")
+
+        body = await asyncio.wait_for(loop.run_in_executor(None, _fetch),
+                                      timeout=timeout + 0.5)
+    except Exception as exc:
+        log.debug("no description at %s: %s", location, exc)
+        return {}
+
+    out = {}
+    for field in ("friendlyName", "manufacturer", "modelName", "modelNumber"):
+        start = body.find(f"<{field}>")
+        if start == -1:
+            continue
+        end = body.find(f"</{field}>", start)
+        if end != -1:
+            out[field] = body[start + len(field) + 2:end].strip()
+    return out
+
+
 def _device_type(headers: dict) -> str:
     """The `NT`/`ST` URN, shortened to the part a reader can use.
 
@@ -181,14 +221,31 @@ class SSDPDiscoverer:
                         timeout=max(0.1, deadline - loop.time()))
                 except (asyncio.TimeoutError, OSError):
                     continue
+                # Multicast comes back to the sender: without this the hub
+                # discovers its own M-SEARCH and reports itself as a device
+                # announcing `ssdp:all`, once per port, every scan.
+                if payload[:8].upper().startswith(b"M-SEARCH"):
+                    continue
                 headers = _parse(payload)
                 if not headers:
                     continue
+                # A response with neither NT nor ST announces nothing.
+                if not (headers.get("nt") or headers.get("st")):
+                    continue
                 device_type = _device_type(headers)
-                # An identity that survives a changing address: the USN is what
-                # SSDP has for that, and it is usually a serial number.
+                # IDENTITY IS THE UUID, NOT THE USN. One device announces
+                # itself many times — once as `upnp:rootdevice`, once per
+                # service, once bare — and each announcement carries a different
+                # USN of the form `uuid:XXX::urn:YYY`. Keying on the whole USN
+                # turned a television into eight findings and a network of two
+                # devices into twelve rows.
                 usn = headers.get("usn", "") or f"{addr[0]}:{port}"
-                if usn in found:
+                identity = usn.split("::", 1)[0]
+                previous = found.get(identity)
+                # Keep the most informative announcement: one that names a
+                # device type beats one that only repeats the uuid.
+                if previous and (previous.service_type
+                                 and not previous.service_type.startswith("uuid:")):
                     continue
                 # Vendor headers (`DevModel.bambu.com: N1`) are kept verbatim in
                 # extra: not interpreted, because interpreting them is where a
@@ -198,13 +255,17 @@ class SSDPDiscoverer:
                           if k not in ("host", "cache-control", "nt", "nts",
                                        "usn", "location", "server", "st", "ext")}
                 address = _address(headers.get("location", ""), addr[0])
-                found[usn] = DiscoveredDevice(
+                described = await _describe(headers.get("location", ""))
+                if described.get("friendlyName"):
+                    headers = {**headers, "friendlyname": described["friendlyName"]}
+                found[identity] = DiscoveredDevice(
                     adapter="",                  # nothing declared yet
                     device_id=usn,
                     device_name=_name(headers, device_type, address),
                     ip=address,
                     extra={"port": port, "headers": vendor, "transport": "ssdp",
-                           "server": headers.get("server", "")},
+                           "server": headers.get("server", ""),
+                           "description": described},
                     service_type=device_type,
                     # Anything announcing itself as a `:device:` is announcing
                     # that it exists to be interacted with. Generic and

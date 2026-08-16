@@ -329,3 +329,61 @@ def test_a_device_is_named_by_what_it_called_itself():
     # With nothing to go on, the type is more use than an address.
     assert "IPControlServer" in _name({"server": "UPnP/1.0"}, "IPControlServer",
                                       "192.0.2.105")
+
+
+def test_one_device_announcing_many_times_is_one_finding():
+    """A television turned into eight rows.
+
+    SSDP devices announce repeatedly — once as `upnp:rootdevice`, once per
+    service, once bare — and each announcement carries a different USN of the
+    form `uuid:XXX::urn:YYY`. Keying on the whole USN made a network of two
+    devices report twelve, and the dashboard asked about each one in a separate
+    dialog.
+
+    Identity is the uuid before `::`.
+    """
+    usns = [
+        "uuid:d58697e1-2986-4ac8-bfb5-fdcf92ec938b::upnp:rootdevice",
+        "uuid:d58697e1-2986-4ac8-bfb5-fdcf92ec938b",
+        "uuid:d58697e1-2986-4ac8-bfb5-fdcf92ec938b::urn:samsung.com:service:IPControlService:1",
+        "uuid:d58697e1-2986-4ac8-bfb5-fdcf92ec938b::urn:samsung.com:device:IPControlServer:1",
+    ]
+    identities = {u.split("::", 1)[0] for u in usns}
+    assert len(identities) == 1, "the same device would be reported four times"
+
+    source = (REPO / "dosync" / "discoverers_ssdp.py").read_text(encoding="utf-8")
+    assert 'usn.split("::", 1)[0]' in source, \
+        "findings are still keyed on the full USN, so one device reports many"
+
+
+def test_the_hub_does_not_discover_its_own_search():
+    """Multicast returns to the sender.
+
+    Without a guard the hub receives its own M-SEARCH, parses it as an
+    announcement, and reports itself as a device offering `ssdp:all` — once per
+    port, on every scan. It did exactly that on the reference deployment.
+    """
+    source = (REPO / "dosync" / "discoverers_ssdp.py").read_text(encoding="utf-8")
+    assert 'b"M-SEARCH"' in source, "the hub still processes its own searches"
+    assert 'headers.get("nt") or headers.get("st")' in source, \
+        "a packet announcing nothing is still treated as a finding"
+
+
+def test_the_description_document_supplies_a_name_worth_showing():
+    """Headers give a type; the document gives a name.
+
+    A television announced `IPControlServer` in its SSDP headers and
+    `75" QLED` by Samsung in the document at its Location. Only one of those is
+    worth showing a person.
+    """
+    from dosync.discoverers_ssdp import _name
+    assert _name({"friendlyname": '75" QLED'}, "IPControlServer",
+                 "192.0.2.105") == '75" QLED'
+
+
+def test_discovery_does_not_depend_on_the_description_being_reachable():
+    """A device that does not serve its document is still a finding."""
+    import asyncio as _asyncio
+    from dosync.discoverers_ssdp import _describe
+    assert _asyncio.run(_describe("")) == {}
+    assert _asyncio.run(_describe("not-a-url")) == {}

@@ -10,6 +10,26 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **One device announcing many times was many devices.** SSDP devices announce
+  repeatedly — once as `upnp:rootdevice`, once per service, once bare — and each
+  announcement carries a different `USN` of the form `uuid:XXX::urn:YYY`. Keyed
+  on the whole USN, a network with two devices reported twelve findings, and the
+  dashboard asked about every one of them in its own dialog. Identity is the
+  uuid before `::`, and the announcement that names a device type wins over the
+  one that only repeats the uuid.
+
+- **The hub discovered its own search.** Multicast returns to the sender, so
+  every scan received the hub's own M-SEARCH, parsed it as an announcement, and
+  reported the hub as a device offering `ssdp:all` — once per port.
+
+- **A device is named by its description document when it serves one.** SSDP
+  headers give a type; the document at `Location` gives `friendlyName`,
+  `manufacturer` and `modelName`. A television announced itself as
+  `IPControlServer` in its headers and as a `75" QLED` by Samsung in its
+  document, and only one of those is worth showing someone. Best-effort: a
+  device that does not serve the document is still a finding, because discovery
+  must not depend on a second request succeeding.
+
 - **SSDP `Location` comes in two shapes, and the parser knew one.** A 3D printer
   sent a bare address (`Location: 192.0.2.91`); a TV on the same network sent a
   full URL (`Location: http://192.0.2.105:9110/ip_control`). Written against the
