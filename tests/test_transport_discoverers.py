@@ -387,3 +387,41 @@ def test_discovery_does_not_depend_on_the_description_being_reachable():
     from dosync.discoverers_ssdp import _describe
     assert _asyncio.run(_describe("")) == {}
     assert _asyncio.run(_describe("not-a-url")) == {}
+
+
+def test_description_fields_are_unescaped():
+    """A person should never see XML entities in a device name.
+
+    A television reported itself as `75&quot; QLED` — the right bytes and the
+    wrong name.
+    """
+    source = (REPO / "dosync" / "discoverers_ssdp.py").read_text(encoding="utf-8")
+    assert "html.unescape" in source, "description fields still carry XML entities"
+
+
+def test_one_television_publishing_two_upnp_devices_is_one_row():
+    """Distinct UUIDs, distinct services, same hardware, same address.
+
+    A TV publishes a DIAL receiver and an IP control server. Both are real UPnP
+    devices and neither is wrong — but the person choosing what to adopt is
+    looking at one television, and saw two rows with the same name.
+    """
+    from dosync.discoverers_ssdp import SSDPDiscoverer
+
+    a = DiscoveredDevice(adapter="", device_id="uuid:a", device_name='75" QLED',
+                         ip="192.0.2.105", extra={}, service_type="upnp:rootdevice")
+    b = DiscoveredDevice(adapter="", device_id="uuid:b", device_name='75" QLED',
+                         ip="192.0.2.105", extra={}, service_type="IPControlServer")
+    by_host = {}
+    for d in (a, b):
+        key = (d.ip, d.device_name)
+        kept = by_host.get(key)
+        if kept is None or (kept.service_type.startswith(("upnp:", "uuid:"))
+                            and not d.service_type.startswith(("upnp:", "uuid:"))):
+            by_host[key] = d
+    assert len(by_host) == 1
+    # And the surviving row is the one that says what the thing is.
+    assert list(by_host.values())[0].service_type == "IPControlServer"
+
+    source = (REPO / "dosync" / "discoverers_ssdp.py").read_text(encoding="utf-8")
+    assert "by_host" in source, "findings are no longer grouped per host"

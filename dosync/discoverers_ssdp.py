@@ -35,6 +35,7 @@ controlling.
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 import socket
 import struct
@@ -148,7 +149,10 @@ async def _describe(location: str, timeout: float = 2.0) -> dict:
             continue
         end = body.find(f"</{field}>", start)
         if end != -1:
-            out[field] = body[start + len(field) + 2:end].strip()
+            # XML escapes its entities and a person should never see them: a
+            # television reported itself as `75&quot; QLED`, which is the right
+            # bytes and the wrong name.
+            out[field] = html.unescape(body[start + len(field) + 2:end].strip())
     return out
 
 
@@ -185,6 +189,19 @@ class SSDPDiscoverer:
             return_exceptions=True,
         )
         results = [d for d in found.values() if d.ip not in ("127.0.0.1", "::1")]
+        # A television publishes several UPnP devices — a DIAL receiver, an IP
+        # control server — with different UUIDs and the same hardware behind
+        # them. Technically distinct; to the person deciding what to adopt, one
+        # television reported twice. Grouped by address and name, keeping the
+        # entry that names a device type over one that only says `rootdevice`.
+        by_host: dict[tuple, DiscoveredDevice] = {}
+        for d in results:
+            key = (d.ip, d.device_name)
+            kept = by_host.get(key)
+            if kept is None or (kept.service_type.startswith(("upnp:", "uuid:"))
+                                and not d.service_type.startswith(("upnp:", "uuid:"))):
+                by_host[key] = d
+        results = list(by_host.values())
         results.sort(key=lambda d: (not d.likely_actionable, d.service_type,
                                     d.device_name))
         log.info("SSDP scan: %d device(s) announced across ports %s",

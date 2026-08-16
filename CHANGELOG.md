@@ -10,6 +10,21 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Two cosmetic defects a real scan exposed, and one milestone it reached.**
+  The first live scan with all four earlier fixes in place found a 3D printer as
+  `3dprinter` at its own address — a device with nothing to do with home
+  automation, discovered and correctly identified without an adapter, a vendor
+  catalogue, or a line of code written by its operator.
+
+  In the same output: a television's name came back as `75&quot; QLED`, because
+  XML escapes its entities and nothing unescaped them — the right bytes and the
+  wrong name. And that television appeared twice, because it publishes two UPnP
+  devices (a DIAL receiver and an IP control server) with different UUIDs and
+  the same hardware behind them. Technically distinct; to the person deciding
+  what to adopt, one television reported twice. Findings are now grouped per
+  host, keeping the entry that names a device type over one that only says
+  `rootdevice`.
+
 - **One device announcing many times was many devices.** SSDP devices announce
   repeatedly — once as `upnp:rootdevice`, once per service, once bare — and each
   announcement carries a different `USN` of the form `uuid:XXX::urn:YYY`. Keyed
