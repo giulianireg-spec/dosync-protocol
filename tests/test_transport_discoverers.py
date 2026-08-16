@@ -299,3 +299,33 @@ def test_the_dashboard_sends_the_service_type_and_explains_the_limit():
         "the dashboard lets someone adopt an inert device without saying so"
     assert "WiZ today" not in dashboard, \
         "the empty-scan message still claims only WiZ can discover"
+
+
+def test_location_parses_in_both_shapes_devices_actually_send():
+    """Two devices on one network sent two different shapes.
+
+    A 3D printer sent a bare address (`Location: 192.0.2.91`); a TV sent a full
+    URL (`Location: http://192.0.2.105:9110/ip_control`). The first parser was
+    written against the printer and split on "/", so every device using the
+    second form was reported at the address `http:` — visible in the dashboard,
+    which offered to adopt something "@ http:".
+    """
+    from dosync.discoverers_ssdp import _address
+    assert _address("192.0.2.91", "fallback") == "192.0.2.91"
+    assert _address("http://192.0.2.105:9110/ip_control", "fb") == "192.0.2.105"
+    assert _address("https://192.0.2.7/desc.xml", "fb") == "192.0.2.7"
+    assert _address("", "192.0.2.50") == "192.0.2.50"
+
+
+def test_a_device_is_named_by_what_it_called_itself():
+    """Not by its Location URL, which is where a name does not belong."""
+    from dosync.discoverers_ssdp import _name
+    # Vendor headers carry the vendor domain — DevName.bambu.com — so a suffix
+    # test on the whole key matches nothing.
+    assert _name({"devname.bambu.com": "printer-A"}, "3dprinter", "192.0.2.91") \
+        == "printer-A"
+    assert _name({"friendlyname": "Living TV"}, "MediaRenderer", "192.0.2.9") \
+        == "Living TV"
+    # With nothing to go on, the type is more use than an address.
+    assert "IPControlServer" in _name({"server": "UPnP/1.0"}, "IPControlServer",
+                                      "192.0.2.105")

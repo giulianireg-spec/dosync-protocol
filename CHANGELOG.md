@@ -9,6 +9,21 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **SSDP `Location` comes in two shapes, and the parser knew one.** A 3D printer
+  sent a bare address (`Location: 192.0.2.91`); a TV on the same network sent a
+  full URL (`Location: http://192.0.2.105:9110/ip_control`). Written against the
+  printer, the parser split on `/` and reported every device of the second kind
+  at the address `http:` — which showed up in the dashboard offering to adopt
+  something "@ http:".
+
+  Written from one capture, broken by the next capture on the same network. Both
+  shapes are now fixtures. A device is also named by what it called itself
+  rather than by its Location URL: vendors publish a name under their own header
+  (`DevName.bambu.com`), and the first attempt to read those tested the whole
+  key for a `name` suffix, which matches nothing because the key ends in the
+  vendor's domain.
+
 ### Added
 - **SSDP discovery, written from a capture rather than a specification.** A real
   device — a 3D printer on a home network — announced continuously and was

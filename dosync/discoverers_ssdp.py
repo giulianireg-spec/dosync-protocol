@@ -75,6 +75,43 @@ def _parse(payload: bytes) -> dict:
     return headers
 
 
+def _address(location: str, fallback: str) -> str:
+    """The host out of a `Location` header, which comes in two shapes.
+
+    A 3D printer sent a bare address (`Location: 192.0.2.91`); a TV on the same
+    network sent a full URL (`Location: http://192.0.2.105:9110/ip_control`).
+    The first version split on "/" and produced `http:` as the address of every
+    device that used the second form — written against one capture, broken by
+    the next one on the same network.
+    """
+    location = (location or "").strip()
+    if not location:
+        return fallback
+    if "://" in location:
+        host = location.split("://", 1)[1].split("/", 1)[0]
+        return host.rsplit(":", 1)[0] if ":" in host else host
+    return location.split("/", 1)[0]
+
+
+def _name(headers: dict, device_type: str, address: str) -> str:
+    """A name a person recognises, preferring what the device called itself.
+
+    Vendors publish one under their own header (`DevName.bambu.com`), and there
+    is no standard for it — so anything ending in `name` is accepted. Falling
+    back to the Location URL, as the first version did, showed people a URL
+    where a name belongs.
+    """
+    for key, value in headers.items():
+        # Vendor headers carry the vendor domain: `DevName.bambu.com`. Testing
+        # the whole key for a "name" suffix matched nothing, because it ends in
+        # the domain — so the field before the first dot is what to look at.
+        if key.split(".", 1)[0].endswith("name") and value:
+            return value
+    if headers.get("server") and device_type:
+        return f"{device_type} ({headers['server']})"
+    return device_type or address
+
+
 def _device_type(headers: dict) -> str:
     """The `NT`/`ST` URN, shortened to the part a reader can use.
 
@@ -160,11 +197,12 @@ class SSDPDiscoverer:
                 vendor = {k: v for k, v in headers.items()
                           if k not in ("host", "cache-control", "nt", "nts",
                                        "usn", "location", "server", "st", "ext")}
+                address = _address(headers.get("location", ""), addr[0])
                 found[usn] = DiscoveredDevice(
                     adapter="",                  # nothing declared yet
                     device_id=usn,
-                    device_name=headers.get("location", addr[0]),
-                    ip=headers.get("location", addr[0]).split("/")[0],
+                    device_name=_name(headers, device_type, address),
+                    ip=address,
                     extra={"port": port, "headers": vendor, "transport": "ssdp",
                            "server": headers.get("server", "")},
                     service_type=device_type,
