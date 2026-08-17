@@ -72,3 +72,46 @@ def test_the_quick_start_tells_the_reader_where_the_token_comes_from():
     assert re.search(r"export DOSYNC_TOKEN|printed on first start|shown only once",
                      section), \
         "the quick start uses a token without saying where the reader gets it"
+
+
+def test_the_quick_start_leads_with_the_dashboard():
+    """Adopting a device needs no terminal, and the page used to imply otherwise.
+
+    The Quick Start opened with four `curl` calls and mentioned the dashboard
+    much further down. Someone who does not write code read that and concluded
+    the project was not for them — while a button doing the same job, better,
+    sat one section lower. A 3D printer, a television and a Bluetooth sensor
+    were adopted through it on the reference deployment without a line typed.
+    """
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    start = readme.index("## Quick start")
+    dashboard = readme.index("localhost:47200", start)
+    first_curl = readme.index("curl -X POST", start)
+    assert dashboard < first_curl, \
+        "the Quick Start reaches an API call before it mentions the dashboard"
+
+
+def test_windows_is_documented():
+    """Six things a clean Windows machine needed that this page did not say.
+
+    pipx is not installed with Python on Windows, so the very first command in
+    the Quick Start failed before the reader saw anything of the project;
+    `ensurepath` requires reopening the terminal; `export` is not a PowerShell
+    command; `curl` is an alias for a different program; `setup_pki.sh` is a
+    shell script; and escaping JSON for `curl.exe` produces a JSON decode error.
+    """
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    for needed in ("python -m pip install --user pipx", "$env:DOSYNC_TOKEN",
+                   "Invoke-RestMethod", "curl.exe"):
+        assert needed in readme, f"Windows readers are still missing: {needed}"
+
+
+def test_powershell_examples_do_not_use_the_curl_alias():
+    """`curl` in PowerShell is Invoke-WebRequest, which fails confusingly."""
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    block = readme[readme.index("The same calls in PowerShell"):]
+    block = block[:block.index("</details>")]
+    for line in block.splitlines():
+        stripped = line.strip()
+        assert not stripped.startswith("curl "), \
+            f"a PowerShell example uses the curl alias: {stripped[:60]}"

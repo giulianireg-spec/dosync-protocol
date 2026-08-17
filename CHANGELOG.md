@@ -10,6 +10,28 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The Quick Start led with `curl` and mentioned the dashboard much later.** A
+  clean install on Windows made the cost obvious: adopting a device needs no
+  terminal and no JSON — a 3D printer, a television and a Bluetooth sensor were
+  adopted through the dashboard on the reference deployment without a line being
+  typed — and the page opened with four API calls, telling anyone who does not
+  write code that the project was not for them while a button doing the same job
+  sat one section lower. The dashboard comes first now; the API calls are framed
+  as what they are, the way to build against DoSync rather than to set it up.
+
+- **Windows was undocumented, and the first command failed there.** Six things a
+  clean Windows machine needed that this page did not say: `pipx` is not
+  installed with Python on Windows, so the very first command of the Quick Start
+  failed before the reader saw anything of the project; `pipx ensurepath`
+  requires reopening the terminal; `export` is not a PowerShell command; `curl`
+  is an alias for `Invoke-WebRequest`, a different program with a different
+  syntax; `setup_pki.sh` is a shell script; and escaping JSON for `curl.exe`
+  from PowerShell produces `JSON decode error`, because the escaped quotes are
+  passed through literally.
+
+  The hub itself ran on Windows without a change — the protocol was fine and its
+  documentation was not.
+
 - **Two cosmetic defects a real scan exposed, and one milestone it reached.**
   The first live scan with all four earlier fixes in place found a 3D printer as
   `3dprinter` at its own address — a device with nothing to do with home

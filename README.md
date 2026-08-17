@@ -197,6 +197,50 @@ dosync-hub
 ```
 
 <details>
+<summary><b>On Windows</b> — pipx is not installed with Python there</summary>
+
+Every step below was found by running it on a clean Windows machine. None of it
+is exotic; it is simply what Windows needs and what this page used to omit.
+
+```powershell
+python -m pip install --user pipx
+python -m pipx ensurepath
+```
+
+**Close PowerShell and open it again.** `ensurepath` edits your PATH and the
+session you are in cannot see the change. Then:
+
+```powershell
+pipx install dosync
+dosync-hub
+```
+
+Two things the rest of this page assumes that PowerShell does not provide:
+`export VAR=value` is `$env:VAR = "value"`, and `curl` is an alias for
+`Invoke-WebRequest`, which is a different program with a different syntax — use
+`curl.exe`, or the PowerShell examples further down. `setup_pki.sh` is a shell
+script and needs Git Bash or WSL.
+
+</details>
+
+### Then open the dashboard
+
+```
+http://localhost:47200
+```
+
+Paste the API key the hub printed on startup, press **Scan**, and the hub
+searches every transport it can reach — WiFi broadcast, mDNS, SSDP, Bluetooth —
+and shows what answered. Name anything you want to keep and it is adopted.
+
+**Start here.** Discovering and adopting a device needs no terminal and no
+JSON: a 3D printer, a television and a Bluetooth sensor were adopted this way
+on the reference deployment without a line being typed. The API calls below are
+for building against DoSync, not for setting it up — they came first on this
+page for a long time, which told people who do not write code that the project
+was not for them, while a button that did the same job sat one section lower.
+
+<details>
 <summary><b>"error: externally-managed-environment"?</b> — Raspberry Pi OS, Debian 12+, Ubuntu 23.04+</summary>
 
 Those systems refuse system-wide `pip install` (PEP 668) to stop Python packages
@@ -233,11 +277,20 @@ That is a working hub on `http://127.0.0.1:47200`. It starts with a simulated
 executor, so you can drive the whole protocol — register devices, fire intents,
 read the audit chain — before you own a single smart device.
 
+### Or drive it from the API
+
+Everything the dashboard does is an HTTP call, and this is the part to read if
+you are building against DoSync rather than setting it up.
+
 The hub prints an API key on that first start and stores only a hash of it, so
 it is shown once. Save it — every command below needs it:
 
 ```bash
 export DOSYNC_TOKEN=<the key printed on first start>
+```
+
+```powershell
+$env:DOSYNC_TOKEN = "<the key printed on first start>"
 ```
 
 Register something and give it a goal:
@@ -267,6 +320,39 @@ curl http://127.0.0.1:47200/v1/intents/ensure_safety/explain \
 # 4. Read the tamper-evident record of what happened
 curl "http://127.0.0.1:47200/v1/audit?limit=10" \
   -H "Authorization: Bearer $DOSYNC_TOKEN"
+```
+
+<details>
+<summary><b>The same calls in PowerShell</b></summary>
+
+`curl` in PowerShell is an alias for `Invoke-WebRequest`, and quoting JSON for
+`curl.exe` is impractical — a clean Windows machine following the commands above
+verbatim gets `JSON decode error`, because PowerShell passes the escaped quotes
+through literally. Build the body as an object instead:
+
+```powershell
+$body = @{
+  device_id = "siren-hall"; device_name = "Hall Siren"
+  manufacturer = "acme"; model = "S1"; firmware = "1.0"
+  category = "actuator"; tags = @("alarm","emergency")
+  emergency_capable = $true; cert_tier = "basic"
+  capabilities = @{ sensors = @(); actuators = @(@{ id="alarm"; type="alarm"; description="sound" }) }
+} | ConvertTo-Json -Depth 6
+
+$headers = @{ Authorization = "Bearer $env:DOSYNC_TOKEN" }
+
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:47200/v1/devices/register `
+  -Headers $headers -ContentType "application/json" -Body $body
+
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:47200/v1/intent/async `
+  -Headers $headers -ContentType "application/json" `
+  -Body (@{ intent = "ensure_safety"; urgency = "emergency"; context = @{} } | ConvertTo-Json)
+
+Invoke-RestMethod -Uri http://127.0.0.1:47200/v1/intents/ensure_safety/explain -Headers $headers
+Invoke-RestMethod -Uri "http://127.0.0.1:47200/v1/audit?limit=10" -Headers $headers
+```
+
+</details>
 ```
 
 Step 3 is the one worth pausing on: the hub tells you which devices it
