@@ -10,6 +10,26 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Three things the dashboard said that were not what the hub did.** All from
+  the same from-scratch Windows install, and all of them the interface
+  describing the system inaccurately rather than the system misbehaving.
+
+  The header read `disconnected` while devices loaded, scans ran and every call
+  returned 200 — the word described the WebSocket, which had no library to speak
+  it, and a reader took it to mean the hub was unreachable. A reachable hub
+  whose live events are not now says so.
+
+  The token field said `API token…` and nothing else. Help existed behind a `?`
+  button, and the project's own author asked where to get a key without finding
+  it, which settles how discoverable it was. The field now names where the first
+  token appears and points at the button.
+
+  And the scan endpoint has always reported which transports it searched and
+  which it skipped — the page discarded both. So a scan that never searched WiZ,
+  because pywizlight was missing, told the operator that no device had answered.
+  The bulbs were powered on. Nothing answered because nobody asked. The empty
+  result now lists what was covered and what was not.
+
 - **The hub served a WebSocket endpoint without a library that speaks it.**
   `uvicorn` without the `standard` extra ships neither `websockets` nor
   `wsproto`, so `/ws` answered 404 on every clean install and the dashboard —

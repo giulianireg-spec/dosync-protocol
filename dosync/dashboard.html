@@ -480,10 +480,12 @@
   <div class="header-right">
     <div class="ws-indicator">
       <div class="ws-dot" id="wsDot"></div>
-      <span id="wsStatus">disconnected</span>
+      <span id="wsStatus">not connected</span>
     </div>
     <input class="token-input" id="tokenInput" type="password"
-           placeholder="API token…" autocomplete="off">
+           placeholder="API token — printed on first start, or press ?"
+           title="The hub prints a token the first time it starts. Press ? to choose your own or turn authentication off."
+           autocomplete="off">
     <button class="btn sm" onclick="connect()">Connect</button>
     <!-- The field said "API token…" and nothing else, and the project's own
          author could not work out where to get one — so a newcomer certainly
@@ -678,6 +680,20 @@ async function openAccess() {
   }
 }
 
+// Which transports were searched, and which were skipped. The scan endpoint
+// has always reported both — the page used to discard them, which is how a
+// scan that never searched WiZ could tell an operator that nothing answered.
+function describeCoverage(res) {
+  const searched = res.searched || [];
+  const skipped  = res.not_searchable || [];
+  let out = "";
+  if (searched.length) out += "Searched: " + searched.join(", ") + "\n";
+  if (skipped.length)  out += "Not searched: " + skipped.join(", ") + "\n";
+  if (!searched.length && !skipped.length)
+    out += "The hub did not report which transports it covered.\n";
+  return out;
+}
+
 function showTokenHelp() {
   alert(
     "DoSync access\n\n" +
@@ -705,7 +721,7 @@ function connect() {
   ws = new WebSocket(url);
 
   ws.onopen = () => {
-    setWsStatus('connected');
+    setWsStatus('live');
     loadStatus();
     loadDevices();
     loadIntents();
@@ -722,7 +738,12 @@ function connect() {
       setWsStatus('error');
       toast('Invalid token — check your API key', 'error');
     } else {
-      setWsStatus('disconnected');
+      // "disconnected" described the WEBSOCKET and was read as "the hub is
+      // unreachable" — on a clean Windows install the header said it while
+      // devices loaded, scans ran and every call returned 200, because uvicorn
+      // had no library to speak WebSocket. The word has to say which of the two
+      // things is missing.
+      setWsStatus(token ? 'live events unavailable' : 'not connected');
       setTimeout(connect, 3000); // auto-reconnect
     }
   };
@@ -926,9 +947,13 @@ async function scanDevices() {
   const previous = list.innerHTML;
   list.innerHTML = '<div class="empty"><div class="empty-text">Scanning…</div></div>';
 
-  let found;
+  let found, res;
   try {
-    found = (await api('GET', '/v1/discovery/scan')).found || [];
+    // Keep the whole response: it carries which transports were searched and
+    // which were skipped, and discarding that is how "nothing answered" got
+    // told about bulbs that were powered on.
+    res = await api('GET', '/v1/discovery/scan');
+    found = res.found || [];
   } catch (e) {
     list.innerHTML = previous;
     alert("Scan failed: " + (e.message || e));
@@ -941,9 +966,14 @@ async function scanDevices() {
     // Saying "none" is itself information: the hub is alive and reachable, so
     // the problem is elsewhere. Silence would leave the user unable to tell
     // this apart from a broken page.
+    // The endpoint has always reported which transports it covered and which
+    // it could not, and the page threw that away — so a scan that never
+    // searched WiZ, because pywizlight was missing, told the operator that no
+    // device had answered. The bulbs were on. Nothing answered because nobody
+    // asked.
     alert("No devices answered on this network.\n\n" +
-          "Not every transport can be searched — the scan reports which ones " +
-          "it covered. Anything it cannot reach is registered directly with " +
+          describeCoverage(res) +
+          "\nAnything a transport cannot reach is registered directly with " +
           "POST /v1/devices/register, which is a normal path, not a failure.");
     return;
   }
