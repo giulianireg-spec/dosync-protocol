@@ -9,7 +9,209 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-17
+
+Two new discovery transports, and fourteen defects found by installing the
+project from scratch and using it as a stranger would — on a clean Linux
+container, on Windows, and against real hardware that had nothing to do with
+home automation. None of them appeared in the backlog. The protocol itself
+needed no change on any platform; almost everything corrected here was what
+the system said about itself.
+
+### Added
+
+- **SSDP discovery, written from a capture rather than a specification.** A real
+  device — a 3D printer on a home network — announced continuously and was
+  invisible to the mDNS scan, because it does not use mDNS. Its announcement
+  taught two things a reading of the standard would not have.
+
+  **The port is not always 1900.** That printer announces on **2021**. A
+  discoverer joining only the standard group would have reported "nothing found"
+  about a device shouting every few seconds — the exact false negative the
+  searched/skipped reporting exists to prevent, arriving through a different
+  door.
+
+  **A vendor-namespaced device type is still a device type.**
+  `urn:bambulab-com:device:3dprinter:1` is not a standard URN and it says
+  *3dprinter*, which is what a person needs to decide whether to adopt it. The
+  vendor namespace is dropped; the vendor's own headers are kept verbatim and
+  uninterpreted, because interpreting them is where a product catalogue starts.
+
+  The capture is the test fixture, serial and address redacted. And the same
+  announcement showed the limit of all of this: the printer was bound to its
+  vendor's cloud, where no local hub can command it. Discovery found it and
+  could not have driven it. Finding is not controlling.
+
+- **A discovered device can be kept even when nothing has declared what it
+  does.** `/v1/discovery/adopt` required an adapter, written when the only
+  discoverer was WiZ and a finding always carried one. Generalising discovery
+  exposed the assumption in the worst possible place: the scan would show
+  someone their printer and then refuse to let them keep it.
+
+  Such a device is now adopted as **inventory** — known, named, visible in the
+  registry, openly unable to act. That is honest only because of work landed
+  this week: an adapter-less device is reported as unexecutable at every start,
+  and any action on it returns `simulated`. Without those two, adopting an inert
+  device would be a trap rather than a step.
+
+  The dashboard shows what the device announced itself as — `3dprinter` tells a
+  person what they are looking at, an address does not — and says plainly that
+  adding it records it rather than making it actionable. Its empty-scan message
+  no longer claims that only WiZ can discover.
+
+- **mDNS/DNS-SD discovery, and a place for discoverers to live.** The scan
+  endpoint already argued, in its own docstring, that discovery must not be an
+  IP-only idea — and then reached exactly two transports, because the only way
+  for a component to be searched was to be an *adapter*. Anything that finds
+  without executing had to implement `execute` to be seen, which deformed the
+  model to fit the plumbing.
+
+  A hub now registers **transport discoverers** alongside adapters. A discoverer
+  only listens and reports; it has a different lifecycle (its library is enough
+  — no credentials), a different failure mode (you do not know what you have,
+  rather than a device not moving), and a different trust property: enumerating
+  someone's network is the first thing an attacker would want.
+
+  `MDNSDiscoverer` covers the class of devices that announce a local API —
+  printers, NAS, cameras, Shelly, Tasmota, ESPHome, Matter commissionables — with
+  one implementation instead of an adapter per vendor, which is the path the
+  project declined when it labelled WiZ and Shelly as reference adapters. The
+  service list decides **where to listen**, never what a device can do, and it
+  asks the network to enumerate its own types so unknown ones still surface.
+  `zeroconf` ships in the core under the rule `pyproject.toml` already states:
+  discovery libraries are needed *before* the knowledge that would justify
+  installing them.
+
+  **What this deliberately does not do** is turn a discovered service into a
+  capability manifest. A `_octoprint._tcp` on the network is not yet a DoSync
+  device, because DoSync resolves over declared capabilities and nobody has
+  declared any. Who writes that manifest is a separate design question, left
+  open.
+
+- **A finding reports what a device announced itself as.** `service_type` and a
+  `likely_actionable` ordering hint. An address says where something is; the
+  service type says what it claims to be, and it is the part a person can act
+  on. Ordering is presentation only — a device outside the hint is still
+  reported, just not first — because a scan returning forty unranked entries
+  costs the reader more than it saves them.
+
+  Found from the user's chair: preparing a from-scratch install with a real WiFi
+  3D printer surfaced that a scan would not see it. The gap was coverage, not
+  design.
+
+- **An action that never left the hub says so.** `ActionResult` carries
+  `simulated` and `simulated_reason`; `intent_executed` carries
+  `actions_simulated`; `direct_action_executed` carries both; and the intent API
+  reports them per action and in aggregate.
+
+  The reference deployment ran an SMS notifier whose manifest named no adapter.
+  Every `notify` fell back to the simulator, returned `success=True`, and was
+  logged at INFO as `Executed:` — for an unknown length of time, on the
+  deployment whose drills are this project's evidence. `success` and `simulated`
+  answer different questions: `success=False` means something went wrong,
+  `simulated=True` means nothing went anywhere. Collapsing them made the Data
+  layer mislead by omission, and mislead the AI layer reasoning on top of it —
+  an agent told that `notify` succeeded during an emergency concludes the people
+  who needed to know were told.
+
+  Three adapters already marked simulation inside `response`. That was the right
+  instinct in the wrong place: a caller should not have to know which adapter
+  answered to learn whether anything happened.
+
+  `fallback_to_simulated` stays on by default. Simulating was never the problem
+  — certification, evaluation corpora and development without hardware all need
+  it. Not saying so was.
+
+- **The hub says at boot which devices nothing can act on.** A manifest that
+  declares actuators and names no adapter — or names one that is not registered
+  — is reported: at registration for new arrivals, and once at startup for the
+  whole fleet.
+
+  A device whose manifest names the adapter `"simulated"` is not reported:
+  declaring simulation is a legitimate choice — a test device, hardware that has
+  not arrived, a certification fixture. The sweep's first hardware run flagged
+  one of those alongside a genuinely misconfigured notifier, which is how a
+  useful warning becomes noise an operator learns to skip, taking the real
+  finding with it. `"none"` is deliberately not treated as such a request: a
+  manifest saying "none" is saying it has no adapter, which is the case being
+  reported.
+
+  The startup sweep exists because the registration check alone was not enough,
+  and hardware validation is what showed it: the reference deployment restarted
+  with the check in place and printed nothing, because devices restored from the
+  database go straight into the registry and never take the registration path.
+  The check covered new arrivals and missed the entire existing fleet — which is
+  exactly where a device sits misconfigured for months. The sweep runs after the
+  adapters register, since running it earlier would report every device as
+  unexecutable.
+
+### Changed
+
+- **The MCP tool descriptions describe the protocol, not one catalogue.** They
+  were in Spanish, named a vendor (*"Para luces WiZ soporta…"*) in the contract
+  of a generic tool, and documented `all_lights` — a convenience identifier the
+  specification does not define — without saying so. An LLM reads those strings
+  as the tool's contract. They now state that available actions come from the
+  device's own capability manifest, that direct actions are governed under the
+  reserved `direct_control` class, and that `all_lights` is client-side fan-out
+  rather than a protocol feature.
+
+  `all_lights` also selected on `["light", "wiz"]` — a vendor tag, the
+  antipattern TAG-VOCABULARY documents. Now `light` alone; measured on the
+  reference deployment, the selection is identical either way.
+
+- **The core and the specification are in English.** 255 lines of Spanish
+  remained across 29 files — module headers, docstrings, the MCP tool
+  descriptions, user-facing SMS text. An open protocol whose core carries one
+  contributor's language cannot be read or implemented by most of the people it
+  asks to adopt it. Enforced by a test scoped to `dosync/`, `tools/` and
+  `spec/`; `examples/` is deliberately outside it, because a demo narrating one
+  deployment in its operator's language is legitimate.
+
+  The first version of that test required three Spanish stopwords on one line
+  and let 81 lines through — `Instalación:`, `Características:`,
+  `Posición 0-100%` are each a single word, and they are the labels a reader
+  sees first. One accented character is now enough, with panel surnames cited in
+  decision comments declared as exceptions.
+
+- **Location tags are stated as an open namespace.** The spec listed ten
+  locations — `bedroom`, `kitchen`, `garage`, `basement` — in a normative
+  document that an industrial or clinical implementer reads, and defined
+  `appliance` as a *home* appliance. The code never restricted anything:
+  `location_hit` is string equality against `context.location`, which is why the
+  clinical and industrial corpora work today with `or-3` and `cell-2`. But the
+  document taught that the protocol was a house.
+
+  §5 now says what the mechanism already did: the deployment defines its
+  locations, a conforming hub MUST NOT reject one for being absent from any
+  list, and the residential names are examples alongside industrial and clinical
+  ones. Pinned by a test that resolves an intent against a device tagged
+  `death-star` — if an enumeration ever creeps in, it fails.
+
+- **Excluded devices now say what would include them.** A device whose actuators
+  fit an intent but whose tags do not is reported as excluded with the tag that
+  would change that, plus a new `actuators_fit_resolution` field, instead of
+  being silently dropped. Correcting the divergence by simply removing those
+  devices would have discarded the one genuinely useful thing the wrong answer
+  contained.
+
+  **Consumers of `/v1/intent/explain` should note:** devices that only matched
+  on actuator move from `included` to `excluded`. No resolution changes —
+  benchmark precision, recall and F1 are unchanged across all four corpora
+  (home, industrial, clinical, and the reference deployment snapshot).
+
+- **The universal intent resolution contract is now in the specification.**
+  Spec §6.4.1 states the resolution tags and actuators of the five universal
+  intents normatively. They previously existed only in
+  `_seed_universal_intents()`, so a second implementation written from `spec/`
+  alone would resolve `control_access` differently and still pass certification.
+  Measured cost of the gap: an industrial door tagged `access` + `security`
+  (both standard vocabulary) scores F1 0.00 — roughly a quarter of the
+  multi-domain agnosticism gap. The table is pinned to the seed by a test that
+  parses it rather than restating it.
+
 ### Fixed
+
 - **Three things the dashboard said that were not what the hub did.** All from
   the same from-scratch Windows install, and all of them the interface
   describing the system inaccurately rather than the system misbehaving.
@@ -130,47 +332,6 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   key for a `name` suffix, which matches nothing because the key ends in the
   vendor's domain.
 
-### Added
-- **SSDP discovery, written from a capture rather than a specification.** A real
-  device — a 3D printer on a home network — announced continuously and was
-  invisible to the mDNS scan, because it does not use mDNS. Its announcement
-  taught two things a reading of the standard would not have.
-
-  **The port is not always 1900.** That printer announces on **2021**. A
-  discoverer joining only the standard group would have reported "nothing found"
-  about a device shouting every few seconds — the exact false negative the
-  searched/skipped reporting exists to prevent, arriving through a different
-  door.
-
-  **A vendor-namespaced device type is still a device type.**
-  `urn:bambulab-com:device:3dprinter:1` is not a standard URN and it says
-  *3dprinter*, which is what a person needs to decide whether to adopt it. The
-  vendor namespace is dropped; the vendor's own headers are kept verbatim and
-  uninterpreted, because interpreting them is where a product catalogue starts.
-
-  The capture is the test fixture, serial and address redacted. And the same
-  announcement showed the limit of all of this: the printer was bound to its
-  vendor's cloud, where no local hub can command it. Discovery found it and
-  could not have driven it. Finding is not controlling.
-
-- **A discovered device can be kept even when nothing has declared what it
-  does.** `/v1/discovery/adopt` required an adapter, written when the only
-  discoverer was WiZ and a finding always carried one. Generalising discovery
-  exposed the assumption in the worst possible place: the scan would show
-  someone their printer and then refuse to let them keep it.
-
-  Such a device is now adopted as **inventory** — known, named, visible in the
-  registry, openly unable to act. That is honest only because of work landed
-  this week: an adapter-less device is reported as unexecutable at every start,
-  and any action on it returns `simulated`. Without those two, adopting an inert
-  device would be a trap rather than a step.
-
-  The dashboard shows what the device announced itself as — `3dprinter` tells a
-  person what they are looking at, an address does not — and says plainly that
-  adding it records it rather than making it actionable. Its empty-scan message
-  no longer claims that only WiZ can discover.
-
-### Fixed
 - **The mDNS meta-query was asked and never used.** `_services._dns-sd._udp`
   asks a network to name every service type it offers, and its answers are
   *types*, not devices — so a scan has to open a browser for each one. Nothing
@@ -194,95 +355,6 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   throughout, because they exercised the pieces and none asserted the pieces
   were connected. There are now tests for the wiring itself.
 
-### Added
-- **mDNS/DNS-SD discovery, and a place for discoverers to live.** The scan
-  endpoint already argued, in its own docstring, that discovery must not be an
-  IP-only idea — and then reached exactly two transports, because the only way
-  for a component to be searched was to be an *adapter*. Anything that finds
-  without executing had to implement `execute` to be seen, which deformed the
-  model to fit the plumbing.
-
-  A hub now registers **transport discoverers** alongside adapters. A discoverer
-  only listens and reports; it has a different lifecycle (its library is enough
-  — no credentials), a different failure mode (you do not know what you have,
-  rather than a device not moving), and a different trust property: enumerating
-  someone's network is the first thing an attacker would want.
-
-  `MDNSDiscoverer` covers the class of devices that announce a local API —
-  printers, NAS, cameras, Shelly, Tasmota, ESPHome, Matter commissionables — with
-  one implementation instead of an adapter per vendor, which is the path the
-  project declined when it labelled WiZ and Shelly as reference adapters. The
-  service list decides **where to listen**, never what a device can do, and it
-  asks the network to enumerate its own types so unknown ones still surface.
-  `zeroconf` ships in the core under the rule `pyproject.toml` already states:
-  discovery libraries are needed *before* the knowledge that would justify
-  installing them.
-
-  **What this deliberately does not do** is turn a discovered service into a
-  capability manifest. A `_octoprint._tcp` on the network is not yet a DoSync
-  device, because DoSync resolves over declared capabilities and nobody has
-  declared any. Who writes that manifest is a separate design question, left
-  open.
-
-- **A finding reports what a device announced itself as.** `service_type` and a
-  `likely_actionable` ordering hint. An address says where something is; the
-  service type says what it claims to be, and it is the part a person can act
-  on. Ordering is presentation only — a device outside the hint is still
-  reported, just not first — because a scan returning forty unranked entries
-  costs the reader more than it saves them.
-
-  Found from the user's chair: preparing a from-scratch install with a real WiFi
-  3D printer surfaced that a scan would not see it. The gap was coverage, not
-  design.
-
-### Added
-- **An action that never left the hub says so.** `ActionResult` carries
-  `simulated` and `simulated_reason`; `intent_executed` carries
-  `actions_simulated`; `direct_action_executed` carries both; and the intent API
-  reports them per action and in aggregate.
-
-  The reference deployment ran an SMS notifier whose manifest named no adapter.
-  Every `notify` fell back to the simulator, returned `success=True`, and was
-  logged at INFO as `Executed:` — for an unknown length of time, on the
-  deployment whose drills are this project's evidence. `success` and `simulated`
-  answer different questions: `success=False` means something went wrong,
-  `simulated=True` means nothing went anywhere. Collapsing them made the Data
-  layer mislead by omission, and mislead the AI layer reasoning on top of it —
-  an agent told that `notify` succeeded during an emergency concludes the people
-  who needed to know were told.
-
-  Three adapters already marked simulation inside `response`. That was the right
-  instinct in the wrong place: a caller should not have to know which adapter
-  answered to learn whether anything happened.
-
-  `fallback_to_simulated` stays on by default. Simulating was never the problem
-  — certification, evaluation corpora and development without hardware all need
-  it. Not saying so was.
-
-- **The hub says at boot which devices nothing can act on.** A manifest that
-  declares actuators and names no adapter — or names one that is not registered
-  — is reported: at registration for new arrivals, and once at startup for the
-  whole fleet.
-
-  A device whose manifest names the adapter `"simulated"` is not reported:
-  declaring simulation is a legitimate choice — a test device, hardware that has
-  not arrived, a certification fixture. The sweep's first hardware run flagged
-  one of those alongside a genuinely misconfigured notifier, which is how a
-  useful warning becomes noise an operator learns to skip, taking the real
-  finding with it. `"none"` is deliberately not treated as such a request: a
-  manifest saying "none" is saying it has no adapter, which is the case being
-  reported.
-
-  The startup sweep exists because the registration check alone was not enough,
-  and hardware validation is what showed it: the reference deployment restarted
-  with the check in place and printed nothing, because devices restored from the
-  database go straight into the registry and never take the registration path.
-  The check covered new arrivals and missed the entire existing fleet — which is
-  exactly where a device sits misconfigured for months. The sweep runs after the
-  adapters register, since running it earlier would report every device as
-  unexecutable.
-
-### Fixed
 - **A reference adapter no longer presumes the operator's hardware.** The WiZ
   adapter logged a WARNING at import time on every hub — *"pywizlight not
   installed. Install with: pip install pywizlight"* — including on hubs whose
@@ -374,23 +446,6 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `tests/test_notification_templates.py` covers the rendering paths that were
   missing.
 
-### Removed
-- **A country's emergency number is no longer inside the protocol.** The SMS
-  body for `ensure_safety` ended with `Llamar al 107 (SAME)` — one country's
-  medical emergency service, hard-coded in the notifications adapter. An
-  operator anywhere else received, during a real emergency, a number that does
-  not answer. It was the only finding of its audit with a physical consequence.
-
-  It was **not** made configurable. An option for "who to call" still assumes
-  there is someone to call: an industrial deployment stops a line, an aerial one
-  notifies a ground station. The five hand-written message templates went with
-  it. What remains is what the hub can state truthfully in any domain — which
-  intent fired, at what urgency, where, and any message the caller passed — and
-  a deployment that wants its own wording supplies
-  `DOSYNC_NOTIFICATION_TEMPLATES`. A broken template logs and falls back rather
-  than silencing an emergency notification.
-
-### Fixed
 - **The repository no longer carries one deployment's configuration.** An audit
   found the reference deployment across the tree: its LAN address in the
   certification CLI's own `--help`, in `setup_pki.sh`, in the benchmark docs and
@@ -479,69 +534,22 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   units ship as templates against `/opt/dosync` rather than one person's home
   directory.
 
-### Changed
-- **The MCP tool descriptions describe the protocol, not one catalogue.** They
-  were in Spanish, named a vendor (*"Para luces WiZ soporta…"*) in the contract
-  of a generic tool, and documented `all_lights` — a convenience identifier the
-  specification does not define — without saying so. An LLM reads those strings
-  as the tool's contract. They now state that available actions come from the
-  device's own capability manifest, that direct actions are governed under the
-  reserved `direct_control` class, and that `all_lights` is client-side fan-out
-  rather than a protocol feature.
+### Removed
 
-  `all_lights` also selected on `["light", "wiz"]` — a vendor tag, the
-  antipattern TAG-VOCABULARY documents. Now `light` alone; measured on the
-  reference deployment, the selection is identical either way.
+- **A country's emergency number is no longer inside the protocol.** The SMS
+  body for `ensure_safety` ended with `Llamar al 107 (SAME)` — one country's
+  medical emergency service, hard-coded in the notifications adapter. An
+  operator anywhere else received, during a real emergency, a number that does
+  not answer. It was the only finding of its audit with a physical consequence.
 
-- **The core and the specification are in English.** 255 lines of Spanish
-  remained across 29 files — module headers, docstrings, the MCP tool
-  descriptions, user-facing SMS text. An open protocol whose core carries one
-  contributor's language cannot be read or implemented by most of the people it
-  asks to adopt it. Enforced by a test scoped to `dosync/`, `tools/` and
-  `spec/`; `examples/` is deliberately outside it, because a demo narrating one
-  deployment in its operator's language is legitimate.
-
-  The first version of that test required three Spanish stopwords on one line
-  and let 81 lines through — `Instalación:`, `Características:`,
-  `Posición 0-100%` are each a single word, and they are the labels a reader
-  sees first. One accented character is now enough, with panel surnames cited in
-  decision comments declared as exceptions.
-
-- **Location tags are stated as an open namespace.** The spec listed ten
-  locations — `bedroom`, `kitchen`, `garage`, `basement` — in a normative
-  document that an industrial or clinical implementer reads, and defined
-  `appliance` as a *home* appliance. The code never restricted anything:
-  `location_hit` is string equality against `context.location`, which is why the
-  clinical and industrial corpora work today with `or-3` and `cell-2`. But the
-  document taught that the protocol was a house.
-
-  §5 now says what the mechanism already did: the deployment defines its
-  locations, a conforming hub MUST NOT reject one for being absent from any
-  list, and the residential names are examples alongside industrial and clinical
-  ones. Pinned by a test that resolves an intent against a device tagged
-  `death-star` — if an enumeration ever creeps in, it fails.
-
-- **Excluded devices now say what would include them.** A device whose actuators
-  fit an intent but whose tags do not is reported as excluded with the tag that
-  would change that, plus a new `actuators_fit_resolution` field, instead of
-  being silently dropped. Correcting the divergence by simply removing those
-  devices would have discarded the one genuinely useful thing the wrong answer
-  contained.
-
-  **Consumers of `/v1/intent/explain` should note:** devices that only matched
-  on actuator move from `included` to `excluded`. No resolution changes —
-  benchmark precision, recall and F1 are unchanged across all four corpora
-  (home, industrial, clinical, and the reference deployment snapshot).
-
-- **The universal intent resolution contract is now in the specification.**
-  Spec §6.4.1 states the resolution tags and actuators of the five universal
-  intents normatively. They previously existed only in
-  `_seed_universal_intents()`, so a second implementation written from `spec/`
-  alone would resolve `control_access` differently and still pass certification.
-  Measured cost of the gap: an industrial door tagged `access` + `security`
-  (both standard vocabulary) scores F1 0.00 — roughly a quarter of the
-  multi-domain agnosticism gap. The table is pinned to the seed by a test that
-  parses it rather than restating it.
+  It was **not** made configurable. An option for "who to call" still assumes
+  there is someone to call: an industrial deployment stops a line, an aerial one
+  notifies a ground station. The five hand-written message templates went with
+  it. What remains is what the hub can state truthfully in any domain — which
+  intent fired, at what urgency, where, and any message the caller passed — and
+  a deployment that wants its own wording supplies
+  `DOSYNC_NOTIFICATION_TEMPLATES`. A broken template logs and falls back rather
+  than silencing an emergency notification.
 
 ## [0.4.3] — 2026-08-08
 
