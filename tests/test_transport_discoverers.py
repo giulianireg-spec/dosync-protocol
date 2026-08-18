@@ -425,3 +425,44 @@ def test_one_television_publishing_two_upnp_devices_is_one_row():
 
     source = (REPO / "dosync" / "discoverers_ssdp.py").read_text(encoding="utf-8")
     assert "by_host" in source, "findings are no longer grouped per host"
+
+
+def test_a_transport_without_its_library_is_reported_as_skipped():
+    """Claiming to have searched what was never searched is the one lie this
+    reporting exists to prevent, and the WiZ branch was telling it.
+
+    `discover_wiz` returns an empty list when pywizlight is absent — it logs and
+    does not raise — so the scan appended `wiz` to `searched` regardless. A
+    clean Windows install reported "no devices answered on this network" about
+    bulbs that were powered on and reachable, because the library to reach them
+    was missing and nothing said so.
+    """
+    source = (REPO / "dosync" / "server.py").read_text(encoding="utf-8")
+    scan = source[source.index('@app.get("/v1/discovery/scan"'):]
+    scan = scan[:scan.index("\n@app.")]
+    assert "WIZ_AVAILABLE" in scan, \
+        "the scan still claims to have searched WiZ without checking it could"
+    assert "pywizlight not installed" in scan, \
+        "a reader of the scan result is not told why the transport was skipped"
+
+
+def test_a_finding_from_a_discovering_adapter_can_be_adopted():
+    """The dashboard offered, the person named it, and the hub said 422.
+
+    A clean install found a television over Bluetooth, offered to adopt it, took
+    a name, and answered `422 Unprocessable Content` — because adoption handled
+    WiZ and adapter-less findings and rejected everything else. The person did
+    exactly what the interface asked and got nothing.
+    """
+    source = (REPO / "dosync" / "server.py").read_text(encoding="utf-8")
+    adopt = source[source.index('async def adopt_device'):]
+    adopt = adopt[:adopt.index("\n@app.")] if "\n@app." in adopt else adopt
+    # The rejection stays, for adapters that never discover: MQTT, a
+    # proprietary bus, a drone that answers no broadcast. Nothing found those
+    # devices, so the request was written by hand and manual registration is
+    # the honest answer. The line is whether the adapter discovers at all.
+    assert "_adapter_can_discover" in adopt, \
+        "adoption does not distinguish an adapter that discovers from one that "\
+        "never does, so it either rejects real findings or accepts anything"
+    assert "manifest.adapter = adapter" in adopt, \
+        "an adopted finding loses the adapter that found it"

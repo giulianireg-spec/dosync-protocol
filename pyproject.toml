@@ -36,7 +36,15 @@ classifiers = [
 # see requirements.txt for the full reasoning behind each bound.
 dependencies = [
     "fastapi>=0.115.0,<1.0",
-    "uvicorn>=0.23.0,<1.0",
+    # `uvicorn[standard]`, not plain uvicorn: the hub serves a WebSocket
+    # endpoint and plain uvicorn cannot speak the protocol. Without this, every
+    # clean install answers /ws with 404 and logs that no supported WebSocket
+    # library was detected — and the dashboard, which is now the first thing the
+    # README tells a new user to open, reads `disconnected` forever while every
+    # other call works. Found on a from-scratch Windows install; it was never a
+    # Windows problem, it was every install that did not happen to have
+    # websockets from something else.
+    "uvicorn[standard]>=0.23.0,<1.0",
     "pydantic>=2.7.0,<3.0",
     "jsonschema>=4.18,<5.0",
     # DISCOVERY libraries belong in the core install, unlike CONTROL libraries.

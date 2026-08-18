@@ -115,3 +115,28 @@ def test_powershell_examples_do_not_use_the_curl_alias():
         stripped = line.strip()
         assert not stripped.startswith("curl "), \
             f"a PowerShell example uses the curl alias: {stripped[:60]}"
+
+
+def test_the_websocket_endpoint_has_a_library_to_speak_it():
+    """The hub serves /ws and plain uvicorn cannot speak the protocol.
+
+    `uvicorn` without the `standard` extra ships neither `websockets` nor
+    `wsproto`, so a clean install answers /ws with 404 and logs that no
+    supported WebSocket library was detected. Every live-events feature is dead
+    and the dashboard — the first thing the README now tells a new user to open
+    — reads `disconnected` forever while every other call returns 200.
+
+    Found on a from-scratch Windows install. It was never a Windows problem: it
+    was every install that did not happen to have `websockets` pulled in by
+    something else, which is why the reference deployment never showed it.
+    """
+    pyproject = (REPO / "pyproject.toml").read_text(encoding="utf-8")
+    server = (REPO / "dosync" / "server.py").read_text(encoding="utf-8")
+    if "@app.websocket" not in server:
+        return                      # no WebSocket endpoint, no requirement
+    assert "uvicorn[standard]" in pyproject, (
+        "the hub serves a WebSocket endpoint and declares plain uvicorn, which "
+        "cannot speak it — /ws returns 404 on every clean install")
+    requirements = (REPO / "requirements.txt").read_text(encoding="utf-8")
+    assert "uvicorn[standard]" in requirements, \
+        "requirements.txt still pins plain uvicorn"

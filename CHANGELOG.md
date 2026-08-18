@@ -10,6 +10,35 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The hub served a WebSocket endpoint without a library that speaks it.**
+  `uvicorn` without the `standard` extra ships neither `websockets` nor
+  `wsproto`, so `/ws` answered 404 on every clean install and the dashboard —
+  the first thing the README now tells a new user to open — read `disconnected`
+  forever while every other call returned 200. Found on a from-scratch Windows
+  install, and it was never a Windows problem: it was every install that did
+  not happen to have `websockets` pulled in by something else, which is exactly
+  why the reference deployment never showed it.
+
+- **The scan claimed to have searched a transport it had skipped.**
+  `discover_wiz` returns an empty list when pywizlight is absent — it logs and
+  does not raise — so the scan appended WiZ to `searched` regardless. The same
+  Windows install reported *"no devices answered on this network"* about bulbs
+  that were powered on and reachable, because the library to reach them was
+  missing and nothing said so. Reporting a transport as searched when it was
+  skipped is the one failure that whole distinction exists to prevent.
+
+- **A finding from a discovering adapter could not be adopted.** The install
+  found a television over Bluetooth, the dashboard offered it, the person named
+  it, and adoption answered `422` — because it handled WiZ and adapter-less
+  findings and rejected everything else. Doing exactly what the interface asks
+  and getting nothing is worse than not being offered the option.
+
+  Such a finding is adopted as inventory now, keeping the adapter that found
+  it. The rejection remains for adapters that never discover — MQTT, a
+  proprietary bus, a drone that answers no broadcast — because nothing found
+  those devices, the request was written by hand, and naming manual
+  registration is the honest reply.
+
 - **The Quick Start led with `curl` and mentioned the dashboard much later.** A
   clean install on Windows made the cost obvious: adopting a device needs no
   terminal and no JSON — a 3D printer, a television and a Bluetooth sensor were

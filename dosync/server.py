@@ -2113,6 +2113,22 @@ def get_presence(auth: str = Depends(require_auth)):
     }
 
 
+def _adapter_can_discover(name: str) -> bool:
+    """Whether the named adapter is one that finds devices.
+
+    The line between "adopt this as inventory" and "you cannot adopt this":
+    an adapter that discovered a device and cannot describe it is a gap in that
+    adapter, and the person already chose the device from a list. An adapter
+    that never discovers means nothing found this — the request was written by
+    hand, and pointing at manual registration is the honest reply.
+    """
+    try:
+        adapter = executor.get_adapter(name)
+    except Exception:
+        return False
+    return bool(adapter) and bool(getattr(adapter, "can_discover", lambda: False)())
+
+
 @app.post("/v1/discovery/adopt", tags=["Discovery"])
 async def adopt_device(req: dict, auth: str = Depends(require_auth)):
     """Register ONE discovered candidate, with a name the operator chose.
@@ -2178,11 +2194,39 @@ async def adopt_device(req: dict, auth: str = Depends(require_auth)):
             adapter_config={"discovered_as": service,
                             "address": req.get("ip", "")} if service or req.get("ip")
                            else {})
-    else:
+    elif not _adapter_can_discover(adapter):
+        # An adapter that does not discover at all — MQTT, a proprietary bus, a
+        # drone that answers no broadcast. Nothing found this device; the
+        # request was hand-written. Naming manual registration is the honest
+        # answer and stays the answer.
         raise HTTPException(
             status_code=422,
             detail=f"Adapter '{adapter}' cannot build a manifest from a scan yet. "
                    "Register this device manually with POST /v1/devices/register.")
+    else:
+        # An adapter that DID discover this device but cannot turn the finding
+        # into a manifest — BLE today. Rejecting was the previous behaviour and
+        # it broke
+        # the flow the dashboard offers: a clean install found a television over
+        # Bluetooth, offered to adopt it, took a name, and answered 422. The
+        # person did everything the interface asked and got nothing.
+        #
+        # Adopted as inventory, keeping the adapter name so that a future
+        # manifest can attach to it. Same honesty as the adapter-less path: the
+        # device is known, named and visible, and the hub says it cannot act on
+        # it rather than pretending otherwise.
+        from dosync.models import CapabilityManifest, DeviceCategory
+        service = (req.get("service_type") or "").strip()
+        manifest = CapabilityManifest(
+            device_id=device_id, device_name=name,
+            manufacturer=req.get("manufacturer", "unknown"),
+            model=req.get("model", "unknown"), firmware="unknown",
+            category=DeviceCategory.ACTUATOR,
+            tags=[t for t in (req.get("tags") or []) if t],
+            emergency_capable=False, sensors=[], actuators=[],
+            adapter_config={"discovered_as": service or adapter,
+                            "address": req.get("ip", "")})
+        manifest.adapter = adapter
 
     hub.register_device(manifest)
     hub.audit_log.append({
@@ -2285,11 +2329,27 @@ async def scan_devices(auth: str = Depends(require_auth)):
 
     # WiZ discovery still lives in discovery.py rather than the adapter; moving
     # it is mechanical and left for when the adapter is next touched.
+    # `discover_wiz` returns an empty list when pywizlight is absent — it logs
+    # and does not raise — so appending to `searched` unconditionally claimed a
+    # transport had been searched when it had not. A clean Windows install
+    # showed the consequence: the hub reported "no devices answered on this
+    # network" about bulbs that were powered on and reachable, because the
+    # library to talk to them was missing and nothing said so. Reporting a
+    # transport as searched when it was skipped is the one failure this whole
+    # searched/skipped distinction exists to prevent.
     try:
-        found.extend(await discover_wiz(timeout=5.0))
-        searched.append("wiz (udp broadcast)")
-    except Exception as e:
-        log.info("WiZ scan did not run: %s", e)
+        from dosync.adapters.wiz import WIZ_AVAILABLE
+    except Exception:
+        WIZ_AVAILABLE = False
+    if WIZ_AVAILABLE:
+        try:
+            found.extend(await discover_wiz(timeout=5.0))
+            searched.append("wiz (udp broadcast)")
+        except Exception as e:
+            log.info("WiZ scan did not run: %s", e)
+            skipped.append("wiz (udp broadcast)")
+    else:
+        skipped.append("wiz (udp broadcast — pywizlight not installed)")
 
     for name in (executor.registered_adapters()
                  if hasattr(executor, "registered_adapters") else []):
