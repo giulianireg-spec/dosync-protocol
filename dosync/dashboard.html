@@ -963,8 +963,21 @@ async function describeDevice(id) {
     alert("Could not assemble the description: " + (e.message || e));
     return;
   }
-  try { await navigator.clipboard.writeText(text); } catch (e) {}
-  alert("Copied to your clipboard.\n\n" +
+  // The clipboard API needs a secure context — HTTPS or localhost — and a hub
+  // reached at http://<lan-address> is neither. It happened to work here; where
+  // it does not, an empty catch followed by "Copied to your clipboard" would be
+  // the system asserting something that did not happen.
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(text);
+    copied = true;
+  } catch (e) {
+    console.warn("clipboard unavailable:", e);
+  }
+  alert((copied
+          ? "Copied to your clipboard.\n\n"
+          : "Could not reach your clipboard — that needs HTTPS or localhost.\n" +
+            "The text is in the panel behind this message; select it there.\n\n") +
         "Give it to any assistant you use, or to an engineer. Save what comes " +
         "back in your declarative directory and reload the hub.\n\n" +
         "Read it before the hub uses it: whoever writes it works from what the " +

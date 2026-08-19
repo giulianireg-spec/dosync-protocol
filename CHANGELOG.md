@@ -10,6 +10,28 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The drafting prompt was teaching the tag antipattern it exists to prevent.**
+  `TAG-VOCABULARY.md` has a *Deprecated tags* table laid out identically to the
+  category tables, and scraping the whole file swept it in — so a model
+  describing a device was handed `climate`, `door-lock` and `smart-plug` as
+  vocabulary. Two of those three are tags this project removed from its own
+  deployment, and one of them, `smart-plug` on a bulb, is the example the
+  Concepts article uses to explain why the antipattern costs something.
+
+  Found by reading the text the button produced. Every test passed: they checked
+  that the vocabulary was present, not that it was the right vocabulary.
+
+- **A failed clipboard copy would have been reported as success.** The API needs
+  a secure context — HTTPS or localhost — and a hub reached at
+  `http://<lan-address>` is neither. It worked on the reference deployment, so
+  this is latent rather than observed; an empty `catch` followed by *"Copied to
+  your clipboard"* is the system asserting something it decided not to check.
+
+### Changed
+- **The description opens with the device instead of the format.** It runs to
+  249 lines, and whoever reads it — a person or a model — should see what was
+  actually found before the schema and three example files.
+
 - **The description came out empty for exactly the devices it exists for.**
   `CapabilityManifest.to_dict()` carries `adapter_config` only when an adapter
   is declared, and a device with no adapter is the case being described — so the

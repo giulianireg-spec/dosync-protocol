@@ -1,6 +1,11 @@
 You are drafting a DoSync declarative adapter: a YAML file that tells a hub what
 a physical device can do, and how to ask it to do those things.
 
+THE DEVICE YOU ARE DESCRIBING
+This is everything the hub observed about it. It is not a specification of the device and
+may be incomplete.
+%%DEVICE_EVIDENCE%%
+
 WHAT TO PRODUCE
 A single YAML document and nothing else — no prose before or after, no markdown
 fences. It will be saved at:
@@ -12,11 +17,6 @@ it reads each action's `type`, which says what the action MEANS. `pause_job`
 means nothing to the resolver — `type: pause` does. Tags decide which goals a
 device participates in at all: a device with no matching tag is never selected,
 however capable it is.
-
-THE DEVICE, AS DISCOVERED
-This is everything the hub observed. It is not a specification of the device and
-may be incomplete.
-%%DEVICE_EVIDENCE%%
 
 TAGS — use these where one applies, and do not invent alternatives
 %%TAG_VOCABULARY%%

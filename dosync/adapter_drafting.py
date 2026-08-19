@@ -81,11 +81,21 @@ def _tag_vocabulary(repo_root: Path) -> str:
     """
     for candidate in (repo_root / "spec" / "TAG-VOCABULARY.md",
                       Path(__file__).parent.parent / "spec" / "TAG-VOCABULARY.md"):
-        if candidate.exists():
-            text = candidate.read_text(encoding="utf-8")
-            tags = re.findall(r"^\|\s*`([a-z0-9-]+)`\s*\|\s*([^|]+)\|", text, re.M)
-            if tags:
-                return "\n".join(f"  {t:16} {d.strip()}" for t, d in tags)
+        if not candidate.exists():
+            continue
+        text = candidate.read_text(encoding="utf-8")
+        # Scoped to the CATEGORY sections. Scanning the whole file swept in the
+        # "Deprecated tags" table, which is laid out identically — so the prompt
+        # handed a model `climate`, `door-lock` and `smart-plug` as vocabulary.
+        # Two of those three are tags this project removed from its own
+        # deployment and documents as the mistake everyone makes; the drafting
+        # tool was teaching them.
+        start = text.find("## Tag categories")
+        end = text.find("## Intent-to-tag mapping")
+        section = text[start:end] if start != -1 and end > start else ""
+        tags = re.findall(r"^\|\s*`([a-z0-9-]+)`\s*\|\s*([^|]+)\|", section, re.M)
+        if tags:
+            return "\n".join(f"  {t:16} {d.strip()}" for t, d in tags)
     return ""
 
 

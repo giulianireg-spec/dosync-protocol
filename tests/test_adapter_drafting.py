@@ -276,3 +276,57 @@ def test_the_dashboard_reads_the_description_as_text():
         "the dashboard still parses the description as JSON"
     assert "api('GET'" not in describe, \
         "the dashboard uses the JSON helper for a plain-text endpoint"
+
+
+def test_the_vocabulary_excludes_the_deprecated_tags():
+    """The drafting tool was teaching the antipattern it exists to prevent.
+
+    `TAG-VOCABULARY.md` has a "Deprecated tags" table laid out identically to
+    the category tables, and scanning the whole file swept it in — so the prompt
+    offered `climate`, `door-lock` and `smart-plug` as vocabulary. Two of those
+    three are tags this project removed from its own deployment, and documents
+    as the mistakes everyone makes; one of them, `smart-plug` on a bulb, is the
+    example used in the Concepts article to explain why the antipattern is
+    costly.
+    """
+    prompt = build_prompt(DISCOVERED, REPO)
+    vocabulary = prompt[prompt.index("TAGS —"):prompt.index("THE FORMAT")]
+    for deprecated in ("climate ", "door-lock", "smart-plug"):
+        assert deprecated not in vocabulary, \
+            f"the prompt offers the deprecated tag {deprecated.strip()!r}"
+    for standard in ("light ", "lock ", "plug ", "emergency "):
+        assert standard in vocabulary, f"the standard tag {standard!r} is missing"
+
+
+def test_the_device_comes_before_the_format():
+    """249 lines that open with the generic bury the specific.
+
+    Whoever reads this — a model or a person — should see what was actually
+    found before the schema and three example files.
+    """
+    prompt = build_prompt(DISCOVERED, REPO)
+    assert prompt.index("THE DEVICE YOU ARE DESCRIBING") < prompt.index("THE FORMAT"), \
+        "the format comes before the device this is about"
+    assert prompt.index("printer-01") < prompt.index("light-generic.yaml")
+
+
+def test_the_examples_cover_both_transports():
+    """The format speaks HTTP and MQTT, and a device that speaks MQTT should
+    see an example of its own transport."""
+    prompt = build_prompt(DISCOVERED, REPO)
+    assert "kind: http" in prompt and "kind: mqtt" in prompt, \
+        "the grounding examples do not cover both transports the format speaks"
+
+
+def test_a_failed_clipboard_copy_is_not_reported_as_success():
+    """The API needs a secure context — HTTPS or localhost — and a hub reached
+    at http://<lan-address> is neither. It worked on the reference deployment;
+    where it does not, an empty catch followed by "Copied to your clipboard"
+    would be the system asserting something that did not happen."""
+    dashboard = (REPO / "dosync" / "dashboard.html").read_text(encoding="utf-8")
+    describe = dashboard[dashboard.index("async function describeDevice"):]
+    describe = describe[:describe.index("\n}")]
+    assert "catch (e) {}" not in describe, \
+        "an empty catch still swallows a failed copy"
+    assert "copied" in describe, \
+        "the message does not depend on whether the copy succeeded"
