@@ -9,6 +9,25 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+- **`ROADMAP.md`, which said the current release was v0.3 three months after
+  v0.5.0 shipped.** It is the document a stranger opens to find out whether
+  anything is happening here, and it answered wrongly — in a project whose
+  entire argument is that a system must not assert things that are not so.
+
+  Deleted rather than updated, because the failure was structural: a
+  hand-maintained list of releases drifts the moment attention goes elsewhere,
+  and the release history already lives in this file, where it cannot. What does
+  not age moved to `docs/VISION.md`: the FamilyOS context, the explicit list of
+  what the project will *not* do, and the guarantee that answers anyone deciding
+  whether to build on this — DoSync stays an independent open protocol whatever
+  becomes of FamilyOS.
+
+  Three of the four "open questions" it carried had been answered since June —
+  arbitration between simultaneous intents, the plugin model, mid-execution
+  restarts — and copying them across would have moved stale text into a new
+  file. The ones that remain are stated as they actually stand.
+
 ### Changed
 - **The principles of the project existed twice, and had drifted 265 lines
   apart.** `DESIGN-PRINCIPLES.md` and `docs/DESIGN-PRINCIPLES.md` were both live

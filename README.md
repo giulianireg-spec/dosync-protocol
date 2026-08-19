@@ -195,7 +195,7 @@ Benchmark (Raspberry Pi 5, Python 3.11.2):
 | **build a device that speaks the protocol** | [docs/DEVICE-INTEGRATION.md](docs/DEVICE-INTEGRATION.md) — needs Docker, a broker and Python |
 | **implement DoSync yourself, or check conformance** | [spec/](spec/) — the wire format, the JSON schemas, and `certify.py` |
 | **understand why it is built this way** | [DESIGN-PRINCIPLES.md](DESIGN-PRINCIPLES.md) |
-| **know where it is going, or who decides** | [ROADMAP.md](ROADMAP.md) · [GOVERNANCE.md](GOVERNANCE.md) |
+| **know its scope, or who decides** | [docs/VISION.md](docs/VISION.md) · [GOVERNANCE.md](GOVERNANCE.md) |
 
 Three of those four were reachable only by guessing. The one called `TUTORIAL.md`
 sat in the repository root, where a reader looks first, and asked for Docker in
@@ -678,7 +678,7 @@ is implementable in a second language against the same certification suite —
 both share the same author. A genuinely **independent** implementation
 (different author or organization) is a tracked milestone for v1.0: a protocol
 needs multiple independent implementations to become a standard. See the
-[roadmap](ROADMAP.md).
+[vision and scope](docs/VISION.md).
 
 ---
 

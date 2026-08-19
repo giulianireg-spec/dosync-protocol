@@ -30,14 +30,20 @@ ROOT_ALLOWED = {
     # Editorial: it explains WHY the project is shaped this way, which is what
     # someone evaluating it reads — and they are not browsing docs/ yet.
     "DESIGN-PRINCIPLES.md",
-    # Editorial: whether a project is alive is among the first things anyone
-    # checks, and they check it in the root.
-    "ROADMAP.md",
 }
 
 #: Files kept in the root only as pointers, because published articles and
 #: external links reference these paths and cannot be edited.
 ROOT_POINTERS = {"TUTORIAL.md", "COMPATIBILITY.md"}
+
+
+#: `ROADMAP.md` was deleted rather than moved. It said the current release was
+#: v0.3 three months after v0.5.0 shipped — a document whose whole purpose is to
+#: tell a reader whether the project is alive, asserting that it was not. What
+#: does not age from it (scope, the guarantee of independence from FamilyOS, the
+#: questions still open) is in docs/VISION.md; what happened is in CHANGELOG.md,
+#: which stays accurate without anyone maintaining a second copy.
+DELETED_DOCS = {"ROADMAP.md"}
 
 
 def _root_markdown():
@@ -114,3 +120,34 @@ def test_the_device_tutorial_states_its_requirements_before_its_first_step():
         "the requirements are not stated before the first section"
     assert "README" in header, \
         "a reader who wanted to install a hub is not redirected"
+
+
+def test_the_roadmap_did_not_come_back_without_a_way_to_keep_it_true():
+    """A roadmap that nobody updates asserts the project is dead.
+
+    `ROADMAP.md` said the latest release was v0.3 three months after v0.5.0
+    shipped. It is the document a stranger opens to find out whether anything is
+    happening here, and it answered wrongly. Deleting it was the honest move
+    because the release history already lives in the CHANGELOG, where it cannot
+    drift.
+
+    If it returns, something has to keep it true — that is what this test is
+    asking for, not that a roadmap is forbidden.
+    """
+    for name in DELETED_DOCS:
+        assert not (REPO / name).exists(), (
+            f"{name} is back. It listed releases by hand and went three months "
+            "stale; if it is worth having again, it needs a mechanism that "
+            "keeps it accurate, not a promise to remember")
+
+
+def test_what_does_not_age_survived_the_deletion():
+    vision = REPO / "docs" / "VISION.md"
+    assert vision.exists(), "the vision went out with the roadmap"
+    text = vision.read_text(encoding="utf-8")
+    assert "independent open protocol regardless" in text, (
+        "the guarantee that DoSync stays independent of FamilyOS is gone — it is "
+        "what answers someone deciding whether building on this ties them to a "
+        "product")
+    assert "Not on the roadmap" in text, \
+        "the list of what the project will not do is gone"
