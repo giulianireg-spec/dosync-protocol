@@ -176,7 +176,9 @@ def test_the_server_records_third_party_adapters_in_the_chain():
 
 def test_publishing_one_is_documented():
     readme = (REPO / "README.md").read_text()
-    principles = (REPO / "docs" / "DESIGN-PRINCIPLES.md").read_text()
+    # The principles lived in two files that drifted 265 lines apart; they were
+    # merged into the root one, which is where this rule now lives.
+    principles = (REPO / "DESIGN-PRINCIPLES.md").read_text()
     assert "dosync.adapters" in readme, \
         "a vendor must be able to find the entry point group"
     assert "entry point" in principles.lower()

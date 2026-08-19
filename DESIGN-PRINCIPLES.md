@@ -4,6 +4,16 @@ This document explains the deliberate design decisions behind DoSync — not wha
 
 ---
 
+> **One document, after two.** This file and `docs/DESIGN-PRINCIPLES.md` were
+> both live for three months and drifted 265 lines apart — neither a stale copy
+> of the other. The root held the founding principle (a mind, external, driving
+> simple bodies); `docs/` held the rules on adapters, optional dependencies and
+> how to write a test, one of which was consulted this week to decide that a
+> discovery library belongs in the core install. A project whose reason for
+> existing is that a system must not say two different things about itself does
+> not get to keep two versions of its principles. Merged here; `docs/` now
+> points at this file.
+
 ## Core principle: the protocol is infrastructure, not intelligence
 
 DoSync's job is to translate a semantic intent into a coordinated set of device actions, execute those actions reliably, and produce a tamper-evident record of everything that happened.
@@ -132,6 +142,32 @@ The reasoning:
 
 ---
 
+## On perception, reflexes, and judgment
+
+An AI that *perceives* a situation and fires an intent on its own — without a human telling it what to do — is a natural and powerful use of DoSync. A model watching a camera can decide "someone fell, ensure their safety" and fire the intent itself. This is agency, not automation: the model judges the situation from context, rather than following a pre-written `if-this-then-that` rule.
+
+Three boundaries make this safe and keep the protocol clean.
+
+**1. Perception lives in Layer 2, outside the protocol.** The component that watches a sensor or a camera, reasons about what it sees, and decides to fire an intent is a *client* of DoSync — not part of the protocol. DoSync is the response layer (Layer 1): it receives an intent, governs it, executes it, and records it. It does not perceive, and it does not interpret raw sensor data for the operator. A reference perception agent may ship alongside the protocol to demonstrate the pattern, but it is a client — device- and model-agnostic by design (pluggable frame source, pluggable perception model), never normative. Anyone may write their own; conformance is unaffected. This mirrors the rest of the protocol: the resolver, the transport, and the AI model are all pluggable and all live outside the normative core.
+
+**2. Reflexes are not judgment — and must never pass through a model.** A decision splits by a single test: *if a wrong or late decision causes physical harm within the time it takes to call a model, it is a reflex; otherwise it is judgment.*
+
+- **Reflex** — collision avoidance on a moving vehicle, an over-temperature cutoff, a machine emergency stop. Resolved in milliseconds, deterministically, locally: in the flight controller, in the operation guards, in threshold logic. A model round-trip (seconds) is far too slow; routing a reflex through an LLM is a safety defect, not a feature.
+- **Judgment** — turning on a light for someone who entered a dark room, opening a gate, adjusting the environment, deciding a drone's next waypoint. Latency-tolerant and context-dependent. This is where a model earns its place — and where a fixed rule cannot capture the nuance (a model can decline to act at 3am when a rule would blindly fire).
+
+A capable device may use both layers at once: for an autonomous drone, "don't hit the tree" is a reflex (flight control + guards) while "investigate that broken fence you saw" is judgment (model → intent → DoSync). The fast reflex keeps it safe; the slow judgment decides the mission.
+
+**3. The model proposes; policy disposes; the log records.** An autonomous agent firing intents shifts some decision-making from Layer 3 (human) toward Layer 2 (model). That shift is graduated by consequence, never blanket:
+
+- **Reversible, low-stakes actions** (a light, the climate, a notification): the agent may decide; the Policy Engine and audit log are the record.
+- **Irreversible or high-stakes actions** (a lock, anything affecting physical safety, spending): the agent *proposes*; a confirmation policy or a human *decides*.
+
+In all cases the proposed intent passes through the Policy Engine (confirm / block / modify) and the tamper-evident audit log before any device acts. The agent never actuates a device directly. This is the safety architecture for autonomy: the model proposes from judgment, policy imposes the guardrails, and the log makes the whole chain — what was perceived, what was proposed, what was done — verifiable after the fact.
+
+**The honest limit.** Reliable perception — not failing to notice the fall, not hallucinating one — is only as good as the model doing the watching, and DoSync does not provide or guarantee it. For safety-critical detection (industrial hazards, life safety), the perception must be a deterministic reflex or a certified sensor, not a general-purpose model. DoSync coordinates the response; it does not vouch for the perception.
+
+---
+
 ## On unreachable devices and transient failures
 
 The `StateAwareResolver` tracks device state in memory. When a device fails to respond — a network timeout, a low-power sleep state, a transient outage — the resolver marks it as `unreachable` and excludes it from subsequent action plans for a configurable period.
@@ -160,6 +196,29 @@ DOSYNC_UNREACHABLE_TTL=3600   # 1 hour — for low-power device-heavy deployment
 The TTL is not a health metric. It is an execution optimization. The Device Health Monitor is the correct tool for tracking device reliability over time — the TTL only determines how long the resolver waits before retrying a device that recently failed.
 
 ---
+
+## On recurring operations
+
+Some maintenance is not a task that gets done — it is a rate that has to be
+matched. The audit chain is the clearest case: the reference deployment archived
+28,189 entries on 2026-07-20 and was back to 16,223 five days later, roughly
+2,800 per day. Archiving is not a job completed in July; it is an obligation that
+recurs about weekly, forever, and grows with the deployment.
+
+The same is true of exporting audit checkpoints, rotating credentials, and PKI
+renewal. Each was, at some point, "done".
+
+Two consequences for how this project tracks work:
+
+- **A recurring operation is not closed by doing it once.** It closes by being
+  scheduled, or by being written down as something a human must do on a rhythm,
+  with the rhythm stated. "Archived the chain" is a log entry; "the chain needs
+  archiving weekly at current volume" is the actual finding.
+- **Manual is a valid answer, silence is not.** PKI rotation here is deliberately
+  operator-driven rather than automated, and that is a defensible choice. What is
+  not defensible is a guarantee that quietly depends on someone remembering. If
+  an auditor asks "how often, and who ensures it", the answer must exist before
+  they ask.
 
 ## PKI rotation policy
 
@@ -264,32 +323,6 @@ The MCP server exposes the protocol's capabilities, not elevated access. An AI a
 
 ---
 
-## On perception, reflexes, and judgment
-
-An AI that *perceives* a situation and fires an intent on its own — without a human telling it what to do — is a natural and powerful use of DoSync. A model watching a camera can decide "someone fell, ensure their safety" and fire the intent itself. This is agency, not automation: the model judges the situation from context, rather than following a pre-written `if-this-then-that` rule.
-
-Three boundaries make this safe and keep the protocol clean.
-
-**1. Perception lives in Layer 2, outside the protocol.** The component that watches a sensor or a camera, reasons about what it sees, and decides to fire an intent is a *client* of DoSync — not part of the protocol. DoSync is the response layer (Layer 1): it receives an intent, governs it, executes it, and records it. It does not perceive, and it does not interpret raw sensor data for the operator. A reference perception agent may ship alongside the protocol to demonstrate the pattern, but it is a client — device- and model-agnostic by design (pluggable frame source, pluggable perception model), never normative. Anyone may write their own; conformance is unaffected. This mirrors the rest of the protocol: the resolver, the transport, and the AI model are all pluggable and all live outside the normative core.
-
-**2. Reflexes are not judgment — and must never pass through a model.** A decision splits by a single test: *if a wrong or late decision causes physical harm within the time it takes to call a model, it is a reflex; otherwise it is judgment.*
-
-- **Reflex** — collision avoidance on a moving vehicle, an over-temperature cutoff, a machine emergency stop. Resolved in milliseconds, deterministically, locally: in the flight controller, in the operation guards, in threshold logic. A model round-trip (seconds) is far too slow; routing a reflex through an LLM is a safety defect, not a feature.
-- **Judgment** — turning on a light for someone who entered a dark room, opening a gate, adjusting the environment, deciding a drone's next waypoint. Latency-tolerant and context-dependent. This is where a model earns its place — and where a fixed rule cannot capture the nuance (a model can decline to act at 3am when a rule would blindly fire).
-
-A capable device may use both layers at once: for an autonomous drone, "don't hit the tree" is a reflex (flight control + guards) while "investigate that broken fence you saw" is judgment (model → intent → DoSync). The fast reflex keeps it safe; the slow judgment decides the mission.
-
-**3. The model proposes; policy disposes; the log records.** An autonomous agent firing intents shifts some decision-making from Layer 3 (human) toward Layer 2 (model). That shift is graduated by consequence, never blanket:
-
-- **Reversible, low-stakes actions** (a light, the climate, a notification): the agent may decide; the Policy Engine and audit log are the record.
-- **Irreversible or high-stakes actions** (a lock, anything affecting physical safety, spending): the agent *proposes*; a confirmation policy or a human *decides*.
-
-In all cases the proposed intent passes through the Policy Engine (confirm / block / modify) and the tamper-evident audit log before any device acts. The agent never actuates a device directly. This is the safety architecture for autonomy: the model proposes from judgment, policy imposes the guardrails, and the log makes the whole chain — what was perceived, what was proposed, what was done — verifiable after the fact.
-
-**The honest limit.** Reliable perception — not failing to notice the fall, not hallucinating one — is only as good as the model doing the watching, and DoSync does not provide or guarantee it. For safety-critical detection (industrial hazards, life safety), the perception must be a deterministic reflex or a certified sensor, not a general-purpose model. DoSync coordinates the response; it does not vouch for the perception.
-
----
-
 ## On domain applicability
 
 DoSync's 5-layer architecture is domain-agnostic. The same protocol stack operates in a home, a hotel, a factory, or a smart building.
@@ -348,6 +381,85 @@ The index is most effective for safety-critical intents with specific tags. Comf
 
 ---
 
+## On adapters: what ships, and who answers for it
+
+Adapters fall into three kinds, and the difference is a claim the project makes
+rather than an accident of history:
+
+- **Ecosystem** — implements an open standard or an open project: MQTT, Matter,
+  BLE, MAVLink, the Home Assistant bridge. These belong in a protocol the way
+  HTTP support belongs in a web framework.
+- **Reference** — implements one vendor's product. WiZ and Shelly are here.
+  They ship as worked examples of how an adapter is written, not as endorsement,
+  partnership, or a promise to track anyone's firmware.
+- **Infrastructure** — not a device technology (notifications).
+
+The distinction exists because shipping vendor code silently says two things
+this project does not mean: that it privileges those brands, and that it is a
+smart-home product. Both are legible in the file tree. Deleting them would say
+something equally wrong — they are the only executable answer to "how do I write
+an adapter" — so the claim is declared (`adapter_kind`), exposed
+(`GET /v1/adapters`) and tested instead.
+
+**A new adapter must choose its kind.** Inheriting a flattering default is how a
+classification stops meaning anything.
+
+## On optional dependencies
+
+A dependency needed to USE a capability the project offers by default cannot be
+optional. Optional extras exist for hardware a deployment may or may not own —
+`dosync[wiz]` because you have WiZ bulbs — and an advertised capability is not
+hardware.
+
+This appeared three times in two days, each time producing not friction but a
+false belief:
+
+- `bleak` in an extra: a user scanned, found nothing, and concluded DoSync does
+  not support Bluetooth.
+- The BLE adapter registered only on request: the library was installed and
+  unused, so the same conclusion followed with the library sitting right there.
+- `aiohttp` in an extra: a declarative adapter — whose only transport is HTTP —
+  failed at EXECUTION, during an intent, rather than at load.
+
+The last is the shape to watch for. A missing dependency that fails when the
+hub starts is an inconvenience; one that fails when an emergency reaches a
+device is a different category, and the difference is only visible if someone
+asks *when* the failure lands.
+
+## On loading adapters from a repository
+
+DoSync does not download and execute adapter code from a remote source, and will
+not. This is the same ruling as adapter-side fallback, for the same reason.
+
+The entire argument of this protocol is that nothing acts on a physical device
+without passing a policy and leaving a record. Fetching executable code from the
+internet — code whose whole purpose is to actuate hardware — would place the
+largest possible hole exactly where the guarantee lives. A bypass of one line
+was closed here in July because it let an agent skip the policy engine; a remote
+plugin loader is that hole with whole packages through it.
+
+Three supported paths, covering different cases:
+
+- **Ecosystem adapters**, in the package. The project answers for them.
+- **Declarative adapters**, a file the operator writes describing an HTTP, MQTT
+  or Modbus device. The operator answers for them. No code is executed that the
+  operator did not write.
+- **Third-party adapters via Python entry points** (group `dosync.adapters`) — a
+  vendor publishes `dosync-adapter-x` and the operator installs it deliberately.
+  The publisher answers for it, and installation is an explicit act with a supply
+  chain behind it rather than a silent fetch.
+
+  Such an adapter runs inside the hub with the hub's permissions, which is the
+  cost of the arrangement and is not hidden: loading one is logged at WARNING and
+  appended to the audit chain, because "what code was running when this happened"
+  is a question an incident review asks. Its `adapter_kind` is set to
+  `third_party` BY THE LOADER and not read from the plugin — where code came from
+  is not the code's to assert, and a package claiming to be first-party code of
+  this project is exactly the claim not to take on trust.
+
+The difference between the third path and a plugin repository is consent and
+attribution: someone chose to install it, and someone's name is on it.
+
 ## On adapter-side fallback ("local fallback without hub")
 
 A recurring question in protocol design is whether adapters should be able to operate independently when the hub is unavailable — executing actions directly on physical devices without going through the capability resolution layer.
@@ -374,6 +486,41 @@ These mechanisms collectively ensure that the hub recovers quickly from failures
 ---
 
 ---
+
+## On writing tests: assert the mechanism, not a symptom
+
+A test must fail when the thing it names is broken. Three times in this project a
+test passed while the mechanism it claimed to protect was removed, because it
+asserted an *outcome* that something else also guaranteed:
+
+- **The resolver scoring refactor.** A test compared the score `explain()` reports
+  against the score the resolver decides with. Once both read one source, the
+  comparison could not fail — it compared a value to itself. Fixed by asserting
+  absolute values (a siren scores 52), which a changed weight breaks.
+- **The sequence-gap test.** It edited `seq` on a sealed entry, so verification
+  rejected the chain on the broken **hash**, never reaching the sequence check.
+  Fixed by building entries with valid hashes and a missing number.
+- **The archive head-mark test.** It asserted "no false alarm after archiving" —
+  but the high-water-mark semantics already guarantee that, so deleting the
+  archive-side fix did not fail it. Fixed by asserting what that fix actually
+  buys: the mark **advances**, so a later truncation is still caught.
+
+The pattern is identical each time: the assertion was true for a reason other
+than the one under test. Two habits follow.
+
+**Verify by deletion.** Before trusting a test, remove the code it protects and
+watch it fail. A test that stays green has not been shown to test anything. This
+is already routine here for features; it applies just as much to the tests
+written alongside them.
+
+**Name the mechanism in the assertion.** "Archiving does not raise a false alarm"
+is a property of the system; several mechanisms could provide it. "The head mark
+advances past its previous value" is a property of one mechanism, and only that
+mechanism can satisfy it. When both are worth having, write both — but know which
+one is load-bearing.
+
+A test that cannot fail is worse than no test: it occupies the place where a real
+one would go, and it reports success while the thing it names is gone.
 
 ## Summary
 

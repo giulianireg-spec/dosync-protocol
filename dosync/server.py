@@ -1201,7 +1201,7 @@ async def explain_intent(
     modify the plan before execution — see the audit log for what happened.
 
     Meant to be read by humans and by AI systems interpreting hub
-    behaviour alike. See docs/DESIGN-PRINCIPLES.md.
+    behaviour alike. See DESIGN-PRINCIPLES.md.
     """
     from dosync.models import Intent, IntentClass, Urgency as _Urgency
     import uuid, time as _time

@@ -132,7 +132,7 @@ DoSync earns its place in specific situations — and honestly gets in the way i
 - Have a single device or one brand's ecosystem — you don't need a coordination layer.
 - Don't need auditability or a policy layer.
 
-**If the first list is you:** the fastest way in is the **[20-minute device tutorial](TUTORIAL.md)** — build a device that senses, expresses a goal, and acts, with the full audit trail. Or open an [issue](https://github.com/giulianireg-spec/dosync-protocol/issues) describing what you're trying to coordinate and we'll tell you honestly whether DoSync fits.
+**If the first list is you:** the fastest way in is the **[20-minute device tutorial](docs/DEVICE-INTEGRATION.md)** — build a device that senses, expresses a goal, and acts, with the full audit trail. Or open an [issue](https://github.com/giulianireg-spec/dosync-protocol/issues) describing what you're trying to coordinate and we'll tell you honestly whether DoSync fits.
 
 ---
 
@@ -186,6 +186,20 @@ Benchmark (Raspberry Pi 5, Python 3.11.2):
 | 1 | **Transport (HAL)** | Reference: WiFi/HTTP-WS · MQTT. Via bridge: Zigbee · Z-Wave · Thread · Matter (Home Assistant). Native BLE/radio bindings: roadmap |
 
 ---
+
+## Where to start
+
+| You want to… | Go to |
+|---|---|
+| **run a hub and see your devices** | [Quick start](#quick-start), below — about five minutes, no terminal after the first command |
+| **build a device that speaks the protocol** | [docs/DEVICE-INTEGRATION.md](docs/DEVICE-INTEGRATION.md) — needs Docker, a broker and Python |
+| **implement DoSync yourself, or check conformance** | [spec/](spec/) — the wire format, the JSON schemas, and `certify.py` |
+| **understand why it is built this way** | [DESIGN-PRINCIPLES.md](DESIGN-PRINCIPLES.md) |
+| **know where it is going, or who decides** | [ROADMAP.md](ROADMAP.md) · [GOVERNANCE.md](GOVERNANCE.md) |
+
+Three of those four were reachable only by guessing. The one called `TUTORIAL.md`
+sat in the repository root, where a reader looks first, and asked for Docker in
+its first step.
 
 ## Quick start
 
@@ -695,7 +709,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, including the C
 - [spec/DoSync-SPEC-v0.1.md](spec/DoSync-SPEC-v0.1.md) — full protocol specification
 - [spec/RESOLVER-SPEC-v0.3.md](spec/RESOLVER-SPEC-v0.3.md) — resolver interface + external resolver protocol
 - [DESIGN-PRINCIPLES.md](DESIGN-PRINCIPLES.md) — architectural decisions and rationale
-- [COMPATIBILITY.md](COMPATIBILITY.md) — backward compatibility guarantees
+- [COMPATIBILITY.md](docs/COMPATIBILITY.md) — backward compatibility guarantees
 
 ---
 

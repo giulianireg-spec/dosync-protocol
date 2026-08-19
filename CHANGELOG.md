@@ -9,6 +9,40 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **The principles of the project existed twice, and had drifted 265 lines
+  apart.** `DESIGN-PRINCIPLES.md` and `docs/DESIGN-PRINCIPLES.md` were both live
+  for three months — the first created 3 June and edited through 12 August, the
+  second created 20 May and edited through 31 July. Neither was a stale copy:
+  the root held the founding principle (*the intelligence lives in the mind, not
+  the body*) and the newest safety decision; `docs/` held the rules on adapters,
+  optional dependencies and how to write a test — one of which was consulted
+  this week to decide that a discovery library belongs in the core install. The
+  code referenced the copy without the safety decision.
+
+  Merged into one document in the root, section by section rather than
+  concatenated, with every section from both preserved. A project whose reason
+  for existing is that a system must not say two different things about itself
+  cannot keep two versions of its own principles.
+
+- **The repository root said nine things were worth opening first.** A file in
+  the root is a claim on a stranger's attention, and four of those claims were
+  false. `MULTIHUB-PHASE-A-DESIGN.md` had zero inbound links; `COMPATIBILITY.md`
+  is for integrators; and `TUTORIAL.md` — the name a stranger opens first —
+  builds a device that speaks the protocol and asks for Docker in step 1, while
+  the README mentioned it once on line 135, after the list of people the project
+  is *not* for.
+
+  The root now holds what GitHub surfaces plus two declared exceptions, the
+  tutorial is `docs/DEVICE-INTEGRATION.md` and states its requirements before
+  its first section, and the README opens with a map of where to start. Moved
+  files leave pointers: thirteen published articles link to these paths and
+  cannot be edited.
+
+  `tests/test_documentation_is_navigable.py` enforces it, and found two more
+  while being written: `GOVERNANCE.md` was unreferenced too, and `ROADMAP.md`
+  was in the root with nobody having decided it should be.
+
 ## [0.5.0] — 2026-08-17
 
 Two new discovery transports, and fourteen defects found by installing the
