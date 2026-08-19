@@ -952,7 +952,13 @@ async function loadIntents() {
 async function describeDevice(id) {
   let text;
   try {
-    text = await api('GET', `/v1/devices/${encodeURIComponent(id)}/describe`, null, true);
+    // Plain text, not JSON: api() always parses, and passing it a fourth
+    // argument it does not take produced "Unexpected token 'Y'" — the first
+    // word of the description. Tested with curl and not with the button.
+    const r = await fetch(HUB + `/v1/devices/${encodeURIComponent(id)}/describe`,
+                          { headers: headers() });
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    text = await r.text();
   } catch (e) {
     alert("Could not assemble the description: " + (e.message || e));
     return;

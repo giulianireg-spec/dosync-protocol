@@ -226,3 +226,53 @@ def test_the_manual_path_stays_first_class():
     assert len(examples) >= 5, "the shipped examples thinned out"
     readme = (REPO / "README.md").read_text(encoding="utf-8")
     assert "declarative" in readme.lower()
+
+
+# ── Found by pressing the button, after the endpoint had been tested by curl ──
+
+def test_discovery_evidence_survives_a_device_with_no_adapter():
+    """The one case this endpoint exists for was the one that lost its evidence.
+
+    `CapabilityManifest.to_dict()` includes `adapter_config` only when an
+    adapter is declared — and a device with no adapter is precisely what needs
+    describing. The address and service type recorded at adoption vanished, and
+    the reference deployment's printer produced a prompt whose evidence block
+    was entirely empty: no address, no service type, nothing announced. A model
+    reading it could not have found the device, let alone described it.
+    """
+    from dosync.models import CapabilityManifest, DeviceCategory
+
+    m = CapabilityManifest(
+        device_id="printer-01", device_name="printer", manufacturer="unknown",
+        model="unknown", firmware="unknown", category=DeviceCategory.ACTUATOR,
+        tags=[], emergency_capable=False, sensors=[], actuators=[],
+        adapter_config={"discovered_as": "3dprinter", "address": "192.0.2.91"})
+    assert "adapter_config" not in m.to_dict(), (
+        "this test is asserting against behaviour that changed — check whether "
+        "to_dict now carries adapter_config for adapter-less devices")
+
+    server = (REPO / "dosync" / "server.py").read_text(encoding="utf-8")
+    describe = server[server.index("async def describe_device"):]
+    describe = describe[:describe.index("\n@app.")]
+    assert 'getattr(device, "adapter_config"' in describe, \
+        "the endpoint reads the manifest dict, which drops the evidence"
+
+    # And with the config restored, the evidence is there.
+    manifest = m.to_dict()
+    manifest["adapter_config"] = m.adapter_config
+    evidence = device_evidence(manifest)
+    assert evidence["address"] == "192.0.2.91"
+    assert evidence["announced_as"] == "3dprinter"
+
+
+def test_the_dashboard_reads_the_description_as_text():
+    """It is text. `api()` always parses JSON, and asking it not to by passing
+    a fourth argument it does not take produced "Unexpected token 'Y'" — the
+    first word of the description — on the first press of the button."""
+    dashboard = (REPO / "dosync" / "dashboard.html").read_text(encoding="utf-8")
+    describe = dashboard[dashboard.index("async function describeDevice"):]
+    describe = describe[:describe.index("\n}")]
+    assert "await r.text()" in describe, \
+        "the dashboard still parses the description as JSON"
+    assert "api('GET'" not in describe, \
+        "the dashboard uses the JSON helper for a plain-text endpoint"

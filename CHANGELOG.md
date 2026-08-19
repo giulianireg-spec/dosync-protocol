@@ -9,6 +9,21 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **The description came out empty for exactly the devices it exists for.**
+  `CapabilityManifest.to_dict()` carries `adapter_config` only when an adapter
+  is declared, and a device with no adapter is the case being described — so the
+  address and service type recorded at adoption vanished on the way out. The
+  reference deployment's 3D printer produced a description whose evidence block
+  was entirely blank: no address, no service type, nothing announced. Anyone
+  reading it could not have located the device, let alone described it.
+
+- **The dashboard button returned a JSON parse error.** The description is plain
+  text; the page's `api()` helper always parses JSON, and asking it not to by
+  passing a fourth argument it does not accept produced `Unexpected token 'Y'` —
+  the first word of the description — on the first press. The endpoint had been
+  tested with curl and the button had not.
+
 ### Added
 - **A discovered device can now be described, and the description is reachable
   from where the problem shows.** A scan reports an address and a service type;

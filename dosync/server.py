@@ -1073,6 +1073,13 @@ async def describe_device(device_id: str, auth: str = Depends(require_auth)):
 
     from dosync.adapter_drafting import build_prompt
     manifest = device.to_dict() if hasattr(device, "to_dict") else dict(device)
+    # `to_dict` drops adapter_config unless an adapter is declared — and a
+    # device with no adapter is exactly the case this endpoint exists for, so
+    # the address and service type recorded at adoption vanished and the text
+    # went out with no evidence in it at all. Read them from the object.
+    config = getattr(device, "adapter_config", None) or {}
+    if config:
+        manifest.setdefault("adapter_config", config)
     return build_prompt(manifest, _Path(__file__).resolve().parent.parent)
 
 
