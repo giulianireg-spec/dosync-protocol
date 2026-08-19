@@ -941,6 +941,31 @@ async function loadIntents() {
 // Registering whatever answered a broadcast would contradict the premise of a
 // protocol built around being able to account for what is in it, and
 // `wiz-a4c138` is what the bulb calls itself, not what its owner calls it.
+// Nothing has declared what this device can do, so the hub cannot act on it.
+// This hands over the text needed to fix that — assembled by the hub from what
+// the device announced, the tag vocabulary and the adapter format.
+//
+// Copyable rather than sent anywhere: in a plant, a hospital or a managed
+// building, sending the topology of a network to an outside model is often
+// prohibited and many such networks have no route out at all. The person takes
+// this to whatever model their organisation allows, or to an engineer.
+async function describeDevice(id) {
+  let text;
+  try {
+    text = await api('GET', `/v1/devices/${encodeURIComponent(id)}/describe`, null, true);
+  } catch (e) {
+    alert("Could not assemble the description: " + (e.message || e));
+    return;
+  }
+  try { await navigator.clipboard.writeText(text); } catch (e) {}
+  alert("Copied to your clipboard.\n\n" +
+        "Give it to any assistant you use, or to an engineer. Save what comes " +
+        "back in your declarative directory and reload the hub.\n\n" +
+        "Read it before the hub uses it: whoever writes it works from what the " +
+        "device announced, not from its documentation. The file goes through " +
+        "your change review like any other change.");
+}
+
 async function scanDevices() {
   if (!token) { alert("Connect first."); return; }
   const list = document.getElementById('deviceList');
@@ -992,7 +1017,9 @@ async function scanDevices() {
     const how = d.adapter ? d.adapter : (d.service_type || "unidentified");
     const note = d.adapter ? "" :
       "\n\nNothing has declared what this device can do yet, so adding it " +
-      "records it in your inventory — the hub will say so rather than act on it.";
+      "records it in your inventory — the hub will say so rather than act on it." +
+      "\n\nTo make it act, something has to describe what it can do. After " +
+      "adding it, the device card offers the text you need for that.";
     const name = prompt(
       "Found: " + (d.device_name || d.device_id) + "  (" + how + " @ " + d.ip + ")" +
       note + "\n\n" +
@@ -1077,6 +1104,12 @@ async function loadDevices() {
                     onclick="renameDevice('${d.device_id}','${(d.device_name||'').replace(/'/g,"\\'")}')">✎</button>
             <button class="btn ghost sm" title="Remove from this hub"
                     onclick="removeDevice('${d.device_id}','${(d.device_name||'').replace(/'/g,"\\'")}')">✕</button>
+            <!-- The hub already knows this device cannot act — it says so on
+                 every start and marks the card. Knowing the problem and not
+                 offering the step that fixes it wastes the one thing it knows. -->
+            ${(!d.adapter || d.adapter === 'simulated') ? `
+            <button class="btn ghost sm" title="Get the text that describes what this device can do"
+                    onclick="describeDevice('${d.device_id}')">◇</button>` : ''}
           </span>
         </div>
         <div class="device-id">${d.device_id}</div>

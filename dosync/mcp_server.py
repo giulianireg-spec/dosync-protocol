@@ -29,9 +29,9 @@ Claude Desktop configuration (~/.config/claude/claude_desktop_config.json):
 
 Herramientas expuestas al LLM:
     dosync_fire_intent      — execute a semantic intent
-    dosync_list_devices     — listar dispositivos registrados
+    dosync_list_devices     — list registered devices
     dosync_get_status       — hub state and inferred occupancy
-    dosync_send_event       — enviar un evento de dispositivo
+    dosync_send_event       — send a device event
     dosync_get_audit_log    — most recent audit log entries
     dosync_get_scenarios    — listar escenarios disponibles
 """
@@ -238,6 +238,67 @@ async def list_tools() -> list[types.Tool]:
                         "default": False,
                     },
                 },
+            },
+        ),
+
+        types.Tool(
+            name="dosync_discover_devices",
+            description=(
+                "Search every transport the hub can reach — WiFi broadcast, "
+                "mDNS, SSDP, Bluetooth — and report what answered. Nothing is "
+                "registered by scanning; each finding reports what the device "
+                "announced itself as, and the result also says which transports "
+                "were searched and which were skipped, because 'nothing found' "
+                "means something different when a transport was never searched."
+            ),
+            inputSchema={"type": "object", "properties": {}},
+        ),
+
+        types.Tool(
+            name="dosync_adopt_device",
+            description=(
+                "Add a discovered device to the hub's inventory under a name "
+                "the operator chooses. A device whose capabilities nobody has "
+                "declared is adopted as inventory: known and visible, and the "
+                "hub reports that it cannot act on it rather than pretending "
+                "otherwise. Describing what it can do is a separate step — see "
+                "dosync_describe_device."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "device_id": {"type": "string",
+                                  "description": "Id from the discovery result"},
+                    "device_name": {"type": "string",
+                                    "description": "The name the operator will see"},
+                    "adapter": {"type": "string",
+                                "description": "Adapter that found it, if any"},
+                    "ip": {"type": "string"},
+                    "service_type": {"type": "string",
+                                     "description": "What it announced itself as"},
+                },
+                "required": ["device_id", "device_name"],
+            },
+        ),
+
+        types.Tool(
+            name="dosync_describe_device",
+            description=(
+                "Everything the hub observed about a device, plus the format "
+                "and the tag vocabulary needed to declare what it can do. Use "
+                "this when a device is registered and the hub reports it cannot "
+                "act on it: the answer contains what you need to write a "
+                "declarative adapter for it. YOU DRAFT IT; THE OPERATOR SAVES "
+                "AND APPROVES IT. Only declare an action you have concrete "
+                "grounds to believe exists on this device — say in a comment "
+                "where you do not know, rather than writing something plausible."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "device_id": {"type": "string"},
+                },
+                "required": ["device_id"],
             },
         ),
 
@@ -535,6 +596,64 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             text += "\n"
 
         return [types.TextContent(type="text", text=text)]
+
+    # ── dosync_discover_devices ───────────────────────────────────────────────
+    elif name == "dosync_discover_devices":
+        result = await hub_request("GET", "/v1/discovery/scan")
+        if "error" in result:
+            return [types.TextContent(type="text",
+                                      text=f"Scan failed: {result['error']}")]
+        found = result.get("found", [])
+        text = f"Found {len(found)} device(s).\n\n"
+        for d in found:
+            mark = "already registered" if d.get("registered") else "not registered"
+            text += (f"  {d.get('device_name') or d.get('device_id')}\n"
+                     f"    announced as : {d.get('service_type') or 'unidentified'}\n"
+                     f"    address      : {d.get('ip', '')}\n"
+                     f"    id           : {d.get('device_id')}\n"
+                     f"    status       : {mark}\n\n")
+        # Saying what was NOT searched matters as much as the findings: nothing
+        # answering means something different when a transport was never asked.
+        text += f"Searched: {', '.join(result.get('searched', [])) or 'nothing'}\n"
+        skipped = result.get("not_searchable", [])
+        if skipped:
+            text += f"Not searched: {', '.join(skipped)}\n"
+        return [types.TextContent(type="text", text=text)]
+
+    # ── dosync_adopt_device ───────────────────────────────────────────────────
+    elif name == "dosync_adopt_device":
+        payload = {k: arguments.get(k, "") for k in
+                   ("device_id", "device_name", "adapter", "ip", "service_type")}
+        result = await hub_request("POST", "/v1/discovery/adopt", payload)
+        if "error" in result:
+            return [types.TextContent(type="text",
+                                      text=f"Could not adopt: {result['error']}")]
+        return [types.TextContent(type="text", text=(
+            f"Adopted {payload['device_name']} ({payload['device_id']}).\n"
+            "It is in the inventory now. If nothing has declared what it can do, "
+            "the hub will say so rather than act on it — use "
+            "dosync_describe_device to draft that description."))]
+
+    # ── dosync_describe_device ────────────────────────────────────────────────
+    elif name == "dosync_describe_device":
+        device_id = arguments.get("device_id", "")
+        devices = await hub_request("GET", "/v1/devices")
+        if "error" in devices:
+            return [types.TextContent(type="text",
+                                      text=f"Could not read devices: {devices['error']}")]
+        match = next((d for d in devices.get("devices", devices)
+                      if d.get("device_id") == device_id), None)
+        if match is None:
+            return [types.TextContent(
+                type="text",
+                text=f"No device {device_id!r} is registered. Scan first with "
+                     "dosync_discover_devices, then adopt it.")]
+        # The same prompt the CLI assembles, so an agent working over MCP and a
+        # person working from a terminal are given identical instructions.
+        from pathlib import Path
+        from dosync.adapter_drafting import build_prompt
+        prompt = build_prompt(match, Path(__file__).resolve().parent.parent)
+        return [types.TextContent(type="text", text=prompt)]
 
     # ── dosync_get_status ─────────────────────────────────────────────────────
     elif name == "dosync_get_status":

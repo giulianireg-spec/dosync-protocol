@@ -54,7 +54,7 @@ settings exist for deployments whose needs differ from that, not as a checklist.
 
 | Setting | Default |
 |---|---|
-| `DOSYNC_DECLARATIVE_DIR` | `declarative` |
+| `DOSYNC_DECLARATIVE_DIR` | _unset_ |
 | `DOSYNC_BLE_ENABLED` | `true` |
 | `DOSYNC_MAVLINK_ENABLED` | `false` |
 | `DOSYNC_HA_EXCLUDE_ENTITIES` | _unset_ |
@@ -88,4 +88,6 @@ settings exist for deployments whose needs differ from that, not as a checklist.
 | Setting | Default |
 |---|---|
 | `DOSYNC_HA_LOCATION_TAGS` | _unset_ |
+| `DOSYNC_LLM_BASE_URL` | _unset_ |
+| `DOSYNC_LLM_MODEL` | _unset_ |
 | `DOSYNC_NOTIFICATION_TEMPLATES` | _unset_ |

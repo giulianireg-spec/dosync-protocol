@@ -9,6 +9,51 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **A discovered device can now be described, and the description is reachable
+  from where the problem shows.** A scan reports an address and a service type;
+  DoSync resolves over declared capabilities and nobody has declared any, so an
+  adopted device stays visible and inert. The hub already knew — it reports
+  those devices at every start and marks them in the dashboard — and offered no
+  next step.
+
+  `GET /v1/devices/{id}/describe` returns **plain text**: what the hub observed,
+  the normative tag vocabulary, the adapter format with three shipped examples,
+  and where the resulting file goes. It sends nothing anywhere. Whoever holds it
+  decides where it goes — an assistant they already use, a model their
+  organisation permits, or an engineer.
+
+  **That is not a limitation, it is the point.** In a plant, a hospital or a
+  managed building, sending the topology of a network to an outside service is
+  frequently prohibited and often impossible, and a feature that only worked by
+  calling out would exclude precisely the deployments this protocol is for. The
+  hub still does not know that language models exist.
+
+  Reachable three ways, all giving the same text: the dashboard offers it on the
+  card of any device it cannot act on; `dosync-manage draft-adapter <id>` prints
+  it, with `--send` as an opt-in for an operator who has a local model; and
+  `dosync_describe_device` over MCP, for an agent already connected to the hub.
+
+- **MCP gained discovery and adoption.** The protocol's central case is an agent
+  connected to a hub, and of the five tools it exposed, none could scan, see
+  what was found, or adopt it — the first draft of this feature asked the
+  operator to copy a prompt by hand and paste it into that same agent.
+  `dosync_discover_devices` reports findings along with which transports were
+  searched and which were skipped; `dosync_adopt_device` registers one by a name
+  the operator chooses.
+
+  The hub does not call a model in any of these paths. It exposes evidence and
+  receives a proposal; the operator saves and approves the file, and that file
+  goes through change review like any other change.
+
+  **The prompt is a text file** — `dosync/templates/adapter-draft-prompt.md` —
+  rather than a string in a module: it is the most reviewable artefact of the
+  feature, someone who distrusts a model describing their hardware wants to read
+  what it is asked before deciding, and a manufacturer can adapt it for their
+  products without forking anything. A test checks it presumes no domain, since
+  that was asked explicitly and this project does not take a property on trust
+  when it can be measured.
+
 ### Removed
 - **`ROADMAP.md`, which said the current release was v0.3 three months after
   v0.5.0 shipped.** It is the document a stranger opens to find out whether

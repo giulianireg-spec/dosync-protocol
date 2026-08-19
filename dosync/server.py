@@ -1046,6 +1046,36 @@ def root():
     }
 
 
+@app.get("/v1/devices/{device_id}/describe", tags=["Devices"],
+         response_class=PlainTextResponse)
+async def describe_device(device_id: str, auth: str = Depends(require_auth)):
+    """The text needed to declare what a registered device can do.
+
+    A device the hub cannot act on is a dead end today: it is in the inventory,
+    the hub says at every start that its actions would be simulated, and nothing
+    offers the next step. This assembles it — what the device announced, the
+    normative tag vocabulary, the adapter format with real examples, and where
+    the resulting file goes.
+
+    It returns TEXT, and sends nothing anywhere. Whoever holds it decides where
+    it goes: an assistant they already use, a model their organisation permits,
+    or an engineer. In a plant or a hospital, sending network topology to an
+    outside service is frequently prohibited and often impossible, and a feature
+    that only worked by calling out would exclude exactly the deployments this
+    protocol is meant for.
+
+    The hub, therefore, still does not know that language models exist.
+    """
+    device = hub.registry.get(device_id)
+    if device is None:
+        raise HTTPException(status_code=404, detail=f"No such device: {device_id}")
+    from pathlib import Path as _Path
+
+    from dosync.adapter_drafting import build_prompt
+    manifest = device.to_dict() if hasattr(device, "to_dict") else dict(device)
+    return build_prompt(manifest, _Path(__file__).resolve().parent.parent)
+
+
 @app.patch("/v1/devices/{device_id}", tags=["Devices"])
 async def rename_device(device_id: str, req: dict, auth: str = Depends(require_auth)):
     """Change a device's display name, and optionally its room.

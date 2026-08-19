@@ -257,6 +257,125 @@ def db_devices(args):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def draft_adapter(args):
+    """Assemble the prompt for a discovered device; optionally send it.
+
+    Printing is the default and sending is opt-in, which is the opposite of how
+    this was first built. In a plant, a hospital or a managed building, sending
+    the topology of a network to an outside model is often prohibited outright,
+    and many such networks have no route to the internet at all. The assembled
+    prompt — device evidence, normative tag vocabulary and format already in it
+    — is what an integrator takes to whatever model their organisation permits,
+    or hands to an engineer. That is the primary path, not a debugging flag.
+    """
+    import json, os
+    from pathlib import Path as _Path
+    from dosync.adapter_drafting import (build_prompt, provenance_header,
+                                         strip_fences, verifiable_requests)
+
+    db = get_db(args.db)
+    row = db._conn.execute(
+        "SELECT manifest_json FROM devices WHERE device_id = ?",
+        (args.device_id,)).fetchone()
+    if row is None:
+        err(f"No such device: {args.device_id}")
+        info("List what the hub knows: dosync-manage db devices")
+        sys.exit(1)
+    device = json.loads(row[0])
+
+    out_dir = _Path(args.out or os.environ.get("DOSYNC_DECLARATIVE_DIR")
+                    or (_Path.home() / ".config" / "dosync" / "declarative"))
+    out_path = out_dir / f"{args.device_id.replace('/', '_')[:60]}.yaml"
+    prompt = build_prompt(device, _Path(__file__).resolve().parent.parent,
+                          str(out_path))
+
+    if not args.send:
+        print(prompt)
+        print()
+        info("Give this to any assistant you already use, or to an engineer.")
+        info(f"Save what it returns as: {out_path}")
+        info("Read it first: a model wrote it from what the device announced,")
+        info("not from its documentation. The file goes through your change")
+        info("review like any other change.")
+        info("To send it from here to a configured model instead: --send")
+        return
+
+    base_url = os.environ.get("DOSYNC_LLM_BASE_URL", "")
+    model = os.environ.get("DOSYNC_LLM_MODEL", "")
+    if not base_url:
+        err("--send needs a model: set DOSYNC_LLM_BASE_URL (and DOSYNC_LLM_MODEL)")
+        info("Any OpenAI-compatible server works; Ollama and LM Studio are local.")
+        info("Without one, run this command without --send and use the prompt.")
+        sys.exit(1)
+
+    # The operator chose this endpoint when configuring the resolver. They
+    # should not discover afterwards where what their scan found was sent.
+    local = any(h in base_url for h in ("localhost", "127.0.0.1", "::1", ".local"))
+    header("Drafting an adapter")
+    info(f"device : {args.device_id}")
+    info(f"model  : {model or '(server default)'} at {base_url}")
+    if not local:
+        warn("That endpoint is not local. What this device announced about")
+        warn("itself — address, model, firmware — will be sent to it.")
+        if not args.yes and input("  Continue? [y/N] ").strip().lower() != "y":
+            info("Nothing was sent.")
+            return
+
+    import asyncio
+    try:
+        import llm_resolver
+    except ImportError:
+        err("llm_resolver is not importable — install aiohttp and run from a clone")
+        info("Or run without --send and take the prompt to your own model.")
+        sys.exit(1)
+    raw = asyncio.run(llm_resolver.query_llm(prompt, timeout_s=args.timeout))
+    if not raw:
+        err("The model returned nothing.")
+        sys.exit(1)
+
+    import yaml
+    text = strip_fences(raw)
+    try:
+        adapter = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        err(f"The model did not return valid YAML: {exc}")
+        sys.exit(1)
+    if not isinstance(adapter, dict) or "actions" not in adapter:
+        err("The draft declares no actions — nothing to verify or adopt.")
+        sys.exit(1)
+
+    header("Checking the draft against the device")
+    verified, unverified = [], []
+    candidates = verifiable_requests(adapter)
+    if not candidates:
+        info("No read-only actions to check — nothing here was confirmed.")
+    for req in candidates:
+        try:
+            import urllib.request
+            r = urllib.request.Request(req["url"], method=req["method"])
+            for k, v in (req["headers"] or {}).items():
+                r.add_header(k, str(v))
+            with urllib.request.urlopen(r, timeout=args.timeout) as resp:
+                good = 200 <= resp.status < 300
+        except Exception:
+            good = False
+        (ok if good else err)(
+            f"{req['action']} → {req['method']} {req['url']}"
+            + ("" if good else "  (no answer)"))
+        (verified if good else unverified).append(req["action"])
+    unverified += [a for a in (adapter.get("actions") or {})
+                   if a not in verified and a not in unverified]
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        provenance_header(model or base_url, verified, unverified,
+                          args.device_id) + text + "\n", encoding="utf-8")
+    header("Draft written")
+    info(str(out_path))
+    info(f"{len(verified)} action(s) answered · {len(unverified)} unchecked")
+    warn("Review it before the hub uses it.")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="DoSync Management CLI",
@@ -373,11 +492,27 @@ Examples:
     p_rotate_adapter.add_argument("name", help="Adapter name (e.g. gpio, wiz)")
     p_rotate_adapter.add_argument("--ip", default="127.0.0.1", help="Adapter IP address")
 
+    p_draft = sub.add_parser(
+        "draft-adapter",
+        help="Assemble the prompt to describe a discovered device (prints by "
+             "default; --send uses a configured model)")
+    p_draft.add_argument("device_id", help="Device id as the hub knows it")
+    p_draft.add_argument("--send", action="store_true",
+                         help="Send to the configured model instead of printing")
+    p_draft.add_argument("--out", help="Directory for the file")
+    p_draft.add_argument("--timeout", type=float, default=30.0)
+    p_draft.add_argument("--yes", action="store_true",
+                         help="Do not ask before sending to a non-local model")
+
     args = parser.parse_args()
 
     # `examples` copies files and never touches the database — requiring one
     # would mean a user could not get the examples until they had started a hub,
     # which is backwards: the examples are how they set the hub up.
+    if args.group == "draft-adapter":
+        draft_adapter(args)
+        return
+
     if args.group == "examples":
         declarative_examples(args)
         return

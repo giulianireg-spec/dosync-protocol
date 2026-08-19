@@ -900,6 +900,7 @@ server grows past this list.
 | GET | `/v1/devices/{device_id}` | One device's manifest |
 | PATCH | `/v1/devices/{device_id}` | Change presentation fields only — never capabilities |
 | DELETE | `/v1/devices/{device_id}` | Remove a device from the registry |
+| GET | `/v1/devices/{device_id}/describe` | Plain text: what the hub observed about a device, the tag vocabulary and the adapter format — enough to declare what it can do. Returns text and sends nothing anywhere |
 | POST | `/v1/devices/provision` | Pre-authorise a device id and issue its token |
 | GET | `/v1/devices/provisioned` | Which device ids are provisioned |
 | DELETE | `/v1/devices/{device_id}/token` | Revoke a device token |

@@ -121,4 +121,8 @@ include = ["dosync*"]
 # repository root and was therefore absent from every `pip install dosync`,
 # while the handler looked for it next to server.py — so the one entry point
 # that does not require curl was missing in the package and broken in a clone.
-dosync = ["py.typed", "dashboard.html", "examples/declarative/*"]
+# The drafting prompt lives in templates/ as a text file rather than as a string
+# in a module: it is the most reviewable artefact of that feature, and someone
+# who does not trust a model to describe their hardware wants to read what it is
+# asked before deciding. A manufacturer adapting it should not need a clone.
+dosync = ["py.typed", "dashboard.html", "examples/declarative/*", "templates/*"]
