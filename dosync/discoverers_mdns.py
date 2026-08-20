@@ -71,6 +71,51 @@ LIKELY_ACTIONABLE = (
 )
 
 
+def _own_addresses() -> set[str]:
+    """Every address this machine answers on.
+
+    A hub advertising itself is not a discovery. It appeared as three separate
+    findings — one per interface — and the operator was asked to adopt each.
+    """
+    addresses = {"127.0.0.1", "::1", "localhost"}
+    import socket
+    try:
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None):
+            addresses.add(info[4][0])
+    except Exception as exc:               # a hub with no resolvable hostname
+        log.debug("could not resolve own hostname: %s", exc)
+    try:
+        # The outbound address, which a hostname lookup often misses. No packet
+        # is sent: connecting a UDP socket only picks a route.
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.connect(("192.0.2.1", 9))       # RFC 5737, routed nowhere
+        addresses.add(probe.getsockname()[0])
+        probe.close()
+    except Exception as exc:
+        log.debug("could not determine outbound address: %s", exc)
+    return addresses
+
+
+def _is_this_host(device: "DiscoveredDevice", own: set[str]) -> bool:
+    """Whether a finding is the hub itself.
+
+    Address alone was not enough: the reference deployment announced
+    `_workstation._tcp` from three interfaces — loopback, LAN and a docker
+    bridge — each carrying a different MAC in its name, so a docker address the
+    hub does not resolve still came back as a device to adopt. The hostname
+    catches all three at once.
+    """
+    if device.ip in own:
+        return True
+    try:
+        import socket
+        hostname = socket.gethostname().split(".")[0].lower()
+    except Exception:
+        return False
+    return bool(hostname) and device.device_name.lower().startswith(hostname)
+
+
 def _short_type(service_type: str) -> str:
     """`_octoprint._tcp.local.` → `_octoprint._tcp`, which is what a reader wants."""
     return service_type.removesuffix(".local.").removesuffix(".")
@@ -172,8 +217,13 @@ class MDNSDiscoverer:
                     pass
             await azc.async_close()
 
-        # Loopback is the hub finding itself, which tells the operator nothing.
-        results = [d for d in found.values() if d.ip not in ("127.0.0.1", "::1")]
+        # The hub finding itself tells the operator nothing, and it did it three
+        # times on the reference deployment: a host announces `_workstation._tcp`
+        # once per interface — loopback, LAN, a docker bridge — each with a
+        # different MAC in its name, so keying on identity kept all three. The
+        # filter has to be every address this machine holds, not just loopback.
+        own = _own_addresses()
+        results = [d for d in found.values() if not _is_this_host(d, own)]
         results.sort(key=lambda d: (not d.likely_actionable, d.service_type,
                                     d.device_name))
         log.info("mDNS scan: %d service(s) announced, %d likely actionable",

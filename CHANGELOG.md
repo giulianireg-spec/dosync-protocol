@@ -10,6 +10,18 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The hub offered itself as a device, three times.** A host announces
+  `_workstation._tcp` from every interface it holds — loopback, the LAN, a
+  docker bridge — and each announcement carries a different MAC in its name, so
+  keying on identity kept all three. Filtering loopback was not enough: two of
+  them arrived on routable addresses. An operator scanning the reference
+  deployment was asked to adopt the hub three times before reaching a real
+  device.
+
+  Address and hostname together now, because a hub does not always resolve the
+  address of a bridge interface it holds, and both discoverers use the same
+  decision.
+
 - **The drafting prompt was teaching the tag antipattern it exists to prevent.**
   `TAG-VOCABULARY.md` has a *Deprecated tags* table laid out identically to the
   category tables, and scraping the whole file swept it in — so a model

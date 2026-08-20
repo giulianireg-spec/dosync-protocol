@@ -466,3 +466,43 @@ def test_a_finding_from_a_discovering_adapter_can_be_adopted():
         "never does, so it either rejects real findings or accepts anything"
     assert "manifest.adapter = adapter" in adopt, \
         "an adopted finding loses the adapter that found it"
+
+
+def test_the_hub_does_not_offer_itself_as_a_device():
+    """It offered itself three times, and asked to adopt each one.
+
+    A host announces `_workstation._tcp` from every interface it has — loopback,
+    the LAN, a docker bridge — and each announcement carries a different MAC in
+    its name, so keying on identity kept all three. Filtering loopback was not
+    enough: two of the three arrived on routable addresses. On the reference
+    deployment an operator scanning got four dialogues before reaching a real
+    device.
+
+    Address and hostname together, because a hub does not always resolve the
+    address of a bridge interface it holds.
+    """
+    import socket
+
+    from dosync.discoverers_mdns import _is_this_host, _own_addresses
+
+    own = _own_addresses()
+    assert "127.0.0.1" in own
+    host = socket.gethostname().split(".")[0]
+
+    for name, ip in ((f"{host} [00:00:00:00:00:00]", "192.0.2.9"),
+                     (f"{host} [ae:29:8e:30:0b:2e]", "172.17.0.1")):
+        d = DiscoveredDevice(adapter="", device_id=name, device_name=name,
+                             ip=ip, extra={})
+        assert _is_this_host(d, own), f"the hub still offers itself: {name}"
+
+    for name, ip in (('75" QLED', "192.0.2.105"), ("printer", "192.0.2.91")):
+        d = DiscoveredDevice(adapter="", device_id=name, device_name=name,
+                             ip=ip, extra={})
+        assert not _is_this_host(d, own), f"a real device was filtered out: {name}"
+
+
+def test_both_discoverers_apply_the_same_filter():
+    """One place decides what counts as the hub itself."""
+    for module in ("discoverers_mdns", "discoverers_ssdp"):
+        source = (REPO / "dosync" / f"{module}.py").read_text(encoding="utf-8")
+        assert "_is_this_host" in source, f"{module} does not filter the hub"

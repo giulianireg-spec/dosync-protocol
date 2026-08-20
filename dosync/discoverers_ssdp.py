@@ -188,7 +188,9 @@ class SSDPDiscoverer:
             *(self._listen(port, timeout, found) for port in PORTS),
             return_exceptions=True,
         )
-        results = [d for d in found.values() if d.ip not in ("127.0.0.1", "::1")]
+        from dosync.discoverers_mdns import _is_this_host, _own_addresses
+        own = _own_addresses()
+        results = [d for d in found.values() if not _is_this_host(d, own)]
         # A television publishes several UPnP devices — a DIAL receiver, an IP
         # control server — with different UUIDs and the same hardware behind
         # them. Technically distinct; to the person deciding what to adopt, one
