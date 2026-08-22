@@ -59,6 +59,18 @@ class TransportDiscoverer(Protocol):
 
         Returns candidates. Registering them is emphatically not this method's
         job: the operator adopts, by name, and the adoption is audited.
+
+        **`device_id` must not be derived from a network address.** An address
+        is the one property of a device guaranteed to change — DHCP reassigns —
+        so an identity built from it makes the same device arrive as a new one
+        after a lease renewal. The operator then adopts what they already have,
+        which happened on the reference deployment: eleven bulbs registered for
+        ten lamps.
+
+        Where that identity comes from is the transport's business and only the
+        transport knows it: a MAC over Bluetooth, a serial in an SSDP `USN`, an
+        announced service name over mDNS. What the protocol requires is that it
+        survive the device moving.
         """
         ...
 

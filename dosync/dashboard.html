@@ -1034,6 +1034,19 @@ async function scanDevices() {
     // transport discoverer carry no adapter, so say that plainly rather than
     // printing an empty pair of brackets.
     const how = d.adapter ? d.adapter : (d.service_type || "unidentified");
+    // The hub knew this address already and the person was never told: they
+    // recognise the name they chose, and a name is what settles it. Shown, not
+    // acted on — addresses move, and concluding identity from one would fuse
+    // two devices some day, which is worse than the duplicate it would prevent.
+    const known = d.possibly_known ? (
+      "\n\nYou may already have this one: a device you named " +
+      `"${d.possibly_known.device_name}" is registered at this same address.` +
+      "\nAdding it again would give you two entries for one device.") : "";
+    // Announcing itself as commissionable means nobody has paired it. On a
+    // shared network it may not be yours.
+    const pairing = d.commissionable ?
+      "\n\nThis device is announcing that it has not been paired with anything " +
+      "yet. On a shared network, it may belong to someone else." : "";
     const note = d.adapter ? "" :
       "\n\nNothing has declared what this device can do yet, so adding it " +
       "records it in your inventory — the hub will say so rather than act on it." +
@@ -1041,7 +1054,7 @@ async function scanDevices() {
       "adding it, the device card offers the text you need for that.";
     const name = prompt(
       "Found: " + (d.device_name || d.device_id) + "  (" + how + " @ " + d.ip + ")" +
-      note + "\n\n" +
+      known + pairing + note + "\n\n" +
       "Name it to add it — this is the name you will see everywhere else.\n" +
       "Leave empty to skip this one.", d.device_name || '');
     if (!name || !name.trim()) continue;

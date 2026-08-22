@@ -10,6 +10,53 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The hub did not recognise devices it already had.** The scan marked a
+  finding as registered by comparing `device_id`, and a discovery id is not an
+  inventory id: the transport fabricates the first — `wiz-auto-192-168-100-33` —
+  while the second is what the operator chose to call the thing, which this
+  project defends elsewhere as the right way round. So a bulb registered for
+  months under a name its owner picked came back as a new device, was offered
+  for adoption, and was adopted. The reference deployment ended with eleven WiZ
+  entries for ten lamps.
+
+  The address that would have revealed it sat in `adapter_config` from the
+  original registration. The hub had the datum and never looked at it.
+
+  It now **reports** the match — *a device you named X is registered at this
+  same address* — and still does not decide. No merging: addresses move with
+  DHCP, and a hub concluding identity from one would eventually fuse two
+  different devices, which is worse than duplicating, because a duplicate is
+  visible and a fusion is not. The person recognises the name they chose; that
+  is what settles it, and it is what they were never shown.
+
+  Correlation is on the address rather than the adapter, so the same device
+  found over a different transport still matches — the general case of which
+  the duplicate bulb is one example.
+
+- **A discovered device's identity may not be derived from its address**, and
+  the rule is now in the discoverer contract where someone writing their own
+  will read it. It is not a new constraint: BLE already keyed on the device MAC,
+  SSDP on the serial in a `USN`, mDNS on the announced service name. WiZ built
+  its id from the IP and was the only one, which is exactly where the duplicate
+  appeared.
+
+  Where a stable identity comes from is the transport's business and only the
+  transport knows it; what the protocol requires is that it survive the device
+  moving. A test now checks every discoverer rather than the one that broke it —
+  a rule that lives only in the head of whoever applied it is what this project
+  turns into a test every other time.
+
+  Identifiers already in a registry are untouched: this names devices discovered
+  from here on, and nobody wakes up to new identifiers because the scheme
+  improved.
+
+- **A commissionable device is declared as one.** Four `_matterc._udp` findings
+  were offered as ordinary adoptions and adopted. A commissionable device is
+  announcing that *nobody has paired it yet* — on a shared network or in a
+  building it may not be the operator's at all. Not hidden, said.
+
+
+### Fixed
 - **The hub offered itself as a device, three times.** A host announces
   `_workstation._tcp` from every interface it holds — loopback, the LAN, a
   docker bridge — and each announcement carries a different MAC in its name, so

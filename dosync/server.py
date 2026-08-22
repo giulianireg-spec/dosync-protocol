@@ -2346,6 +2346,38 @@ def list_adapters(auth: str = Depends(require_auth)):
     }
 
 
+def _already_here(discovered) -> dict | None:
+    """Whether a finding looks like a device the operator already registered.
+
+    The scan matched on `device_id` alone, and a discovery id is not an
+    inventory id: the transport fabricates the first — `wiz-auto-192-168-100-33`
+    — while the second is what the operator chose to call the thing, which this
+    project defends elsewhere as the right way round. So a bulb registered for
+    months as `light-kitchen-01` came back as a new device, and the reference
+    deployment ended with eleven WiZ entries for ten lamps.
+
+    The address that would have revealed it was in `adapter_config` the whole
+    time. The hub had the datum and did not look at it.
+
+    **It reports, it does not decide.** No merging, no hiding: a device is
+    returned with the name the operator gave it and what matched, because
+    addresses move with DHCP and a hub that concluded identity from one would
+    eventually fuse two different devices — worse than duplicating, since
+    duplication is visible and fusion is not.
+    """
+    address = getattr(discovered, "ip", "")
+    if not address:
+        return None
+    for device in hub.registry.active():
+        config = getattr(device, "adapter_config", None) or {}
+        known = config.get("ip") or config.get("address") or ""
+        if known and known == address:
+            return {"device_id": device.device_id,
+                    "device_name": device.device_name,
+                    "matched_on": "address"}
+    return None
+
+
 @app.get("/v1/discovery/scan", tags=["Discovery"])
 async def scan_devices(auth: str = Depends(require_auth)):
     """List devices reachable on any transport this hub can search.
@@ -2434,6 +2466,13 @@ async def scan_devices(auth: str = Depends(require_auth)):
                 "service_type": getattr(d, "service_type", ""),
                 "likely_actionable": getattr(d, "likely_actionable", False),
                 "registered":  hub.registry.get(d.device_id) is not None,
+                # What it matched, if anything — reported, never acted on.
+                "possibly_known": _already_here(d),
+                # A commissionable device is announcing that NOBODY has paired
+                # it yet. In a building or a shared network it may not be the
+                # operator's at all, and offering it like any other finding
+                # invites adopting a neighbour's hardware.
+                "commissionable": "matterc" in (getattr(d, "service_type", "") or ""),
             }
             for d in wiz_devices
         ],

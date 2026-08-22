@@ -78,12 +78,29 @@ async def discover_wiz(timeout: float = 5.0) -> list[DiscoveredDevice]:
             ip = getattr(bulb, 'ip_address', None) or getattr(bulb, 'ip', None)
             if not ip:
                 continue
+            # Identity from the MAC where the bulb offers one, and only from
+            # the address as a last resort. An address is the single datum
+            # guaranteed to change — DHCP reassigns — so building an id from it
+            # meant the same lamp arrived under a new identity after a lease
+            # renewal, and the reference deployment ended with eleven WiZ
+            # entries for ten lamps.
+            #
+            # Ids already in a registry are NOT affected: this names devices
+            # discovered from here on. Nobody wakes up to ten new identifiers
+            # because the project improved its scheme.
+            mac = (getattr(bulb, "mac", None) or
+                   getattr(bulb, "bulbtype", None) and
+                   getattr(getattr(bulb, "bulbtype"), "mac", None))
+            stable = str(mac).replace(":", "").lower() if mac else ""
             devices.append(DiscoveredDevice(
                 adapter="wiz",
-                device_id=f"wiz-auto-{ip.replace('.', '-')}",
+                device_id=(f"wiz-{stable}" if stable
+                           else f"wiz-auto-{ip.replace('.', '-')}"),
                 device_name=f"WiZ Bulb {ip}",
                 ip=ip,
-                extra={},
+                # Kept so a later scan can recognise the same device at a
+                # different address, which the address alone cannot do.
+                extra={"mac": stable} if stable else {},
             ))
             log.info("Found WiZ bulb: %s", ip)
 
