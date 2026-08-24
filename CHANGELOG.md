@@ -9,6 +9,21 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Documented
+- **`pipx inject dosync <package>` for optional dependencies installed after
+  the hub, framed as a general pattern rather than a per-vendor fix.** A
+  vendor library installed with plain `pip install` after `pipx install
+  dosync` lands in the wrong environment — `pipx` isolates the hub in its own
+  venv, and the failure is silent, since the hub cannot distinguish "not
+  installed" from "installed somewhere else". Found reinstalling on Windows.
+
+  Framed deliberately without naming any single vendor's product as the
+  worked example: this project already had to walk back a reference adapter
+  that nagged every hub to install a vendor library regardless of whether the
+  operator owned that hardware, and documenting the fix around one vendor
+  again would reintroduce the same bias from the other direction. A test
+  checks the explanation names no domestic-appliance vendor.
+
 ### Fixed
 - **mDNS discovery searched for `_workstation._tcp`, which identifies a
   general-purpose computer, never a controllable device.** On a real network

@@ -235,6 +235,10 @@ Two things the rest of this page assumes that PowerShell does not provide:
 `curl.exe`, or the PowerShell examples further down. `setup_pki.sh` is a shell
 script and needs Git Bash or WSL.
 
+If a control library for your hardware needs installing afterwards, a plain
+`pip install` will not reach it — `pipx` keeps the hub in its own isolated
+environment. See **pipx inject**, below.
+
 </details>
 
 ### Then open the dashboard
@@ -453,6 +457,22 @@ daikin = "dosync_adapter_daikin:DaikinAdapter"
 The operator runs `pip install dosync-adapter-daikin` and the hub finds it. No
 pull request here, and no promise from this project to maintain code for
 hardware it has never seen — the publisher answers for their own adapter.
+
+**If DoSync itself was installed with `pipx`, a plain `pip install` lands in
+the wrong environment.** `pipx` deliberately isolates the hub in its own
+virtual environment, separate from the system Python, so a vendor library
+installed the ordinary way is invisible to it — the hub stays silent about
+this exactly as it does about an uninstalled one, because from its side
+there is no difference. Install into the hub's own environment instead:
+
+```bash
+pipx inject dosync dosync-adapter-daikin
+```
+
+This is not specific to any one vendor's product: it is how you add *any*
+optional dependency — a control library, a third-party adapter package, a
+protocol SDK — after installing DoSync with `pipx`. Whichever hardware you
+own, `pipx inject dosync <package>` is the command, not `pip install`.
 
 A third-party adapter runs inside the hub with the hub's permissions, so the hub
 says so: it is logged at WARNING when loaded, recorded in the audit chain, and

@@ -346,6 +346,39 @@ def test_install_instructions_cover_the_target_platform():
         "including the option we do not recommend, and why"
 
 
+def test_pipx_inject_is_documented_as_a_general_pattern_not_a_vendor_case():
+    """A Windows reinstall confirmed a vendor library installed with plain
+    `pip install` after `pipx install dosync` lands in the wrong environment —
+    `pipx` isolates the hub in its own venv, and the failure is silent, because
+    the hub cannot distinguish "not installed" from "installed somewhere else".
+
+    The fix documented is `pipx inject dosync <package>`. It must be framed as
+    the general pattern for ANY optional dependency installed after the hub —
+    not tied to WiZ or any other single vendor's product, since the protocol
+    presumes no domain and the README should not either. This project has
+    caught itself doing exactly that before: a reference adapter once nagged
+    every hub to install `pywizlight` on every start, regardless of whether the
+    operator owned anything from that vendor.
+    """
+    readme = (REPO / "README.md").read_text()
+    assert "pipx inject dosync" in readme, \
+        "the fix for the isolated-environment problem is not documented"
+    assert "not specific to any one vendor" in readme, \
+        "pipx inject must be framed as a general pattern, not a per-vendor fix"
+
+    # The instruction itself must not single out a domestic-appliance vendor
+    # as the worked example — that is exactly the framing this project has
+    # already had to walk back once.
+    section_start = readme.index("pipx inject dosync")
+    section = readme[max(0, section_start - 400):section_start + 600]
+    for domestic_vendor in ("wiz ", "philips hue", "lifx", "nanoleaf"):
+        assert domestic_vendor not in section.lower(), (
+            f"the generic pipx inject explanation names '{domestic_vendor.strip()}' "
+            "as its worked example, re-introducing the home-appliance framing "
+            "this project already removed from the reference adapter's warning"
+        )
+
+
 # ── Dependencies must not live in two places (2026-07-31) ───────────────────
 
 def test_requirements_and_pyproject_agree():
