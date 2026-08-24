@@ -58,7 +58,15 @@ SERVICE_TYPES = (
     "_hap._tcp.local.",                # HomeKit accessories
     "_matter._tcp.local.",
     "_matterc._udp.local.",            # Matter commissionable
-    "_workstation._tcp.local.",
+    # NOT `_workstation._tcp.local.`. This is how a general-purpose computer
+    # announces itself — a laptop, a server, another hub's own host — never a
+    # controllable device, and `_is_this_host` only excludes the SCANNING
+    # machine, not other infrastructure on the same network. On a real network
+    # this offered a production Raspberry Pi — running its own DoSync hub, with
+    # its own audit chain and registered devices — as a discovery result to
+    # adopt from an unrelated hub. Adopting it would not have controlled
+    # anything, but "device found" implying "device controllable" is exactly
+    # the confusion an operator should never have to untangle by hand.
 )
 
 #: Announcing one of these suggests a device that exists to be controlled, as
@@ -100,11 +108,15 @@ def _own_addresses() -> set[str]:
 def _is_this_host(device: "DiscoveredDevice", own: set[str]) -> bool:
     """Whether a finding is the hub itself.
 
-    Address alone was not enough: the reference deployment announced
-    `_workstation._tcp` from three interfaces — loopback, LAN and a docker
-    bridge — each carrying a different MAC in its name, so a docker address the
-    hub does not resolve still came back as a device to adopt. The hostname
-    catches all three at once.
+    Address alone was not enough while `_workstation._tcp` was still an active
+    search: the reference deployment announced it from three interfaces —
+    loopback, LAN and a docker bridge — each carrying a different MAC in its
+    name, so a docker address the hub does not resolve still came back as a
+    device to adopt. `_workstation._tcp` is no longer searched (it identifies a
+    general-purpose computer, not something controllable, and offered a
+    production Raspberry Pi from an unrelated network as a discovery result).
+    This still guards against the hub answering the meta-query or another
+    searched type on its own addresses or hostname.
     """
     if device.ip in own:
         return True
@@ -217,11 +229,10 @@ class MDNSDiscoverer:
                     pass
             await azc.async_close()
 
-        # The hub finding itself tells the operator nothing, and it did it three
-        # times on the reference deployment: a host announces `_workstation._tcp`
-        # once per interface — loopback, LAN, a docker bridge — each with a
-        # different MAC in its name, so keying on identity kept all three. The
-        # filter has to be every address this machine holds, not just loopback.
+        # The hub finding itself tells the operator nothing. This used to
+        # happen three times over — one per interface, via `_workstation._tcp`
+        # — which is no longer searched for that reason. The filter stays as a
+        # second layer: every address this machine holds, not just loopback.
         own = _own_addresses()
         results = [d for d in found.values() if not _is_this_host(d, own)]
         results.sort(key=lambda d: (not d.likely_actionable, d.service_type,

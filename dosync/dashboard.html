@@ -711,16 +711,29 @@ function showTokenHelp() {
     " hashed, by design.");
 }
 
+// Bumped on every call to connect(). A closing socket's callbacks check this
+// before touching global state, so a stale connection — from the auto-connect
+// on page load racing a manual Connect click, or an old retry timer firing
+// after a fresh connection succeeded — cannot flip the indicator or schedule
+// its own reconnect once superseded. Two sockets both wanting to be "the"
+// connection is what produced a status that flickered between live and
+// unavailable: not a real disconnection, two generations of connect() briefly
+// disagreeing about which of them was current.
+let wsGeneration = 0;
+
 function connect() {
   token = document.getElementById('tokenInput').value.trim();
   if (token) localStorage.setItem('dosync_token', token);
 
+  const myGeneration = ++wsGeneration;
   if (ws) ws.close();
 
   const url = token ? `${WS}/ws?token=${token}` : `${WS}/ws`;
-  ws = new WebSocket(url);
+  const socket = new WebSocket(url);
+  ws = socket;
 
-  ws.onopen = () => {
+  socket.onopen = () => {
+    if (myGeneration !== wsGeneration) { socket.close(); return; }
     setWsStatus('live');
     loadStatus();
     loadDevices();
@@ -728,12 +741,14 @@ function connect() {
     loadAudit();
   };
 
-  ws.onmessage = (e) => {
+  socket.onmessage = (e) => {
+    if (myGeneration !== wsGeneration) return;
     const msg = JSON.parse(e.data);
     handleWsEvent(msg);
   };
 
-  ws.onclose = (e) => {
+  socket.onclose = (e) => {
+    if (myGeneration !== wsGeneration) return;   // superseded — not a real drop
     if (e.code === 4001) {
       setWsStatus('error');
       toast('Invalid token — check your API key', 'error');
@@ -744,11 +759,11 @@ function connect() {
       // had no library to speak WebSocket. The word has to say which of the two
       // things is missing.
       setWsStatus(token ? 'live events unavailable' : 'not connected');
-      setTimeout(connect, 3000); // auto-reconnect
+      setTimeout(() => { if (myGeneration === wsGeneration) connect(); }, 3000);
     }
   };
 
-  ws.onerror = () => setWsStatus('error');
+  socket.onerror = () => { if (myGeneration === wsGeneration) setWsStatus('error'); };
 }
 
 function setWsStatus(status) {

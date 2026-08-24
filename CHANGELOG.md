@@ -10,6 +10,16 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **mDNS discovery searched for `_workstation._tcp`, which identifies a
+  general-purpose computer, never a controllable device.** On a real network
+  it offered a production Raspberry Pi — running its own separate DoSync hub,
+  with its own audit chain and registered devices — as a discovery result to
+  adopt from a completely unrelated hub. `_is_this_host` only filters the
+  machine doing the scanning; it was never meant to filter every other piece
+  of infrastructure on the network that happens to run mDNS, and it could not
+  have. Removed from the active search entirely rather than filtered after
+  the fact: a service type that structurally cannot identify a controllable
+  device should not be searched for as though it might.
 - **The hub did not recognise devices it already had.** The scan marked a
   finding as registered by comparing `device_id`, and a discovery id is not an
   inventory id: the transport fabricates the first — `wiz-auto-192-168-100-33` —
@@ -956,6 +966,17 @@ Closing a version means moving the heading, and it was missed at the time.*
 - Retired every deprecated `asyncio.get_event_loop()` call.
 
 ### Fixed
+- **The connection indicator flickered between "live" and "live events
+  unavailable" on a hub that was never actually disconnecting.** The dashboard
+  auto-connects on page load using a saved token; pressing Connect by hand
+  while that was in flight created a second WebSocket. Each socket's `onclose`
+  scheduled its own reconnect independently, so an old socket closing after a
+  newer one had already reported "live" flipped the status back down and
+  queued a redundant retry — not a real drop, two generations of `connect()`
+  briefly disagreeing about which was current. Found reinstalling on Windows
+  from scratch, the fourth thing that install turned up. A generation counter
+  now guards every socket callback: once superseded, a stale socket's events
+  are inert.
 - **A security alert that had never fired.** `register_device` raises an
   `alert_anomaly` intent when a device's capabilities change without a firmware
   version bump ("may indicate compromise"). It called `execute_intent` without

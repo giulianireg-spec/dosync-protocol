@@ -506,3 +506,26 @@ def test_both_discoverers_apply_the_same_filter():
     for module in ("discoverers_mdns", "discoverers_ssdp"):
         source = (REPO / "dosync" / f"{module}.py").read_text(encoding="utf-8")
         assert "_is_this_host" in source, f"{module} does not filter the hub"
+
+
+def test_workstation_service_is_not_actively_searched():
+    """A fifth thing the same reinstallation found: `_workstation._tcp` is how
+    a general-purpose computer announces itself on the network — a laptop, a
+    server, another hub's own host — never a controllable device.
+
+    On a real network, actively searching for it offered a production
+    Raspberry Pi — running its own separate DoSync hub, with its own audit
+    chain and registered devices — as a discovery result to adopt from a
+    completely unrelated hub. `_is_this_host` only filters the machine doing
+    the scanning; it was never meant to, and cannot, filter every other piece
+    of infrastructure on the same network that happens to run mDNS.
+
+    Removed from SERVICE_TYPES rather than filtered after the fact: a type
+    that structurally cannot identify a controllable device should not be
+    searched for as though it might.
+    """
+    from dosync.discoverers_mdns import SERVICE_TYPES
+    assert "_workstation._tcp.local." not in SERVICE_TYPES, \
+        "_workstation._tcp is being searched, which surfaces other " \
+        "computers and unrelated infrastructure on the network as if they " \
+        "were IoT devices to adopt"

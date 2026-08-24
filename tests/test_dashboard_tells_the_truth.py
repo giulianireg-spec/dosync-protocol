@@ -66,3 +66,36 @@ def test_the_dashboard_javascript_parses():
     assert '"""' not in page, "a Python docstring reached the dashboard script"
     assert page.count("<script>") == page.count("</script>"), \
         "unbalanced script tags"
+
+
+def test_the_status_indicator_does_not_flicker_between_stale_and_fresh_sockets():
+    """A fourth thing the same reinstallation found: the header flickered
+    between "live" and "live events unavailable" seconds apart, on a hub that
+    was never actually dropping the connection.
+
+    The page auto-connects on load using a saved token, and the operator also
+    pressed Connect by hand. Two WebSocket objects existed briefly, and each
+    one's onclose scheduled its own reconnect — so an old socket closing after
+    a new one had already opened "live" would flip the status back down and
+    queue a redundant retry. Not a real disconnection: two generations of
+    connect() disagreeing about which of them was current.
+
+    The fix is a generation counter: every call to connect() bumps it, and a
+    socket's callbacks check it against the current value before touching
+    global status or scheduling a reconnect. A superseded socket's events are
+    inert once a newer one exists.
+    """
+    page = _dashboard()
+    assert "wsGeneration" in page, \
+        "no generation guard exists, so a stale socket can still overwrite " \
+        "a newer connection's status"
+    assert "myGeneration !== wsGeneration" in page or \
+           "myGeneration === wsGeneration" in page, \
+        "the guard is declared but never checked before acting on a socket event"
+    # The three callbacks that mutate shared state or schedule work must each
+    # be guarded, not just onclose — an open or message event from a stale
+    # socket is exactly as capable of corrupting the displayed status.
+    for handler in ("socket.onopen", "socket.onmessage", "socket.onclose"):
+        section = page[page.index(handler):page.index(handler) + 400]
+        assert "myGeneration" in section, \
+            f"{handler} does not check the generation guard"
