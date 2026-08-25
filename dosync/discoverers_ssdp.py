@@ -184,10 +184,22 @@ class SSDPDiscoverer:
 
     async def discover(self, timeout: float = 5.0) -> list[DiscoveredDevice]:
         found: dict[str, DiscoveredDevice] = {}
-        await asyncio.gather(
+        # `return_exceptions=True` keeps one dead port from killing the other,
+        # but silence is not the same as success: uvloop raising
+        # NotImplementedError on every port produced an empty result that the
+        # scan then reported as a transport it had SEARCHED. A scan claiming to
+        # have looked where it never listened is the one outcome this whole
+        # searched/skipped distinction exists to prevent, so a total failure is
+        # raised rather than reported as nothing-found.
+        outcomes = await asyncio.gather(
             *(self._listen(port, timeout, found) for port in PORTS),
             return_exceptions=True,
         )
+        failures = [o for o in outcomes if isinstance(o, BaseException)]
+        for exc in failures:
+            log.warning("SSDP listen failed: %s: %s", type(exc).__name__, exc)
+        if len(failures) == len(PORTS):
+            raise failures[0]
         from dosync.discoverers_mdns import _is_this_host, _own_addresses
         own = _own_addresses()
         results = [d for d in found.values() if not _is_this_host(d, own)]
@@ -231,13 +243,32 @@ class SSDPDiscoverer:
             sock.close()
             return
 
+        # `loop.sock_recvfrom` is NOT usable here: uvloop declares the method
+        # and raises NotImplementedError when called, and uvicorn installs
+        # uvloop whenever `uvicorn[standard]` is present — which this project
+        # requires for WebSocket support. The result was SSDP failing instantly
+        # on both ports in production while every test passed, because tests
+        # run on the stock asyncio loop where the method works.
+        #
+        # `add_reader` + a plain non-blocking `recvfrom` is supported by both
+        # loops, so discovery behaves the same wherever the hub runs.
+        queue: asyncio.Queue = asyncio.Queue()
+
+        def _readable() -> None:
+            try:
+                queue.put_nowait(sock.recvfrom(4096))
+            except (BlockingIOError, InterruptedError):
+                pass
+            except OSError as exc:
+                log.debug("SSDP read on port %s failed: %s", port, exc)
+
+        loop.add_reader(sock.fileno(), _readable)
         deadline = loop.time() + timeout
         try:
             while loop.time() < deadline:
                 try:
                     payload, addr = await asyncio.wait_for(
-                        loop.sock_recvfrom(sock, 4096),
-                        timeout=max(0.1, deadline - loop.time()))
+                        queue.get(), timeout=max(0.1, deadline - loop.time()))
                 except (asyncio.TimeoutError, OSError):
                     continue
                 # Multicast comes back to the sender: without this the hub
@@ -293,4 +324,10 @@ class SSDPDiscoverer:
                                                      or headers.get("st") or ""),
                 )
         finally:
+            # Both, in this order: a reader left registered on a closed fd
+            # makes the loop spin on a descriptor nobody owns any more.
+            try:
+                loop.remove_reader(sock.fileno())
+            except (OSError, ValueError):
+                pass
             sock.close()

@@ -2432,7 +2432,9 @@ async def scan_devices(auth: str = Depends(require_auth)):
             found.extend(await adapter.discover(timeout=5.0))
             searched.append(name)
         except Exception as e:
-            log.info("Discovery via %s did not run: %s", name, e)
+            log.warning("Discovery via %s did not run: %s: %s",
+                        name, type(e).__name__, e)
+            skipped.append(f"{name} — failed: {type(e).__name__}")
 
     # Transport discoverers: components that find without executing.
     registry = getattr(hub, "discoverers", None)
@@ -2445,7 +2447,13 @@ async def scan_devices(auth: str = Depends(require_auth)):
             found.extend(await discoverer.discover(timeout=5.0))
             searched.append(label)
         except Exception as e:
-            log.info("Discovery via %s did not run: %s", discoverer.name, e)
+            # It must land in one list or the other. Falling through left the
+            # transport absent from BOTH, so a reader could not tell it had
+            # been attempted at all — and the adapter loop above still does
+            # exactly that, which is the same defect waiting to be noticed.
+            log.warning("Discovery via %s did not run: %s: %s",
+                        discoverer.name, type(e).__name__, e)
+            skipped.append(f"{label} — failed: {type(e).__name__}")
 
     # Likely-actionable first: a scan that returns forty unranked entries costs
     # the reader more than it saves them.

@@ -529,3 +529,68 @@ def test_workstation_service_is_not_actively_searched():
         "_workstation._tcp is being searched, which surfaces other " \
         "computers and unrelated infrastructure on the network as if they " \
         "were IoT devices to adopt"
+
+
+# ── The event loop the hub actually runs on (2026-08-24) ────────────────────
+
+def test_ssdp_listening_works_on_the_loop_uvicorn_installs():
+    """1045 tests passed while SSDP was completely broken in production.
+
+    `uvicorn[standard]` — required for WebSocket support — installs uvloop, and
+    uvloop *declares* `loop.sock_recvfrom` but raises NotImplementedError when
+    it is called. So `hasattr` said the method existed, every test on the stock
+    asyncio loop passed, and on the Raspberry Pi the SSDP discoverer failed
+    instantly on both ports, every scan, for days. A 3D printer announcing
+    itself twice a minute was invisible while the hub reported SSDP as a
+    transport it had searched.
+
+    Checking that an attribute exists is not checking that calling it works.
+    This test runs the real listen path on the real loop the hub runs on.
+    """
+    uvloop = pytest.importorskip(
+        "uvloop", reason="uvloop is what uvicorn[standard] installs; without "
+                         "it this environment cannot reproduce the failure")
+    import asyncio as _asyncio
+
+    from dosync.discoverers_ssdp import SSDPDiscoverer
+
+    async def _run():
+        # A short window: this asserts the mechanism survives the loop, not
+        # that anything is on the network to find.
+        return await SSDPDiscoverer().discover(timeout=0.4)
+
+    loop = uvloop.new_event_loop()
+    try:
+        _asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(_run())
+    finally:
+        loop.close()
+        _asyncio.set_event_loop(None)
+
+    assert isinstance(result, list), \
+        "SSDP discovery did not complete on uvloop — this is the loop the hub " \
+        "runs on under uvicorn[standard]"
+
+
+def test_a_discoverer_that_fails_is_never_reported_as_searched():
+    """The worse half of the same defect: the scan claimed to have searched a
+    transport that raised on every port.
+
+    `asyncio.gather(return_exceptions=True)` turned two NotImplementedErrors
+    into an empty list, indistinguishable from "listened and heard nothing" —
+    so the endpoint appended SSDP to `searched`. A scan asserting it looked
+    where it never listened is exactly what the searched/skipped split exists
+    to prevent.
+    """
+    source = (REPO / "dosync" / "discoverers_ssdp.py").read_text(encoding="utf-8")
+    assert "if len(failures) == len(PORTS):" in source, \
+        "a total SSDP failure still returns empty instead of raising, so the " \
+        "scan cannot tell it apart from finding nothing"
+
+    server = (REPO / "dosync" / "server.py").read_text(encoding="utf-8")
+    scan = server[server.index('@app.get("/v1/discovery/scan"'):]
+    scan = scan[:scan.index("\n@app.")]
+    # A transport must land in searched or skipped — never neither, which left
+    # a reader unable to tell it had been attempted.
+    assert scan.count("failed: {type(e).__name__}") >= 2, \
+        "a failing discoverer or adapter still vanishes from both lists"

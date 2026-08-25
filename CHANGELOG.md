@@ -9,6 +9,29 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **SSDP discovery was completely broken in production while 1045 tests
+  passed.** `uvicorn[standard]` — added days earlier to fix WebSocket support
+  — installs uvloop, and uvloop *declares* `loop.sock_recvfrom` but raises
+  `NotImplementedError` when it is called. `hasattr` reported the method as
+  present, the test suite ran on the stock asyncio loop where it works, and on
+  the reference deployment every SSDP scan failed instantly on both ports for
+  days. A 3D printer announcing itself twice a minute was invisible.
+
+  Replaced with `add_reader` plus a non-blocking `recvfrom`, which both loops
+  support. Checking that an attribute exists is not checking that calling it
+  works, so there is now a test that runs the real listen path on uvloop —
+  the loop the hub actually runs on — and skips only where uvloop is absent.
+
+- **And the scan reported that transport as one it had SEARCHED.**
+  `asyncio.gather(return_exceptions=True)` turned two `NotImplementedError`s
+  into an empty list, indistinguishable from having listened and heard
+  nothing. A total failure now raises instead. A discoverer or adapter that
+  raises is also recorded in `skipped` with the reason: previously it fell
+  through and appeared in neither list, leaving a reader unable to tell it had
+  been attempted at all.
+
+
 ### Documented
 - **`pipx inject dosync <package>` for optional dependencies installed after
   the hub, framed as a general pattern rather than a per-vendor fix.** A
