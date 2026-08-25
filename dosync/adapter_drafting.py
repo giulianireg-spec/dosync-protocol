@@ -157,18 +157,53 @@ SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 
 
 def verifiable_requests(adapter: dict) -> list[dict]:
-    """The requests in a draft that can be tried without consequences."""
+    """The requests in a draft that can be tried without consequences.
+
+    Both `actions` and `sensors`. Reading only `actions` made this return
+    nothing at all for a real draft: a model asked to prefer read-only
+    endpoints put its single GET under `sensors`, where a sensor belongs — so
+    the verification step found nothing to check and the draft reached the
+    operator with no objection raised. The rule is the HTTP method, not which
+    section of the file a request happens to sit in.
+    """
     out = []
     transport = adapter.get("transport") or {}
     base = (transport.get("base_url") or "").rstrip("/")
-    for name, action in (adapter.get("actions") or {}).items():
-        request = (action or {}).get("request") or {}
-        method = str(request.get("method", "GET")).upper()
-        if method not in SAFE_METHODS:
-            continue
-        out.append({"action": name, "method": method,
-                    "url": base + str(request.get("path", "")),
-                    "headers": transport.get("headers") or {}})
+    for section in ("actions", "sensors"):
+        for name, entry in (adapter.get(section) or {}).items():
+            request = (entry or {}).get("request") or {}
+            method = str(request.get("method", "GET")).upper()
+            if method not in SAFE_METHODS:
+                continue
+            out.append({"action": name, "section": section, "method": method,
+                        "url": base + str(request.get("path", "")),
+                        "headers": transport.get("headers") or {}})
+    return out
+
+
+def unverifiable_entries(adapter: dict) -> list[dict]:
+    """Everything the hub cannot try, and why.
+
+    A draft is not just its testable half. `cancel_job` on a printer that may
+    be printing is exactly what must NOT be executed to find out whether it
+    exists — so it stays unverified by design, and the operator has to be told
+    that plainly rather than shown a file whose untested parts look identical
+    to its tested ones.
+    """
+    out = []
+    for section in ("actions", "sensors"):
+        for name, entry in (adapter.get(section) or {}).items():
+            entry = entry or {}
+            request = entry.get("request") or {}
+            if entry.get("publish"):
+                out.append({"action": name, "section": section,
+                            "reason": "publishes to a broker — sending it is the "
+                                      "side effect, so it cannot be tested"})
+                continue
+            method = str(request.get("method", "GET")).upper()
+            if method not in SAFE_METHODS:
+                out.append({"action": name, "section": section,
+                            "reason": f"{method} changes something on the device"})
     return out
 
 
@@ -215,3 +250,65 @@ def strip_fences(text: str) -> str:
         text = re.sub(r"^```[a-zA-Z]*\n", "", text)
         text = re.sub(r"\n```\s*$", "", text)
     return text.strip()
+
+
+async def verify_draft(adapter: dict, timeout: float = 4.0) -> dict:
+    """Try a draft's harmless requests against the real device.
+
+    This is the step that separates a description from a guess. A model given
+    an empty announcement wrote a confident adapter for an unrelated protocol;
+    given the vendor's announcement it wrote an honest one with invented
+    endpoints. Neither could be told apart from a correct file by reading it.
+    Four HTTP requests could.
+
+    Only `GET`, `HEAD` and `OPTIONS`, and only what the draft itself declares.
+    Nothing here tries to discover the device's real API: this reports whether
+    what was written matches what answers, and never guesses a replacement.
+    """
+    import asyncio
+
+    checked: list[dict] = []
+    for request in verifiable_requests(adapter):
+        entry = {"action": request["action"], "section": request["section"],
+                 "method": request["method"], "url": request["url"]}
+        try:
+            def _probe(req=request):
+                import urllib.request
+                r = urllib.request.Request(req["url"], method=req["method"])
+                for k, v in (req["headers"] or {}).items():
+                    r.add_header(k, str(v))
+                with urllib.request.urlopen(r, timeout=timeout) as resp:
+                    return resp.status
+            status = await asyncio.wait_for(
+                asyncio.to_thread(_probe), timeout=timeout + 1)
+            entry["status"] = status
+            entry["answered"] = 200 <= status < 400
+        except Exception as exc:
+            # A refused connection and a 404 mean different things: one says
+            # nothing is listening, the other says something is listening and
+            # this is not a route it has.
+            entry["status"] = None
+            entry["answered"] = False
+            entry["error"] = f"{type(exc).__name__}: {str(exc)[:80]}"
+        checked.append(entry)
+
+    unverifiable = unverifiable_entries(adapter)
+    answered = [c for c in checked if c["answered"]]
+
+    # The distinction the operator needs: "some of this is untested" is normal,
+    # "nothing in this file answered" means the transport itself is wrong.
+    transport_reachable = bool(answered)
+    verdict = "ok"
+    if checked and not answered:
+        verdict = "transport_unreachable"
+    elif not checked:
+        verdict = "nothing_testable"
+
+    return {
+        "verdict": verdict,
+        "transport": (adapter.get("transport") or {}).get("kind", ""),
+        "checked": checked,
+        "unverifiable": unverifiable,
+        "answered_count": len(answered),
+        "checked_count": len(checked),
+    }

@@ -9,6 +9,35 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **`POST /v1/adapters/verify` — a drafted adapter is tried against the real
+  device before anyone relies on it.** A draft cannot be judged by reading it.
+  Given an empty announcement, a model wrote a confident adapter for an
+  unrelated protocol; given the vendor's announcement it wrote an honest one
+  whose endpoints were still invented, and marked `# UNVERIFIED`. Both files
+  look correct. Four `GET`s told the difference in under a second: the printer
+  returned no response at all on every path, on every port.
+
+  `GET`, `HEAD` and `OPTIONS` only, and only the requests the draft itself
+  declares — this never probes for a device's real API and never proposes a
+  replacement, which would be guessing on the operator's behalf and would need
+  per-vendor knowledge to do. A draft where nothing answers is reported as
+  `transport_unreachable` rather than as a failed check, because "the whole
+  transport is wrong" and "one route is wrong" are different problems.
+
+### Fixed
+- **Verification checked `actions` and ignored `sensors`, so a real draft was
+  verified with zero requests.** Asked to prefer read-only endpoints, a model
+  put its single `GET` under `sensors` — where a sensor belongs. Nothing was
+  tested and the draft reached the operator with no objection raised. What
+  makes a request safe to try is its method, not the section it sits in.
+
+  Everything that cannot be tried is now returned too, with the reason: a
+  `POST` that changes the device, an MQTT publish whose side effect *is* the
+  send. A draft whose untested half is invisible is the problem this exists to
+  solve.
+
+
 ### Fixed
 - **Adoption discarded what the device announced about itself.** A real 3D
   printer announced `NT: urn:bambulab-com:device:3dprinter:1` over SSDP — the

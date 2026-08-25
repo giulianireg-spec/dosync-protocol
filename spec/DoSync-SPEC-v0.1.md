@@ -901,6 +901,7 @@ server grows past this list.
 | PATCH | `/v1/devices/{device_id}` | Change presentation fields only — never capabilities |
 | DELETE | `/v1/devices/{device_id}` | Remove a device from the registry |
 | GET | `/v1/devices/{device_id}/describe` | Plain text: what the hub observed about a device, the tag vocabulary and the adapter format — enough to declare what it can do. Returns text and sends nothing anywhere |
+| POST | `/v1/adapters/verify` | Tries a drafted adapter's `GET`/`HEAD`/`OPTIONS` requests against the device and reports what answered. Tries only what the draft declares — never probes for an API of its own, never proposes a replacement. Returns what it could not test, and why |
 | POST | `/v1/devices/provision` | Pre-authorise a device id and issue its token |
 | GET | `/v1/devices/provisioned` | Which device ids are provisioned |
 | DELETE | `/v1/devices/{device_id}/token` | Revoke a device token |

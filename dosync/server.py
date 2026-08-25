@@ -1046,6 +1046,51 @@ def root():
     }
 
 
+@app.post("/v1/adapters/verify", tags=["Devices"])
+async def verify_adapter_draft(req: dict, auth: str = Depends(require_auth)):
+    """Try a drafted adapter's harmless requests against the real device.
+
+    A draft cannot be judged by reading it. Asked to describe a 3D printer with
+    no announcement to go on, a model produced a confident adapter for an
+    unrelated protocol; asked again with the vendor's own announcement, it
+    produced an honest one whose endpoints were still invented. Both files look
+    correct. Four `GET`s told the difference in under a second.
+
+    `GET`, `HEAD` and `OPTIONS` only, and only the requests the draft itself
+    declares. This never probes for a device's real API and never proposes a
+    replacement — it reports whether what was written matches what answers.
+    Everything it cannot try is returned too, with the reason, because a draft
+    whose untested half is invisible is the problem this is meant to solve.
+
+    Accepts `{"yaml": "..."}` or `{"adapter": {...}}`.
+    """
+    import yaml as _yaml
+
+    from dosync.adapter_drafting import strip_fences, verify_draft
+
+    adapter = req.get("adapter")
+    if adapter is None:
+        raw = req.get("yaml") or req.get("draft") or ""
+        if not str(raw).strip():
+            raise HTTPException(
+                status_code=422,
+                detail="Send the draft as `yaml` (text) or `adapter` (object).")
+        try:
+            adapter = _yaml.safe_load(strip_fences(str(raw)))
+        except _yaml.YAMLError as exc:
+            raise HTTPException(status_code=422,
+                                detail=f"That is not valid YAML: {exc}")
+    if not isinstance(adapter, dict):
+        raise HTTPException(status_code=422,
+                            detail="The draft did not parse into a document.")
+
+    result = await verify_draft(adapter)
+    # Reported, not enforced: the operator decides what to do with a draft
+    # nothing answered. Refusing to return it would hide the evidence that
+    # makes the decision possible.
+    return result
+
+
 @app.get("/v1/devices/{device_id}/describe", tags=["Devices"],
          response_class=PlainTextResponse)
 async def describe_device(device_id: str, auth: str = Depends(require_auth)):

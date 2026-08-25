@@ -417,3 +417,93 @@ def test_the_hub_never_interprets_the_announcement():
                 "The announcement is stored verbatim and never interpreted — "
                 "per-brand logic is how a protocol becomes a product catalogue."
             )
+
+
+# ── Verification is the only barrier that moves certainties (2026-08-24) ────
+
+def test_read_only_requests_are_found_wherever_they_sit():
+    """Checking only `actions` verified nothing at all on a real draft.
+
+    Asked to prefer read-only endpoints, a model put its single GET under
+    `sensors` — where a sensor belongs. `verifiable_requests` looked only at
+    `actions`, found nothing to test, and the draft reached the operator with
+    no objection raised. What makes a request safe to try is its method, not
+    the section of the file it happens to occupy.
+    """
+    draft = {
+        "transport": {"kind": "http", "base_url": "http://192.0.2.9"},
+        "actions": {"stop_it": {"request": {"method": "POST", "path": "/stop"}}},
+        "sensors": {"state": {"request": {"method": "GET", "path": "/state"}}},
+    }
+    found = verifiable_requests(draft)
+    assert [r["action"] for r in found] == ["state"], \
+        "a read-only request under `sensors` is still invisible to verification"
+    assert found[0]["section"] == "sensors"
+
+
+def test_what_cannot_be_tested_is_reported_rather_than_omitted():
+    """`cancel_job` on a printer that may be printing is precisely what must
+    NOT be executed to find out whether it exists. It stays untested by
+    design — so it has to be named, not quietly left out of the report."""
+    from dosync.adapter_drafting import unverifiable_entries
+
+    draft = {
+        "transport": {"kind": "http", "base_url": "http://192.0.2.9"},
+        "actions": {
+            "cancel_job": {"request": {"method": "POST", "path": "/cancel"}},
+            "estop": {"publish": {"topic": "line/cmd", "payload": "stop"}},
+        },
+    }
+    reported = {e["action"]: e["reason"] for e in unverifiable_entries(draft)}
+    assert set(reported) == {"cancel_job", "estop"}
+    assert "changes something" in reported["cancel_job"]
+    assert "broker" in reported["estop"], \
+        "an MQTT publish is untestable for a different reason and should say so"
+
+
+def test_a_draft_nothing_answers_is_called_unreachable_not_merely_empty():
+    """The verdict an operator needs is not "0 of 1 passed".
+
+    A real printer returned HTTP 000 on every path a model had written for it —
+    not 404, which would mean a server exists and the route is wrong, but no
+    server at all. `transport_unreachable` says the whole transport is wrong;
+    reporting it as a failed check would have buried that.
+    """
+    import asyncio
+
+    from dosync.adapter_drafting import verify_draft
+
+    draft = {
+        # TEST-NET-1: guaranteed not to route anywhere.
+        "transport": {"kind": "http", "base_url": "http://192.0.2.91"},
+        "actions": {"cancel": {"request": {"method": "POST", "path": "/cancel"}}},
+        "sensors": {"state": {"request": {"method": "GET", "path": "/state"}}},
+    }
+    result = asyncio.run(verify_draft(draft, timeout=1.0))
+    assert result["verdict"] == "transport_unreachable"
+    assert result["answered_count"] == 0
+    assert result["checked_count"] == 1
+    assert len(result["unverifiable"]) == 1, \
+        "the POST that could not be tried is missing from the accounting"
+
+
+def test_verification_never_proposes_a_replacement():
+    """It reports whether what was written matches what answers.
+
+    A hub that probed for a device's real API and rewrote the draft would be
+    guessing on the operator's behalf, one convenient special case at a time,
+    and would need to know about vendors to do it — the catalogue this project
+    decided not to become.
+    """
+    source = (REPO / "dosync" / "adapter_drafting.py").read_text(encoding="utf-8")
+    fn = source[source.index("async def verify_draft"):]
+    # Executable lines only. The first version of this scanned the whole
+    # function and tripped on the word "guess" in the docstring that argues
+    # against guessing — a test failing on the prose that justifies it.
+    body = "\n".join(line for line in fn.splitlines()
+                     if line.strip() and not line.lstrip().startswith("#"))
+    body = body.split('"""')[2] if body.count('"""') >= 2 else body
+    for inventing in ("/api/", "well_known", "candidates = ["):
+        assert inventing not in body, \
+            f"verification contains {inventing!r} — it must try only what the " \
+            "draft declares, never look for endpoints of its own"
