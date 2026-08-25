@@ -9,6 +9,28 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **An MQTT draft was probed over HTTP, and the hub then reported MQTT as
+  unreachable without having spoken it once.** Found the first time a real
+  MQTT draft went through the dashboard check. Its `publish` actions carry no
+  `request`, so the method defaulted to `GET`; an MQTT transport has no
+  `base_url`, so the URL was the empty string. The hub issued three requests
+  to `''`, reported `ValueError: unknown url type`, and concluded that *"this
+  draft assumes mqtt and the device is not speaking it"* — a claim about a
+  transport it had never used.
+
+  That is the same failure this project has already fixed in the scan, in
+  simulation reporting and in the audit: asserting an outcome that was never
+  measured. What a draft can be tried with now follows from its transport
+  rather than from a default that only makes sense for one of them, and a
+  transport is only called unreachable when something was actually tried.
+
+  The same three actions were also listed as verifiable and untestable
+  simultaneously. Every declared entry now lands in exactly one list, and a
+  test asserts both that the sets do not overlap and that together they
+  account for everything the draft declares.
+
+
 ### Added
 - **A drafted adapter can be checked from the dashboard before it is saved.**
   Until now the only way to find out whether a draft matched the device was to

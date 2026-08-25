@@ -507,3 +507,77 @@ def test_verification_never_proposes_a_replacement():
         assert inventing not in body, \
             f"verification contains {inventing!r} — it must try only what the " \
             "draft declares, never look for endpoints of its own"
+
+
+# ── An MQTT draft was probed as HTTP (2026-08-25) ───────────────────────────
+
+MQTT_DRAFT = {
+    "device": {"id": "printer", "name": "printer", "category": "actuator"},
+    "transport": {"kind": "mqtt", "broker": "REPLACE_ME", "port": 8883,
+                  "tls": True},
+    "actions": {
+        "pause_job":  {"type": "pause", "publish": {"topic": "d/x/pause", "payload": ""}},
+        "cancel_job": {"type": "stop",  "publish": {"topic": "d/x/stop",  "payload": ""}},
+    },
+    "sensors": {
+        "print_status": {"request": {"method": "subscribe", "topic": "d/x/report"}},
+    },
+}
+
+
+def test_an_mqtt_draft_is_not_probed_over_http():
+    """The first real MQTT draft put through the dashboard was tried as HTTP.
+
+    Its `publish` actions carry no `request`, so the method defaulted to GET;
+    `base_url` is absent on an MQTT transport, so the URL was the empty string.
+    The hub issued three requests to `''` and reported `ValueError: unknown url
+    type`. What a draft can be tried with follows from its transport, not from
+    a default that only makes sense for one of them.
+    """
+    assert verifiable_requests(MQTT_DRAFT) == [], \
+        "an MQTT draft still yields HTTP requests to attempt"
+
+
+def test_an_entry_is_never_both_tried_and_untried():
+    """The same three actions appeared in both lists at once — counted as
+    verifiable HTTP requests and, one line later, as untestable publishes."""
+    from dosync.adapter_drafting import unverifiable_entries
+
+    tried = {r["action"] for r in verifiable_requests(MQTT_DRAFT)}
+    untried = {e["action"] for e in unverifiable_entries(MQTT_DRAFT)}
+    assert not (tried & untried), \
+        f"these appear in both lists: {sorted(tried & untried)}"
+    # And every declared entry is accounted for in one of them.
+    declared = set(MQTT_DRAFT["actions"]) | set(MQTT_DRAFT["sensors"])
+    assert declared == (tried | untried), \
+        f"unaccounted for: {sorted(declared - (tried | untried))}"
+
+
+def test_a_transport_is_never_called_unreachable_without_being_tried():
+    """The verdict said the device was not speaking MQTT. The hub had not sent
+    a single MQTT message — it had sent three HTTP requests to the empty
+    string. Reporting a transport as unreachable without having spoken it is
+    the same failure this project fixed in the scan, in the audit and in
+    simulation reporting.
+    """
+    import asyncio
+
+    from dosync.adapter_drafting import verify_draft
+
+    result = asyncio.run(verify_draft(MQTT_DRAFT, timeout=1.0))
+    assert result["verdict"] == "nothing_testable", \
+        "an untried transport is still being reported as unreachable"
+    assert result["checked_count"] == 0
+    assert len(result["unverifiable"]) == 3, \
+        "the entries the hub could not try are not all accounted for"
+    assert any("only try HTTP" in e["reason"] for e in result["unverifiable"]), \
+        "nothing explains that the hub cannot speak this draft's transport"
+
+
+def test_an_http_draft_with_no_base_url_is_not_probed_either():
+    """`base + path` with an empty base produced a request to a relative path
+    and a ValueError, reported to the operator as the device not answering."""
+    draft = {"transport": {"kind": "http"},
+             "sensors": {"state": {"request": {"method": "GET", "path": "/state"}}}}
+    assert verifiable_requests(draft) == [], \
+        "a draft with no base_url still yields a request the hub will attempt"

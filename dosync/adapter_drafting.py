@@ -168,15 +168,33 @@ def verifiable_requests(adapter: dict) -> list[dict]:
     """
     out = []
     transport = adapter.get("transport") or {}
+    # Only HTTP requests can be tried this way. An MQTT draft was probed as
+    # HTTP: its `publish` actions carry no `request`, the method defaulted to
+    # GET, `base_url` was absent, and the hub issued three requests to the
+    # empty string. It then reported the transport as unreachable — a claim
+    # about MQTT, which was never tried at all.
+    if str(transport.get("kind", "http")).lower() not in ("http", "https"):
+        return out
     base = (transport.get("base_url") or "").rstrip("/")
+    if not base:
+        return out
     for section in ("actions", "sensors"):
         for name, entry in (adapter.get(section) or {}).items():
-            request = (entry or {}).get("request") or {}
+            entry = entry or {}
+            # A publish is not a request, whatever else the entry contains.
+            if entry.get("publish"):
+                continue
+            request = entry.get("request") or {}
+            if not request:
+                continue
             method = str(request.get("method", "GET")).upper()
             if method not in SAFE_METHODS:
                 continue
+            path = str(request.get("path", ""))
+            if not path:
+                continue
             out.append({"action": name, "section": section, "method": method,
-                        "url": base + str(request.get("path", "")),
+                        "url": base + path,
                         "headers": transport.get("headers") or {}})
     return out
 
@@ -191,19 +209,39 @@ def unverifiable_entries(adapter: dict) -> list[dict]:
     to its tested ones.
     """
     out = []
+    transport = adapter.get("transport") or {}
+    kind = str(transport.get("kind", "http")).lower()
+    testable = {r["action"] for r in verifiable_requests(adapter)}
     for section in ("actions", "sensors"):
         for name, entry in (adapter.get(section) or {}).items():
             entry = entry or {}
-            request = entry.get("request") or {}
+            # Never both lists. Listing an entry as tried AND untried was the
+            # first thing the panel surfaced when a real MQTT draft went
+            # through it.
+            if name in testable:
+                continue
             if entry.get("publish"):
                 out.append({"action": name, "section": section,
                             "reason": "publishes to a broker — sending it is the "
                                       "side effect, so it cannot be tested"})
                 continue
+            if kind not in ("http", "https"):
+                out.append({"action": name, "section": section,
+                            "reason": f"the hub can only try HTTP requests, and "
+                                      f"this draft speaks {kind}"})
+                continue
+            request = entry.get("request") or {}
+            if not request:
+                out.append({"action": name, "section": section,
+                            "reason": "declares no request the hub could send"})
+                continue
             method = str(request.get("method", "GET")).upper()
             if method not in SAFE_METHODS:
                 out.append({"action": name, "section": section,
                             "reason": f"{method} changes something on the device"})
+            elif not str(request.get("path", "")):
+                out.append({"action": name, "section": section,
+                            "reason": "declares no path to request"})
     return out
 
 
@@ -297,9 +335,12 @@ async def verify_draft(adapter: dict, timeout: float = 4.0) -> dict:
 
     # The distinction the operator needs: "some of this is untested" is normal,
     # "nothing in this file answered" means the transport itself is wrong.
-    transport_reachable = bool(answered)
     verdict = "ok"
     if checked and not answered:
+        # Only claimable when something WAS tried. An MQTT draft produced this
+        # verdict about MQTT after the hub sent three HTTP requests to the
+        # empty string — asserting a transport unreachable without having
+        # spoken it once.
         verdict = "transport_unreachable"
     elif not checked:
         verdict = "nothing_testable"
