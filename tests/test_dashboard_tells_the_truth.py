@@ -99,3 +99,66 @@ def test_the_status_indicator_does_not_flicker_between_stale_and_fresh_sockets()
         section = page[page.index(handler):page.index(handler) + 400]
         assert "myGeneration" in section, \
             f"{handler} does not check the generation guard"
+
+
+def test_a_draft_can_be_checked_before_it_is_saved():
+    """Until now the only way to find out whether a drafted adapter matched the
+    device was to install it and watch.
+
+    A model given an empty announcement wrote a confident adapter for an
+    unrelated protocol. Given the vendor's own announcement it wrote an honest
+    one — correct manufacturer, `# UNVERIFIED` markers, candid comments — whose
+    endpoints were still invented. Both files read as plausible. The printer
+    refused the connection on every path in both.
+
+    So the check has to sit between getting the file back and saving it, which
+    is where the operator actually is at that moment.
+    """
+    page = _dashboard()
+    assert "runDraftCheck" in page, "there is no way to check a draft from the dashboard"
+    assert "/v1/adapters/verify" in page, "the dashboard does not ask the hub to verify"
+    assert "<textarea" in page, \
+        "a YAML draft cannot be pasted into an alert(); it needs somewhere to go"
+
+
+def test_the_three_verdicts_are_not_collapsed_into_pass_or_fail():
+    """"Nothing answered" is not "some checks failed".
+
+    A printer with no HTTP server at all returns nothing on every path — that
+    says the transport is wrong, not that a route is. And a draft where every
+    request changes something cannot be judged either way, which is a third
+    thing again and must not be reported as success.
+    """
+    page = _dashboard()
+    for verdict in ("transport_unreachable", "nothing_testable", "ok"):
+        assert verdict in page, f"the dashboard does not distinguish {verdict}"
+    assert "it is the transport" in page, \
+        "an unreachable transport is not explained as different from a failed route"
+    assert "cannot tell you either way" in page, \
+        "a draft with nothing testable is not reported honestly"
+
+
+def test_what_could_not_be_tested_is_shown_not_omitted():
+    """`cancel_job` on a printer that may be printing is exactly what must NOT
+    be executed to find out whether it exists. It stays unverified by design —
+    so the operator has to see it, or a green verdict reads as coverage it
+    never had."""
+    page = _dashboard()
+    assert "NOT TRIED — AND WHY" in page, \
+        "the untested half of a draft is invisible in the result"
+    assert "r.unverifiable" in page, \
+        "the dashboard discards the accounting of what the hub could not try"
+    assert "whatever the verdict above says" in page, \
+        "nothing warns that the untested part is untested regardless of the verdict"
+
+
+def test_describing_a_device_leads_to_checking_the_result():
+    """The check existing and the operator knowing it exists at the moment they
+    need it are different things."""
+    page = _dashboard()
+    describe = page[page.index("async function describeDevice"):]
+    describe = describe[:describe.index("\nasync function") if "\nasync function" in describe else len(describe)]
+    assert "openDraftCheck()" in describe, \
+        "after handing over the description, nothing points at the verification step"
+    assert "BEFORE saving it" in describe, \
+        "the operator is not told to check the draft before saving it"

@@ -212,6 +212,47 @@
   }
 
   /* ── Panels ── */
+  /* A drafted adapter has to be checkable BEFORE it is saved. The operator
+     takes the description to a model, gets a file back, and until now the only
+     way to find out whether it matched the device was to install it and watch.
+     Eighteen alert() calls and no container of our own is fine for one-line
+     messages; a YAML draft and its verdict are not one line. */
+  .draft-check {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(10, 14, 26, .88);
+    display: none; align-items: center; justify-content: center; padding: 2rem;
+  }
+  .draft-check.open { display: flex; }
+  .draft-box {
+    background: var(--bg); border: 1px solid var(--text-mute);
+    border-radius: 6px; width: min(760px, 100%); max-height: 88vh;
+    display: flex; flex-direction: column;
+  }
+  .draft-box h3 {
+    font-family: var(--sans); font-size: .9rem; font-weight: 600;
+    padding: .9rem 1rem; border-bottom: 1px solid var(--text-mute);
+  }
+  .draft-box .inner { padding: 1rem; overflow-y: auto; }
+  .draft-box textarea {
+    width: 100%; height: 190px; resize: vertical;
+    background: #060912; color: var(--text); border: 1px solid var(--text-mute);
+    border-radius: 4px; padding: .6rem; font-family: var(--mono); font-size: .74rem;
+  }
+  .draft-box .foot {
+    padding: .8rem 1rem; border-top: 1px solid var(--text-mute);
+    display: flex; gap: .5rem; justify-content: flex-end;
+  }
+  .verdict { padding: .7rem .8rem; border-radius: 4px; margin-bottom: .8rem;
+             font-size: .78rem; line-height: 1.45; }
+  .verdict.bad   { border: 1px solid var(--red);   background: rgba(220,38,38,.10); }
+  .verdict.mixed { border: 1px solid var(--amber); background: rgba(217,119,6,.10); }
+  .verdict.good  { border: 1px solid var(--green); background: rgba(22,163,74,.10); }
+  .check-row { font-family: var(--mono); font-size: .72rem;
+               padding: .3rem 0; border-bottom: 1px solid var(--text-mute); }
+  .check-row .ok   { color: var(--green); }
+  .check-row .fail { color: var(--red); }
+  .check-row .na   { color: var(--text-dim); }
+
   .panel {
     border-right: 1px solid var(--border);
     overflow: hidden;
@@ -600,6 +641,25 @@
 
 <div class="toast-container" id="toastContainer"></div>
 
+<div class="draft-check" id="draftCheck">
+  <div class="draft-box">
+    <h3>Check a drafted adapter against the device</h3>
+    <div class="inner">
+      <p style="font-size:.78rem;color:var(--text-dim);line-height:1.5;margin-bottom:.7rem">
+        Paste the YAML you got back. The hub tries only the read-only requests
+        the draft itself declares — it never looks for endpoints of its own and
+        never rewrites what you paste. Nothing is saved here.
+      </p>
+      <textarea id="draftYaml" placeholder="device:&#10;  id: ...&#10;transport:&#10;  kind: http&#10;  base_url: http://..."></textarea>
+      <div id="draftResult" style="margin-top:.9rem"></div>
+    </div>
+    <div class="foot">
+      <button class="btn ghost sm" onclick="closeDraftCheck()">Close</button>
+      <button class="btn sm" onclick="runDraftCheck()">Check it</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 let ws        = null;
@@ -964,6 +1024,82 @@ async function loadIntents() {
 // building, sending the topology of a network to an outside model is often
 // prohibited and many such networks have no route out at all. The person takes
 // this to whatever model their organisation allows, or to an engineer.
+// A draft cannot be judged by reading it. Given an empty announcement a model
+// wrote a confident adapter for an unrelated protocol; given the vendor's
+// announcement it wrote an honest one whose endpoints were still invented and
+// correctly marked UNVERIFIED. Both files read as plausible. One GET told them
+// apart. This is where the operator gets that GET before saving anything.
+function openDraftCheck(prefill) {
+  document.getElementById('draftResult').innerHTML = '';
+  if (prefill) document.getElementById('draftYaml').value = prefill;
+  document.getElementById('draftCheck').classList.add('open');
+  document.getElementById('draftYaml').focus();
+}
+
+function closeDraftCheck() {
+  document.getElementById('draftCheck').classList.remove('open');
+}
+
+async function runDraftCheck() {
+  const yaml = document.getElementById('draftYaml').value.trim();
+  const out  = document.getElementById('draftResult');
+  if (!yaml) { out.innerHTML = '<div class="verdict mixed">Paste a draft first.</div>'; return; }
+  out.innerHTML = '<div style="font-size:.78rem;color:var(--text-dim)">Trying the read-only requests…</div>';
+
+  let r;
+  try {
+    r = await api('POST', '/v1/adapters/verify', { yaml });
+  } catch (e) {
+    out.innerHTML = `<div class="verdict bad">Could not check it: ${e.message || e}</div>`;
+    return;
+  }
+
+  // Three outcomes, and they mean different things. "Nothing answered" is not
+  // "some checks failed": it says the transport itself is wrong, which is what
+  // a printer with no HTTP server at all looks like.
+  const verdicts = {
+    transport_unreachable: ['bad',
+      `Nothing in this draft answered. Every read-only request was refused or timed out, ` +
+      `so the problem is not one route — it is the transport. This draft assumes ` +
+      `<code>${r.transport || 'an unknown transport'}</code> and the device is not speaking it.`],
+    nothing_testable: ['mixed',
+      `Nothing here could be tried. Every request in this draft changes something, so ` +
+      `none of it can be checked without acting on the device. It may be correct — the hub ` +
+      `simply cannot tell you either way.`],
+    ok: ['good',
+      `${r.answered_count} of ${r.checked_count} read-only request(s) answered.`],
+  };
+  const [cls, message] = verdicts[r.verdict] || ['mixed', 'Unrecognised result.'];
+
+  let html = `<div class="verdict ${cls}">${message}</div>`;
+
+  if (r.checked && r.checked.length) {
+    html += '<div style="font-size:.72rem;color:var(--text-dim);margin:.6rem 0 .2rem">TRIED AGAINST THE DEVICE</div>';
+    for (const c of r.checked) {
+      const mark = c.answered ? '<span class="ok">answered</span>'
+                              : `<span class="fail">no answer</span>`;
+      const why  = c.answered ? ` HTTP ${c.status}` : ` — ${c.error || ''}`;
+      html += `<div class="check-row">${c.method} ${c.url} · ${mark}${why}</div>`;
+    }
+  }
+
+  // The half that cannot be tested is shown, not omitted. `cancel_job` on a
+  // printer that may be printing is exactly what must NOT be run to find out
+  // whether it exists — so it stays unverified by design, and saying so is the
+  // difference between an honest report and a reassuring one.
+  if (r.unverifiable && r.unverifiable.length) {
+    html += '<div style="font-size:.72rem;color:var(--text-dim);margin:.9rem 0 .2rem">NOT TRIED — AND WHY</div>';
+    for (const u of r.unverifiable) {
+      html += `<div class="check-row"><span class="na">${u.action}</span> · ${u.reason}</div>`;
+    }
+    html += '<div style="font-size:.74rem;color:var(--text-dim);margin-top:.7rem;line-height:1.5">' +
+            'These stay unchecked whatever the verdict above says. Read them yourself ' +
+            'before the hub is allowed to run them.</div>';
+  }
+
+  out.innerHTML = html;
+}
+
 async function describeDevice(id) {
   let text;
   try {
@@ -993,11 +1129,17 @@ async function describeDevice(id) {
           ? "Copied to your clipboard.\n\n"
           : "Could not reach your clipboard — that needs HTTPS or localhost.\n" +
             "The text is in the panel behind this message; select it there.\n\n") +
-        "Give it to any assistant you use, or to an engineer. Save what comes " +
-        "back in your declarative directory and reload the hub.\n\n" +
+        "Give it to any assistant you use, or to an engineer.\n\n" +
+        "When you have the file back, check it here BEFORE saving it — the " +
+        "next screen tries its read-only requests against the device. A draft " +
+        "that reads perfectly can still describe a protocol this device does " +
+        "not speak, and one request is enough to find out.\n\n" +
         "Read it before the hub uses it: whoever writes it works from what the " +
         "device announced, not from its documentation. The file goes through " +
         "your change review like any other change.");
+  // Opened rather than merely mentioned: the check existing and the operator
+  // knowing it exists at the moment they need it are different things.
+  openDraftCheck();
 }
 
 async function scanDevices() {

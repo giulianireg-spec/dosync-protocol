@@ -10,6 +10,31 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A drafted adapter can be checked from the dashboard before it is saved.**
+  Until now the only way to find out whether a draft matched the device was to
+  install it and watch. A model given an empty announcement wrote a confident
+  adapter for an unrelated protocol; given the vendor's own announcement it
+  wrote an honest one — right manufacturer, `# UNVERIFIED` markers, candid
+  comments about what it could not determine — whose endpoints were still
+  invented. Both files read as plausible. The printer refused the connection on
+  every path in both.
+
+  The three outcomes are kept distinct, because they mean different things:
+  nothing answering says the *transport* is wrong, not a route; a draft whose
+  every request changes something cannot be judged either way and is not
+  reported as success; and a partial pass is stated as the count it is.
+
+  What could not be tried is shown alongside what was, with the reason. A
+  `POST cancel_job` on a printer that may be printing is precisely what must
+  not be run to find out whether it exists — so it stays unverified by design,
+  and a verdict that hid it would read as coverage it never had.
+
+  Describing a device now hands off to this check rather than mentioning it:
+  the step existing and the operator knowing it exists at the moment they need
+  it are different things.
+
+
+### Added
 - **`POST /v1/adapters/verify` — a drafted adapter is tried against the real
   device before anyone relies on it.** A draft cannot be judged by reading it.
   Given an empty announcement, a model wrote a confident adapter for an
