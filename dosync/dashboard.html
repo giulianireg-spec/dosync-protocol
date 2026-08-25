@@ -1076,7 +1076,11 @@ async function scanDevices() {
     try {
       await api('POST', '/v1/discovery/adopt', {
         adapter: d.adapter, device_id: d.device_id, ip: d.ip,
-        service_type: d.service_type, device_name: name.trim() });
+        service_type: d.service_type, device_name: name.trim(),
+        // Forward what the device announced verbatim. Without this the hub
+        // persists an address and a service type, and whoever later writes an
+        // adapter for the device is handed an empty announcement.
+        evidence: d.evidence || {} });
       adopted++;
     } catch (e) {
       alert("Could not add " + d.device_id + ": " + (e.message || e));

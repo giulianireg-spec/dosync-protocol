@@ -214,6 +214,22 @@ class CapabilityManifest:
     dosync_version: str                    = "0.1"
     adapter: Optional[str]                 = None
     adapter_config: dict                   = field(default_factory=dict)
+    #: What the device announced about ITSELF at discovery, kept verbatim.
+    #:
+    #: Not what the hub concluded — what the device said. An SSDP `NT` header
+    #: reading `urn:bambulab-com:device:3dprinter:1` is the most authoritative
+    #: statement a device makes about its own identity, and adoption used to
+    #: discard it: the discoverer captured headers, description document and
+    #: transport, and persisted only the address and service type. A model
+    #: later asked to describe that printer received `"announcement": {}` and
+    #: wrote an adapter for a completely different protocol.
+    #:
+    #: Deliberately opaque to the hub. Nothing here is parsed, matched or
+    #: branched on — this project does not keep a catalogue of vendors, and
+    #: storing the raw datum must not become the first step towards one. It is
+    #: for whoever describes the device later, and for diagnosing in six months
+    #: what a device claimed to be on the day it was adopted.
+    discovery_evidence: dict               = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         d = {
@@ -239,8 +255,19 @@ class CapabilityManifest:
             "cert_tier": self.cert_tier.value,
         }
         if self.adapter:
-            d["adapter"]        = self.adapter
+            d["adapter"] = self.adapter
+        # `adapter_config` used to be emitted only alongside an adapter, so a
+        # device with none — precisely the one that still needs describing —
+        # serialised without the address and service type recorded when it was
+        # adopted. The endpoint patched around it by reading the object; the
+        # dict was still lying to every other caller.
+        if self.adapter_config:
             d["adapter_config"] = self.adapter_config
+        # Unconditional, unlike adapter_config: a device with no adapter is
+        # exactly the one whose announcement someone will need in order to
+        # write it one.
+        if self.discovery_evidence:
+            d["discovery_evidence"] = self.discovery_evidence
         return d
 
     def to_public_dict(self) -> dict:

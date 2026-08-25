@@ -100,17 +100,30 @@ def _tag_vocabulary(repo_root: Path) -> str:
 
 
 def device_evidence(device: dict) -> dict:
-    """What the hub observed, and nothing it inferred."""
-    extra = device.get("extra") or {}
+    """What the hub observed, and nothing it inferred.
+
+    Reads `discovery_evidence` from the stored manifest, falling back to the
+    live `extra` of a DiscoveredDevice. Both are needed: this is called with a
+    finding during a scan and with a persisted manifest afterwards.
+
+    It used to read `extra` only — a field `CapabilityManifest` does not have —
+    so every adopted device produced `"announcement": {}`. A model asked to
+    describe a 3D printer got its address and the word "3dprinter", nothing
+    about the vendor that the hub had captured and discarded, and wrote an
+    adapter for an unrelated protocol with no hesitation.
+    """
+    evidence = device.get("discovery_evidence") or device.get("extra") or {}
     config = device.get("adapter_config") or {}
     return {
         "device_id":     device.get("device_id", ""),
         "device_name":   device.get("device_name", ""),
         "address":       device.get("ip") or config.get("address", ""),
-        "announced_as":  device.get("service_type") or config.get("discovered_as", ""),
-        "discovered_by": extra.get("transport", ""),
-        "announcement":  extra.get("headers", {}),
-        "description":   extra.get("description", {}),
+        "announced_as":  (device.get("service_type")
+                          or evidence.get("announced_as")
+                          or config.get("discovered_as", "")),
+        "discovered_by": evidence.get("transport", ""),
+        "announcement":  evidence.get("headers", {}),
+        "description":   evidence.get("description", {}),
         "tags_now":      device.get("tags", []),
     }
 

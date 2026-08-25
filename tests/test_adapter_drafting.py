@@ -233,12 +233,14 @@ def test_the_manual_path_stays_first_class():
 def test_discovery_evidence_survives_a_device_with_no_adapter():
     """The one case this endpoint exists for was the one that lost its evidence.
 
-    `CapabilityManifest.to_dict()` includes `adapter_config` only when an
-    adapter is declared — and a device with no adapter is precisely what needs
-    describing. The address and service type recorded at adoption vanished, and
-    the reference deployment's printer produced a prompt whose evidence block
-    was entirely empty: no address, no service type, nothing announced. A model
-    reading it could not have found the device, let alone described it.
+    `CapabilityManifest.to_dict()` used to include `adapter_config` only when
+    an adapter was declared — and a device with no adapter is precisely what
+    needs describing. The address and service type recorded at adoption
+    vanished, and the reference deployment's printer produced a prompt whose
+    evidence block was entirely empty. The endpoint patched around it by
+    reading the object rather than the dict; the dict still lied to every other
+    caller, so `to_dict` itself was fixed and this now asserts the corrected
+    behaviour.
     """
     from dosync.models import CapabilityManifest, DeviceCategory
 
@@ -247,20 +249,13 @@ def test_discovery_evidence_survives_a_device_with_no_adapter():
         model="unknown", firmware="unknown", category=DeviceCategory.ACTUATOR,
         tags=[], emergency_capable=False, sensors=[], actuators=[],
         adapter_config={"discovered_as": "3dprinter", "address": "192.0.2.91"})
-    assert "adapter_config" not in m.to_dict(), (
-        "this test is asserting against behaviour that changed — check whether "
-        "to_dict now carries adapter_config for adapter-less devices")
+    assert m.adapter is None
+    assert "adapter_config" in m.to_dict(), (
+        "a device with no adapter serialises without the address and service "
+        "type it was adopted with — the one case that still needs describing")
 
-    server = (REPO / "dosync" / "server.py").read_text(encoding="utf-8")
-    describe = server[server.index("async def describe_device"):]
-    describe = describe[:describe.index("\n@app.")]
-    assert 'getattr(device, "adapter_config"' in describe, \
-        "the endpoint reads the manifest dict, which drops the evidence"
-
-    # And with the config restored, the evidence is there.
-    manifest = m.to_dict()
-    manifest["adapter_config"] = m.adapter_config
-    evidence = device_evidence(manifest)
+    # Straight from to_dict, with no caller having to repair it first.
+    evidence = device_evidence(m.to_dict())
     assert evidence["address"] == "192.0.2.91"
     assert evidence["announced_as"] == "3dprinter"
 
@@ -330,3 +325,95 @@ def test_a_failed_clipboard_copy_is_not_reported_as_success():
         "an empty catch still swallows a failed copy"
     assert "copied" in describe, \
         "the message does not depend on whether the copy succeeded"
+
+
+# ── Adoption must not discard what the device announced (2026-08-24) ────────
+
+def test_adoption_keeps_what_the_device_announced_about_itself():
+    """A model wrote a fully confident adapter for the wrong protocol, and the
+    datum that would have prevented it had been captured and thrown away.
+
+    A real 3D printer announced `NT: urn:bambulab-com:device:3dprinter:1` over
+    SSDP — the vendor naming itself, the most authoritative statement a device
+    makes about its own identity. The discoverer captured it in `extra`;
+    adoption persisted only the address and the service type; `extra` is not a
+    field `CapabilityManifest` has. So the description handed to a model read
+    `"announcement": {}`, and it filled the gap with the OctoPrint example
+    shipped alongside as a format reference. Every endpoint it produced
+    returned HTTP 000: the printer has no HTTP server at all.
+    """
+    from dosync.models import CapabilityManifest, DeviceCategory
+
+    m = CapabilityManifest(
+        device_id="printer-1", device_name="a printer",
+        manufacturer="unknown", model="unknown", firmware="unknown",
+        category=DeviceCategory.ACTUATOR, tags=[],
+        adapter_config={"discovered_as": "3dprinter", "address": "192.0.2.91"},
+        discovery_evidence={
+            "transport": "ssdp",
+            "headers": {"nt": "urn:example-vendor:device:3dprinter:1",
+                        "devmodel.example.com": "X1"},
+        })
+
+    stored = m.to_dict()
+    assert "discovery_evidence" in stored, \
+        "the announcement does not survive serialisation, so it is lost the " \
+        "moment the device is written to the registry"
+
+    evidence = device_evidence(stored)
+    assert evidence["announcement"], \
+        "whoever describes this device still receives an empty announcement"
+    assert "example-vendor" in evidence["announcement"].get("nt", ""), \
+        "the vendor's own identity header did not reach the description"
+    assert evidence["discovered_by"] == "ssdp", \
+        "which transport heard the device is part of what the announcement means"
+
+
+def test_adapter_config_survives_a_device_with_no_adapter():
+    """`to_dict` emitted `adapter_config` only alongside an adapter — and a
+    device with no adapter is exactly the one that still needs describing, so
+    its address and service type vanished from every serialised form."""
+    from dosync.models import CapabilityManifest, DeviceCategory
+
+    m = CapabilityManifest(
+        device_id="d", device_name="d", manufacturer="u", model="u",
+        firmware="u", category=DeviceCategory.ACTUATOR, tags=[],
+        adapter_config={"discovered_as": "3dprinter", "address": "192.0.2.91"})
+    assert m.adapter is None
+    stored = m.to_dict()
+    assert stored.get("adapter_config", {}).get("address") == "192.0.2.91"
+
+    evidence = device_evidence(stored)
+    assert evidence["address"] == "192.0.2.91"
+    assert evidence["announced_as"] == "3dprinter"
+
+
+def test_the_hub_never_interprets_the_announcement():
+    """Storing the raw datum must not become the first step towards a
+    catalogue of vendors.
+
+    The panel that asked for this evidence to be persisted set the limit in the
+    same breath: keep what the device said, never grow branches per brand. A
+    hub that starts reading `urn:bambulab-com` to decide behaviour has become
+    the thing this project decided not to be — and the decision is easy to
+    erode one convenient special case at a time.
+    """
+    import re
+
+    for module in ("server.py", "adapter_drafting.py", "hub.py"):
+        source = (REPO / "dosync" / module).read_text(encoding="utf-8")
+        # Comments and docstrings may name a vendor to explain WHY; executable
+        # lines may not branch on one.
+        code = "\n".join(
+            line for line in source.splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        for vendor in ("bambulab", "octoprint", "prusa", "creality"):
+            offending = re.findall(
+                rf'(?:if|elif|match|==|!=|\.startswith|\.endswith|in )[^\n]*'
+                rf'["\'][^"\']*{vendor}', code, re.IGNORECASE)
+            assert not offending, (
+                f"{module} branches on the vendor name {vendor!r}: {offending[:2]}. "
+                "The announcement is stored verbatim and never interpreted — "
+                "per-brand logic is how a protocol becomes a product catalogue."
+            )

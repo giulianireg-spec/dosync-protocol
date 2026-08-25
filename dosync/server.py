@@ -2150,6 +2150,24 @@ def get_presence(auth: str = Depends(require_auth)):
     }
 
 
+def _evidence_from(req: dict) -> dict:
+    """What the device announced, as it announced it.
+
+    Stored verbatim and never interpreted. The hub does not read this to decide
+    anything — it is for whoever writes the device an adapter later, and for
+    answering in six months what a device claimed to be on the day it was
+    adopted. Keeping the raw datum must not become the first step towards a
+    catalogue of vendors, which this project has decided not to be.
+    """
+    evidence = dict(req.get("evidence") or {})
+    # The transport that found it belongs with the announcement: `announced_as`
+    # alone does not say whether it was heard over SSDP, mDNS or a broadcast,
+    # and that changes what the announcement means.
+    if req.get("service_type") and "announced_as" not in evidence:
+        evidence["announced_as"] = req["service_type"]
+    return evidence
+
+
 def _adapter_can_discover(name: str) -> bool:
     """Whether the named adapter is one that finds devices.
 
@@ -2230,7 +2248,8 @@ async def adopt_device(req: dict, auth: str = Depends(require_auth)):
             emergency_capable=False, sensors=[], actuators=[],
             adapter_config={"discovered_as": service,
                             "address": req.get("ip", "")} if service or req.get("ip")
-                           else {})
+                           else {},
+            discovery_evidence=_evidence_from(req))
     elif not _adapter_can_discover(adapter):
         # An adapter that does not discover at all — MQTT, a proprietary bus, a
         # drone that answers no broadcast. Nothing found this device; the
@@ -2262,7 +2281,8 @@ async def adopt_device(req: dict, auth: str = Depends(require_auth)):
             tags=[t for t in (req.get("tags") or []) if t],
             emergency_capable=False, sensors=[], actuators=[],
             adapter_config={"discovered_as": service or adapter,
-                            "address": req.get("ip", "")})
+                            "address": req.get("ip", "")},
+            discovery_evidence=_evidence_from(req))
         manifest.adapter = adapter
 
     hub.register_device(manifest)
@@ -2472,6 +2492,12 @@ async def scan_devices(auth: str = Depends(require_auth)):
                 # is; this says what it claims to be, and it is the part a
                 # person can act on.
                 "service_type": getattr(d, "service_type", ""),
+                # What the device announced about itself, verbatim. Carried so
+                # that adoption can persist it: the discoverer captured the
+                # vendor's own identity header and the hub threw it away at
+                # adoption, leaving whoever described the device later with
+                # nothing but an address and the word "3dprinter".
+                "evidence": dict(getattr(d, "extra", {}) or {}),
                 "likely_actionable": getattr(d, "likely_actionable", False),
                 "registered":  hub.registry.get(d.device_id) is not None,
                 # What it matched, if anything — reported, never acted on.

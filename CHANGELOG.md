@@ -10,6 +10,34 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Adoption discarded what the device announced about itself.** A real 3D
+  printer announced `NT: urn:bambulab-com:device:3dprinter:1` over SSDP — the
+  vendor naming itself, the most authoritative statement a device makes about
+  its own identity. The discoverer captured it, along with the model, firmware
+  and description document; adoption persisted only the address and service
+  type, because `CapabilityManifest` had nowhere to put the rest.
+
+  The consequence surfaced the first time the drafting flow was used for real:
+  the description handed to a model read `"announcement": {}`, and the model
+  filled the gap with the OctoPrint example shipped alongside it as a format
+  reference. Every endpoint it produced returned HTTP 000 — that printer has no
+  HTTP server at all. The hub had captured the vendor's name and thrown it away
+  before asking anyone what the device was.
+
+  Manifests now carry `discovery_evidence`, the announcement kept verbatim, and
+  the scan result and the dashboard forward it through adoption. It is stored
+  and never interpreted: a test asserts no module branches on a vendor name,
+  because keeping the raw datum must not become the first step towards the
+  catalogue of vendors this project decided not to be.
+
+- **`to_dict()` dropped `adapter_config` for devices with no adapter** — which
+  is exactly the device that still needs describing. The address and service
+  type recorded at adoption vanished from every serialised form. The describe
+  endpoint had been patched to read the object instead; the dict was still
+  lying to every other caller.
+
+
+### Fixed
 - **SSDP discovery was completely broken in production while 1045 tests
   passed.** `uvicorn[standard]` — added days earlier to fix WebSocket support
   — installs uvloop, and uvloop *declares* `loop.sock_recvfrom` but raises
