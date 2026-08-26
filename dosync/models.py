@@ -230,6 +230,21 @@ class CapabilityManifest:
     #: for whoever describes the device later, and for diagnosing in six months
     #: what a device claimed to be on the day it was adopted.
     discovery_evidence: dict               = field(default_factory=dict)
+    #: Who wrote this description of the device, and what was checked.
+    #:
+    #: A manifest states what a device can do. When a language model drafted
+    #: that statement from an announcement it interpreted, and most of it was
+    #: never tried against the hardware, those are facts about the claim — not
+    #: about the file that happens to carry it. They lived in a YAML comment,
+    #: which the parser discards on load and any edit removes, so the hub had
+    #: no way to know that `cancel_job` on a printer was written by a model and
+    #: tried by nobody.
+    #:
+    #: Descriptive only. Nothing in the protocol reads this to decide whether
+    #: an action may run — a drafted adapter is not less authorised than a
+    #: hand-written one, it is differently attested, and that is the operator's
+    #: judgement to make with the fact in front of them.
+    provenance: dict                       = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         d = {
@@ -268,6 +283,8 @@ class CapabilityManifest:
         # write it one.
         if self.discovery_evidence:
             d["discovery_evidence"] = self.discovery_evidence
+        if self.provenance:
+            d["provenance"] = self.provenance
         return d
 
     def to_public_dict(self) -> dict:

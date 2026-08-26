@@ -9,6 +9,33 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **A manifest records who described the device and what was checked.** A
+  manifest states what a device can do. When a language model drafted that
+  statement from an announcement it interpreted, and most of it was never tried
+  against the hardware, those are facts about the claim — not about the file
+  carrying it. They lived in a YAML comment, which the parser discards on load
+  and any edit removes, so the hub could not tell `cancel_job` written by a
+  model and tried by nobody from the same action written by an engineer who
+  tested it.
+
+  Declarative adapters may now carry a `provenance:` block, which the loader
+  keeps on the manifest; `dosync-manage draft-adapter` writes it alongside the
+  human-readable header, stating the same facts twice so a reader can see if
+  one of them was quietly edited. The dashboard marks such a device, and the
+  marker names which actions were checked against the device and which were
+  not.
+
+  **Descriptive only.** A drafted adapter is not less authorised than a
+  hand-written one — it is differently attested, and what to do about that is
+  the operator's judgement. A test asserts that no module branches on
+  provenance: a hub that refused actions because a model wrote their
+  description would be deciding on evidence it cannot evaluate, and the step
+  after that is trusting some models more than others. Absence stays the honest
+  default: a file that claims nothing about itself has nothing asserted about
+  it.
+
+
 ### Fixed
 - **The reason a request failed vanished from the verification panel.**
   `URLError: <urlopen error [Errno 111] Connection refused>` was rendered into

@@ -353,3 +353,33 @@ async def verify_draft(adapter: dict, timeout: float = 4.0) -> dict:
         "answered_count": len(answered),
         "checked_count": len(checked),
     }
+
+
+def provenance_block(model: str, verified: list[str], unverified: list[str],
+                     device_id: str) -> str:
+    """The same facts as `provenance_header`, as YAML the hub can load.
+
+    The header is a comment, and a comment is discarded by the parser and
+    removed by any edit — so a hub could not tell a description a model wrote
+    and nobody tried from one an engineer wrote and tested. Both are legitimate
+    ways to get an adapter; they are not the same claim, and only one of them
+    was leaving a trace.
+
+    Emitted alongside the header rather than instead of it: the comment is for
+    whoever opens the file, this is for the hub. They state the same thing, so
+    a reader can check that nobody quietly edited one of them.
+    """
+    from datetime import datetime, timezone
+
+    lines = [
+        "provenance:",
+        f"  drafted_by: {model or 'an unnamed model'!r}",
+        f"  device_id: {device_id!r}",
+        f"  drafted_at: {datetime.now(timezone.utc).isoformat(timespec='seconds')!r}",
+        "  # Checked against the device before this file was written. Actions"
+        " absent from both lists were added by hand afterwards.",
+        "  verified: [" + ", ".join(repr(a) for a in verified) + "]",
+        "  unverified: [" + ", ".join(repr(a) for a in unverified) + "]",
+        "",
+    ]
+    return "\n".join(lines)

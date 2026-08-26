@@ -190,3 +190,17 @@ def test_a_failure_with_no_message_still_says_something():
     assert "no reason reported" in page, \
         "a failure whose exception carries no text leaves the operator with a " \
         "dash and no explanation"
+
+
+def test_the_card_says_when_a_description_was_drafted():
+    """The hub knowing and the operator seeing are different things.
+
+    A description a model wrote and nobody tried is not the same claim as one
+    an engineer wrote and tested. Shown, never enforced — the marker is a fact
+    the operator weighs, not a permission the hub withholds.
+    """
+    page = _dashboard()
+    assert "d.provenance" in page, "the device card ignores provenance entirely"
+    assert ">drafted<" in page, "nothing marks a card whose description was drafted"
+    assert "Checked against the device:" in page, \
+        "the marker does not say which parts were actually tried"

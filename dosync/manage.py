@@ -270,7 +270,8 @@ def draft_adapter(args):
     """
     import json, os
     from pathlib import Path as _Path
-    from dosync.adapter_drafting import (build_prompt, provenance_header,
+    from dosync.adapter_drafting import (build_prompt, provenance_block,
+                                         provenance_header,
                                          strip_fences, verifiable_requests)
 
     db = get_db(args.db)
@@ -369,7 +370,10 @@ def draft_adapter(args):
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path.write_text(
         provenance_header(model or base_url, verified, unverified,
-                          args.device_id) + text + "\n", encoding="utf-8")
+                          args.device_id)
+        + provenance_block(model or base_url, verified, unverified,
+                           args.device_id)
+        + text + "\n", encoding="utf-8")
     header("Draft written")
     info(str(out_path))
     info(f"{len(verified)} action(s) answered · {len(unverified)} unchecked")

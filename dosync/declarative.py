@@ -211,7 +211,24 @@ def build_manifest(data: dict, source: str = "<declarative>"):
             kind=str(spec.get("kind", "environment")),
         ))
 
+    # A `provenance:` block, if the file carries one. It is data rather than a
+    # comment for one reason: the parser throws comments away, so the header
+    # `dosync-manage draft-adapter` writes could not reach the hub and any edit
+    # to the file removed it entirely. Whoever wrote a description of a device,
+    # and how much of it was ever tried, outlives the text that stated it.
+    raw_provenance = data.get("provenance")
+    provenance: dict = {}
+    if isinstance(raw_provenance, dict):
+        # Copied verbatim and never interpreted: nothing here decides whether
+        # an action may run. A drafted adapter is not less authorised than a
+        # hand-written one — it is differently attested.
+        provenance = dict(raw_provenance)
+    elif raw_provenance is not None:
+        log.warning("%s: `provenance:` must be a mapping; ignoring %s.",
+                    source, type(raw_provenance).__name__)
+
     return CapabilityManifest(
+        provenance=provenance,
         device_id=device_id,
         device_name=name,
         manufacturer=str(device.get("manufacturer", "declarative")),

@@ -581,3 +581,96 @@ def test_an_http_draft_with_no_base_url_is_not_probed_either():
              "sensors": {"state": {"request": {"method": "GET", "path": "/state"}}}}
     assert verifiable_requests(draft) == [], \
         "a draft with no base_url still yields a request the hub will attempt"
+
+
+# ── A5: provenance belongs to the manifest, not to a comment (2026-08-26) ───
+
+def test_provenance_survives_the_parser_and_an_edit():
+    """It lived in a YAML comment, and a comment is thrown away on load.
+
+    A manifest states what a device can do. When a model drafted that statement
+    from an announcement it interpreted, and most of it was never tried against
+    the hardware, those are facts about the claim — not about the file carrying
+    it. The hub had no way to tell `cancel_job` written by a model and tried by
+    nobody from the same action written by an engineer who tested it.
+    """
+    import yaml
+
+    from dosync.declarative import build_manifest
+
+    doc = yaml.safe_load("""
+device: {id: p1, name: Printer, category: actuator, tags: [appliance]}
+provenance:
+  drafted_by: some-model
+  verified: [state]
+  unverified: [cancel_job]
+transport: {kind: http, base_url: 'http://192.0.2.9'}
+actions:
+  cancel_job: {type: stop, request: {method: POST, path: /cancel}}
+""")
+    m = build_manifest(doc, "test.yaml")
+    assert m.provenance.get("drafted_by") == "some-model"
+    assert m.provenance.get("unverified") == ["cancel_job"]
+    assert "provenance" in m.to_dict(), \
+        "provenance does not survive serialisation, so it never reaches a reader"
+
+
+def test_a_hand_written_adapter_carries_no_provenance():
+    """Absence is the honest default: nothing is asserted about a file that
+    claims nothing about itself."""
+    import yaml
+
+    from dosync.declarative import build_manifest
+
+    m = build_manifest(yaml.safe_load("""
+device: {id: p2, name: Light, category: actuator, tags: [light]}
+transport: {kind: http, base_url: 'http://192.0.2.9'}
+actions:
+  turn_on: {type: turn_on, request: {method: POST, path: /on}}
+"""), "hand.yaml")
+    assert m.provenance == {}
+    assert "provenance" not in m.to_dict()
+
+
+def test_provenance_is_descriptive_and_authorises_nothing():
+    """The limit that keeps this from becoming a permission system.
+
+    A drafted adapter is not less authorised than a hand-written one — it is
+    differently attested, and what to do about that is the operator's judgement.
+    A hub that started refusing actions because a model wrote their description
+    would be deciding on evidence it cannot evaluate, and the next step is
+    trusting some models more than others.
+    """
+    import re
+
+    for module in ("server.py", "hub.py", "executor.py", "policies.py"):
+        path = REPO / "dosync" / module
+        if not path.exists():
+            continue
+        code = "\n".join(l for l in path.read_text(encoding="utf-8").splitlines()
+                         if not l.lstrip().startswith("#"))
+        offending = re.findall(
+            r"(?:if|elif|assert|and|or|not)\s[^\n]*\bprovenance\b", code)
+        assert not offending, (
+            f"{module} branches on provenance: {offending[:2]} — it is "
+            "descriptive, and must never gate whether an action may run")
+
+
+def test_the_drafting_tool_emits_a_block_the_hub_can_load():
+    """If the generator only writes the comment, the field is empty forever."""
+    import yaml
+
+    from dosync.adapter_drafting import provenance_block
+
+    block = provenance_block("a-model", ["state"], ["cancel_job"], "printer-1")
+    parsed = yaml.safe_load(block)
+    assert parsed["provenance"]["drafted_by"] == "a-model"
+    assert parsed["provenance"]["verified"] == ["state"]
+    assert parsed["provenance"]["unverified"] == ["cancel_job"]
+
+    manage = (REPO / "dosync" / "manage.py").read_text(encoding="utf-8")
+    assert "provenance_block(" in manage, \
+        "draft-adapter writes only the comment, so nothing ever reaches the hub"
+    assert "provenance_header(" in manage, \
+        "the human-readable header was dropped; both are needed, and stating " \
+        "the same facts twice lets a reader see if one was quietly edited"

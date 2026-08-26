@@ -1303,6 +1303,20 @@ async function loadDevices() {
             'title="' + (d.quarantine_reason || '') + ' — excluded from intents until you ' +
             'remove it or restore its file">quarantined</span>' : ''}
           <span class="device-adapter">${adapter}</span>
+          <!-- A description a model wrote and nobody tried is not the same
+               claim as one an engineer wrote and tested. Both are legitimate;
+               only one of them used to leave a trace, and it was in a comment
+               the parser discarded. Shown, never enforced — a drafted adapter
+               is not less authorised, it is differently attested. -->
+          ${d.provenance && d.provenance.drafted_by ? `<span class="device-adapter"
+             style="color:#d97706" title="${esc(
+               'Drafted by ' + d.provenance.drafted_by +
+               (d.provenance.drafted_at ? ' on ' + d.provenance.drafted_at : '') +
+               '. Checked against the device: ' +
+               ((d.provenance.verified || []).join(', ') || 'nothing') +
+               '. Not checked: ' +
+               ((d.provenance.unverified || []).join(', ') || 'nothing') + '.'
+             )}">drafted</span>` : ''}
           <!-- Renaming meant re-registering the whole manifest and removing meant
                curl. Telling a non-developer the bar is lower while leaving them
                a terminal for their first mistake would not have been true. -->
