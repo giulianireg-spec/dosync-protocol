@@ -1029,6 +1029,19 @@ async function loadIntents() {
 // announcement it wrote an honest one whose endpoints were still invented and
 // correctly marked UNVERIFIED. Both files read as plausible. One GET told them
 // apart. This is where the operator gets that GET before saving anything.
+// Everything rendered below comes from a file the operator pasted or from a
+// device's own reply — neither is ours to trust. `URLError: <urlopen error
+// [Errno 111] Connection refused>` disappeared from the result entirely,
+// because the browser read `<urlopen error ...>` as an unknown HTML element
+// and dropped it: the operator was shown "no answer — URLError:" with the
+// reason silently removed. The same path would have executed an injected
+// script element out of a pasted draft just as willingly.
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[c]);
+}
+
 function openDraftCheck(prefill) {
   document.getElementById('draftResult').innerHTML = '';
   if (prefill) document.getElementById('draftYaml').value = prefill;
@@ -1061,7 +1074,7 @@ async function runDraftCheck() {
     transport_unreachable: ['bad',
       `Nothing in this draft answered. Every read-only request was refused or timed out, ` +
       `so the problem is not one route — it is the transport. This draft assumes ` +
-      `<code>${r.transport || 'an unknown transport'}</code> and the device is not speaking it.`],
+      `<code>${esc(r.transport || 'an unknown transport')}</code> and the device is not speaking it.`],
     nothing_testable: ['mixed',
       `Nothing here could be tried. Every request in this draft changes something, so ` +
       `none of it can be checked without acting on the device. It may be correct — the hub ` +
@@ -1078,8 +1091,9 @@ async function runDraftCheck() {
     for (const c of r.checked) {
       const mark = c.answered ? '<span class="ok">answered</span>'
                               : `<span class="fail">no answer</span>`;
-      const why  = c.answered ? ` HTTP ${c.status}` : ` — ${c.error || ''}`;
-      html += `<div class="check-row">${c.method} ${c.url} · ${mark}${why}</div>`;
+      const why  = c.answered ? ` HTTP ${esc(c.status)}`
+                              : ` — ${esc(c.error || 'no reason reported')}`;
+      html += `<div class="check-row">${esc(c.method)} ${esc(c.url)} · ${mark}${why}</div>`;
     }
   }
 
@@ -1090,7 +1104,7 @@ async function runDraftCheck() {
   if (r.unverifiable && r.unverifiable.length) {
     html += '<div style="font-size:.72rem;color:var(--text-dim);margin:.9rem 0 .2rem">NOT TRIED — AND WHY</div>';
     for (const u of r.unverifiable) {
-      html += `<div class="check-row"><span class="na">${u.action}</span> · ${u.reason}</div>`;
+      html += `<div class="check-row"><span class="na">${esc(u.action)}</span> · ${esc(u.reason)}</div>`;
     }
     html += '<div style="font-size:.74rem;color:var(--text-dim);margin-top:.7rem;line-height:1.5">' +
             'These stay unchecked whatever the verdict above says. Read them yourself ' +

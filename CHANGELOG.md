@@ -10,6 +10,22 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The reason a request failed vanished from the verification panel.**
+  `URLError: <urlopen error [Errno 111] Connection refused>` was rendered into
+  `innerHTML` unescaped, so the browser read `<urlopen error …>` as an unknown
+  element and dropped it. The operator saw `no answer — URLError:` with the
+  cause silently removed — the panel built to stop a draft asserting unmeasured
+  things was hiding what it had measured.
+
+  Everything that panel renders comes from a file the operator pasted or from a
+  device's own reply, and neither is ours to trust: the same path would have
+  run an injected script element out of a draft just as willingly. The URL,
+  method, status, action, reason and transport are all escaped now, and a
+  failure whose exception carries no text says so instead of trailing off after
+  a dash.
+
+
+### Fixed
 - **An MQTT draft was probed over HTTP, and the hub then reported MQTT as
   unreachable without having spoken it once.** Found the first time a real
   MQTT draft went through the dashboard check. Its `publish` actions carry no

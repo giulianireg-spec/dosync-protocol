@@ -162,3 +162,31 @@ def test_describing_a_device_leads_to_checking_the_result():
         "after handing over the description, nothing points at the verification step"
     assert "BEFORE saving it" in describe, \
         "the operator is not told to check the draft before saving it"
+
+
+def test_the_result_escapes_what_it_renders():
+    """The reason a request failed vanished from the panel entirely.
+
+    `URLError: <urlopen error [Errno 111] Connection refused>` was rendered
+    into innerHTML unescaped, so the browser read `<urlopen error ...>` as an
+    unknown element and dropped it. The operator saw `no answer — URLError:`
+    with the cause silently removed — the panel built to stop a draft asserting
+    unmeasured things was itself hiding what it had measured.
+
+    Everything shown here comes from a pasted file or a device's own reply.
+    Neither is ours to trust, and the same path would have run an injected
+    script element out of a draft just as willingly.
+    """
+    page = _dashboard()
+    assert "function esc(" in page, "there is no escaping helper"
+    for field in ("esc(c.error", "esc(c.url)", "esc(u.reason)", "esc(u.action)"):
+        assert field in page, f"{field} is still interpolated unescaped"
+    assert "${c.error ||" not in page, "the raw error is still rendered directly"
+
+
+def test_a_failure_with_no_message_still_says_something():
+    """An empty reason rendered as a dangling em dash and nothing after it."""
+    page = _dashboard()
+    assert "no reason reported" in page, \
+        "a failure whose exception carries no text leaves the operator with a " \
+        "dash and no explanation"
