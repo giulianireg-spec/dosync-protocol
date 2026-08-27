@@ -13,5 +13,5 @@ The two numbers move independently on purpose:
   __version__           this implementation of the hub  (semver)
   __protocol_version__  the wire contract other implementations must match
 """
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 __protocol_version__ = "0.4"

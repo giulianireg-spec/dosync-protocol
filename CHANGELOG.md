@@ -9,6 +9,21 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-27
+
+Seventeen commits, and almost all of them came from installing the project on a
+machine that had never run it and using it as a stranger would. The protocol
+needed no change; what needed changing was what the system said about itself.
+
+Three of these were the same failure in different places — the hub asserting an
+outcome it had never measured. A scan reporting a transport as searched when
+uvloop had made it fail instantly; a drafted adapter declared unreachable over
+MQTT after three HTTP requests to an empty string; a verification panel that
+silently swallowed the reason a request failed. The project has a rule about
+not claiming what was not measured, and the interesting part is that it kept
+being broken by the code written to enforce it.
+
+
 ### Security
 - **A live Home Assistant token shipped in `dosync.service` for three months.**
   Issued May 2026 and valid until 2036, in a unit file at the root of a public
