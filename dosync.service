@@ -9,7 +9,17 @@ After=network.target
 Type=simple
 User=dosync
 WorkingDirectory=/opt/dosync
-Environment="HA_URL=http://localhost:8123" "HA_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2MDFiZWY0NTdlZWE0MGUxOTc5MjkxNGE1NDdhYmJiMyIsImlhdCI6MTc3ODg5OTkyMCwiZXhwIjoyMDk0MjU5OTIwfQ.gqsYvemtBJfs7Fe0_0OH8_PY6QfJYTZ67c6U0hYuD6I"
+# Secrets do NOT belong in a unit file that ships with the project. This line
+# carried a real Home Assistant long-lived token — issued May 2026, valid until
+# 2036 — in a public repository, until a Windows persistence test happened to
+# open the file. Keep credentials in a drop-in that is not tracked:
+#
+#   /etc/systemd/system/dosync.service.d/local.conf   (chmod 600)
+#     [Service]
+#     Environment="HA_URL=http://localhost:8123"
+#     Environment="HA_TOKEN=..."
+#
+# systemd merges drop-ins over this unit, so nothing here needs editing.
 ExecStart=/opt/dosync/venv/bin/uvicorn server:app \
   --host 0.0.0.0 \
   --port 47200 \

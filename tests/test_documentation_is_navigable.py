@@ -151,3 +151,39 @@ def test_what_does_not_age_survived_the_deletion():
         "product")
     assert "Not on the roadmap" in text, \
         "the list of what the project will not do is gone"
+
+
+def test_running_the_hub_permanently_is_documented_for_both_platforms():
+    """The project shipped a systemd unit for months and never said so.
+
+    The README referred to *"your service"* as though the reader already had
+    one, `dosync.service` sat in the repository root unmentioned by any user
+    document, and the reference deployment ran under systemd only because its
+    operator wrote the unit himself. It surfaced while testing Windows, which
+    was never the special case — it was where the omission became visible.
+    """
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    assert "## Keeping the hub running" in readme, \
+        "nothing explains how to keep a hub running across reboots"
+    section = readme[readme.index("## Keeping the hub running"):]
+    section = section[:section.index("\n## ", 10)]
+
+    assert "systemctl enable" in section, "the Linux path is not documented"
+    assert "Register-ScheduledTask" in section, "the Windows path is not documented"
+    assert "DOSYNC_DB" in section, (
+        "the Windows recipe omits DOSYNC_DB — without it a scheduled task "
+        "writes to a different database, reports devices: 0, and looks like "
+        "the inventory was lost")
+    assert "Verified on" in section, \
+        "the section does not say what was actually tested, only what to type"
+
+
+def test_the_deployment_section_keeps_secrets_out_of_the_unit():
+    """A unit file is copied by everyone who reads it, so what it models is
+    what gets deployed. This one carried a live token until August 2026."""
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    section = readme[readme.index("## Keeping the hub running"):]
+    section = section[:section.index("\n## ", 10)]
+    assert "drop-in" in section, \
+        "nothing tells the operator where credentials should live instead"
+    assert "not tracked" in section or "untracked" in section

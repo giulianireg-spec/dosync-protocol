@@ -626,6 +626,104 @@ pytest                                  # runs the full suite
 dosync-hub --reload
 ```
 
+The hub stops when the terminal closes. To keep it running across reboots, see
+[Keeping the hub running](#keeping-the-hub-running).
+
+---
+
+## Keeping the hub running
+
+Everything above starts a hub in a terminal, and it stops when that terminal
+closes. Nothing in this project has explained how to change that — while the
+repository has shipped a systemd unit at its root for months and this page
+refers to *"your service"* as though you already had one. That gap is the
+reason this section exists.
+
+DoSync does not implement supervision on any platform. It delegates: to systemd
+on Linux, to the task scheduler on Windows. What differs between them is how
+much you have to write, not whether it works.
+
+**Say once what is at stake:** a hub that governs physical actions and does not
+come back after a power cut is a deployment decision with consequences. If a
+lock, an alarm or a machine depends on it, this is not optional.
+
+### Linux — systemd
+
+`dosync.service` in the repository root is a template. Adjust the paths, then:
+
+```bash
+sudo cp dosync.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now dosync
+systemctl status dosync
+```
+
+**Keep secrets out of the unit.** It is a file people copy, and this one carried
+a real Home Assistant token in a public repository until August 2026. Put them
+in a drop-in that is not tracked:
+
+```bash
+sudo install -d -m 700 /etc/systemd/system/dosync.service.d
+sudo tee /etc/systemd/system/dosync.service.d/local.conf >/dev/null <<'EOF'
+[Service]
+Environment="HA_TOKEN=your-token-here"
+EOF
+sudo chmod 600 /etc/systemd/system/dosync.service.d/local.conf
+sudo systemctl daemon-reload && sudo systemctl restart dosync
+```
+
+systemd merges drop-ins over the unit, so the template never needs editing.
+
+### Windows — Task Scheduler
+
+*Verified on Windows 11 ARM64 in a virtual machine, Python 3.14, installed with
+`pipx`.*
+
+Run PowerShell **as administrator**:
+
+```powershell
+$exe = (Get-Command dosync-hub).Source
+$db  = "$env:USERPROFILE\.local\state\dosync\dosync.db"
+
+$action = New-ScheduledTaskAction -Execute "cmd.exe" `
+  -Argument "/c set DOSYNC_DB=$db && `"$exe`""
+$trigger   = New-ScheduledTaskTrigger -AtStartup
+$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" `
+  -LogonType ServiceAccount -RunLevel Highest
+$settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries `
+  -DontStopIfGoingOnBatteries -RestartCount 3 `
+  -RestartInterval (New-TimeSpan -Minutes 1)
+
+Register-ScheduledTask -TaskName "DoSync Hub" -Action $action `
+  -Trigger $trigger -Principal $principal -Settings $settings
+```
+
+`-AtStartup` with `SYSTEM` means the hub comes back after a reboot without
+anyone logging in — the closest equivalent to systemd. `-RestartCount` covers a
+process that dies.
+
+**`DOSYNC_DB` is not optional, and leaving it out fails silently.** A scheduled
+task does not inherit your environment, so a hub started this way writes to
+`C:\Windows\System32\config\systemprofile\` — a different database from the
+one you used by hand. It starts perfectly, reports `devices: 0`, and looks like
+your inventory was lost. Setting `DOSYNC_DB` points both at the same file;
+running it by hand afterwards reads what the scheduled task wrote, with no
+permission conflict.
+
+Check it:
+
+```powershell
+curl.exe -s http://localhost:47200/v1/status | findstr db_path
+Get-ScheduledTask -TaskName "DoSync Hub" | Get-ScheduledTaskInfo
+```
+
+`LastTaskResult: 267009` is `0x41301` — *the task is currently running*. That is
+the healthy value here; `0` would mean it exited.
+
+**NSSM** installs the hub as a real Windows service and is what a server
+deployment would use. It is third-party software this project does not ship or
+test, so it is named rather than recommended.
+
 ---
 
 ## What's built today

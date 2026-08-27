@@ -263,3 +263,83 @@ def test_the_core_and_the_spec_are_in_english():
     assert not hits, (
         "the protocol core or its specification contains Spanish prose:\n  "
         + "\n  ".join(hits[:20]))
+
+
+# ── Credentials, not just names and paths (2026-08-26) ─────────────────────
+
+#: Placeholders are the point: a file that says REPLACE_WITH_YOUR_API_KEY is
+#: doing the right thing and must not trip this.
+PLACEHOLDER_MARKERS = (
+    "replace_with", "your_", "<your", "example", "changeme", "placeholder",
+    "xxxx", "...", "redacted", "dummy", "sample",
+)
+
+#: Shapes that are credentials whatever they are called. A JWT is three
+#: base64 segments; the rest are the token formats a deployment realistically
+#: carries. Deliberately narrow: a false positive here costs a moment, and a
+#: miss costs what this test was written for.
+CREDENTIAL_PATTERNS = (
+    ("JWT", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")),
+    ("GitHub token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}")),
+    ("Slack token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}")),
+    ("AWS key id", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+    ("private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
+)
+
+
+def test_no_credentials_anywhere_in_the_repository():
+    """A live Home Assistant token shipped in `dosync.service` for three months.
+
+    Issued in May 2026 and valid until 2036, in a unit file at the root of a
+    public repository, and found only because a Windows persistence test
+    happened to open it. Anyone who cloned the project got a working credential
+    for one person's Home Assistant.
+
+    `.service` files were already scanned — that extension was added
+    deliberately after units carrying `/home/<user>` slipped through. But the
+    checks looked for addresses, paths, room names and device identifiers.
+    Nobody had asked whether a file contained a *secret*, so the guard written
+    to catch exactly this class of leak looked straight past it.
+
+    Placeholders are exempt on purpose: a unit that says
+    `HA_TOKEN=REPLACE_WITH_YOUR_TOKEN` is doing the right thing.
+    """
+    hits = []
+    for path in _files():
+        text = _read(path)
+        for label, pattern in CREDENTIAL_PATTERNS:
+            for match in pattern.finditer(text):
+                found = match.group(0)
+                if any(m in found.lower() for m in PLACEHOLDER_MARKERS):
+                    continue
+                line = next((i for i, l in enumerate(text.splitlines(), 1)
+                             if found[:24] in l), 0)
+                hits.append(f"{path.relative_to(REPO)}:{line} → {label}: "
+                            f"{found[:20]}…")
+    assert not hits, (
+        "a credential is committed to this repository. Revoke it first — it is "
+        "public and cloned copies keep it — then remove it and keep secrets in "
+        "an untracked drop-in:\n  " + "\n  ".join(hits))
+
+
+def test_the_shipped_unit_carries_no_environment_secrets():
+    """The unit is a template others copy, so what it models matters.
+
+    A unit that hard-codes a token teaches every reader to hard-code a token,
+    and the file is the first thing an operator opens when setting up a service.
+    """
+    unit = REPO / "dosync.service"
+    if not unit.exists():
+        return
+    text = unit.read_text(encoding="utf-8")
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#") or "Environment=" not in stripped:
+            continue
+        for secret_ish in ("TOKEN", "SECRET", "PASSWORD", "KEY", "CREDENTIAL"):
+            if secret_ish in stripped.upper():
+                assert any(m in stripped.lower() for m in PLACEHOLDER_MARKERS), (
+                    f"the shipped unit sets {secret_ish} to something that is not "
+                    f"a placeholder:\n    {stripped[:100]}\n"
+                    "Secrets belong in an untracked drop-in, not in the template "
+                    "everyone copies.")

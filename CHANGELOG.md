@@ -9,6 +9,40 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+- **A live Home Assistant token shipped in `dosync.service` for three months.**
+  Issued May 2026 and valid until 2036, in a unit file at the root of a public
+  repository — anyone who cloned the project received a working credential for
+  one person's Home Assistant. Found only because a Windows persistence test
+  happened to open the file. The token has been revoked and removed, and the
+  unit now documents keeping secrets in an untracked drop-in instead.
+
+  `.service` files were already scanned by the operator-data guard — that
+  extension was added deliberately after units carrying `/home/<user>` slipped
+  through. But the checks looked for addresses, paths, room names and device
+  identifiers. Nobody had asked whether a file contained a *secret*, so the
+  guard written for exactly this class of leak looked straight past it. It now
+  detects JWTs, cloud provider keys and private key blocks, with placeholders
+  exempt, and a second test rejects any non-placeholder secret in the shipped
+  unit. Both were confirmed to fail against the real token before being kept.
+
+### Added
+- **How to keep the hub running, for Linux and Windows.** The project shipped a
+  systemd unit at its root for months while no user document mentioned it, and
+  this page referred to *"your service"* as though the reader already had one —
+  the reference deployment runs under systemd only because its operator wrote
+  the unit himself. It surfaced while testing Windows, which was never the
+  special case: it was where the omission became visible.
+
+  DoSync implements supervision on no platform; it delegates, to systemd or to
+  the task scheduler. Both paths are documented, and the Windows one was
+  verified on Windows 11 ARM64 in a virtual machine rather than written from
+  memory — including the failure it makes obvious: a scheduled task does not
+  inherit your environment, so without `DOSYNC_DB` the hub starts perfectly
+  against a different database, reports `devices: 0`, and looks like the
+  inventory was lost.
+
+
 ### Added
 - **A manifest records who described the device and what was checked.** A
   manifest states what a device can do. When a language model drafted that
