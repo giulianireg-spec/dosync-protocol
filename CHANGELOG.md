@@ -9,6 +9,31 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **SSDP discovery raised `NotImplementedError` on Windows, and the handler
+  that should have absorbed it raised `NameError`.** Both found on a clean
+  install of 0.6.0, minutes after publishing it.
+
+  The first is the same bug twice. `sock_recvfrom` worked on stock asyncio and
+  failed on uvloop, which `uvicorn[standard]` installs; the fix for that,
+  `add_reader`, worked on both and failed on Windows, whose ProactorEventLoop
+  has no reader registration for sockets. Each fix worked on the loop it was
+  written against. SSDP now uses `create_datagram_endpoint`, which is defined
+  on `BaseEventLoop` — inherited by all three — rather than on the abstract
+  base where the other two are stubs that raise.
+
+- **The scan called a logger that `server.py` does not define.** Three
+  `log.warning(...)`/`log.info(...)` calls inside `except` blocks, in a module
+  where every other line uses `logging.getLogger("dosync.server")`. A
+  discoverer failing therefore raised `NameError` *from the error handler*,
+  turning a failure the code was written to absorb into a 500 that took the
+  whole scan down.
+
+  Two were added the day before; the third had been latent for longer and was
+  never reached because no discoverer had failed in production until Windows.
+  A test now rejects any bare `log.` in that endpoint — it found the third one.
+
+
 ## [0.6.0] — 2026-08-27
 
 Seventeen commits, and almost all of them came from installing the project on a

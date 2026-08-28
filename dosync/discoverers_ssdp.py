@@ -254,15 +254,25 @@ class SSDPDiscoverer:
         # loops, so discovery behaves the same wherever the hub runs.
         queue: asyncio.Queue = asyncio.Queue()
 
-        def _readable() -> None:
-            try:
-                queue.put_nowait(sock.recvfrom(4096))
-            except (BlockingIOError, InterruptedError):
-                pass
-            except OSError as exc:
-                log.debug("SSDP read on port %s failed: %s", port, exc)
+        class _Collector(asyncio.DatagramProtocol):
+            """Hands each datagram to the queue the reader below drains."""
 
-        loop.add_reader(sock.fileno(), _readable)
+            def datagram_received(self, data: bytes, addr) -> None:
+                queue.put_nowait((data, addr))
+
+            def error_received(self, exc: Exception) -> None:
+                log.debug("SSDP socket error on port %s: %s", port, exc)
+
+        # `create_datagram_endpoint` is the one UDP mechanism all three event
+        # loops this hub runs on actually implement. The two before it each
+        # worked on the loop they were written against and raised
+        # NotImplementedError on another: `sock_recvfrom` on uvloop, which
+        # uvicorn[standard] installs on Linux, and then `add_reader` on
+        # Windows, whose ProactorEventLoop has no reader registration for
+        # sockets at all. Both were found in production rather than by the
+        # suite, because the suite runs on one loop and there are three.
+        transport, _ = await loop.create_datagram_endpoint(
+            _Collector, sock=sock)
         deadline = loop.time() + timeout
         try:
             while loop.time() < deadline:
@@ -324,10 +334,7 @@ class SSDPDiscoverer:
                                                      or headers.get("st") or ""),
                 )
         finally:
-            # Both, in this order: a reader left registered on a closed fd
-            # makes the loop spin on a descriptor nobody owns any more.
-            try:
-                loop.remove_reader(sock.fileno())
-            except (OSError, ValueError):
-                pass
-            sock.close()
+            # The transport owns the socket once the endpoint is created —
+            # closing it here closes both, and closing the socket separately
+            # would pull it out from under the loop.
+            transport.close()

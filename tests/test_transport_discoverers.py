@@ -594,3 +594,57 @@ def test_a_discoverer_that_fails_is_never_reported_as_searched():
     # a reader unable to tell it had been attempted.
     assert scan.count("failed: {type(e).__name__}") >= 2, \
         "a failing discoverer or adapter still vanishes from both lists"
+
+
+def test_ssdp_uses_the_one_udp_mechanism_every_loop_implements():
+    """Two fixes in a row each worked on the loop they were written against.
+
+    `sock_recvfrom` worked on stock asyncio and raised NotImplementedError on
+    uvloop, which `uvicorn[standard]` installs — SSDP was dead in production for
+    days while every test passed. The replacement, `add_reader`, worked on both
+    of those and raised NotImplementedError on Windows, whose ProactorEventLoop
+    has no reader registration for sockets: a clean install could not scan at
+    all.
+
+    `create_datagram_endpoint` is defined on `BaseEventLoop`, which every loop
+    here inherits, rather than on the abstract base where the other two are
+    stubs that raise. The suite runs on one loop and there are three, so the
+    mechanism has to be one that cannot vary.
+    """
+    source = (REPO / "dosync" / "discoverers_ssdp.py").read_text(encoding="utf-8")
+    assert "create_datagram_endpoint" in source, \
+        "SSDP does not use the UDP mechanism all three event loops implement"
+    # Executable lines only. The comments explain WHY the other two mechanisms
+    # are unusable and name them to do it — scanning the whole file made this
+    # trip on the very text that documents the fix, which is the third time
+    # today a check has failed on the prose that justifies it.
+    code = "\n".join(l for l in source.splitlines()
+                     if l.strip() and not l.lstrip().startswith("#"))
+    for loop_specific in ("add_reader", "sock_recvfrom"):
+        assert f"loop.{loop_specific}(" not in code, \
+            f"SSDP still calls loop.{loop_specific}, which raises " \
+            "NotImplementedError on at least one loop this hub runs on"
+
+
+def test_the_scan_error_handler_does_not_itself_raise():
+    """The handler written to record a failed discoverer was broken.
+
+    `log.warning(...)` in `server.py`, where no name `log` exists — every other
+    line there calls `logging.getLogger("dosync.server")`. So a discoverer
+    raising turned into `NameError` inside the `except` block, and a failure the
+    code was written to absorb became a 500 that took the whole scan down.
+
+    It had been latent since before this handler existed: the previous version
+    called `log.info` on the same lines and was never reached, because until
+    Windows no discoverer had failed in production.
+    """
+    source = (REPO / "dosync" / "server.py").read_text(encoding="utf-8")
+    scan = source[source.index('@app.get("/v1/discovery/scan"'):]
+    scan = scan[:scan.index("\n@app.")]
+    for line in scan.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        assert not stripped.startswith("log."), (
+            f"the scan calls a bare `log` that server.py does not define — "
+            f"this raises NameError from inside an except block: {stripped[:60]}")

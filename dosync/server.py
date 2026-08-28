@@ -2480,7 +2480,8 @@ async def scan_devices(auth: str = Depends(require_auth)):
             found.extend(await discover_wiz(timeout=5.0))
             searched.append("wiz (udp broadcast)")
         except Exception as e:
-            log.info("WiZ scan did not run: %s", e)
+            logging.getLogger("dosync.server").info(
+                "WiZ scan did not run: %s", e)
             skipped.append("wiz (udp broadcast)")
     else:
         skipped.append("wiz (udp broadcast — pywizlight not installed)")
@@ -2497,7 +2498,8 @@ async def scan_devices(auth: str = Depends(require_auth)):
             found.extend(await adapter.discover(timeout=5.0))
             searched.append(name)
         except Exception as e:
-            log.warning("Discovery via %s did not run: %s: %s",
+            logging.getLogger("dosync.server").warning(
+                "Discovery via %s did not run: %s: %s",
                         name, type(e).__name__, e)
             skipped.append(f"{name} — failed: {type(e).__name__}")
 
@@ -2516,7 +2518,8 @@ async def scan_devices(auth: str = Depends(require_auth)):
             # transport absent from BOTH, so a reader could not tell it had
             # been attempted at all — and the adapter loop above still does
             # exactly that, which is the same defect waiting to be noticed.
-            log.warning("Discovery via %s did not run: %s: %s",
+            logging.getLogger("dosync.server").warning(
+                "Discovery via %s did not run: %s: %s",
                         discoverer.name, type(e).__name__, e)
             skipped.append(f"{label} — failed: {type(e).__name__}")
 
