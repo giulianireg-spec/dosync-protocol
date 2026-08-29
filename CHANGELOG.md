@@ -9,6 +9,18 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-08-29
+
+Two fixes, both found by installing 0.6.0 on a machine that had never run it —
+the test that should have preceded the release rather than followed it.
+
+SSDP discovery raised `NotImplementedError` on Windows and took the whole scan
+down with a 500, because the handler written to absorb a failing discoverer
+called a logger that module does not define. And an action that failed came
+back with an empty reason, found while turning real bulbs green from that same
+clean install.
+
+
 ### Fixed
 - **An action that failed reported `"error": ""`.** Found controlling real
   bulbs from a clean Windows install: two of three returned
