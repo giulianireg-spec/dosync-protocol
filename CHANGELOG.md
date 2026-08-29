@@ -9,6 +9,14 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-08-29
+
+One fix, found running the first semantic intent from a clean Windows install:
+JSON responses did not declare their charset, so PowerShell 5.1 fell back to
+Latin-1 and mangled every non-ASCII byte the hub sent. The tool this project's
+own Windows instructions recommend was the one showing broken text.
+
+
 ### Fixed
 - **JSON responses did not declare their charset, and Windows clients mangled
   every non-ASCII byte.** An operator running the first intent from a clean
