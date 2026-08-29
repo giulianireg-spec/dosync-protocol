@@ -12,7 +12,8 @@ import json
 import os
 import re
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
+from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
+                               PlainTextResponse)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 
@@ -933,7 +934,26 @@ async def lifespan(app: FastAPI):
         log.warning("Could not flush the audit head on shutdown: %s", _fh_e)
     log.info("DoSync Hub shutting down")
 
+class _UTF8JSONResponse(JSONResponse):
+    """`application/json; charset=utf-8`, said out loud rather than assumed.
+
+    JSON is UTF-8 by definition and FastAPI therefore omits the charset — which
+    is correct and, for one widely used client, useless. Windows PowerShell 5.1
+    falls back to Latin-1 when a response does not declare one, so an operator
+    following this project's own Windows instructions saw
+    `read-only status query â device has no sensors` where an em dash belonged,
+    and would see the same for every accented character a deployment uses in a
+    device name.
+
+    Being right about the specification while a reader gets mojibake is the
+    kind of correctness this project has decided is not worth much.
+    """
+
+    media_type = "application/json; charset=utf-8"
+
+
 app = FastAPI(
+    default_response_class=_UTF8JSONResponse,
     title="DoSync Hub",
     description=(
         "DoSync Protocol — REST API\n\n"

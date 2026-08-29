@@ -199,3 +199,21 @@ def test_the_shipped_gpio_adapter_uses_the_current_endpoint():
     src = (REPO / "gpio_adapter.py").read_text()
     assert 'hub_post("/v1/intent/async"' in src
     assert 'hub_post("/v1/intent"' not in src
+
+
+def test_json_responses_declare_utf8():
+    """`read-only status query â device has no sensors to read`.
+
+    That is what a Windows operator saw following this project's own
+    instructions. JSON is UTF-8 by definition, so FastAPI omits the charset —
+    correct, and useless for Windows PowerShell 5.1, which falls back to
+    Latin-1 when a response does not declare one. Every em dash and every
+    accented character in a device name arrives mangled.
+
+    The README documents `Invoke-RestMethod` as the way to call this API from
+    Windows, so the tool it recommends was the one showing broken text.
+    """
+    response = client.get("/v1/status")
+    assert "charset=utf-8" in response.headers.get("content-type", "").lower(), (
+        "JSON responses do not declare their charset, so clients that guess "
+        "wrongly — PowerShell 5.1 among them — mangle every non-ASCII byte")

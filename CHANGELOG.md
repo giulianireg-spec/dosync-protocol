@@ -9,6 +9,23 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **JSON responses did not declare their charset, and Windows clients mangled
+  every non-ASCII byte.** An operator running the first intent from a clean
+  Windows install read `read-only status query â device has no sensors to read`
+  where an em dash belonged.
+
+  JSON is UTF-8 by definition, so FastAPI omits the charset — correct, and
+  useless for Windows PowerShell 5.1, which falls back to Latin-1 when a
+  response does not declare one. The README documents `Invoke-RestMethod` as
+  the way to call this API from Windows, so the tool this project recommends
+  was the one showing broken text, and every accented character in a device
+  name would arrive the same way.
+
+  Being right about the specification while a reader gets mojibake is a kind of
+  correctness this project has already decided is not worth much.
+
+
 ## [0.6.1] — 2026-08-29
 
 Two fixes, both found by installing 0.6.0 on a machine that had never run it —
