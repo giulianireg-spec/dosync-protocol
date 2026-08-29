@@ -9,6 +9,18 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-08-29
+
+Everything here came from connecting an agent to a hub for the first time, on a
+machine that had never run either.
+
+The MCP server could not start at all against the SDK a fresh install receives.
+The README had said "MCP" a dozen times without ever explaining how to connect
+one. And the language guard, which matches accented characters, had let an
+unaccented Spanish warning reach an operator — the second time that happened,
+because the first was fixed by hand without strengthening the guard.
+
+
 ### Fixed
 - **The MCP server could not start against the SDK a fresh install gets.** The
   2.x SDK removed `Server.list_tools()`, which `dosync/mcp_server.py` decorates
