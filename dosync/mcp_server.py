@@ -128,6 +128,22 @@ def fmt(data: dict) -> str:
 
 server = Server("dosync-hub")
 
+# Checked here rather than left to fail at the first decorator. The 2.x SDK
+# removed `Server.list_tools()`, so an operator with that version installed got
+# `AttributeError: 'Server' object has no attribute 'list_tools'` from inside a
+# module they never opened — a true statement about the wrong thing. The
+# dependency is capped at `<2.0` now, but a cap does not help anyone who
+# already has 2.x in their environment, which is exactly who this message is
+# for.
+if not hasattr(server, "list_tools"):
+    import mcp as _mcp
+    raise RuntimeError(
+        "This MCP server is written against the 1.x SDK and the installed "
+        f"version is {getattr(_mcp, '__version__', 'unknown')}. The 2.x SDK "
+        "changed how tools are registered, so nothing here can start.\n\n"
+        "  pipx inject --force dosync 'mcp>=1.0.0,<2.0'\n\n"
+        "Porting to 2.x is tracked work, not a configuration problem.")
+
 
 async def _intent_property_schema() -> dict:
     """Build the JSON-schema fragment for the `intent` argument by reading the
@@ -179,7 +195,7 @@ async def list_tools() -> list[types.Tool]:
                 "Execute a semantic intent on the DoSync hub. "
                 "The hub resolves which devices act and how, "
                 "from their declared capabilities. "
-                "Usar para: emergencias, rutinas, control del ambiente, notificaciones."
+                "Use for: emergencies, routines, environment control, notifications."
             ),
             inputSchema={
                 "type": "object",
@@ -847,8 +863,8 @@ async def main():
         log.warning(
             "DOSYNC_TOKEN is not set — requests to the hub may fail "
             "if authentication is enabled. "
-            "Usar: DOSYNC_AUTH=false para deshabilitar, o "
-            "DOSYNC_TOKEN=<token> para autenticar."
+            "Set DOSYNC_TOKEN=<token> to authenticate, or run the hub with "
+            "DOSYNC_AUTH=false to turn authentication off (development only)."
         )
 
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):

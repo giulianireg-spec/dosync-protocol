@@ -1294,7 +1294,7 @@ async def explain_intent(
     """
     Explainability endpoint — the resolver's reasoning for one intent.
 
-    Para cada dispositivo registrado, detalla:
+    For each registered device, it details:
     - Score total y desglose (tag overlap, location bonus, emergency bonus, actuator match)
     - Why it was included in or excluded from the ActionPlan
     - Which tags matched the intent's resolution tags

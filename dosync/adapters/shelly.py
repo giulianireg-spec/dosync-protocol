@@ -1,7 +1,7 @@
 """
 DoSync — Shelly Adapter
 =======================
-Adapter para dispositivos Shelly via HTTP local (Gen1 y Gen2).
+Adapter for Shelly devices over local HTTP (Gen1 and Gen2).
 
 Features:
 - Fully local communication — no cloud, no internet required
@@ -199,7 +199,7 @@ class ShellyAdapter(DoSyncAdapter):
     adapter_kind = "reference"
 
     """
-    Adapter DoSync para dispositivos Shelly.
+    DoSync adapter for Shelly devices.
 
     Soporta Gen1 (API REST) y Gen2 (API RPC).
     Sin dependencias externas — usa requests.

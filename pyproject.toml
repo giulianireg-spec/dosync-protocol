@@ -89,11 +89,17 @@ ha      = ["aiohttp>=3.9.0"]
 ble     = ["bleak>=0.21"]
 sms     = ["twilio>=8.0.0"]
 mavlink = ["pymavlink>=2.4.0"]
-mcp     = ["mcp>=1.0.0"]
+# `<2.0` is not caution, it is a measured incompatibility: the 2.x SDK removed
+# `Server.list_tools()`, which `dosync/mcp_server.py` decorates at import time,
+# so `python -m dosync.mcp_server` dies with an AttributeError before it can
+# serve anything. An open-ended `>=1.0.0` was correct the day it was written
+# and stopped being correct when 2.0 shipped — the same shape of mistake as the
+# plain `uvicorn` pin that left the hub without a WebSocket library.
+mcp     = ["mcp>=1.0.0,<2.0"]
 # Everything a fully-loaded deployment needs.
 all = [
     "pywizlight>=0.5.0", "paho-mqtt>=2.0.0", "aiohttp>=3.9.0",
-    "bleak>=0.21", "twilio>=8.0.0", "pymavlink>=2.4.0", "mcp>=1.0.0",
+    "bleak>=0.21", "twilio>=8.0.0", "pymavlink>=2.4.0", "mcp>=1.0.0,<2.0",
 ]
 dev = [
     "pytest>=7.4", "pytest-asyncio>=0.23", "httpx>=0.27",

@@ -25,7 +25,7 @@ Quick start:
     # Generar PKI completa (primera vez)
     python3 -m dosync.security setup
 
-    # Emitir certificado para un adapter nuevo
+    # Issue a certificate for a new adapter
     python3 -m dosync.security issue --name gpio --ip 127.0.0.1
 
     # Verify the certificates are valid and have not expired

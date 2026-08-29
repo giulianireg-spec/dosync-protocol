@@ -726,6 +726,130 @@ test, so it is named rather than recommended.
 
 ---
 
+## Connecting an agent
+
+This page has said "MCP" a dozen times — a badge at the top, a section on why
+MCP is the channel rather than the rival, a drone that flew a mission through
+it — and never once explained how to connect an agent. This is that.
+
+DoSync ships an MCP server. It is not a separate product: it exposes the hub's
+intents and devices as tools, and every call it makes lands in the same policy
+engine and the same audit chain as a call from `curl`. An agent that reaches a
+device through it is governed exactly like anything else.
+
+### What DoSync provides
+
+The server is a module rather than a command, and it needs the MCP SDK, which
+the hub does not install:
+
+```bash
+pip install "mcp>=1.0.0,<2.0"       # or: pipx inject dosync "mcp>=1.0.0,<2.0"
+python -m dosync.mcp_server
+```
+
+The upper bound is not caution. The 2.x SDK changed how tools are registered
+and this server is written against 1.x; without the cap, a fresh install gets
+2.x and the server exits at import. It says so plainly if that happens.
+
+It speaks over stdin/stdout, so a successful start prints nothing and waits.
+Typing into that terminal will produce JSON parse errors — that is the protocol
+rejecting your keystrokes, not a fault.
+
+It reads three environment variables:
+
+| Variable | Meaning |
+|---|---|
+| `DOSYNC_HUB_URL` | Where the hub is. Default `http://localhost:47200` |
+| `DOSYNC_TOKEN` | The hub's bearer token |
+| `DOSYNC_CA_CERT` | CA certificate, when the hub runs over TLS |
+
+That is the whole of DoSync's side. Everything below is about getting a client
+to launch that command — which is the client's business, not the protocol's.
+
+### What the client provides
+
+MCP clients are configured with a JSON file naming a command to run and the
+environment to run it in. The shape is standard:
+
+```json
+{
+  "mcpServers": {
+    "dosync": {
+      "command": "/absolute/path/to/python",
+      "args": ["-m", "dosync.mcp_server"],
+      "env": {
+        "DOSYNC_HUB_URL": "http://localhost:47200",
+        "DOSYNC_TOKEN": "your-token-here"
+      }
+    }
+  }
+}
+```
+
+**That file holds a credential.** It grants whatever the token grants. This
+project shipped a live token in a public repository for three months, so the
+warning is not rhetorical: keep it out of version control and off shared
+drives.
+
+Use an absolute path to the interpreter that has DoSync installed. A client
+launches the command with its own environment, not yours, so `python` may not
+resolve to what you expect. With `pipx`, the interpreter is inside its venv —
+on Linux and macOS `~/.local/share/pipx/venvs/dosync/bin/python`, on Windows
+`%LOCALAPPDATA%\pipx\pipx\venvs\dosync\Scripts\python.exe`.
+
+Where the file goes and how it reloads is documented by your client, not here.
+
+### Two things Windows does to this file
+
+Neither belongs to any particular client, and both fail without a useful error,
+so they are worth knowing before you spend an afternoon on them.
+
+**A packaged application does not see the path you wrote to.** Applications
+installed from the Microsoft Store run with a virtualised filesystem: when they
+read `%APPDATA%\Something`, Windows redirects them to
+`%LOCALAPPDATA%\Packages\<package-id>\LocalCache\Roaming\Something`. A file
+written to the literal path is invisible to the application, and nothing
+reports this — the client simply behaves as though no configuration exists. If
+your client offers a button that opens its configuration folder, use it and
+write there.
+
+**PowerShell 5.1 writes a byte-order mark.** `Set-Content -Encoding UTF8` puts
+three bytes at the start of the file that JSON parsers reject, and the error
+names an invisible character: `Unexpected token ''`. Write it without one:
+
+```powershell
+[System.IO.File]::WriteAllText($path, $json, [System.Text.UTF8Encoding]::new($false))
+```
+
+Check the first byte is `123` (`{`) and not `239`:
+
+```powershell
+[System.IO.File]::ReadAllBytes($path)[0]
+```
+
+### What it looks like when it works
+
+*Verified 29 August 2026: Windows 11 ARM64, Python 3.14, DoSync 0.6.2 installed
+with `pipx`, MCP SDK 1.29.1, Claude Desktop from the Microsoft Store. Named
+because a result you cannot reproduce is not evidence — not as a
+recommendation. Any client that speaks MCP works; the details above are what
+that combination required, and clients change theirs without notice.*
+
+Asked in plain language which devices were registered, the agent listed six —
+three WiZ bulbs with their actions, and three adopted devices with none. What
+it said about the second group is the part worth reading:
+
+> Estos tres últimos están registrados pero sin tags ni acciones definidas — el
+> hub sabe que existen pero no puede actuar sobre ellos todavía.
+
+It did not invent capabilities for devices that have none. That is not the
+model being careful: the hub reports an undeclared device as undeclared, so
+there was nothing to invent from. Then it offered to describe one — the drafting
+flow in [`/v1/devices/{id}/describe`](#keeping-the-hub-running), reached from
+the other end.
+
+---
+
 ## What's built today
 
 | Component | Status |

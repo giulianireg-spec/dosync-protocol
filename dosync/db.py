@@ -232,7 +232,7 @@ class DoSyncDB:
         log.debug("Deleted device: %s", device_id)
 
     def load_devices(self) -> list[dict]:
-        """Carga todos los dispositivos registrados."""
+        """Load every registered device."""
         with self._cursor() as cur:
             cur.execute("SELECT manifest_json FROM devices ORDER BY registered_at")
             rows = cur.fetchall()
@@ -552,7 +552,7 @@ class DoSyncDB:
         return {}
 
     def load_all_device_states(self) -> dict:
-        """Carga todos los estados persistidos. Retorna {device_id: state_dict}."""
+        """Load every persisted state. Returns {device_id: state_dict}."""
         with self._cursor() as cur:
             cur.execute("SELECT device_id, state_json FROM device_state")
             rows = cur.fetchall()

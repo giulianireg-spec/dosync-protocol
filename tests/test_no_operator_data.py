@@ -245,6 +245,22 @@ def test_the_core_and_the_spec_are_in_english():
     # "Características:", "Posición 0-100%" are each one word. A detector tuned
     # to catch prose misses exactly the labels a reader sees first.
     accented = re.compile(r"[áéíóúñÁÉÍÓÚÑ¡¿]")
+    # Accents alone are not enough, and a user-facing warning proved it twice.
+    # `Usar: DOSYNC_AUTH=false para deshabilitar, o DOSYNC_TOKEN=<token> para
+    # autenticar.` is unambiguously Spanish, carries no accent, and reached an
+    # operator on a clean install. A Spanish docstring in the same file had
+    # slipped through earlier for the same reason and was fixed by hand without
+    # strengthening this check — which guaranteed the second time.
+    #
+    # Whole words only: `para` is Spanish, `parameters` is not, and a single
+    # match is not enough, since `este` and `cada` turn up inside URLs.
+    spanish_words = re.compile(
+        r"\b(?:para|desde|hasta|entre|sobre|cuando|donde|porque|aunque|"
+        r"usar|debe|puede|tiene|hacer|dispositivo|dispositivos|"
+        r"deshabilitar|autenticar|habilitar|ejecutar|configurar|"
+        r"archivo|archivos|todos|todas|esto|esta|este|estos|estas|"
+        r"mismo|misma|cada|otro|otra|carga|nuevo|nueva)\b",
+        re.IGNORECASE)
     # Surnames from design panels, cited in code comments that record why a
     # decision was made. Attribution is not prose, and rewriting a person's name
     # to satisfy a language rule would be worse than the rule.
@@ -258,7 +274,10 @@ def test_the_core_and_the_spec_are_in_english():
         if _allowed(path):
             continue
         for i, line in enumerate(_read(path).splitlines(), 1):
-            if accented.search(line) and not allowed_names.search(line):
+            if allowed_names.search(line):
+                continue
+            if accented.search(line) or len(
+                    set(w.lower() for w in spanish_words.findall(line))) >= 2:
                 hits.append(f"{rel}:{i} → {line.strip()[:70]}")
     assert not hits, (
         "the protocol core or its specification contains Spanish prose:\n  "

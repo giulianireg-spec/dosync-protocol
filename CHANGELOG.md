@@ -9,6 +9,23 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **The MCP server could not start against the SDK a fresh install gets.** The
+  2.x SDK removed `Server.list_tools()`, which `dosync/mcp_server.py` decorates
+  at import time, so `python -m dosync.mcp_server` died with
+  `AttributeError: 'Server' object has no attribute 'list_tools'`. Found while
+  wiring an agent to a hub on a clean Windows install, which installed 2.1.1
+  because the project declared `mcp>=1.0.0` — a floor with no ceiling, correct
+  the day it was written and wrong from the moment 2.0 shipped. The same shape
+  as the plain `uvicorn` pin that left the hub with no WebSocket library.
+
+  Capped at `<2.0`, and the server now checks before decorating: a cap does
+  nothing for an operator who already has 2.x installed, and an AttributeError
+  from inside a module they never opened is a true statement about the wrong
+  thing. Porting to the 2.x SDK is work to schedule, not a configuration
+  problem, and saying so is more useful than a stack trace.
+
+
 ## [0.6.2] — 2026-08-29
 
 One fix, found running the first semantic intent from a clean Windows install:

@@ -685,7 +685,7 @@ class CapabilityMatchingResolver(BaseResolver):
                          actuator_type: str, intent: Intent) -> dict | None:
         """
         When the intent carries explicit profile actions in its context,
-        busca los params correspondientes a este dispositivo y actuator.
+        finds the params belonging to this device and actuator.
         Returns None when there is no match — the caller uses the defaults.
         """
         profile_actions = intent.context.get("actions", [])
@@ -3553,7 +3553,7 @@ class DoSyncHub:
         """
         Ejecuta un PhasedActionPlan: cada fase en paralelo,
         the phases in sequence, with a delay between them.
-        Ideal para emergencias donde el orden importa.
+        Suited to emergencies where ordering matters.
         """
         all_results = []
 

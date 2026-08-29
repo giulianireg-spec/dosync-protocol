@@ -129,3 +129,49 @@ if __name__ == "__main__":
     print(f"\n{_PASS}/{_PASS + _FAIL} MCP dynamic-intent tests passed.")
     if _FAIL:
         raise SystemExit(1)
+
+
+# ── The SDK this server is written against (2026-08-29) ────────────────────
+
+def test_the_mcp_sdk_is_capped_at_the_major_it_was_written_for():
+    """`mcp>=1.0.0` was correct until 2.0 shipped.
+
+    The 2.x SDK removed `Server.list_tools()`, which this module decorates at
+    import time, so `python -m dosync.mcp_server` dies with
+    `AttributeError: 'Server' object has no attribute 'list_tools'` — found
+    while wiring an agent to a hub on a clean Windows install, which installed
+    2.1.1 because nothing said otherwise.
+
+    Same shape as the plain `uvicorn` pin that left the hub with no WebSocket
+    library: an open-ended floor that was right the day it was written.
+    """
+    from pathlib import Path
+
+    pyproject = (Path(__file__).resolve().parent.parent
+                 / "pyproject.toml").read_text(encoding="utf-8")
+    for line in pyproject.splitlines():
+        if '"mcp>=' in line:
+            assert "<2.0" in line, (
+                f"the MCP SDK is declared without an upper bound: {line.strip()} "
+                "— 2.x cannot run this server")
+
+
+def test_an_incompatible_sdk_says_so_instead_of_raising_attributeerror():
+    """A cap does not help anyone who already has 2.x installed.
+
+    They get an AttributeError from inside a module they never opened: a true
+    statement about the wrong thing. The check has to run before the first
+    decorator, because that decorator is what fails.
+    """
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parent.parent
+              / "dosync" / "mcp_server.py").read_text(encoding="utf-8")
+    assert 'hasattr(server, "list_tools")' in source, \
+        "nothing checks the SDK before decorating, so the failure is a raw " \
+        "AttributeError"
+    check_at = source.index('hasattr(server, "list_tools")')
+    decorator_at = source.index("@server.list_tools()")
+    assert check_at < decorator_at, \
+        "the compatibility check runs after the decorator it is meant to " \
+        "protect, so it can never fire"

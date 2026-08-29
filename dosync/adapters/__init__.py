@@ -6,7 +6,7 @@ Translation layer between the DoSync protocol and real physical devices.
 Modelo:
     DoSync Hub → AdapterExecutor → [WiZAdapter | GPIOAdapter | ShellyAdapter | ...]
 
-Para agregar un nuevo dispositivo:
+To add a new device type:
     1. Crear adapters/mi_marca.py implementando DoSyncAdapter
     2. Register the device with adapter="my_brand" in its CapabilityManifest
     3. The hub treats it like any other device — no core changes needed
@@ -55,7 +55,7 @@ class DoSyncAdapter(ABC):
     Cada adapter traduce acciones DoSync al protocolo nativo
     del dispositivo (UDP, HTTP, GPIO, BLE, etc.).
 
-    Para implementar un adapter nuevo:
+    To implement a new adapter:
 
         class MyBrandAdapter(DoSyncAdapter):
             async def execute(self, action, urgency):

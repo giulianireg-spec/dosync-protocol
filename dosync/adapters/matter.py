@@ -1,7 +1,7 @@
 """
 DoSync — Matter Adapter
 =======================
-Adapter para dispositivos Matter via python-matter-server o Home Assistant bridge.
+Adapter for Matter devices, via python-matter-server or Home Assistant bridge.
 
 Matter is the Connectivity Standards Alliance IoT interoperability standard.
 Este adapter soporta dos modos:
@@ -164,7 +164,7 @@ class _MatterViaHA:
 
 class MatterAdapter(DoSyncAdapter):
     """
-    Adapter DoSync para dispositivos Matter.
+    DoSync adapter for Matter devices.
 
     Modo actual: via Home Assistant bridge (v0.2).
     Modo futuro: via python-matter-server standalone (v0.3).

@@ -187,3 +187,67 @@ def test_the_deployment_section_keeps_secrets_out_of_the_unit():
     assert "drop-in" in section, \
         "nothing tells the operator where credentials should live instead"
     assert "not tracked" in section or "untracked" in section
+
+
+def test_connecting_an_agent_is_documented():
+    """The README said "MCP" a dozen times and never explained how.
+
+    A badge, a section on why MCP is the channel rather than the rival, a drone
+    that flew a mission through it — and no instructions. The same pattern as
+    the systemd unit that shipped for months while the page referred to *"your
+    service"*: both surfaced by using the system as a stranger would.
+    """
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    assert "## Connecting an agent" in readme, \
+        "nothing explains how to connect an agent over MCP"
+    section = readme[readme.index("## Connecting an agent"):]
+    section = section[:section.index("\n## ", 10)]
+
+    assert "python -m dosync.mcp_server" in section, \
+        "the section does not say how the server is started"
+    assert "DOSYNC_TOKEN" in section and "DOSYNC_HUB_URL" in section, \
+        "the environment the server reads is not documented"
+    assert "<2.0" in section, \
+        "nothing warns that the 2.x SDK cannot run this server"
+
+
+def test_the_agent_section_survives_a_different_client():
+    """The panel's test for this section: if another MCP client appears
+    tomorrow, how much still applies?
+
+    What DoSync controls — the command, the environment, the SDK bound — is the
+    protocol's and documented outright. Where a client keeps its file is the
+    client's, and appears as a dated example. Windows' byte-order mark and
+    filesystem virtualisation are the platform's: they hold for any packaged
+    client and any JSON written with PowerShell, which is why they are
+    described as platform behaviour rather than as one product's quirks.
+    """
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    section = readme[readme.index("## Connecting an agent"):]
+    section = section[:section.index("\n## ", 10)]
+
+    assert "documented by your client, not here" in section, \
+        "the section does not hand client-specific configuration back to the " \
+        "client, so it will rot when that client changes"
+    assert "Verified 29 August 2026" in section, \
+        "the section is not dated — a client's configuration changes without " \
+        "notice and this one already has"
+    # Whitespace-normalised: markdown wraps lines, and a test that breaks
+    # because a sentence moved across a line break is testing the wrap, not
+    # the meaning.
+    flat = " ".join(section.split())
+    assert "not as a recommendation" in flat, \
+        "naming what was tested reads as endorsing it"
+    assert "Any client that speaks MCP works" in section, \
+        "nothing says the protocol is not tied to one client"
+
+
+def test_the_agent_section_warns_the_config_holds_a_credential():
+    """The example puts the hub's token in a file in plain text. This project
+    shipped a live token in a public repository for three months."""
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    section = readme[readme.index("## Connecting an agent"):]
+    section = section[:section.index("\n## ", 10)]
+    assert "holds a credential" in section
+    assert "out of version control" in section, \
+        "nothing tells the reader to keep the file out of version control"
