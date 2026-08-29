@@ -166,3 +166,66 @@ def test_ha_bridge_skips_all_wiz_entities():
     m = bridge._state_to_manifest(
         {"entity_id": "light.ambient_strip", "attributes": {}, "state": "on"})
     assert m is not None and m.device_id == "ha-light-ambient_strip"
+
+
+# ── An action that failed must say why (2026-08-29) ────────────────────────
+
+def test_a_failure_with_no_message_still_reports_a_reason():
+    """`"error": ""` came back from real hardware.
+
+    A WiZ bulb powered off at the wall raised an exception whose `str()` is
+    empty. Six adapters did `error=str(e)`, so the hub reported
+    `success: false, error: ""` and the log line ended at the colon — the
+    operator was told the action failed and nothing else.
+
+    An exception type is not a diagnosis, but a blank field is strictly worse:
+    the type at least says where to look.
+    """
+    from dosync.adapters import failure_reason
+
+    class Silent(Exception):
+        def __str__(self) -> str:
+            return ""
+
+    reason = failure_reason(Silent())
+    assert reason, "a failure with no message still yields nothing"
+    assert "Silent" in reason, "the exception type is not named"
+    assert "did not answer" in reason
+
+    # A real message is passed through untouched.
+    assert failure_reason(ValueError("connection refused")) == "connection refused"
+
+
+def test_no_adapter_puts_a_bare_exception_into_the_error_field():
+    """The pattern was in six adapters at once, so a shared helper replaced it
+    rather than six separate patches — and this keeps the seventh from
+    reintroducing it."""
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parent.parent
+    import ast
+
+    offenders = []
+    for path in (repo / "dosync" / "adapters").glob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        # Parsed, not grepped. Scanning the text tripped on the helper's own
+        # docstring, which quotes the pattern to explain what it replaces —
+        # the fourth time today a check has failed on the prose justifying it.
+        tree = ast.parse(source)
+        docstrings = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Module, ast.ClassDef,
+                                 ast.FunctionDef, ast.AsyncFunctionDef)):
+                doc = ast.get_docstring(node, clean=False)
+                if doc:
+                    docstrings.update(doc.splitlines())
+        for i, line in enumerate(source.splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith("#") or line in docstrings or stripped in {
+                    d.strip() for d in docstrings}:
+                continue
+            if "error=str(e)" in stripped or "error=str(exc)" in stripped:
+                offenders.append(f"{path.name}:{i}")
+    assert not offenders, (
+        "these adapters put a raw exception into the error field, which is the "
+        f"empty string for some libraries: {offenders}. Use failure_reason().")

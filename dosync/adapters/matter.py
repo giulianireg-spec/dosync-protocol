@@ -39,6 +39,7 @@ from typing import Optional
 
 from ..adapters import DoSyncAdapter
 from ..models import ActionResult, DeviceAction, Urgency
+from . import failure_reason
 
 log = logging.getLogger("dosync.adapters.matter")
 
@@ -257,7 +258,7 @@ class MatterAdapter(DoSyncAdapter):
                 action=action.action,
                 success=False,
                 response=None,
-                error=str(e),
+                error=failure_reason(e),
             )
 
     def _call_ha(self, device_type: str,

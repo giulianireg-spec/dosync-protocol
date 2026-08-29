@@ -29,6 +29,25 @@ log = logging.getLogger("dosync.adapters")
 
 # ── Base interface every adapter must implement ───────────────────────────────
 
+def failure_reason(exc: BaseException) -> str:
+    """A reason an operator can act on, even when the exception has no text.
+
+    `error=str(e)` was the pattern in six adapters, and it produced
+    `"error": ""` on real hardware: a WiZ bulb powered off at the wall raised an
+    exception whose `str()` is empty, so the hub reported that the action failed
+    and said nothing else. The log line ended at the colon.
+
+    An exception type is not a diagnosis, but it is not nothing either — and a
+    blank field is strictly worse than "TimeoutError with no message", because
+    the second at least tells the reader where to look.
+    """
+    text = str(exc).strip()
+    if text:
+        return text
+    return (f"{type(exc).__name__} with no message — the device did not "
+            "answer, or answered in a way the adapter could not read.")
+
+
 class DoSyncAdapter(ABC):
     """
     Base interface for physical device adapters.

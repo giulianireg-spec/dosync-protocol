@@ -359,7 +359,7 @@ class MQTTAdapter(DoSyncAdapter):
             log.warning("MQTTAdapter: publish failed for '%s': %s", action.device_id, exc)
             return ActionResult(
                 device_id=action.device_id, action=action.action,
-                success=False, error=str(exc),
+                success=False, error=failure_reason(exc),
             )
 
     # ── Helpers ───────────────────────────────────────────────────────────────

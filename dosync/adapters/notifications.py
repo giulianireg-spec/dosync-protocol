@@ -199,7 +199,7 @@ class NotificationAdapter(DoSyncAdapter):
             )
             return ActionResult(device_id=action.device_id, action=action.action, success=True, response={'status': 'sent'})
         except Exception as e:
-            return ActionResult(device_id=action.device_id, action=action.action, success=False, error=str(e))
+            return ActionResult(device_id=action.device_id, action=action.action, success=False, error=failure_reason(e))
 
     async def notify(self, intent: str, urgency: str, context: dict,
                      to: str = None) -> bool:

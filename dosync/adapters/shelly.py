@@ -34,6 +34,7 @@ from typing import Optional
 
 from ..adapters import DoSyncAdapter
 from ..models import ActionResult, DeviceAction, Urgency
+from . import failure_reason
 
 log = logging.getLogger("dosync.adapters.shelly")
 
@@ -305,7 +306,7 @@ class ShellyAdapter(DoSyncAdapter):
                 action=action.action,
                 success=False,
                 response=None,
-                error=str(e),
+                error=failure_reason(e),
             )
 
     async def _execute_http(self, ip: str, gen: int,

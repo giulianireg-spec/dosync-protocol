@@ -248,12 +248,22 @@ class WiZAdapter(DoSyncAdapter):
                     success=False,
                     error="WiZ timeout — device unreachable",
                 )
-            log.error("WiZ error %s @ %s: %s", action.device_id, ip, e)
+            # `str(e)` alone is not a reason. pywizlight raises exceptions whose
+            # text is empty — a bulb that was powered off at the wall returned
+            # `success: false, error: ""`, and the log line ended at the colon.
+            # The operator was told the action failed and nothing else, which is
+            # the same failure this project fixed in the verification panel: an
+            # exception carrying no message must not become a blank field.
+            reason = str(e).strip() or (
+                f"{type(e).__name__} with no message — the bulb did not answer. "
+                "It is usually powered off at the wall, on another network, or "
+                "busy with another controller.")
+            log.error("WiZ error %s @ %s: %s", action.device_id, ip, reason)
             return ActionResult(
                 device_id=action.device_id,
                 action=action.action,
                 success=False,
-                error=str(e),
+                error=reason,
             )
 
     async def get_state(self, device_id: str) -> dict | None:

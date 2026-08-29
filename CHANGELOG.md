@@ -10,6 +10,22 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **An action that failed reported `"error": ""`.** Found controlling real
+  bulbs from a clean Windows install: two of three returned
+  `success: false` with an empty reason, and the log line ended at the colon.
+  `pywizlight` raises exceptions whose `str()` is empty — a bulb powered off at
+  the wall produces one — and six adapters did `error=str(e)`, so the hub
+  reported that an action had failed and said nothing else.
+
+  A shared `failure_reason()` now names the exception type when it carries no
+  text. A type is not a diagnosis, but a blank field is strictly worse: the
+  type at least says where to look. Applied across all six adapters rather than
+  patched in one, with a test that parses each adapter and rejects a bare
+  exception in the error field — the same class of failure as the verification
+  panel swallowing `URLError`, three days apart.
+
+
+### Fixed
 - **SSDP discovery raised `NotImplementedError` on Windows, and the handler
   that should have absorbed it raised `NameError`.** Both found on a clean
   install of 0.6.0, minutes after publishing it.

@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from ..hub import DoSyncHub
 
 from ..adapters import DoSyncAdapter
+from . import failure_reason
 from ..models import (
     ActionResult, ActuatorSpec, CapabilityManifest,
     CertTier, DeviceAction, DeviceCategory, EventSpec,
@@ -610,7 +611,7 @@ class HABridge(DoSyncAdapter):
                 device_id=action.device_id,
                 action=action.action,
                 success=False,
-                error=str(e),
+                error=failure_reason(e),
             )
 
     async def get_state(self, device_id: str) -> dict | None:
