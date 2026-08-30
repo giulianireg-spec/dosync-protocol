@@ -254,6 +254,24 @@ def test_the_core_and_the_spec_are_in_english():
     #
     # Whole words only: `para` is Spanish, `parameters` is not, and a single
     # match is not enough, since `este` and `cada` turn up inside URLs.
+    # Third iteration of this check, and the previous two failed the same way:
+    # each fix added items to a list, and a list always has holes. Accents
+    # missed `Usar: DOSYNC_AUTH=false para deshabilitar`. A content-word list
+    # then missed `Conecta DoSync con Home Assistant via su API REST local`,
+    # which is unmistakably Spanish and contains no content word from it.
+    #
+    # Function words are the fix: `con`, `su`, `el`, `del` are the parts of a
+    # language that cannot be avoided, unlike vocabulary. Two on one line, whole
+    # words only.
+    spanish_function_words = re.compile(
+        r"\b(?:el|la|los|las|un|una|unos|unas|del|al|con|sin|por|su|sus|"
+        r"que|como|más|pero|muy|ya|si|no|se|le|lo|nos|te|mi|tu)\b")
+    # Single words that cannot occur in an English docstring at all. These are
+    # section headers, which is exactly where a translated file leaves traces.
+    spanish_headers = re.compile(
+        r"^\s*(?:Uso|Requiere|Ejemplo|Ejemplos|Nota|Notas|Instalación|"
+        r"Configuración|Advertencia|Resumen|Parámetros|Devuelve|Retorna)\s*:",
+        re.MULTILINE)
     spanish_words = re.compile(
         r"\b(?:para|desde|hasta|entre|sobre|cuando|donde|porque|aunque|"
         r"usar|debe|puede|tiene|hacer|dispositivo|dispositivos|"
@@ -276,8 +294,12 @@ def test_the_core_and_the_spec_are_in_english():
         for i, line in enumerate(_read(path).splitlines(), 1):
             if allowed_names.search(line):
                 continue
-            if accented.search(line) or len(
-                    set(w.lower() for w in spanish_words.findall(line))) >= 2:
+            if (accented.search(line)
+                    or spanish_headers.search(line)
+                    or len(set(w.lower()
+                               for w in spanish_words.findall(line))) >= 2
+                    or len(set(w.lower()
+                               for w in spanish_function_words.findall(line))) >= 2):
                 hits.append(f"{rel}:{i} → {line.strip()[:70]}")
     assert not hits, (
         "the protocol core or its specification contains Spanish prose:\n  "

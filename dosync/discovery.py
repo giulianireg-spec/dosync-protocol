@@ -61,7 +61,7 @@ class DiscoveredDevice:
 async def discover_wiz(timeout: float = 5.0) -> list[DiscoveredDevice]:
     """
     Descubre lamparitas WiZ en la red local via broadcast UDP.
-    Requiere: pip install pywizlight
+    Requires: pip install pywizlight
     """
     try:
         from pywizlight import discovery as wiz_discovery
@@ -162,7 +162,7 @@ class Discovery:
 
     def _register(self, discovered: DiscoveredDevice) -> int:
         """
-        Registra un dispositivo descubierto en el hub.
+        Register a discovered device with the hub.
         Returns 1 when new, 0 when already present.
         """
         existing = self.hub.registry.get(discovered.device_id)
@@ -200,7 +200,7 @@ class Discovery:
         Runs discovery periodically in the background.
         Useful for catching devices that appear or change address.
 
-        Uso:
+        Usage:
             asyncio.create_task(discovery.run_periodic(interval_seconds=300))
         """
         self._running = True
@@ -217,7 +217,7 @@ class Discovery:
 
     async def scan_and_print(self) -> None:
         """
-        Escanea y muestra los dispositivos encontrados sin registrarlos.
+        Scan and print what was found, without registering anything.
         Useful for diagnostics.
         """
         print("\n── DoSync Device Discovery ───────────────────────")

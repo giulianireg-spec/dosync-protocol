@@ -64,7 +64,7 @@ def shelly_manifest(
     Args:
         device_id:        unique identifier (e.g. "shelly-zone1-01")
         device_name:      nombre visible (ej: "Shelly Living Room")
-        ip:               IP del dispositivo en la red local
+        ip:               the device's address on the local network
         device_type:      tipo: "relay" | "dimmer" | "plug" | "rgbw"
         gen:              API generation: 1 or 2
         tags:             tags adicionales

@@ -1,10 +1,10 @@
 """
 DoSync — Home Assistant Bridge
 ===============================
-Conecta DoSync con Home Assistant via su API REST local.
+Connects DoSync to Home Assistant through its local REST API.
 Exposes Home Assistant entities as certifiable DoSync devices.
 
-Requiere:
+Requires:
     pip install aiohttp
 
 Configuration:
@@ -13,9 +13,9 @@ Configuration:
 
 Getting a token from Home Assistant:
     1. Profile (bottom-left icon) → Long-Lived Access Tokens
-    2. "Create Token" → copiar el token
+    2. "Create Token" → copy the token
 
-Uso:
+Usage:
     from dosync.adapters.homeassistant import HABridge
 
     bridge = HABridge(

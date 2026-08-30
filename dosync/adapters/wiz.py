@@ -20,7 +20,7 @@ Registro de un dispositivo WiZ en DoSync:
     executor = AdapterExecutor(hub)
     executor.register(WiZAdapter())
 
-    # Registrar la lamparita en el hub
+    # Register the bulb with the hub
     hub.register_device(wiz_manifest(
         device_id="wiz-living-01",
         device_name="Zone 1 lamp",
@@ -133,7 +133,7 @@ def wiz_manifest(
         cert_tier=CertTier.STANDARD,
     )
 
-    # Adjuntar config del adapter directamente al manifest
+    # Attach the adapter config to the manifest directly
     manifest.adapter        = "wiz"
     manifest.adapter_config = {"ip": ip, "port": 38899}
 
@@ -317,7 +317,7 @@ class WiZAdapter(DoSyncAdapter):
             pct = params.get("brightness", 100)
             # Si viene 0 es apagar
             if pct == 0:
-                return None  # se maneja como turn_off en execute()
+                return None  # handled as turn_off in execute()
             return PilotBuilder(brightness=self._pct_to_wiz(pct))
 
         if action.action == "set_color":
@@ -334,7 +334,7 @@ class WiZAdapter(DoSyncAdapter):
             scene_id = params.get("scene_id", 1)
             return PilotBuilder(scene=scene_id)
 
-        # Default: encender con brillo al 80%
+        # Default: switch on at 80% brightness
         return PilotBuilder(brightness=204)
 
     @staticmethod

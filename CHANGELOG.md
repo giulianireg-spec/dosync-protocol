@@ -9,6 +9,26 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Forty-eight more lines of Spanish in the core, and the third rewrite of the
+  guard that kept missing them.** Found while checking what the Home Assistant
+  bridge looks like to a first-time reader: its module docstring opened with
+  *"Conecta DoSync con Home Assistant via su API REST local"* — unmistakably
+  Spanish, and invisible to a check that had already been strengthened twice.
+
+  Each previous fix added entries to a list. Accents missed unaccented prose; a
+  content-word list then missed a sentence whose only Spanish is `con` and `su`.
+  A list will always have holes. The guard now matches **function words** —
+  `el`, `la`, `del`, `con`, `su`, `que` — which are the part of a language a
+  writer cannot avoid, two on a line, whole words only. It also rejects Spanish
+  docstring section headers (`Uso:`, `Requiere:`, `Ejemplo:`), which is where a
+  half-translated file leaves its clearest trace.
+
+  It found forty-eight lines across twelve modules, including the security PKI
+  header, the auth key-handling notes and three lines in the Home Assistant
+  bridge itself.
+
+
 ## [0.6.3] — 2026-08-29
 
 Everything here came from connecting an agent to a hub for the first time, on a

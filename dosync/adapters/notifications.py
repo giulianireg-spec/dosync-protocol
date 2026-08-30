@@ -3,8 +3,8 @@ DoSync — Notification Adapter (SMS via Twilio)
 ===============================================
 Sends SMS when emergency or alert intents fire.
 
-Uso:
-    # Agregar al servidor como middleware de notificaciones
+Usage:
+    # Add to the server as notification middleware
     from dosync.adapters.notifications import NotificationAdapter
     notifier = NotificationAdapter()
     await notifier.notify_emergency(intent, context)

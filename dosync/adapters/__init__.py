@@ -59,7 +59,7 @@ class DoSyncAdapter(ABC):
 
         class MyBrandAdapter(DoSyncAdapter):
             async def execute(self, action, urgency):
-                # traducir action.action + action.params al protocolo del dispositivo
+                # translate action.action + action.params into the device's protocol
                 return ActionResult(
                     device_id=action.device_id,
                     action=action.action,
@@ -178,12 +178,12 @@ class DoSyncAdapter(ABC):
 
 class AdapterExecutor:
     """
-    Ejecutor central que delega acciones al adapter correcto
+    Central executor that delegates each action to the right adapter
     based on the 'adapter' field of the device's CapabilityManifest.
 
     A device with no registered adapter falls back to the SimulatedExecutor.
 
-    Uso:
+    Usage:
         executor = AdapterExecutor(hub)
         executor.register(WiZAdapter())
         executor.register(GPIOAdapter())
@@ -196,7 +196,7 @@ class AdapterExecutor:
         """
         Args:
             hub: instancia de DoSyncHub
-            fallback_to_simulated: si True, dispositivos sin adapter
+            fallback_to_simulated: if True, devices with no adapter
                                    usan SimulatedExecutor en lugar de fallar
         """
         self._hub = hub

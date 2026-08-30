@@ -3,7 +3,7 @@ DoSync — Management CLI
 =======================
 Administration tool for a DoSync hub.
 
-Uso:
+Usage:
     PYTHONPATH=. python3 manage.py keys list
     PYTHONPATH=. python3 manage.py keys create --label "mi-app"
     PYTHONPATH=. python3 manage.py keys reset

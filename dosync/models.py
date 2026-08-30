@@ -50,7 +50,7 @@ class FailurePolicy(str, Enum):
     Defines executor behaviour when an action fails.
 
     CONTINUE  — compntes
-    ABORT     — detiene las acciones pendientes al primer fallo
+    ABORT     — stops pending actions at the first failure
     RETRY     — retry the failed action N times before continuing
     """
     CONTINUE = "continue"
@@ -189,7 +189,7 @@ class EventSpec:
 class ContextSignal:
     """
     Declares that this device contributes to context inference.
-    Ejemplo: un smartwatch contribuye a PRESENCE y HEALTH.
+    Example: a smartwatch contributes to both PRESENCE and HEALTH.
     """
     type: ContextSignalType
     description: str = ""

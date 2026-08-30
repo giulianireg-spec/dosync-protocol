@@ -3,15 +3,15 @@ DoSync — Authentication
 =======================
 API key simple para proteger el hub.
 
-- Las keys se generan con secrets.token_urlsafe(32)
-- Solo almacenamos el SHA-256 del token, nunca el token en texto plano
+- Keys are generated with secrets.token_urlsafe(32)
+- Only the SHA-256 of a token is stored, never the token itself
 - The first start generates a key automatically and prints it once
 - Las keys adicionales se crean via API o CLI
 
 Flujo:
-    1. Hub arranca → si no hay keys, genera una y la muestra UNA SOLA VEZ
+    1. Hub starts → with no keys, it generates one and shows it ONCE
     2. Cliente incluye: Authorization: Bearer <token>
-    3. Hub hashea el token y busca en la DB
+    3. Hub hashes the token and looks it up in the DB
     4. Si no coincide → 401 Unauthorized
 
 Uso en FastAPI (las dependencias viven en dosync.auth_fastapi):
@@ -44,7 +44,7 @@ log = logging.getLogger("dosync.auth")
 # ── Hashing ───────────────────────────────────────────────────────────────────
 
 def hash_token(token: str) -> str:
-    """SHA-256 del token. Nunca almacenamos el token en texto plano."""
+    """SHA-256 of a token. The token itself is never stored."""
     return hashlib.sha256(token.encode()).hexdigest()
 
 
@@ -112,7 +112,7 @@ class AuthManager:
         """
         With no keys present, generate one and return it to be displayed.
         With keys already present, return None — no second key is generated.
-        Llamar al iniciar el hub.
+        Call this when the hub starts.
 
         When DOSYNC_DEMO_TOKEN is set, that value is used as the initial
         token instead of a random one. Useful for Docker deployments
@@ -174,7 +174,7 @@ class DeviceAuthManager:
 
     Flujo:
         1. Operador pre-registra un dispositivo → obtiene device_token
-        2. Dispositivo incluye device_token al registrar su manifest
+        2. The device includes device_token when registering its manifest
         3. Hub valida el token → solo permite el device_id autorizado
 
     Backward compatible: when device_token is absent from the manifest,

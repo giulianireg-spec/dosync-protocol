@@ -1,28 +1,28 @@
 """
 DoSync Security — Layer 2
 =========================
-PKI local + TLS/mTLS para el hub DoSync.
+A local PKI, plus TLS/mTLS for the DoSync hub.
 
-Arquitectura:
+Architecture:
     - The hub host acts as a local Certificate Authority (CA)
-    - El hub tiene su propio certificado firmado por la CA
-    - Los adapters externos (gpio_adapter, adapters de terceros)
-      reciben certificados firmados por la misma CA
-    - mTLS verifica identidad en ambas direcciones
+    - The hub holds its own certificate, signed by that CA
+    - External adapters (the GPIO adapter, third-party adapters)
+      receive certificates signed by the same CA
+    - mTLS verifies identity in both directions
 
-Archivos generados (en certs/):
+Files generated under certs/:
     certs/
-    ├── ca.key          — clave privada de la CA (nunca sale de la Pi)
-    ├── ca.crt          — certificado de la CA (se distribuye a clientes)
-    ├── hub.key         — clave privada del hub
-    ├── hub.crt         — certificado del hub (firmado por CA)
-    ├── hub.csr         — certificate signing request (intermedio)
+    ├── ca.key          — the CA private key (never leaves this host)
+    ├── ca.crt          — the CA certificate (distributed to clients)
+    ├── hub.key         — the hub private key
+    ├── hub.crt         — the hub certificate, signed by the CA
+    ├── hub.csr         — certificate signing request (intermediate)
     └── adapters/
-        ├── gpio.key    — clave privada del gpio_adapter
-        └── gpio.crt    — certificado del gpio_adapter (firmado por CA)
+        ├── gpio.key    — the GPIO adapter private key
+        └── gpio.crt    — its certificate, signed by the CA
 
 Quick start:
-    # Generar PKI completa (primera vez)
+    # Generate the whole PKI (first run)
     python3 -m dosync.security setup
 
     # Issue a certificate for a new adapter
@@ -31,7 +31,7 @@ Quick start:
     # Verify the certificates are valid and have not expired
     python3 -m dosync.security verify
 
-    # Ver info de un certificado
+    # Inspect a certificate
     python3 -m dosync.security info --cert certs/hub.crt
 
 Integration with uvicorn (HTTPS):
@@ -444,8 +444,8 @@ def setup(
         3. Certificado para gpio_adapter (opcional)
     
     Args:
-        hub_ip:      IP del hub en la red local
-        hub_hostname: hostname del hub
+        hub_ip:      the hub's address on the local network
+        hub_hostname: the hub's hostname
         issue_gpio:  when True, also issue the GPIO adapter certificate
         force:       regenerar todo aunque ya exista
     

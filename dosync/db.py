@@ -1,8 +1,8 @@
 """
 DoSync — Persistence Layer (SQLite)
-Todos los datos criticos del hub sobreviven reinicios.
+Every piece of critical hub state survives a restart.
 
-Un solo archivo dosync.db en el directorio del proyecto.
+A single dosync.db file in the project directory.
 Sin dependencias externas — sqlite3 viene con Python.
 """
 
@@ -109,7 +109,7 @@ class DoSyncDB:
     """
     SQLite persistence layer for the DoSync hub.
 
-    Uso:
+    Usage:
         db = DoSyncDB("dosync.db")
         db.init()
 
@@ -380,7 +380,7 @@ class DoSyncDB:
         return json.loads(row[0]) if row else default
 
     def load_audit_log(self) -> list[dict]:
-        """Carga el audit log completo ordenado por timestamp."""
+        """Load the whole audit log, ordered by timestamp."""
         with self._cursor() as cur:
             cur.execute(
                 "SELECT entry_json FROM audit_log ORDER BY timestamp, id"
@@ -573,7 +573,7 @@ class DoSyncDB:
     def get_device_health(self, device_id: str, last_n: int = 100) -> dict:
         """
         Health statistics for one device.
-        Retorna: {device_id, total, success, failed, success_rate, last_error, last_seen}
+        Returns: {device_id, total, success, failed, success_rate, last_error, last_seen}
         """
         with self._cursor() as cur:
             cur.execute(
@@ -646,7 +646,7 @@ class DoSyncDB:
     # ── Device tokens ─────────────────────────────────────────────────────────
 
     def init_device_tokens_table(self) -> None:
-        """Crear tabla device_tokens si no existe."""
+        """Create the device_tokens table if it is not there."""
         self._conn.execute("""
             CREATE TABLE IF NOT EXISTS device_tokens (
                 device_id   TEXT PRIMARY KEY,

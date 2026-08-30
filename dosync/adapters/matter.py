@@ -13,7 +13,7 @@ Modo 1 — via Home Assistant (recomendado para v0.2):
 
 Modo 2 — via python-matter-server (standalone, experimental):
     Conecta directamente a un python-matter-server corriendo localmente.
-    Requiere: pip install matter-server-client
+    Requires: pip install matter-server-client
 
 Installation:
     HA mode:     no additional installation required

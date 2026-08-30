@@ -540,7 +540,7 @@ class CapabilityMatchingResolver(BaseResolver):
         """
         Explain the resolver's reasoning for a given intent.
         Shows each device's score and why it was included or excluded.
-        Calculado on-demand — refleja el estado actual del registry.
+        Computed on demand — reflects the registry as it stands now.
         """
         resolution = self._get_resolution(intent)
         target_tags      = set(resolution.get("tags", []))

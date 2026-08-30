@@ -1,12 +1,12 @@
 """
 DoSync — MCP Server
 ====================
-Expone el hub DoSync como un servidor MCP (Model Context Protocol).
+Exposes the DoSync hub as an MCP (Model Context Protocol) server.
 
 Con esto, cualquier LLM que soporte MCP (Claude, ChatGPT, Cursor, etc.)
 can then act through DoSync with no further configuration.
 
-Uso:
+Usage:
     # Arrancar como servidor MCP standalone (stdio — para Claude Desktop)
     PYTHONPATH=. python3 dosync/mcp_server.py
 
@@ -81,7 +81,7 @@ POLL_INTERVAL          = 1.0  # seconds between polls
 # ── HTTP helper ───────────────────────────────────────────────────────────────
 
 async def hub_request(method: str, path: str, body: dict = None) -> dict:
-    """Llama a la API REST del hub DoSync."""
+    """Call the DoSync hub's REST API."""
     headers = {"Content-Type": "application/json"}
     if HUB_TOKEN:
         headers["Authorization"] = f"Bearer {HUB_TOKEN}"
@@ -336,7 +336,7 @@ async def list_tools() -> list[types.Tool]:
                 "Send an event from a device to the hub. "
                 "Use to inject sensor events (a detected fall, "
                 "motion, a fault) or to integrate devices "
-                "que no tienen adapter nativo."
+                "that have no native adapter."
             ),
             inputSchema={
                 "type": "object",
@@ -710,7 +710,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         if "error" in result:
             text = f"❌ Error: {result['error']}"
         else:
-            text = (f"✅ Evento recibido por el hub:\n"
+            text = (f"✅ Event received by the hub:\n"
                     f"  Dispositivo: {result.get('device_id')}\n"
                     f"  Evento:      {result.get('event_id')}\n"
                     f"  Severidad:   {result.get('severity')}\n")
