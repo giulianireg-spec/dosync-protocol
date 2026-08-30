@@ -755,6 +755,35 @@ It speaks over stdin/stdout, so a successful start prints nothing and waits.
 Typing into that terminal will produce JSON parse errors — that is the protocol
 rejecting your keystrokes, not a fault.
 
+**When the agent is not on this machine**, stdio cannot help: it assumes the
+client can start the server as a subprocess, which means they share a filesystem.
+A hub in a container, on a Pi across the room, or under a supervisor is not that.
+Serve it over the network instead:
+
+```bash
+DOSYNC_MCP_TRANSPORT=http DOSYNC_TOKEN=<token> python -m dosync.mcp_server
+```
+
+It listens on `127.0.0.1:47210` by default; `DOSYNC_MCP_HOST` and
+`DOSYNC_MCP_PORT` change that. Clients connect to `/mcp`, and `/health` answers
+unauthenticated so a supervisor can check the process without holding a
+credential.
+
+**It will not start over HTTP without `DOSYNC_TOKEN`, deliberately.** Over stdio
+the operating system is the boundary — whoever can start the process is already
+on the machine. A port has none, and on a host network it is reachable by every
+device on the LAN. The tools behind it open locks and stop machines.
+
+**The token travels in clear text unless you put TLS in front of it.** That is
+true of the hub's own API too and is documented there, but it matters more here:
+this port executes tools rather than answering questions. On a trusted LAN it is
+a considered trade-off; across anything else, terminate TLS in front of it. Idle
+sessions are dropped after 15 minutes by default (`DOSYNC_MCP_SESSION_TIMEOUT`).
+
+The transport changes nothing else. Both serve the same tools from the same
+server object, and an agent reaching a device this way goes through the hub's
+REST API exactly as `curl` does — same policy engine, same audit chain.
+
 It reads three environment variables:
 
 | Variable | Meaning |

@@ -9,6 +9,47 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The MCP server can be reached over the network, not only as a subprocess.**
+  `stdio` assumes the client can start the server itself, which means they share
+  a machine and a filesystem. That held while the only deployment was one
+  person's laptop. It fails for every real one: a hub in a container, on a Pi
+  across the room, or under a supervisor is not where the agent is.
+
+  `DOSYNC_MCP_TRANSPORT=http` serves the same tools from the same server object
+  over Streamable HTTP — a transport the pinned SDK already ships, so nothing
+  about the protocol changed. An agent reaching a device this way goes through
+  the hub's REST API exactly as `curl` does, and a test asserts the MCP server
+  never imports the hub or the executor directly: policies and the audit chain
+  apply to an agent as they do to any other caller.
+
+  **It refuses to start over HTTP without `DOSYNC_TOKEN`.** Over stdio the
+  operating system is the boundary — whoever can start the process is already on
+  the machine. A port has none, and on a host network it is reachable by every
+  device on the LAN. The token is compared with `hmac.compare_digest`: `!=` on
+  strings stops at the first differing byte, which leaks the matching prefix
+  length through response time and is enough, on a LAN with repeated
+  measurements, to reconstruct a token. Idle sessions are released after 15
+  minutes, because a client that disconnects without closing otherwise leaves
+  its session in memory for as long as the process runs.
+
+  Both defaults say that opening a port is a decision rather than a consequence
+  of installing: the transport is `stdio` and the host is loopback unless asked
+  otherwise.
+
+### Fixed
+- **The same server introduced itself differently over each transport.** The
+  Streamable HTTP session manager builds its initialization options from the
+  `Server` object and never sees what a transport constructs, so the version was
+  reported as DoSync's over stdio and as the MCP SDK's own package version over
+  HTTP. Declared on the server itself, where both read it.
+
+- **`/mcp` answered with a 307 redirect to `/mcp/`.** An HTTP client following a
+  redirect is not required to resend the `Authorization` header or the POST
+  body, so a correctly configured client would have arrived unauthenticated at a
+  URL it never chose. Both spellings now reach the same handler.
+
+
 ### Fixed
 - **Forty-eight more lines of Spanish in the core, and the third rewrite of the
   guard that kept missing them.** Found while checking what the Home Assistant

@@ -90,4 +90,8 @@ settings exist for deployments whose needs differ from that, not as a checklist.
 | `DOSYNC_HA_LOCATION_TAGS` | _unset_ |
 | `DOSYNC_LLM_BASE_URL` | _unset_ |
 | `DOSYNC_LLM_MODEL` | _unset_ |
+| `DOSYNC_MCP_HOST` | `127.0.0.1` |
+| `DOSYNC_MCP_PORT` | `47210` |
+| `DOSYNC_MCP_SESSION_TIMEOUT` | `900` |
+| `DOSYNC_MCP_TRANSPORT` | `stdio` |
 | `DOSYNC_NOTIFICATION_TEMPLATES` | _unset_ |

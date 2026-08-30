@@ -38,6 +38,8 @@ Herramientas expuestas al LLM:
 
 from __future__ import annotations
 import asyncio
+import contextlib
+import hmac
 import json
 import logging
 import os
@@ -126,7 +128,13 @@ def fmt(data: dict) -> str:
 
 # ── MCP Server ────────────────────────────────────────────────────────────────
 
-server = Server("dosync-hub")
+# The version is declared here rather than at the transport, because the
+# Streamable HTTP session manager builds its own initialization options from
+# this object and never sees anything a transport constructs. Passing it only
+# to the stdio path made the same server introduce itself as DoSync 0.6.3 over
+# one transport and as the MCP SDK's version over the other — the SDK falls
+# back to its own package version when a server declares none.
+server = Server("dosync-hub", version=__import__("dosync").__version__)
 
 # Checked here rather than left to fail at the first decorator. The 2.x SDK
 # removed `Server.list_tools()`, so an operator with that version installed got
@@ -856,8 +864,143 @@ Niveles de urgencia:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+#: Where a client reaches this server from, and therefore who may.
+#:
+#: `stdio` assumes the client can start the server as a subprocess, which means
+#: they share a machine and a filesystem. That held for as long as the only
+#: deployment was one person's laptop. It stops holding the moment the hub runs
+#: somewhere the agent is not — a container, a Pi across the room, a supervised
+#: appliance — and that is every real deployment. The transport is a protocol
+#: decision, not a packaging one, which is why it lives here rather than in a
+#: launcher script.
+TRANSPORT = os.environ.get("DOSYNC_MCP_TRANSPORT", "stdio").strip().lower()
+MCP_HOST  = os.environ.get("DOSYNC_MCP_HOST", "127.0.0.1")
+MCP_PORT  = int(os.environ.get("DOSYNC_MCP_PORT", "47210"))
+
+
+def _init_options():
+    """Shared by both transports so they cannot describe different servers."""
+    from mcp.server.lowlevel.server import NotificationOptions
+    # Derived from the server object, which is the same one the HTTP transport
+    # hands to the session manager. Two transports, one description.
+    return server.create_initialization_options(
+        notification_options=NotificationOptions())
+
+
+class _Dispatch:
+    """Routes MCP paths to the session manager and everything else to Starlette.
+
+    Exists so that the lifespan Starlette owns still runs while `/mcp` and
+    `/mcp/` reach the same handler without a redirect between them.
+    """
+
+    def __init__(self, handler, fallback):
+        self._handler = handler
+        self._fallback = fallback
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "lifespan":
+            await self._fallback(scope, receive, send)
+            return
+        await self._handler(scope, receive, send)
+
+
+async def _serve_http() -> None:
+    """Serve over Streamable HTTP, for a client that is not on this machine.
+
+    Nothing about the tools changes: the same `server` object handles both
+    transports, so a tool cannot behave one way over stdio and another over the
+    network. What changes is who can reach it, and that is the whole reason this
+    function refuses to start without a token.
+    """
+    import uvicorn
+    from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+    from starlette.applications import Starlette
+    from starlette.responses import JSONResponse
+    from starlette.routing import Route
+
+    if not HUB_TOKEN:
+        raise RuntimeError(
+            "DOSYNC_MCP_TRANSPORT=http needs DOSYNC_TOKEN.\n\n"
+            "Over stdio the operating system is the boundary: whoever can start "
+            "the process is already on the machine. A port has no such boundary "
+            "— on a host network it is reachable by every device on the LAN, and "
+            "the tools behind it open locks and stop machines. Refusing to start "
+            "is the only honest default here.")
+
+    # `session_idle_timeout` matters for a process that runs for weeks: a client
+    # that disconnects without closing leaves its session in memory, and
+    # sessions accumulate. Without a bound, an authenticated caller opening them
+    # in a loop is an exhaustion path.
+    manager = StreamableHTTPSessionManager(
+        app=server, json_response=False,
+        session_idle_timeout=float(
+            os.environ.get("DOSYNC_MCP_SESSION_TIMEOUT", "900")))
+
+    async def _mcp(scope, receive, send):
+        # The bearer token the hub already issues. Not a second credential: the
+        # same one an operator pastes into a client today.
+        header = ""
+        for name, value in scope.get("headers", []):
+            if name == b"authorization":
+                header = value.decode("latin-1")
+                break
+        # `!=` on strings stops at the first differing byte, which leaks the
+        # length of the matching prefix through response time. On a LAN, with
+        # repeated measurements, that is enough to reconstruct a token byte by
+        # byte. `compare_digest` takes the same time whatever the input.
+        if not hmac.compare_digest(
+                header.removeprefix("Bearer ").strip(), HUB_TOKEN):
+            await JSONResponse(
+                {"error": "Missing or invalid Authorization: Bearer <token>"},
+                status_code=401)(scope, receive, send)
+            return
+        await manager.handle_request(scope, receive, send)
+
+    async def _health(_request):
+        # Deliberately unauthenticated and deliberately empty: a supervisor
+        # needs to know the process is up without holding a credential, and
+        # nothing here should tell an unauthenticated caller what this hub is.
+        return JSONResponse({"status": "ok"})
+
+    @contextlib.asynccontextmanager
+    async def _lifespan(_app):
+        async with manager.run():
+            log.info("MCP over Streamable HTTP on %s:%s%s",
+                     MCP_HOST, MCP_PORT, "/mcp")
+            yield
+
+    # Mounted at the root so `/mcp` and `/mcp/` are the same endpoint rather
+    # than a redirect between them. Starlette answers a bare `/mcp` mount with a
+    # 307, and an HTTP client that follows a redirect is not required to resend
+    # the Authorization header or the POST body — a correctly configured client
+    # would arrive unauthenticated at a URL it never chose.
+    async def _root(scope, receive, send):
+        path = scope.get("path", "")
+        if path in ("/mcp", "/mcp/"):
+            await _mcp({**scope, "path": "/"}, receive, send)
+            return
+        await app_routes(scope, receive, send)
+
+    app_routes = Starlette(routes=[Route("/health", _health)],
+                           lifespan=_lifespan)
+    app = _Dispatch(_root, app_routes)
+    config = uvicorn.Config(app, host=MCP_HOST, port=MCP_PORT,
+                            log_level="warning")
+    await uvicorn.Server(config).serve()
+
+
 async def main():
     logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
+
+    if TRANSPORT in ("http", "streamable-http", "streamable_http"):
+        await _serve_http()
+        return
+
+    if TRANSPORT != "stdio":
+        raise RuntimeError(
+            f"Unknown DOSYNC_MCP_TRANSPORT={TRANSPORT!r}. "
+            "Use 'stdio' (default) or 'http'.")
 
     if not HUB_TOKEN:
         log.warning(
@@ -868,22 +1011,7 @@ async def main():
         )
 
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-        from mcp.server.models import InitializationOptions
-        from mcp.server.lowlevel.server import NotificationOptions
-        caps = server.get_capabilities(
-            notification_options=NotificationOptions(),
-            experimental_capabilities={},
-        )
-
-        await server.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="dosync-hub",
-                server_version="0.1.0",
-                capabilities=caps,
-            ),
-        )
+        await server.run(read_stream, write_stream, _init_options())
 
 
 if __name__ == "__main__":
