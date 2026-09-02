@@ -9,6 +9,25 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **The audit log lives in its own module.** `hub.py` held five
+  responsibilities in 3,710 lines — the capability registry, four resolvers, the
+  audit log, a timed executor and the device-health monitor — and none could be
+  touched without risk to the other four. The resolver redesign that the Phase 1
+  measurements call for is not safe until those are separated, so this is the
+  first of several moves.
+
+  `AuditLog` is now `dosync/audit.py`, re-exported from `dosync.hub` so that
+  every existing import keeps working. Nothing about the behaviour changed:
+  the chaining, the persistence callback, the head checkpoint and the
+  verification are the code that shipped in 0.6.3.
+
+  One detail worth naming because it nearly slipped: the extracted module logs
+  to `dosync.hub`, not `dosync.audit`. An operator filtering on the old name
+  would otherwise have stopped seeing audit warnings the day the file moved —
+  a behaviour change hiding inside a move that promised none.
+
+
 ### Added
 - **The MCP server can be reached over the network, not only as a subprocess.**
   `stdio` assumes the client can start the server itself, which means they share
