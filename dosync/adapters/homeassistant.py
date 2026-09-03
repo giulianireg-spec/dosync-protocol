@@ -276,7 +276,7 @@ def dosync_to_ha_service(domain: str, action: str, params: dict) -> tuple[str, s
 
 class HABridge(DoSyncAdapter):
     """
-    Bridge entre DoSync y Home Assistant.
+    Bridge between DoSync and Home Assistant.
 
     Acts as:
     1. Scanner — importa dispositivos de HA como manifests DoSync

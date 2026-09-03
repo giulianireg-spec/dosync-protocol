@@ -434,7 +434,7 @@ if _hub_role == "standby":
 # ── WebSocket manager ─────────────────────────────────────────────────────────
 
 class ConnectionManager:
-    """Gestiona todas las conexiones WebSocket activas."""
+    """Manages every active WebSocket connection."""
 
     def __init__(self):
         self._connections: list[WebSocket] = []
@@ -1574,7 +1574,7 @@ async def verify_device_cert(body: dict, auth: str = Depends(require_auth)):
 
 @app.get("/v1/devices/provisioned", tags=["Devices"])
 def list_provisioned_devices(auth: str = Depends(require_auth)):
-    """Lista todos los device_ids pre-registrados."""
+    """Lists every pre-registered device_id."""
     from dosync.auth import get_device_auth_manager
     device_auth = get_device_auth_manager()
     if not device_auth:

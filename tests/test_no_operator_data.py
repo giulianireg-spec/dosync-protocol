@@ -263,15 +263,49 @@ def test_the_core_and_the_spec_are_in_english():
     # Function words are the fix: `con`, `su`, `el`, `del` are the parts of a
     # language that cannot be avoided, unlike vocabulary. Two on one line, whole
     # words only.
+    # Fifth iteration. Each of the previous four added entries to a list, and
+    # each was defeated by a line whose Spanish used words the list happened not
+    # to contain — most recently `Ejecuta un PhasedActionPlan: cada fase en
+    # paralelo`, where the only listed word was `un`.
+    #
+    # The list is now the closed class itself: articles, prepositions,
+    # conjunctions, demonstratives, quantifiers and the copula. These are the
+    # words a language cannot do without, unlike vocabulary — which is why a
+    # vocabulary list keeps losing and this should not.
     spanish_function_words = re.compile(
-        r"\b(?:el|la|los|las|un|una|unos|unas|del|al|con|sin|por|su|sus|"
-        r"que|como|más|pero|muy|ya|si|no|se|le|lo|nos|te|mi|tu)\b")
+        r"\b(?:el|la|los|las|lo|un|una|unos|unas|del|al|con|sin|por|para|"
+        r"desde|hasta|entre|sobre|tras|durante|segun|mediante|"
+        r"su|sus|mi|mis|tu|tus|nuestro|nuestra|"
+        r"que|como|cuando|donde|porque|aunque|pero|sino|mientras|"
+        r"este|esta|estos|estas|ese|esa|esos|esas|aquel|aquella|"
+        r"cada|todo|toda|todos|todas|otro|otra|otros|otras|"
+        r"es|son|era|eran|ser|esta|estan|hay|"
+        r"mas|muy|ya|si|no|se|le|nos|te|ni)\b")
+    # `y` and `o` count, but never on their own. In Python they are axes,
+    # coordinates and one-letter loop variables — `x, y = point` and
+    # `set the y and o axis` would both read as Spanish. Requiring a second,
+    # longer function word alongside them keeps `Bridge entre DoSync y Home
+    # Assistant` (which has `entre`) while dropping the false positives.
+    #
+    # Measured: removing them outright lost six of the fifteen lines this
+    # version found, so they carry real signal — just not alone.
+    spanish_short_conjunctions = re.compile(r"\b(?:y|o)\b")
+
     # Single words that cannot occur in an English docstring at all. These are
     # section headers, which is exactly where a translated file leaves traces.
     spanish_headers = re.compile(
         r"^\s*(?:Uso|Requiere|Ejemplo|Ejemplos|Nota|Notas|Instalación|"
         r"Configuración|Advertencia|Resumen|Parámetros|Devuelve|Retorna)\s*:",
         re.MULTILINE)
+    # Known limits, stated rather than discovered later:
+    #   `la = latitude, lo = longitude` reads as Spanish. Two-letter names for
+    #   coordinates would trip this; the pattern does not occur here today.
+    #   Short Spanish with no accents, no function words and no section header
+    #   still passes — `Requiere autenticacion` has none of the four signals.
+    #   Test files are not scanned. They are written for the author; the core
+    #   and the specification are what a third party reads. A decision, not an
+    #   oversight.
+
     spanish_words = re.compile(
         r"\b(?:para|desde|hasta|entre|sobre|cuando|donde|porque|aunque|"
         r"usar|debe|puede|tiene|hacer|dispositivo|dispositivos|"
@@ -299,7 +333,9 @@ def test_the_core_and_the_spec_are_in_english():
                     or len(set(w.lower()
                                for w in spanish_words.findall(line))) >= 2
                     or len(set(w.lower()
-                               for w in spanish_function_words.findall(line))) >= 2):
+                               for w in spanish_function_words.findall(line))) >= 2
+                    or (spanish_short_conjunctions.search(line)
+                        and spanish_function_words.search(line))):
                 hits.append(f"{rel}:{i} → {line.strip()[:70]}")
     assert not hits, (
         "the protocol core or its specification contains Spanish prose:\n  "

@@ -9,6 +9,26 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Fifteen more lines of Spanish, and the fifth rewrite of the guard.** Found
+  while inventorying `DoSyncHub`, not by the check: `execute_phased` opened with
+  *"Ejecuta un PhasedActionPlan: cada fase en paralelo"*, and the detector let it
+  through because the only word it recognised was `un`.
+
+  Each of the previous four fixes added entries to a list, and each was defeated
+  by Spanish that used words the list happened not to contain. The list is now
+  the **closed word class** itself — articles, prepositions, conjunctions,
+  demonstratives, quantifiers, the copula. These are the words a language cannot
+  do without, unlike vocabulary, which is why a vocabulary list keeps losing.
+
+  It immediately found fourteen more lines across seven modules that four
+  previous versions had passed, including the auth module's key-management
+  docstrings and the WebSocket manager in `server.py`.
+
+  Verified by reintroducing the exact line that defeated the previous four: the
+  check now fails on it.
+
+
 ### Changed
 - **Checkpoint administration joined the audit log.** The 2 September extraction
   took `AuditLog` out of `hub.py` and left its administration behind: four

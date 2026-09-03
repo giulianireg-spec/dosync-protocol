@@ -755,7 +755,7 @@ class DoSyncDB:
         ]
 
     def clear_old_snapshots(self, max_age_hours: int = 24) -> int:
-        """Limpia snapshots resueltos o muy antiguos."""
+        """Clear resolved or long-stale snapshots."""
         import time
         cutoff = time.time() - (max_age_hours * 3600)
         cur = self._conn.execute("""
@@ -839,7 +839,7 @@ class DoSyncDB:
         return json.loads(row[0]) if row else None
 
     def clear_old_operations(self, max_age_hours: int = 24) -> int:
-        """Limpia operaciones terminales o muy antiguas. Las operaciones activas
+        """Clear terminal or long-stale operations. Active operations
         (terminal=0) are NEVER aged out — an old but live operation is exactly
         the one that must be preserved in order to reconcile."""
         import time

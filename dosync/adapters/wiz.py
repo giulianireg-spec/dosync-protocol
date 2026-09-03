@@ -163,7 +163,7 @@ class WiZAdapter(DoSyncAdapter):
         """Get the device address from the hub registry."""
         # The device IP is stored in adapter_config of the manifest
         from .. import models   # avoid circular import
-        return None  # se resuelve en execute via action.params o manifest
+        return None  # resolved in execute via action.params or manifest
 
     def __init__(self, hub=None):
         """

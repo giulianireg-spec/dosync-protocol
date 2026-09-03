@@ -7,7 +7,7 @@ Con esto, cualquier LLM que soporte MCP (Claude, ChatGPT, Cursor, etc.)
 can then act through DoSync with no further configuration.
 
 Usage:
-    # Arrancar como servidor MCP standalone (stdio — para Claude Desktop)
+    # Start as a standalone MCP server (stdio — for a desktop client)
     PYTHONPATH=. python3 dosync/mcp_server.py
 
     # With authentication
@@ -433,7 +433,7 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "brightness": {
                         "type": "integer",
-                        "description": "Brillo 0-100 (para set_brightness o turn_on)",
+                        "description": "Brightness 0-100 (for set_brightness or turn_on)",
                     },
                     "r": {"type": "integer", "description": "Rojo 0-255"},
                     "g": {"type": "integer", "description": "Verde 0-255"},

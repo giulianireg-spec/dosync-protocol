@@ -2754,8 +2754,8 @@ class DoSyncHub:
         executor: "DeviceExecutor",
     ) -> list[IntentResult]:
         """
-        Ejecuta un PhasedActionPlan: cada fase en paralelo,
-        the phases in sequence, with a delay between them.
+        Runs a PhasedActionPlan: each phase in parallel, the phases in
+        sequence, with a delay between them.
         Suited to emergencies where ordering matters.
         """
         all_results = []

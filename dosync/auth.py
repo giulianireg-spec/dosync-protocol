@@ -1,12 +1,12 @@
 """
 DoSync — Authentication
 =======================
-API key simple para proteger el hub.
+A simple API key that protects the hub.
 
 - Keys are generated with secrets.token_urlsafe(32)
 - Only the SHA-256 of a token is stored, never the token itself
 - The first start generates a key automatically and prints it once
-- Las keys adicionales se crean via API o CLI
+- Further keys are created through the API or the CLI
 
 Flujo:
     1. Hub starts → with no keys, it generates one and shows it ONCE
@@ -52,7 +52,7 @@ def hash_token(token: str) -> str:
 
 class AuthManager:
     """
-    Gestiona API keys para el hub DoSync.
+    Manages API keys for the DoSync hub.
     Backed by DoSyncDB for persistence.
     """
 

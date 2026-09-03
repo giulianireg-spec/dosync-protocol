@@ -283,7 +283,7 @@ def generate_hub_cert(
     Args:
         hub_ip:       hub address, for the SAN
         hub_hostname: hub hostname, for the SAN
-        force:        regenerar aunque ya exista
+        force:        regenerate even if one already exists
     """
     _ensure_dirs()
 
@@ -361,7 +361,7 @@ def issue_adapter_cert(
     Args:
         name:       nombre del adapter (ej: "gpio", "shelly-01")
         adapter_ip: adapter address, for the SAN
-        force:      regenerar aunque ya exista
+        force:      regenerate even if one already exists
     
     Returns:
         (key_path, cert_path)
@@ -447,7 +447,7 @@ def setup(
         hub_ip:      the hub's address on the local network
         hub_hostname: the hub's hostname
         issue_gpio:  when True, also issue the GPIO adapter certificate
-        force:       regenerar todo aunque ya exista
+        force:       regenerate everything even if it already exists
     
     Returns:
         PKIStatus describing the resulting PKI
