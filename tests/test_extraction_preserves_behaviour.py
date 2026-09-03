@@ -94,6 +94,40 @@ def test_the_extraction_took_the_classes_and_left_the_functions():
         "_assurance_is_regulated left hub.py"
 
 
+def test_checkpoint_state_is_not_duplicated():
+    """The hub exposes the keeper's bookkeeping as properties, not copies.
+
+    Tests and `server.py` read `hub._checkpoint_export_state` and friends. If
+    the extraction had copied those attributes onto the hub as well, there
+    would be two values and only one of them would be updated — the kind of
+    drift that shows up as a checkpoint the hub believes it wrote.
+    """
+    from dosync.hub import DoSyncHub
+
+    hub = DoSyncHub(db_path=":memory:")
+    hub._checkpoints._checkpoint_export_state = "sentinel"
+    assert hub._checkpoint_export_state == "sentinel", (
+        "hub._checkpoint_export_state does not follow the keeper — it is a "
+        "copy, and the two will drift")
+
+
+def test_the_default_checkpoint_interval_is_visible_at_the_entry_point():
+    """An implementer looking for the default looks at the method they call.
+
+    Delegating the body to CheckpointKeeper hid the number one level down. It
+    is repeated in the docstring so it stays where someone would look — which
+    a pre-existing test asserts by reading the source.
+    """
+    import inspect
+
+    from dosync.hub import DoSyncHub
+
+    src = inspect.getsource(DoSyncHub.start_checkpoint_scheduler)
+    assert '"86400"' in src, (
+        "the default interval is no longer visible in the method an "
+        "implementer calls")
+
+
 def test_hub_is_smaller_than_it_was():
     """A guard against the extraction being undone by a later merge.
 
@@ -105,6 +139,6 @@ def test_hub_is_smaller_than_it_was():
     # are done this test should be retired rather than raised, or it will start
     # failing for legitimate additions and blaming the wrong cause.
     lines = (REPO / "dosync" / "hub.py").read_text(encoding="utf-8").count("\n")
-    assert lines < 3250, (
+    assert lines < 2950, (
         f"hub.py is back to {lines} lines: something moved back in, or an "
         "extraction was reverted")

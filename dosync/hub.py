@@ -1091,7 +1091,8 @@ class StateAwareResolver(CapabilityMatchingResolver):
 # extraction that forces callers to move at the same time is a rewrite
 # wearing an extraction's clothes.
 
-from dosync.audit import AuditLog  # noqa: E402,F401
+from dosync.audit import (AuditLog, CheckpointKeeper,  # noqa: E402,F401
+                          _assurance_is_regulated, checkpoint_export_mode)
 
 # ── Execution timing and device health ───────────────────────────────────────
 #
@@ -1099,45 +1100,6 @@ from dosync.audit import AuditLog  # noqa: E402,F401
 # working unchanged.
 
 from dosync.execution import DeviceHealth, _TimedExecutor  # noqa: E402,F401
-
-
-
-
-def _assurance_is_regulated() -> bool:
-    """Does this deployment have to prove anything to someone else?
-
-    DoSync's audit machinery serves two different needs that look alike. In a
-    home or a small shop the operator is the only interested party: the chain is
-    a log that answers "what did the system do", and nobody will ever be asked
-    to demonstrate it was not edited. In a care facility, a plant, or anywhere a
-    regulator or an insurer can ask, the same chain has to function as EVIDENCE,
-    which requires exported checkpoints and a routine behind them.
-
-    Defaulting to `standard` is deliberate. Warning a household about an
-    adversary who controls the host means warning them about themselves — a
-    warning they cannot act on and would be right to ignore, which is how a
-    system teaches people that its warnings are noise. A deployment that needs
-    the stronger posture says so, and gets told when its evidence is incomplete.
-    """
-    return os.environ.get("DOSYNC_ASSURANCE", "standard").lower() in (
-        "regulated", "high", "audited")
-
-
-def checkpoint_export_mode() -> str:
-    """How checkpoints leave this host, derived from CONFIGURATION.
-
-    Read at status time rather than remembered from the last write. The state
-    used to be set only when a checkpoint was produced, so a hub that had just
-    restarted reported "unknown" about a setting it could see plainly — and a
-    monitor checking this field would be blind for a whole interval after every
-    restart, which is exactly when someone is most likely to be watching.
-    """
-    if os.environ.get("DOSYNC_CHECKPOINT_EXPORT_EXTERNAL", "").lower() in (
-            "1", "true", "yes"):
-        return "external"
-    if os.environ.get("DOSYNC_CHECKPOINT_EXPORT_DIR"):
-        return "configured"
-    return "not_configured"
 
 class DoSyncHub:
     """
@@ -1160,10 +1122,9 @@ class DoSyncHub:
         # Surfaced in /v1/status so monitoring can catch a checkpoint routine
         # that has quietly stopped. The hub cannot see whether checkpoints are
         # EXPORTED, but it can say when it last produced one.
-        self._last_checkpoint_at: float | None = None
-        self._last_checkpoint_path: str | None = None
-        self._checkpoint_export_state: str = "unknown"
-        self._last_checkpoint_export_at: float | None = None
+        # Checkpoint bookkeeping moved to CheckpointKeeper with the four methods
+        # that used it. Constructed after db and audit_log exist.
+        self._checkpoints = None   # set below, once db is wired
         # Executor for HUB-INITIATED intents — those the hub raises on its own
         # (e.g. the capability-anomaly security alert), which have no caller to
         # supply one. Wired by the server at startup. If it is None the hub
@@ -1176,6 +1137,7 @@ class DoSyncHub:
         self.db             = DoSyncDB(db_path)
         self.db.init()
         self.health         = DeviceHealth(self)   # hub-owned passive device health
+        self._checkpoints   = CheckpointKeeper(self.db, self.audit_log)
         # Load persisted state now that db is ready
         if hasattr(self, "resolver"):
             self.resolver._load_state_from_db()
@@ -1187,305 +1149,9 @@ class DoSyncHub:
 
     # ── DB restore ──────────────────────────────────────────────────────────
 
-    async def start_checkpoint_scheduler(self, interval: float = None,
-                                         directory: str = None) -> None:
-        """Emit signed audit checkpoints on a schedule, by default.
 
-        The protocol's tamper-evidence has a limit that only a checkpoint can
-        close: an adversary with write access to the whole database can rewrite
-        the chain, recompute every hash, and update the head record to match.
-        Nothing stored on this machine can detect that. An exported checkpoint
-        can, because the attacker never had it.
 
-        Leaving that to a routine each operator invents means most deployments
-        will not have it — a guarantee that requires opt-in is a guarantee most
-        installations lack. So the hub GENERATES checkpoints itself, on a default
-        interval, the same way it already applies default risk parameters like
-        DOSYNC_UNREACHABLE_TTL (1800s) and DOSYNC_INTENT_TIMEOUT.
 
-        What the hub CANNOT do is export them, and that distinction is the whole
-        reason the deployment still has work to do. A checkpoint sitting in this
-        directory protects nothing against anyone who controls this machine; it
-        becomes evidence only once a copy exists somewhere the hub cannot reach.
-        The hub does the part it can and says plainly which part it cannot.
-
-        Args:
-            interval:  seconds between checkpoints. Defaults to
-                       DOSYNC_CHECKPOINT_INTERVAL (86400 = daily). Set to 0 to
-                       disable — a deliberate choice, not a default.
-            directory: where to write them. Defaults to DOSYNC_CHECKPOINT_DIR
-                       ("checkpoints").
-        """
-        if interval is None:
-            interval = float(os.environ.get("DOSYNC_CHECKPOINT_INTERVAL", "86400"))
-        if interval <= 0:
-            log.warning("Audit checkpoints DISABLED (DOSYNC_CHECKPOINT_INTERVAL=%s). "
-                        "A rewritten history will not be detectable.", interval)
-            return
-        if directory is None:
-            from .paths import resolve_state
-            directory = str(resolve_state("checkpoints", "DOSYNC_CHECKPOINT_DIR",
-                                          create=True))
-
-        _export = os.environ.get("DOSYNC_CHECKPOINT_EXPORT_DIR")
-        log.info("Audit checkpoints scheduled every %.0fs → %s", interval, directory)
-        _external = os.environ.get("DOSYNC_CHECKPOINT_EXPORT_EXTERNAL", "").lower() in (
-            "1", "true", "yes")
-        if _export:
-            log.info("Audit checkpoints will be exported to %s", _export)
-        elif _external:
-            log.info("Audit checkpoints are collected externally "
-                     "(DOSYNC_CHECKPOINT_EXPORT_EXTERNAL) — this hub keeps no copy "
-                     "elsewhere and holds no credentials to the collector.")
-        elif _assurance_is_regulated():
-            # Said at STARTUP, not only when the first checkpoint is written a
-            # day later: an operator who is going to configure this should learn
-            # it now, not after a day of producing artifacts nobody collects.
-            # Only for deployments that declared they must prove things — see
-            # _assurance_is_regulated for why this is not everyone's problem.
-            log.warning(
-                "DOSYNC_ASSURANCE=regulated but no checkpoint export is configured. "
-                "Checkpoints will stay on this host, where they prove nothing against "
-                "anyone who controls it. Set DOSYNC_CHECKPOINT_EXPORT_DIR to push copies "
-                "somewhere, or DOSYNC_CHECKPOINT_EXPORT_EXTERNAL=true if something else "
-                "collects them from here.")
-
-        # Write first if one is overdue, THEN settle into the interval.
-        #
-        # Sleeping first looks harmless and is not: a hub that restarts more
-        # often than the interval never reaches the first write, so it produces
-        # no evidence at all. Found by looking at why a pull of `cp-*.json`
-        # came back empty after a day of work — every restart had reset a
-        # 24-hour timer that never elapsed. Deployments restart for updates,
-        # power and configuration changes; an interval that only survives
-        # uninterrupted uptime is not an interval.
-        last = self.db.get_last_checkpoint_at()
-        if last is None or (time.time() - last) >= interval:
-            self.write_checkpoint(directory)
-
-        # Archiving rides the same timer. Both are maintenance the deployment
-        # should not have to remember, and a hub that checkpoints faithfully
-        # while its chain grows without bound has solved the smaller problem.
-        self.maybe_archive()
-
-        while True:
-            try:
-                await asyncio.sleep(interval)
-                self.maybe_archive()
-                self.write_checkpoint(directory)
-            except asyncio.CancelledError:
-                log.info("Audit checkpoint scheduler stopped")
-                break
-            except Exception as e:
-                log.warning("Audit checkpoint cycle error: %s", e)
-
-    def write_checkpoint(self, directory: str = None) -> str | None:
-        """Write one signed checkpoint. Returns its path, or None if the chain
-        is empty. Used by the scheduler and available for a manual call."""
-        from . import audit_backup, cert_signing
-
-        if directory is None:
-            from .paths import resolve_state
-            directory = str(resolve_state("checkpoints", "DOSYNC_CHECKPOINT_DIR",
-                                          create=True))
-
-        # The mark must be current before attesting to it.
-        self.audit_log.flush_head()
-        entries = self.audit_log.entries()
-        if not entries:
-            return None
-
-        doc = audit_backup.build_checkpoint(entries, self.db.get_audit_anchor())
-        signed = cert_signing.sign_report(doc)
-
-        os.makedirs(directory, exist_ok=True)
-        path = os.path.join(directory, audit_backup.checkpoint_filename())
-        if os.path.exists(path):
-            return None          # same second; the previous one already attests
-        with open(path, "w") as f:
-            json.dump(signed, f, indent=2, sort_keys=True)
-
-        self._last_checkpoint_at = time.time()
-        self._last_checkpoint_path = path
-        try:
-            self.db.set_last_checkpoint_at(self._last_checkpoint_at)
-        except Exception as e:      # pragma: no cover - defensive
-            log.warning("Could not persist the checkpoint timestamp: %s", e)
-        log.info("Audit checkpoint written: %s (%d entries, head %s…)",
-                 path, doc["entry_count"], doc["head_hash"][:16])
-
-        self._export_checkpoint(path)
-        return path
-
-    def _export_checkpoint(self, path: str) -> None:
-        """Copy a checkpoint to `DOSYNC_CHECKPOINT_EXPORT_DIR`, if configured.
-
-        A checkpoint that never leaves this host proves nothing against anyone
-        who controls this host — so "where does it go" is not an afterthought,
-        it is the step that turns the artifact into evidence. The DESTINATION is
-        deployment-specific (a mounted share, a synced folder, removable media),
-        but the CONFIGURATION POINT is part of the protocol.
-
-        **Whether any of this matters depends on who you are proving things to.**
-        In a home or a small shop the operator IS the only interested party;
-        there is no third party to convince, and the chain is a useful log rather
-        than evidence. Warning such a deployment about an adversary who controls
-        the host — which is to say, about themselves — teaches them that DoSync's
-        warnings are noise. So the nagging is gated on `DOSYNC_ASSURANCE`, which
-        defaults to `standard` and says nothing. A deployment that must satisfy
-        an auditor sets `regulated` and gets told, loudly, when its evidence is
-        not leaving the building.
-
-        Honest about how much an export buys, because the gradation matters:
-
-          * **Not configured** — no protection against a compromised host.
-          * **A directory this hub can write to** (typically a network mount) —
-            better: the copy survives destruction of the local database, and a
-            remote filesystem that keeps snapshots or versions may hold history
-            the hub cannot reach. But an attacker with root here can generally
-            delete there too.
-          * **Pull-based transfer**, where the remote side fetches and the hub
-            holds no credentials to it — the strongest arrangement, and the only
-            one where "the hub cannot reach it" is literally true. The protocol
-            cannot implement this side of it; it is your infrastructure.
-        """
-        # A PULL arrangement — something outside fetching checkpoints from here —
-        # is the STRONGEST option in the table above, and in it this variable is
-        # correctly unset: pointing it at a mount the hub can write to would be a
-        # downgrade. So "unset" alone cannot mean "misconfigured", or the warning
-        # fires loudest at the best setup. The operator declares which it is.
-        if os.environ.get("DOSYNC_CHECKPOINT_EXPORT_EXTERNAL", "").lower() in (
-                "1", "true", "yes"):
-            self._checkpoint_export_state = "external"
-            log.info("Audit checkpoint retained for external collection "
-                     "(DOSYNC_CHECKPOINT_EXPORT_EXTERNAL): %s", path)
-            return
-
-        target = os.environ.get("DOSYNC_CHECKPOINT_EXPORT_DIR")
-        if not target:
-            self._checkpoint_export_state = "not_configured"
-            if _assurance_is_regulated():
-                log.warning(
-                    "Audit checkpoint NOT exported: neither DOSYNC_CHECKPOINT_EXPORT_DIR "
-                    "nor DOSYNC_CHECKPOINT_EXPORT_EXTERNAL is set, and this deployment "
-                    "declares DOSYNC_ASSURANCE=regulated. A checkpoint kept only on this "
-                    "host does not detect a rewritten history.")
-            else:
-                log.debug("Audit checkpoint kept locally (%s); no export configured.", path)
-            return
-        try:
-            import shutil
-            os.makedirs(target, exist_ok=True)
-            shutil.copy2(path, os.path.join(target, os.path.basename(path)))
-            self._checkpoint_export_state = "ok"
-            self._last_checkpoint_export_at = time.time()
-            log.info("Audit checkpoint exported to %s", target)
-        except Exception as e:
-            self._checkpoint_export_state = "failed"
-            log.error("Audit checkpoint export to %s FAILED: %s — the checkpoint "
-                      "exists locally but is not yet evidence.", target, e)
-
-    def maybe_archive(self, keep: int = None, directory: str = None) -> str | None:
-        """Archive the oldest chain entries if the live chain has grown too big.
-
-        The hub does this ITSELF, while running, and that is what makes it safe.
-        `manage.py db audit-archive` requires the hub stopped because it is a
-        SECOND process contending for a single-writer database — a constraint of
-        that arrangement, not of archiving. In-process there is no second writer,
-        so the operation that needed a maintenance window becomes routine.
-
-        It needs to be automatic because it is not optional. The reference
-        deployment went from 2,000 live entries to 16,258 in five days: an
-        unbounded chain grows memory, slows every restart, and lengthens every
-        verification, forever. Leaving that to an operator's memory is the same
-        mistake as leaving checkpoints to it — and worse for a home or a small
-        shop, where nobody is watching entry counts and the failure arrives
-        months later as "why is this slow now".
-
-        Refuses on a chain that does not verify: archiving corruption would seal
-        it into a segment that later reads as trusted history.
-
-        Args:
-            keep:      live entries to retain. Defaults to DOSYNC_AUDIT_MAX_LIVE
-                       (10000); 0 disables archiving entirely.
-            directory: where segments go. Defaults to DOSYNC_ARCHIVE_DIR
-                       ("audit-segments").
-        """
-        import hashlib as _hashlib
-
-        from . import audit_backup as ab
-
-        if keep is None:
-            keep = int(os.environ.get("DOSYNC_AUDIT_MAX_LIVE", "10000"))
-        if keep <= 0:
-            return None
-        if directory is None:
-            from .paths import resolve_state
-            directory = str(resolve_state("audit-segments", "DOSYNC_ARCHIVE_DIR", create=True))
-
-        entries = self.audit_log.entries()
-        if len(entries) <= keep:
-            return None
-
-        anchor = self.db.get_audit_anchor() or {}
-        start_anchor = anchor.get("anchor_prev_hash", ab.GENESIS)
-        generation = anchor.get("generations", 0) + 1
-
-        if not ab.verify_entries(entries, start_anchor):
-            log.error("Automatic archiving REFUSED: the live chain does not verify from "
-                      "its anchor. Archiving now would seal the corruption into a segment "
-                      "that later reads as trusted history. Investigate before continuing.")
-            return None
-
-        cut = len(entries) - keep
-        archived, remaining = entries[:cut], entries[cut:]
-
-        os.makedirs(directory, exist_ok=True)
-        out = os.path.join(directory,
-                           f"audit_segment_g{generation}_{int(time.time())}.json")
-        manifest = ab.write_segment(archived, out, start_anchor, generation)
-        seg_sha = ab.file_sha256(out)
-
-        # The archival is itself a chain event, computed exactly as AuditLog
-        # appends do, so the live chain stays verifiable across the seam.
-        arch_entry = {
-            "type": "audit_archived",
-            "generation": generation,
-            "archived_count": len(archived),
-            "segment_first_hash": manifest["first_hash"],
-            "segment_last_hash": manifest["last_hash"],
-            "segment_file": os.path.basename(out),
-            "segment_sha256": seg_sha,
-            "automatic": True,
-            "seq": self.audit_log._next_seq,
-            "prev_hash": remaining[-1]["hash"],
-            "timestamp": time.time(),
-        }
-        arch_entry["hash"] = _hashlib.sha256(
-            json.dumps(arch_entry, sort_keys=True).encode()).hexdigest()
-
-        self.db.replace_audit_after_archive(archived, arch_entry)
-        self.db.set_audit_anchor({
-            "anchor_prev_hash": manifest["last_hash"],
-            "generations": generation,
-            "archived_total": anchor.get("archived_total", 0) + len(archived),
-            "last_archive_file": out,
-            "last_archive_sha256": seg_sha,
-            "archived_at": time.time(),
-        })
-
-        # In-memory state must follow the database, or the next append chains
-        # from an entry that is no longer there.
-        self.audit_log._entries = remaining + [arch_entry]
-        self.audit_log.anchor_prev_hash = manifest["last_hash"]
-        self.audit_log._prev_hash = arch_entry["hash"]
-        self.audit_log._next_seq = arch_entry["seq"] + 1
-        self.audit_log.flush_head()
-
-        log.info("Audit chain archived automatically: %d entries → %s "
-                 "(generation %d, %d kept live)",
-                 len(archived), out, generation, len(remaining))
-        return out
 
     async def start_state_refresh(
         self,
@@ -1722,6 +1388,49 @@ class DoSyncHub:
             len(self.registry.all()),
             len(self.audit_log.entries()),
         )
+
+
+    # ── Checkpoints ───────────────────────────────────────────────────────────
+    #
+    # The work is in CheckpointKeeper. These stay because server.py and the
+    # audit tests call them on the hub, and an extraction that forces its
+    # callers to move is a rewrite with better manners.
+
+    async def start_checkpoint_scheduler(self, interval: float = None,
+                                         directory: str = None) -> None:
+        """Default interval: DOSYNC_CHECKPOINT_INTERVAL, or "86400" — daily.
+
+        The number is repeated in this docstring on purpose. A test asserts it
+        appears in the source of this method, because an implementer looking for
+        the default looks here, at the entry point, not in the class the work
+        was delegated to.
+        """
+        return await self._checkpoints.start_checkpoint_scheduler(
+            interval=interval, directory=directory)
+
+    # State that used to be hub attributes. Exposed as properties rather than
+    # copied, so there is one value and not two that can drift.
+    @property
+    def _checkpoint_export_state(self) -> str:
+        return self._checkpoints._checkpoint_export_state
+
+    @property
+    def _last_checkpoint_at(self) -> float | None:
+        return self._checkpoints._last_checkpoint_at
+
+    @property
+    def _last_checkpoint_path(self) -> str | None:
+        return self._checkpoints._last_checkpoint_path
+
+    @property
+    def _last_checkpoint_export_at(self) -> float | None:
+        return self._checkpoints._last_checkpoint_export_at
+
+    def write_checkpoint(self, directory: str = None) -> str | None:
+        return self._checkpoints.write_checkpoint(directory=directory)
+
+    def maybe_archive(self, *args, **kwargs):
+        return self._checkpoints.maybe_archive(*args, **kwargs)
 
     def set_family_profile(self, profile: FamilyProfile) -> None:
         """Load the family profile into the hub and persist it."""

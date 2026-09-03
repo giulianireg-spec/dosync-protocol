@@ -10,6 +10,32 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- **Checkpoint administration joined the audit log.** The 2 September extraction
+  took `AuditLog` out of `hub.py` and left its administration behind: four
+  methods on `DoSyncHub` — scheduling, writing, exporting and archiving
+  checkpoints — that touch nothing but the chain, the database and their own
+  bookkeeping. One responsibility on two sides of a module boundary.
+
+  They are now `CheckpointKeeper` in `dosync/audit.py`, along with the two
+  module-level functions they call. `DoSyncHub` keeps `write_checkpoint`,
+  `maybe_archive` and `start_checkpoint_scheduler` as delegating methods,
+  because `server.py` and the audit tests call them on the hub.
+
+  Two things the tests caught that a reading would not have:
+
+  The hub's checkpoint bookkeeping is exposed as **properties** rather than
+  copied. Copying would have left two values where the tests read one, and only
+  one of them updated.
+
+  And a test asserts the default interval `"86400"` appears in the source of
+  `start_checkpoint_scheduler`, because an implementer looking for the default
+  looks at the method they call. Delegating the body hid it one level down; the
+  docstring puts it back.
+
+  `hub.py`: 3,204 → 2,913 lines. Three of eleven responsibilities extracted.
+
+
+### Changed
 - **Execution timing and device health moved out of `hub.py`.** Second of the
   Phase 2 extractions. `_TimedExecutor` and `DeviceHealth` are now
   `dosync/execution.py`, re-exported from `dosync.hub` so that
