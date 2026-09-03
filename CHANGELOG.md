@@ -10,6 +10,25 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- **Execution timing and device health moved out of `hub.py`.** Second of the
+  Phase 2 extractions. `_TimedExecutor` and `DeviceHealth` are now
+  `dosync/execution.py`, re-exported from `dosync.hub` so that
+  `adapters/__init__.py` and three test modules import them unchanged. Both
+  classes are byte-identical to what they replaced.
+
+  `hub.py` is down from 3,710 lines to 3,204 across the two extractions, and
+  from five responsibilities to three.
+
+  The first attempt at this move failed in a way worth recording: taking a line
+  range from `_TimedExecutor` to `DoSyncHub` swept up two module-level functions
+  that happened to sit between the classes — `checkpoint_export_mode` and
+  `_assurance_is_regulated` — and fourteen tests failed, because callers import
+  those from `dosync.hub`. Line ranges are a blunt instrument; what belongs
+  together conceptually is not always contiguous. Both functions are back where
+  they were, and a test now says so.
+
+
+### Changed
 - **The audit log lives in its own module.** `hub.py` held five
   responsibilities in 3,710 lines — the capability registry, four resolvers, the
   audit log, a timed executor and the device-health monitor — and none could be

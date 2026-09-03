@@ -54,6 +54,46 @@ def test_the_audit_log_is_defined_once():
         "hub.py still defines AuditLog; the extraction left a copy behind")
 
 
+def test_execution_timing_and_health_are_one_class_at_two_addresses():
+    """`adapters/__init__.py` and three test modules import these from
+    `dosync.hub`. A copy rather than a re-export would give the adapters one
+    health tracker and the hub another, and neither would see the other's
+    failures."""
+    from dosync.execution import DeviceHealth as h_extracted
+    from dosync.execution import _TimedExecutor as t_extracted
+    from dosync.hub import DeviceHealth as h_reexported
+    from dosync.hub import _TimedExecutor as t_reexported
+
+    assert h_reexported is h_extracted, "DeviceHealth was copied, not re-exported"
+    assert t_reexported is t_extracted, "_TimedExecutor was copied, not re-exported"
+
+
+def test_execution_records_still_reach_the_hub_logger():
+    """Same reason as the audit module: an operator filtering on `dosync.hub`
+    should not lose these the day the file moved."""
+    import dosync.execution as execution
+
+    assert execution.log.name == "dosync.hub", (
+        f"execution records now go to {execution.log.name!r}")
+
+
+def test_the_extraction_took_the_classes_and_left_the_functions():
+    """The first attempt at this move swept up two module-level functions that
+    sat between the classes — `checkpoint_export_mode` and
+    `_assurance_is_regulated` — and fourteen tests failed because callers
+    import them from `dosync.hub`.
+
+    Line ranges are a blunt instrument for extraction; what belongs together
+    conceptually is not always contiguous.
+    """
+    import dosync.hub as hub
+
+    assert hasattr(hub, "checkpoint_export_mode"), \
+        "checkpoint_export_mode left hub.py; callers import it from there"
+    assert hasattr(hub, "_assurance_is_regulated"), \
+        "_assurance_is_regulated left hub.py"
+
+
 def test_hub_is_smaller_than_it_was():
     """A guard against the extraction being undone by a later merge.
 
@@ -65,6 +105,6 @@ def test_hub_is_smaller_than_it_was():
     # are done this test should be retired rather than raised, or it will start
     # failing for legitimate additions and blaming the wrong cause.
     lines = (REPO / "dosync" / "hub.py").read_text(encoding="utf-8").count("\n")
-    assert lines < 3600, (
+    assert lines < 3250, (
         f"hub.py is back to {lines} lines: something moved back in, or an "
         "extraction was reverted")
