@@ -37,12 +37,27 @@ import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 CORPORA = {
+    # Updated 4 September, deliberately and in the same commit as the change
+    # that moved them. These numbers are what the shipped resolver scores, not
+    # a target: the guard exists so that a tool drifting from the resolver is
+    # caught, and it did catch this — it fired the moment the gate changed,
+    # which is what it is for.
+    #
+    # They rose because participation is now decided by declared capability
+    # rather than by a curated tag: 0.64 → 0.85 industrial, 0.61 → 0.83
+    # clinical, both at recall 1.00. The corpora were expected to FALL, since
+    # they measure agreement with tags; that they improved this much says the
+    # tag filter was costing accuracy even by its own standard.
+    #
+    # Most of the gain is not the scoring gate — it is candidate selection. The
+    # gate alone moved these to 0.66 and 0.65, because a tag index upstream had
+    # already decided who would be scored at all.
     "industrial": (REPO / "benchmarks/corpus/industrial_registry.json",
                    REPO / "benchmarks/corpus/industrial_ground_truth.json",
-                   0.64),
+                   0.85),
     "clinical":   (REPO / "benchmarks/corpus/clinical_registry.json",
                    REPO / "benchmarks/corpus/clinical_ground_truth.json",
-                   0.61),
+                   0.83),
     "recall":     (REPO / "benchmarks/fixtures/recall_registry.json",
                    REPO / "benchmarks/fixtures/recall_ground_truth.json",
                    1.00),

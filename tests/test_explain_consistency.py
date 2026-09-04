@@ -77,7 +77,11 @@ def test_hard_filter_still_applies_to_emergency_forced_candidates():
     assert "dev-x" in candidates, "emergency force-inclusion stopped working"
     bd = r._score_breakdown(reg.get("dev-x"), intent, r._get_resolution(intent))
     assert bd.hard_filtered is True
-    assert "hard filter" in bd.exclusion_reason()
+    # The message no longer says "hard filter": participation is decided by
+    # declared capability, and the reason names what the device cannot do
+    # rather than which tag it lacks. Asserting the old wording here would
+    # pin a message that sends an operator to edit the wrong field.
+    assert "declares none of the capabilities" in bd.exclusion_reason()
 
 
 def test_matching_device_is_included_in_both():

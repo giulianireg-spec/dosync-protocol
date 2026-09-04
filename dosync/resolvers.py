@@ -96,9 +96,20 @@ class ScoreBreakdown:
     matched_actuators: list
     actuator_component: float
     hard_filtered: bool
+    # Named for what it held until 4 September. It now carries the actuators
+    # and sensors an intent needs, because that is what a device is excluded for
+    # lacking. Renaming it is a public-shape change and belongs to the step that
+    # revises the explain payload, not to this one — but the name is wrong today
+    # and saying so here is cheaper than someone trusting it.
     required_specific_tags: list
     device_tags: list
     had_any_tag_overlap: bool
+    # What the device declares, for an exclusion message that names the real
+    # reason. Under the capability gate a device is excluded for what it cannot
+    # do, and telling an operator "no tag overlap" would send them to edit the
+    # wrong field.
+    matched_sensors: list = field(default_factory=list)
+    device_capabilities: list = field(default_factory=list)
 
     @property
     def total(self) -> float:
@@ -110,9 +121,18 @@ class ScoreBreakdown:
                 + self.emergency_component + self.actuator_component)
 
     def exclusion_reason(self) -> str:
+        """Why this device is not in the plan, in terms of what the operator can
+        change.
+
+        Until 4 September this said "required specific tags […] not in device
+        tags […]", which was true then and would be a lie now: participation is
+        decided by declared capability, and an operator told to fix the tags
+        would edit a field that no longer gates anything.
+        """
         if self.hard_filtered:
-            return (f"required specific tags {self.required_specific_tags} not in "
-                    f"device tags {self.device_tags} (hard filter — bonuses do not apply)")
+            return (f"declares none of the capabilities this intent needs "
+                    f"{self.required_specific_tags}; it declares "
+                    f"{self.device_capabilities or 'none'}")
         if not self.had_any_tag_overlap:
             return "no tag overlap with intent resolution tags"
         return "score = 0"
@@ -369,6 +389,30 @@ class CapabilityMatchingResolver(BaseResolver):
         candidates = [d for d in self.registry.find_by_tags(list(target_tags))
                       if not is_quarantined(d)]
 
+        # Devices that declare a capability the intent needs are candidates too,
+        # tags or not (2026-09-04).
+        #
+        # Without this, changing the SCORING gate to read capabilities achieved
+        # nothing: the tag index had already decided who would be scored. The
+        # lock that motivated the redesign — declaring `lock` and `unlock`,
+        # tagged `access` and `security` — passed the new gate and still never
+        # reached a plan, because it was never a candidate. Verified: gate says
+        # include, plan comes back empty.
+        #
+        # One question, one answer: a device takes part if it declares what the
+        # intent needs. The tag index is now an accelerator for the devices that
+        # do carry the tags, not the boundary of who gets considered.
+        wanted = set(resolution.get("actuators", [])) | set(resolution.get("sensors", []))
+        if wanted:
+            seen = {d.device_id for d in candidates}
+            for device in self.registry.active():
+                if device.device_id in seen:
+                    continue
+                declared = ({a.type for a in device.actuators}
+                            | {sn.type for sn in device.sensors})
+                if declared & wanted:
+                    candidates.append(device)
+
         # Emergency intents also evaluate every emergency_capable device, tags or
         # not (F2b): a safety device must never be dropped by a tag filter. This
         # extension lived only in resolve(), which is part of why the two sets
@@ -406,24 +450,46 @@ class CapabilityMatchingResolver(BaseResolver):
         keep in sync."""
         target_tags   = set(resolution.get("tags", []))
         device_tags   = set(device.tags)
-        generic_tags  = {"light", "climate", "communication", "sensor", "appliance", "display"}
-        specific_tags = target_tags - generic_tags
-        resolution_is_all_specific = bool(specific_tags) and not (target_tags & generic_tags)
-
+        # The generic/specific tag split that used to live here is gone with the
+        # gate it served: it decided whether tags were a requirement or a bonus,
+        # and tags are neither now — they add to the score and nothing else.
         matched_tags = target_tags & device_tags
-        # Hard-filter semantics (2026-07-11 panel decision, F3b): only when the
-        # resolution is ALL specific tags are those tags a requirement; mixed
-        # resolutions treat specific tags as boost, not gate.
-        hard_filtered = resolution_is_all_specific and not (specific_tags & device_tags)
+
+        target_actuators = set(resolution.get("actuators", []))
+        device_actuators = {a.type for a in device.actuators}
+        matched_actuators = target_actuators & device_actuators
+
+        target_sensors = set(resolution.get("sensors", []))
+        device_sensors = {sn.type for sn in device.sensors}
+        matched_sensors = target_sensors & device_sensors
+
+        # ── Participation is decided by capability, not by label (2026-09-04) ──
+        #
+        # This gate used to read: if the resolution asks only for specific tags
+        # and the device carries none of them, exclude it. Measured against a
+        # ground truth written from what the deployment's owner wants — rather
+        # than from the tags the resolver itself reads — that rule excluded a
+        # lock declaring `lock` and `unlock` from `control_access`, because it
+        # lacked a tag the capability already implies.
+        #
+        # The rule now: a device participates if it declares an actuator the
+        # intent needs, or a sensor the intent needs. Both are facts the device
+        # states about itself and a third party can verify. A tag is a decision
+        # somebody made about a deployment, and it no longer decides entry —
+        # only ranking, and only for the part of ranking that is genuinely a
+        # deployment decision.
+        #
+        # Where an intent declares neither actuators nor sensors —
+        # `report_status` asks for everything — there is nothing to gate on and
+        # every device qualifies, which is the existing behaviour unchanged.
+        intent_declares_capability = bool(target_actuators or target_sensors)
+        hard_filtered = intent_declares_capability and not (
+            matched_actuators or matched_sensors)
 
         location = intent.context.get("location", "")
         location_hit = bool(location) and location in device_tags
 
         emergency_hit = (intent.urgency == Urgency.EMERGENCY and device.emergency_capable)
-
-        target_actuators = set(resolution.get("actuators", []))
-        device_actuators = {a.type for a in device.actuators}
-        matched_actuators = target_actuators & device_actuators
 
         return ScoreBreakdown(
             matched_tags=sorted(matched_tags),
@@ -433,9 +499,14 @@ class CapabilityMatchingResolver(BaseResolver):
             matched_actuators=sorted(matched_actuators),
             actuator_component=len(matched_actuators) * self._W_ACTUATOR,
             hard_filtered=hard_filtered,
-            required_specific_tags=sorted(specific_tags) if hard_filtered else [],
+            # Kept for the explain path, which reports what a device would have
+            # needed. Under the capability gate what it needed is a capability,
+            # so this now carries the actuators and sensors the intent asked for.
+            required_specific_tags=sorted(target_actuators | target_sensors) if hard_filtered else [],
             device_tags=sorted(device_tags),
             had_any_tag_overlap=bool(matched_tags),
+            matched_sensors=sorted(matched_sensors),
+            device_capabilities=sorted(device_actuators | device_sensors),
         )
 
     def _relevance_score(
@@ -456,8 +527,6 @@ class CapabilityMatchingResolver(BaseResolver):
         resolution = self._get_resolution(intent)
         target_tags      = set(resolution.get("tags", []))
         target_actuators = set(resolution.get("actuators", []))
-        generic_tags     = {"light", "climate", "communication", "sensor", "appliance", "display"}
-        specific_tags    = target_tags - generic_tags
         location         = intent.context.get("location", "")
 
         included = []
@@ -715,14 +784,14 @@ class CapabilityMatchingResolver(BaseResolver):
                 return ActionPlan(intent_id=intent.intent_id, actions=[], urgency=intent.urgency)
         resolution = self._get_resolution(intent)
 
-        # Candidate selection via inverted tag index.
-        # Strategy:
-        #   specific_tags → intersection index: O(|result|), devices must have ALL
-        #   generic_tags only → union index: O(|tags| + |candidates|)
+        # Candidate selection.
+        #   any target tags → the tag index, plus every device declaring a
+        #                     capability the intent needs (see _candidates)
         #   no tags (report_status) → all devices
-        target_tags   = set(resolution.get("tags", []))
-        generic_tags  = {"light", "climate", "communication", "sensor", "appliance", "display"}
-        specific_tags = target_tags - generic_tags
+        #
+        # The generic/specific distinction that used to steer this is gone: the
+        # index is an accelerator now, not the boundary of who is considered.
+        target_tags = set(resolution.get("tags", []))
 
         if target_tags:
             # Union index: candidates are devices with ANY of the target tags.

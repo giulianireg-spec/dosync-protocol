@@ -168,4 +168,91 @@ def test_exclusion_reason_matches_why_score_is_zero():
     bd = hub.resolver._score_breakdown(
         hub.registry.get("no-overlap"), intent, resolution)
     assert bd.total == 0.0
-    assert "no tag overlap" in bd.exclusion_reason()
+    assert "declares none of the capabilities" in bd.exclusion_reason()
+
+
+# ── Capability decides participation (2026-09-04) ─────────────────────────────
+
+def test_a_device_declaring_the_needed_actuator_is_never_gated_out_by_tags():
+    """The failure that started the redesign.
+
+    A lock declaring `lock` and `unlock` was excluded from `control_access`
+    because it lacked the tag `lock` — a tag the capability already implies.
+    Its tags were `access` and `security`, which is what anyone would write for
+    a lock.
+    """
+    from dosync.models import (ActuatorSpec, CapabilityManifest, DeviceCategory,
+                               Intent, IntentClass, Urgency)
+    from dosync.resolvers import CapabilityMatchingResolver
+    from dosync.hub import CapabilityRegistry
+
+    reg = CapabilityRegistry()
+    reg.register(CapabilityManifest(
+        device_id="lock-01", device_name="Door", manufacturer="t", model="t",
+        firmware="1", category=DeviceCategory.ACTUATOR,
+        tags=["access", "security"],
+        actuators=[ActuatorSpec(id="l", type="lock", description=""),
+                   ActuatorSpec(id="u", type="unlock", description="")]))
+
+    r = CapabilityMatchingResolver(reg)
+    bd = r._score_breakdown(reg.get("lock-01"),
+                            Intent(intent_id="t", intent=IntentClass("control_access"),
+                                   urgency=Urgency.ALERT, context={}),
+                            {"tags": ["lock"], "actuators": ["lock", "unlock"]})
+
+    assert not bd.hard_filtered, (
+        "a lock declaring lock and unlock was gated out of control_access for "
+        "want of a tag: " + bd.exclusion_reason())
+
+
+def test_a_device_declaring_nothing_the_intent_needs_is_gated_out():
+    """The gate still gates. Capability deciding participation is not the same
+    as everything participating."""
+    from dosync.models import (ActuatorSpec, CapabilityManifest, DeviceCategory,
+                               Intent, IntentClass, Urgency)
+    from dosync.resolvers import CapabilityMatchingResolver
+    from dosync.hub import CapabilityRegistry
+
+    reg = CapabilityRegistry()
+    reg.register(CapabilityManifest(
+        device_id="lamp-01", device_name="Lamp", manufacturer="t", model="t",
+        firmware="1", category=DeviceCategory.ACTUATOR,
+        tags=["lock", "security"],          # tags say lock; capability does not
+        actuators=[ActuatorSpec(id="on", type="turn_on", description="")]))
+
+    r = CapabilityMatchingResolver(reg)
+    bd = r._score_breakdown(reg.get("lamp-01"),
+                            Intent(intent_id="t", intent=IntentClass("control_access"),
+                                   urgency=Urgency.ALERT, context={}),
+                            {"tags": ["lock"], "actuators": ["lock", "unlock"]})
+
+    assert bd.hard_filtered, (
+        "a lamp tagged `lock` but declaring only turn_on took part in "
+        "control_access — the tag decided, which is what this change removes")
+
+
+def test_the_exclusion_reason_names_a_capability_not_a_tag():
+    """An operator told "no tag overlap" would edit a field that no longer
+    gates anything. The message must name what the device cannot do."""
+    from dosync.models import (ActuatorSpec, CapabilityManifest, DeviceCategory,
+                               Intent, IntentClass, Urgency)
+    from dosync.resolvers import CapabilityMatchingResolver
+    from dosync.hub import CapabilityRegistry
+
+    reg = CapabilityRegistry()
+    reg.register(CapabilityManifest(
+        device_id="lamp-02", device_name="Lamp", manufacturer="t", model="t",
+        firmware="1", category=DeviceCategory.ACTUATOR,
+        tags=["lock"],
+        actuators=[ActuatorSpec(id="on", type="turn_on", description="")]))
+
+    r = CapabilityMatchingResolver(reg)
+    reason = r._score_breakdown(reg.get("lamp-02"),
+                                Intent(intent_id="t", intent=IntentClass("control_access"),
+                                       urgency=Urgency.ALERT, context={}),
+                                {"tags": ["lock"], "actuators": ["lock"]}).exclusion_reason()
+
+    assert "capabilities" in reason and "turn_on" in reason, (
+        f"the exclusion reason does not say what the device declares: {reason}")
+    assert "tag" not in reason.lower(), (
+        f"the exclusion reason still blames tags: {reason}")

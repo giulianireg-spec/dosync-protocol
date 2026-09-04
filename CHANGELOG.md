@@ -9,6 +9,69 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Participation is decided by declared capability, not by curated tags.**
+  First step of the resolver redesign the Phase 1 measurements called for.
+
+  The gate used to read: if the intent asks only for specific tags and the
+  device carries none, exclude it. That excluded a lock declaring `lock` and
+  `unlock` from `control_access` because it lacked the tag `lock` — a tag the
+  capability already implies. Its tags were `access` and `security`, which is
+  what anyone would write for a lock.
+
+  The rule now: a device takes part if it declares an actuator or a sensor the
+  intent needs. Both are facts the device states about itself, which a third
+  party can check. A tag is a decision somebody made about a deployment.
+
+  **Measured against the operator ground truth** — written from what the
+  deployment's owner wants rather than from the tags the resolver reads, which
+  is the one baseline a resolver change cannot invalidate:
+
+  | | before | after |
+  |---|---|---|
+  | precision | 0.514 | **0.667** |
+  | recall | 1.00 | 0.88 |
+
+  The corpora were expected to fall, since they measure agreement with tags.
+  They rose instead — industrial 0.64 → 0.66, clinical 0.61 → 0.65, tuned
+  fixture unchanged at 1.00 — which says the tags were costing accuracy by
+  their own standard.
+
+  **The recall loss is the finding.** Three devices dropped out, and production
+  shows why: sensor types are mostly shapes rather than meanings. Fourteen
+  devices declare `boolean`, eleven `integer`, ten `float`. Only three declare
+  something interpretable, and one of those calls itself `motion_detected`
+  where the intent asks for `motion` — the exact `temp` versus `temperature`
+  limit documented yesterday, appearing in production the day after.
+
+  **The scoring gate was not enough, and finding that out is the point.**
+  Changing it achieved nothing on its own: an inverted tag index upstream had
+  already decided who would be scored. The lock that motivated the redesign
+  passed the new gate and still never reached a plan, because it was never a
+  candidate. Verified directly — gate says include, plan comes back empty.
+
+  Candidate selection now admits a device that declares a capability the intent
+  needs, tags or not. The tag index remains as an accelerator for the devices
+  that do carry tags; it is no longer the boundary of who gets considered.
+
+  That is where most of the gain came from:
+
+  | | tags decide | gate only | gate + candidates |
+  |---|---|---|---|
+  | industrial | 0.64 | 0.66 | **0.85** |
+  | clinical | 0.61 | 0.65 | **0.83** |
+  | operator precision | 0.514 | 0.667 | 0.645 |
+
+  The operator precision is lower with the full change than with the gate alone,
+  and that number is the honest one: 0.667 was reached partly by the tag filter
+  still excluding devices upstream.
+
+  The exclusion message changed with the rule. It used to say "required
+  specific tags […] not in device tags […]", which was true then and would be a
+  lie now: an operator told to fix the tags would edit a field that no longer
+  gates anything. It now names what the device declares.
+
+
 ### Added
 - **An intent can declare which sensors answer it.** Until now a class could say
   what must be *acted on* and not what must be *detected*, and `alert_anomaly`

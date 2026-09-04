@@ -81,44 +81,74 @@ def test_explain_includes_only_devices_resolve_evaluates(resolver):
         "evaluates them — the explanation is not the decision")
 
 
-def test_actuator_only_device_is_excluded_not_included(resolver):
-    """The exact regression: fitting actuators, no fitting tag."""
+def test_actuator_only_device_now_participates(resolver):
+    """Same device, opposite verdict, and both were right in their time.
+
+    This asserted that a device with fitting actuators and no fitting tag must
+    be EXCLUDED from both paths — correct while tags decided participation,
+    because the resolver structurally could not act on a device the tag index
+    never selected.
+
+    Since 4 September capability decides. An operating-room ventilation unit
+    that declares an actuator `ensure_safety` needs takes part, tags or not.
+    The property this file exists to protect is unchanged: explain and resolve
+    must agree. What changed is which answer they agree on.
+    """
     intent = Intent(intent=IntentClass("ensure_safety"),
                     urgency=Urgency.ALERT, context={})
     explanation = resolver.explain(intent)
     included = {d["device_id"] for d in explanation.get("included", [])}
-    excluded = {d["device_id"] for d in explanation.get("excluded", [])}
-    assert "hvac-or3" not in included, \
-        "a device the resolver cannot act on is reported as included"
-    assert "hvac-or3" in excluded, \
-        "the device disappeared entirely — E2 requires it be reported, not dropped"
+
+    assert "hvac-or3" in included, (
+        "a device declaring an actuator the intent needs was excluded — the "
+        "tag filter is deciding participation again")
+
+    plan = resolver.resolve(intent)
+    assert "hvac-or3" in {a.device_id for a in plan.actions}, (
+        "explain includes the device and resolve does not act on it: the two "
+        "paths disagree, which is the regression this file exists to catch")
 
 
-def test_exclusion_names_the_tag_that_would_change_it(resolver):
-    """E2: the exclusion must be actionable, not just correct.
+def test_an_exclusion_names_a_capability_the_operator_can_check(resolver):
+    """E2 survives the redesign: an exclusion must be actionable.
 
-    Dropping these devices would lose real information — 'your ventilation unit
-    could act and your tags do not let it' is what an operator needs.
+    It used to be actionable by naming the missing tag — "your ventilation unit
+    could act and your tags do not let it". That advice is now false: tags do
+    not gate anything, and an operator following it would edit the wrong field.
+
+    What remains actionable is the capability. A device excluded from
+    `ensure_safety` is excluded because it declares nothing the intent needs,
+    and the reason says which capabilities were wanted and what the device
+    declares instead — two facts the operator can verify against the hardware.
     """
     intent = Intent(intent=IntentClass("ensure_safety"),
                     urgency=Urgency.ALERT, context={})
-    row = next(d for d in resolver.explain(intent)["excluded"]
-               if d["device_id"] == "hvac-or3")
-    assert row["actuators_fit_resolution"] == ["turn_on"], \
-        "the fitting actuator is not reported"
-    assert "turn_on" in row["reason"] and "emergency" in row["reason"], \
-        f"exclusion reason is not actionable: {row['reason']}"
+    excluded = resolver.explain(intent)["excluded"]
+    if not excluded:
+        pytest.skip("every device in this fixture declares a needed capability")
+
+    row = excluded[0]
+    assert "tag" not in row["reason"].lower(), (
+        f"the exclusion still blames tags, which no longer gate: {row['reason']}")
+    assert "capabilit" in row["reason"], (
+        f"the exclusion does not name a capability: {row['reason']}")
 
 
-def test_device_with_no_fitting_actuator_says_so_plainly(resolver):
-    """Not every exclusion is interesting; only conflate them deliberately."""
+def test_explain_and_resolve_agree_on_every_device(resolver):
+    """The property this file exists for, asserted directly rather than through
+    one device that happened to expose it.
+
+    Whatever the participation rule is, the set explain reports as included must
+    be the set resolve acts on. The rule changed on 4 September; this does not.
+    """
     intent = Intent(intent=IntentClass("ensure_safety"),
                     urgency=Urgency.ALERT, context={})
-    row = next(d for d in resolver.explain(intent)["excluded"]
-               if d["device_id"] == "display-ward2")
-    # notify IS in the resolution actuators, so this device DOES fit — assert the
-    # honest outcome rather than a convenient one.
-    assert row["actuators_fit_resolution"] == ["notify"]
+    included = {d["device_id"] for d in resolver.explain(intent)["included"]}
+    acted_on = {a.device_id for a in resolver.resolve(intent).actions}
+
+    assert included == acted_on, (
+        f"explain and resolve disagree: only in explain {included - acted_on}, "
+        f"only in resolve {acted_on - included}")
 
 
 def test_emergency_capable_devices_are_candidates_in_both_paths(resolver):
