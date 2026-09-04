@@ -96,13 +96,20 @@ def _patch(regime: str):
         # actuators. It went unnoticed because the number it produced was
         # plausible. Hence the assertion below: a branch that cannot execute
         # must fail the measurement, not pass it quietly.
-        assert "sensors" not in resolution, (
-            "resolution now carries sensors — this gate needs updating rather "
-            "than silently ignoring them")
-
+        # `resolution` now carries sensors. The assertion that used to stand
+        # here — guarding against a branch that could never run — fired the day
+        # the field arrived, which is exactly what it was for.
         target_actuators = set(resolution.get("actuators", []))
+        target_sensors = set(resolution.get("sensors", []))
         device_actuators = {a.type for a in device.actuators}
-        has_capability = bool(target_actuators & device_actuators)
+        device_sensors = {s.type for s in device.sensors}
+
+        # A device qualifies by acting OR by detecting. A motion detector
+        # answering an alert has no actuators at all, and a gate that only
+        # looked at actuators dropped it — measured at F1 1.00 → 0.67 before
+        # `resolution_sensors` existed.
+        has_capability = bool(target_actuators & device_actuators) or bool(
+            target_sensors & device_sensors)
 
         if regime == "capability":
             # The gate becomes "does it declare an actuator this intent needs".

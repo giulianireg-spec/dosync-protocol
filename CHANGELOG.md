@@ -9,6 +9,45 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **An intent can declare which sensors answer it.** Until now a class could say
+  what must be *acted on* and not what must be *detected*, and `alert_anomaly`
+  carried the tag `sensor` to make a motion detector and a thermometer resolve
+  at all — a curated label standing in for a missing field, which is the
+  reviewers' tag-curation critique in miniature.
+
+  `resolution_sensors` is a new column with an additive migration. **Absent
+  means empty, never wildcard**: a hub upgrading from a database without the
+  column must not silently widen every intent.
+
+  What it unblocks, measured with the Phase 1 tools. A capability gate — one
+  that admits a device for declaring the actuator or sensor an intent needs,
+  rather than for carrying a curated tag — used to improve the unseen domains
+  and break the tuned fixture, because it could only see actuators:
+
+  | | before | after |
+  |---|---|---|
+  | industrial | 0.69 | **0.66** |
+  | clinical | 0.68 | **0.65** |
+  | tuned fixture | 0.93 | **1.00** |
+
+  The fixture is the point: `alert_anomaly` fell to 0.67 there because two
+  sensors with no actuators were dropped. It no longer does.
+
+  Two findings from the measurement, both recorded in tests:
+
+  **`number` is a shape, not a meaning.** A particulate counter and a pressure
+  gauge both report it. Including it made every numeric sensor in the industrial
+  corpus qualify for any alert and precision fell from 0.73 to 0.60. A label
+  that fits everything selects nothing — the same reason the tag vocabulary
+  keeps failing.
+
+  **Matching is exact, and that is a known limit.** A device calling its reading
+  `temp` where the intent asks for `temperature` will not match: the tags'
+  failure in a new field. Left exact rather than inventing a synonym table,
+  because this project has rewritten five such lists and each had holes.
+
+
 ### Changed
 - **Quarantine moved to the resolvers, and the import cycle is gone.**
   `is_quarantined` reads a manifest and decides whether the device may take part

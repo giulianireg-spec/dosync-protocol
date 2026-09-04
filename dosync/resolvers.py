@@ -677,10 +677,24 @@ class CapabilityMatchingResolver(BaseResolver):
                     return {
                         "tags":      row["resolution_tags"],
                         "actuators": row["resolution_actuators"],
+                        # Which sensor types answer this intent. Empty for four
+                        # of the five universals: only `alert_anomaly` is served
+                        # by devices that participate by detecting rather than
+                        # acting, and until this field existed it carried the
+                        # tag `sensor` to make them resolve at all.
+                        #
+                        # Matching is exact on the declared type. A device that
+                        # calls its reading `temp` where the intent asks for
+                        # `temperature` will not match — the same failure the
+                        # tags have, in a new field. Left exact rather than
+                        # inventing a synonym table, because this project has
+                        # rewritten five such lists and each had holes. It
+                        # becomes worth solving when a deployment hits it.
+                        "sensors":   row.get("resolution_sensors") or [],
                     }
         except Exception as e:
             log.warning("_get_resolution: DB lookup failed for '%s': %s", str(intent.intent), e)
-        return {"tags": [], "actuators": []}
+        return {"tags": [], "actuators": [], "sensors": []}
 
     def resolve(self, intent: Intent) -> ActionPlan:
         from datetime import datetime

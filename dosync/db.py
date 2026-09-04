@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS intent_classes (
     urgency              TEXT NOT NULL DEFAULT 'info',
     resolution_tags      TEXT NOT NULL DEFAULT '[]',
     resolution_actuators TEXT NOT NULL DEFAULT '[]',
+    resolution_sensors   TEXT NOT NULL DEFAULT '[]',
     description          TEXT NOT NULL DEFAULT '',
     domain               TEXT NOT NULL DEFAULT 'general',
     is_universal         INTEGER NOT NULL DEFAULT 0,
@@ -160,36 +161,70 @@ class DoSyncDB:
             self._conn.commit()
             log.info("Migration: added intent_classes.composition_kind")
 
+        # resolution_sensors: which sensor types answer this intent. Until this
+        # column existed there was no way to say that an intent is served by
+        # devices that DETECT rather than act, and `alert_anomaly` carried the
+        # tag `sensor` to paper over it — a curated label standing in for a
+        # missing field.
+        #
+        # Default '[]' and not NULL: an absent value means "this intent is not
+        # served by sensors", never "any sensor will do". A hub that upgrades
+        # must not change behaviour because a column appeared.
+        if not _has_column("intent_classes", "resolution_sensors"):
+            self._conn.execute(
+                "ALTER TABLE intent_classes ADD COLUMN resolution_sensors "
+                "TEXT NOT NULL DEFAULT '[]'")
+            self._conn.commit()
+            log.info("Migration: added intent_classes.resolution_sensors")
+
 
     def _seed_universal_intents(self) -> None:
         """Seed the 5 universal intent classes if not already present.
         These are the only intents defined at the protocol level — valid in any domain."""
         import json, time
+        # `sensors` is the fourth column, added 3 September 2026. Only
+        # `alert_anomaly` declares any: it is the one universal intent whose
+        # natural answer includes devices that have no actuators at all — a
+        # motion detector contributing to an alert participates by noticing.
+        #
+        # Until this field existed, `alert_anomaly` carried the tag `sensor` to
+        # make those devices resolve. That tag is kept for now: removing it is a
+        # behaviour change that belongs in the resolver redesign, not here.
+        #
+        # `number` is deliberately NOT in the list, though several devices
+        # declare it. It is a shape, not a meaning: a particulate counter and a
+        # pressure gauge both report `number`, and including it made every
+        # numeric sensor in the industrial corpus qualify for any alert —
+        # measured, precision fell from 0.73 to 0.60. A sensor type that says
+        # only "this reads a number" cannot decide participation, which is the
+        # same reason the tag vocabulary keeps failing: a label that fits
+        # everything selects nothing.
         universals = [
-            ("ensure_safety",  "emergency", ["emergency","alarm","communication","notification"], ["alarm","notify","call","turn_on","set_brightness"], "Safety emergency — protect people and property",    "universal", 1),
-            ("alert_anomaly",  "alert",     ["communication","notification","sensor"],            ["notify","call"],            "Unexpected condition detected — investigate",        "universal", 1),
-            ("control_access", "alert",     ["lock"],                                             ["lock","unlock"],            "Manage physical access to a space",                 "universal", 1),
-            ("report_status",  "info",      [],                                                   [],                          "Generate a status report of the environment",        "universal", 1),
-            ("notify",         "info",      ["communication","notification","display"],            ["notify","display","call"],  "Push information to any target",                    "universal", 1),
+            ("ensure_safety",  "emergency", ["emergency","alarm","communication","notification"], ["alarm","notify","call","turn_on","set_brightness"], [],                                    "Safety emergency — protect people and property",    "universal", 1),
+            ("alert_anomaly",  "alert",     ["communication","notification","sensor"],            ["notify","call"],            ["motion","temperature","humidity","smoke"], "Unexpected condition detected — investigate",        "universal", 1),
+            ("control_access", "alert",     ["lock"],                                             ["lock","unlock"],            [],                                    "Manage physical access to a space",                 "universal", 1),
+            ("report_status",  "info",      [],                                                   [],                          [],                                    "Generate a status report of the environment",        "universal", 1),
+            ("notify",         "info",      ["communication","notification","display"],            ["notify","display","call"],  [],                                    "Push information to any target",                    "universal", 1),
         ]
         now = time.time()
-        for name, urgency, tags, actuators, desc, domain, is_univ in universals:
+        for name, urgency, tags, actuators, sensors, desc, domain, is_univ in universals:
             row = self._conn.execute(
-                "SELECT resolution_tags, resolution_actuators FROM intent_classes WHERE name = ?", (name,)
+                "SELECT resolution_tags, resolution_actuators, resolution_sensors FROM intent_classes WHERE name = ?", (name,)
             ).fetchone()
             if not row:
                 self._conn.execute(
-                    "INSERT INTO intent_classes (name,urgency,resolution_tags,resolution_actuators,description,domain,is_universal,created_at) VALUES (?,?,?,?,?,?,?,?)",
-                    (name, urgency, json.dumps(tags), json.dumps(actuators), desc, domain, is_univ, now)
+                    "INSERT INTO intent_classes (name,urgency,resolution_tags,resolution_actuators,resolution_sensors,description,domain,is_universal,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                    (name, urgency, json.dumps(tags), json.dumps(actuators), json.dumps(sensors), desc, domain, is_univ, now)
                 )
-            elif row[0] != json.dumps(tags) or row[1] != json.dumps(actuators):
+            elif (row[0] != json.dumps(tags) or row[1] != json.dumps(actuators)
+                  or row[2] != json.dumps(sensors)):
                 # Universal intent classes are protocol-defined, not user data:
                 # reconcile existing deployments to the canonical definition on
                 # startup (custom/domain classes are never touched). Without this,
                 # a seed fix would never reach an already-initialized DB.
                 self._conn.execute(
-                    "UPDATE intent_classes SET urgency=?, resolution_tags=?, resolution_actuators=?, description=? WHERE name=? AND is_universal=1",
-                    (urgency, json.dumps(tags), json.dumps(actuators), desc, name)
+                    "UPDATE intent_classes SET urgency=?, resolution_tags=?, resolution_actuators=?, resolution_sensors=?, description=? WHERE name=? AND is_universal=1",
+                    (urgency, json.dumps(tags), json.dumps(actuators), json.dumps(sensors), desc, name)
                 )
         self._conn.commit()
 
@@ -857,7 +892,8 @@ class DoSyncDB:
     def save_intent_class(self, name: str, urgency: str,
                                   resolution_tags: list, resolution_actuators: list,
                                   description: str, domain: str,
-                                  composition_kind: str | None = None) -> None:
+                                  composition_kind: str | None = None,
+                                  resolution_sensors: list | None = None) -> None:
         """Insert or update an intent class. Never modifies is_universal flag.
 
         composition_kind: marks the intent as a composition intent (e.g. "perimeter"
@@ -875,10 +911,12 @@ class DoSyncDB:
         self._conn.execute("""
             INSERT OR REPLACE INTO intent_classes
             (name, urgency, resolution_tags, resolution_actuators,
-             description, domain, is_universal, composition_kind, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             resolution_sensors, description, domain, is_universal,
+             composition_kind, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (name, urgency, json.dumps(resolution_tags),
               json.dumps(resolution_actuators),
+              json.dumps(resolution_sensors or []),
               description, domain, is_universal, composition_kind, time.time()))
         self._conn.commit()
 
@@ -894,6 +932,12 @@ class DoSyncDB:
             "urgency": row["urgency"],
             "resolution_tags": json.loads(row["resolution_tags"]),
             "resolution_actuators": json.loads(row["resolution_actuators"]),
+            # `.keys()` guard: a row read from a database migrated in this
+            # same startup has the column; one from an older connection
+            # object may not. Absent means empty, never "any sensor".
+            "resolution_sensors": json.loads(
+                row["resolution_sensors"]
+                if "resolution_sensors" in row.keys() else "[]"),
             "description": row["description"],
             "domain": row["domain"],
             "created_at": row["created_at"],

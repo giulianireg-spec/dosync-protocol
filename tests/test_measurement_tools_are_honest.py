@@ -98,16 +98,25 @@ def test_the_counterfactual_reproduces_the_shipped_resolver(corpus):
         "resolver — fix the tool before reading anything it reports.")
 
 
-def test_a_regime_that_cannot_run_fails_loudly():
-    """An earlier gate read `resolution["sensors"]`, a key that does not exist.
+def test_the_capability_gate_now_uses_the_sensors_it_once_could_not():
+    """This test used to assert the opposite, and that was correct at the time.
 
-    The branch never ran, the tool reported a capability gate "including
-    sensors" that only looked at actuators, and nobody noticed because the
-    number was plausible. The assertion that replaced it must still be there.
+    An early gate read `resolution["sensors"]`, a key that did not exist. The
+    branch never ran, the tool reported a capability gate "including sensors"
+    that only looked at actuators, and nobody noticed because the number was
+    plausible. The fix was an assertion that the key was absent — a guard that
+    would fire the day the field arrived.
+
+    It fired. `resolution_sensors` exists now, so the guard is replaced by its
+    inverse: the gate must actually read them. A motion detector answering an
+    alert has no actuators, and a gate blind to sensors drops it — measured at
+    F1 1.00 → 0.67 before the field existed, and back at 1.00 after.
     """
     source = (REPO / "tools" / "counterfactual_resolver.py").read_text(encoding="utf-8")
-    assert 'assert "sensors" not in resolution' in source, (
-        "the guard against a silently unreachable branch is gone")
+    assert 'resolution.get("sensors"' in source, (
+        "the capability gate ignores the sensors an intent declares")
+    assert 'assert "sensors" not in resolution' not in source, (
+        "the old guard is still there and would now fire on correct data")
 
 
 def test_the_rulebook_is_not_reported_as_a_result():
@@ -199,3 +208,64 @@ def test_the_baselines_reproduce_their_own_numbers(corpus):
     assert abs(f1 - expected) < 0.02, (
         f"the baselines tool scores DoSync on {corpus} at {f1:.2f}, but the "
         f"benchmark scores {expected:.2f} — they cannot both be right")
+
+
+# ── resolution_sensors (2026-09-03) ───────────────────────────────────────────
+
+def test_intents_can_declare_which_sensors_answer_them():
+    """Before this field, an intent could say what must be ACTED on and not what
+    must be DETECTED. `alert_anomaly` carried the tag `sensor` to make a motion
+    detector and a thermometer resolve — a curated label standing in for a
+    missing field, which is the reviewer's tag-curation critique in miniature.
+    """
+    from dosync.hub import DoSyncHub
+
+    hub = DoSyncHub(db_path=":memory:")
+    alert = hub.db.get_intent_class("alert_anomaly")
+    assert alert["resolution_sensors"], (
+        "alert_anomaly declares no sensors; the devices that answer it by "
+        "detecting depend on the tag `sensor` again")
+
+    # Four of the five universals are answered by acting, not detecting.
+    for name in ("control_access", "report_status", "notify"):
+        assert hub.db.get_intent_class(name)["resolution_sensors"] == [], (
+            f"{name} declares sensors it is not answered by")
+
+
+def test_a_generic_sensor_type_is_not_a_participation_signal():
+    """`number` is a shape, not a meaning.
+
+    A particulate counter and a pressure gauge both report `number`. Including
+    it in alert_anomaly made every numeric sensor in the industrial corpus
+    qualify for any alert, and precision fell from 0.73 to 0.60 — measured. A
+    label that fits everything selects nothing, which is the same reason the tag
+    vocabulary keeps failing.
+    """
+    from dosync.hub import DoSyncHub
+
+    hub = DoSyncHub(db_path=":memory:")
+    sensors = hub.db.get_intent_class("alert_anomaly")["resolution_sensors"]
+    assert "number" not in sensors, (
+        "`number` is back in alert_anomaly's sensors: it says only that the "
+        "device reads a number, which cannot decide participation")
+
+
+def test_an_absent_sensors_column_means_empty_not_wildcard():
+    """A hub upgrading from a database without this column must not change
+    behaviour. Absent means "this intent is not answered by sensors", never
+    "any sensor will do" — the conservative reading, because the permissive one
+    would silently widen every intent on a deployment nobody touched.
+    """
+    from dosync.hub import DoSyncHub
+
+    hub = DoSyncHub(db_path=":memory:")
+    hub.db._conn.execute(
+        "INSERT INTO intent_classes (name,urgency,resolution_tags,"
+        "resolution_actuators,description,domain,is_universal,created_at) "
+        "VALUES ('legacy_intent','info','[]','[]','','test',0,0)")
+    hub.db._conn.commit()
+
+    row = hub.db.get_intent_class("legacy_intent")
+    assert row["resolution_sensors"] == [], (
+        "a row written without the column reads as something other than an "
+        "empty list")
