@@ -128,6 +128,59 @@ def test_the_default_checkpoint_interval_is_visible_at_the_entry_point():
         "implementer calls")
 
 
+def test_the_resolvers_are_one_set_of_classes_at_two_addresses():
+    """`server.py` swaps in an ExternalResolver at startup and several tests
+    replace `resolve` outright. A copy rather than a re-export would leave the
+    hub holding one class and the caller constructing another."""
+    from dosync import hub, resolvers
+
+    for name in ("BaseResolver", "ExternalResolver", "CapabilityMatchingResolver",
+                 "StateAwareResolver", "ScoreBreakdown"):
+        assert getattr(hub, name) is getattr(resolvers, name), (
+            f"{name} was copied into hub.py rather than re-exported")
+
+
+def test_the_resolver_can_still_be_replaced_at_runtime():
+    """The substitution `server.py` performs — `hub.resolver = ExternalResolver(...)`
+    — must survive the move, because the deployment that uses an external
+    resolution service depends on it."""
+    from dosync.hub import DoSyncHub
+    from dosync.resolvers import ExternalResolver
+
+    hub = DoSyncHub(db_path=":memory:")
+    hub.resolver = ExternalResolver(hub.registry, "http://example.invalid")
+    assert isinstance(hub.resolver, ExternalResolver)
+
+
+def test_the_resolvers_do_not_import_the_hub_at_module_level():
+    """hub.py imports resolvers.py. A module-level import back would close the
+    cycle, and the one function that needs `is_quarantined` imports it inside
+    the call instead.
+
+    A first attempt at that indirection replaced the call inside the wrapper
+    with the wrapper's own name — the function called itself, and fifty-one
+    tests died of recursion. Blind text replacement does not respect scope.
+    """
+    import ast
+
+    src = (REPO / "dosync" / "resolvers.py").read_text(encoding="utf-8")
+
+    # Parsed rather than string-sliced. A first version of this test cut the
+    # file at the first "class " and searched the remainder, which put the
+    # lazy import — a function defined above the classes — inside the region it
+    # was checking. It failed on correct code.
+    tree = ast.parse(src)
+    module_level = [n for n in tree.body if isinstance(n, (ast.Import, ast.ImportFrom))]
+    for node in module_level:
+        mod = getattr(node, "module", "") or ""
+        assert "hub" not in mod, (
+            f"resolvers.py imports {mod!r} at module level; hub.py imports "
+            "resolvers.py, so this closes an import cycle")
+
+    assert "return is_quarantined(manifest)" in src, \
+        "the quarantine wrapper is not delegating to the real function"
+
+
 def test_hub_is_smaller_than_it_was():
     """A guard against the extraction being undone by a later merge.
 
@@ -139,6 +192,6 @@ def test_hub_is_smaller_than_it_was():
     # are done this test should be retired rather than raised, or it will start
     # failing for legitimate additions and blaming the wrong cause.
     lines = (REPO / "dosync" / "hub.py").read_text(encoding="utf-8").count("\n")
-    assert lines < 2950, (
+    assert lines < 2050, (
         f"hub.py is back to {lines} lines: something moved back in, or an "
         "extraction was reverted")

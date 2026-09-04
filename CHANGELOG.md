@@ -9,6 +9,31 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **The resolvers moved out of `hub.py`.** Four classes in an inheritance chain
+  plus the `ScoreBreakdown` they produce — 890 lines — are now
+  `dosync/resolvers.py`. They had to move together; there is no seam between
+  `BaseResolver`, `CapabilityMatchingResolver` and `StateAwareResolver`.
+
+  All five re-exported from `dosync.hub`, and runtime substitution is preserved:
+  `server.py` replaces `hub.resolver` with an `ExternalResolver` at startup and
+  several tests replace `resolve` outright. A test pins that.
+
+  `hub.py`: 2,913 → 1,990 lines. Four of eleven responsibilities extracted, and
+  the module is now 46% of the 3,710 it began at.
+
+  This is the code Phase 1 measured and Phase 3 will redesign. Extracting it is
+  what makes rewriting it possible without dragging the registry, the executor
+  and the orchestration along.
+
+  Two traps worth recording. `hub.py` imports this module, so the one place that
+  needs `is_quarantined` imports it inside the call — a module-level import
+  would close the cycle. And the first attempt at that indirection replaced the
+  call inside the wrapper with the wrapper's own name: the function called
+  itself and fifty-one tests died of recursion. Blind text replacement does not
+  respect scope.
+
+
 ### Fixed
 - **Fifteen more lines of Spanish, and the fifth rewrite of the guard.** Found
   while inventorying `DoSyncHub`, not by the check: `execute_phased` opened with
