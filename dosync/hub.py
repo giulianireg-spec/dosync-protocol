@@ -31,24 +31,6 @@ log = logging.getLogger("dosync.hub")
 
 # ── Capability Registry (Layer 3) ─────────────────────────────────────────────
 
-#: Marker used to quarantine a device without deleting it.
-QUARANTINE_KEY = "quarantined"
-
-
-def is_quarantined(manifest) -> bool:
-    """Whether a device is registered but must not participate in intents.
-
-    Stored in `adapter_config` rather than as a new manifest field so it rides
-    the existing serialisation untouched — the flag is deployment state, not a
-    capability of the device.
-    """
-    cfg = getattr(manifest, "adapter_config", None) or {}
-    return bool(cfg.get(QUARANTINE_KEY))
-
-
-def quarantine_reason(manifest) -> str:
-    cfg = getattr(manifest, "adapter_config", None) or {}
-    return str(cfg.get("quarantine_reason", "")) if cfg.get(QUARANTINE_KEY) else ""
 
 
 class CapabilityRegistry:
@@ -168,8 +150,8 @@ class CapabilityRegistry:
 # wearing an extraction's clothes.
 
 from dosync.resolvers import (  # noqa: E402,F401
-    BaseResolver, CapabilityMatchingResolver, ExternalResolver,
-    ScoreBreakdown, StateAwareResolver)
+    QUARANTINE_KEY, BaseResolver, CapabilityMatchingResolver, ExternalResolver,
+    ScoreBreakdown, StateAwareResolver, is_quarantined, quarantine_reason)
 from dosync.audit import (AuditLog, CheckpointKeeper,  # noqa: E402,F401
                           _assurance_is_regulated, checkpoint_export_mode)
 

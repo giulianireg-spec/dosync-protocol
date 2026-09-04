@@ -10,6 +10,25 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- **Quarantine moved to the resolvers, and the import cycle is gone.**
+  `is_quarantined` reads a manifest and decides whether the device may take part
+  in an intent — a resolver question, and the resolvers were calling it three
+  times to the hub's one. Its own docstring says the flag is deployment state
+  rather than a capability.
+
+  Leaving it in `hub.py` when the resolvers moved had forced a lazy import to
+  avoid a cycle. That debt was declared in the previous commit and is paid here,
+  separately, so that neither change hides inside the other.
+
+  `resolvers.py` now imports nothing from `hub.py` at all. The dependency runs
+  one way: a resolver reads the registry, the registry knows nothing about
+  resolvers.
+
+  `QUARANTINE_KEY`, `is_quarantined` and `quarantine_reason` are re-exported
+  from `dosync.hub`, where `server.py` and three test modules look for them.
+
+
+### Changed
 - **The resolvers moved out of `hub.py`.** Four classes in an inheritance chain
   plus the `ScoreBreakdown` they produce — 890 lines — are now
   `dosync/resolvers.py`. They had to move together; there is no seam between

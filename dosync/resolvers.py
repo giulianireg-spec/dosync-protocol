@@ -36,11 +36,35 @@ from .models import (ActionPlan, ActuatorSpec, CapabilityManifest, DeviceAction,
 log = logging.getLogger("dosync.hub")
 
 
-def _quarantine_check(manifest):
-    """Imported lazily: hub.py imports this module, so a module-level import
-    of hub.py here would close the cycle."""
-    from .hub import is_quarantined
-    return is_quarantined(manifest)
+# ── Quarantine ────────────────────────────────────────────────────────────────
+#
+# Moved here from hub.py on 3 September 2026. It reads a manifest and decides
+# whether the device may take part in an intent, which is a resolver question —
+# and the resolvers were calling it three times to the hub's one. Leaving it in
+# hub.py had forced a lazy import to avoid a cycle; a debt declared when the
+# resolvers moved and paid now, separately, so that neither change hides in the
+# other.
+
+#: Marker used to quarantine a device without deleting it.
+QUARANTINE_KEY = "quarantined"
+
+
+
+def is_quarantined(manifest) -> bool:
+    """Whether a device is registered but must not participate in intents.
+
+    Stored in `adapter_config` rather than as a new manifest field so it rides
+    the existing serialisation untouched — the flag is deployment state, not a
+    capability of the device.
+    """
+    cfg = getattr(manifest, "adapter_config", None) or {}
+    return bool(cfg.get(QUARANTINE_KEY))
+
+
+
+def quarantine_reason(manifest) -> str:
+    cfg = getattr(manifest, "adapter_config", None) or {}
+    return str(cfg.get("quarantine_reason", "")) if cfg.get(QUARANTINE_KEY) else ""
 
 
 
@@ -343,7 +367,7 @@ class CapabilityMatchingResolver(BaseResolver):
         # only became visible because explain() and resolve() started reporting
         # the same set and the totals stopped matching.
         candidates = [d for d in self.registry.find_by_tags(list(target_tags))
-                      if not _quarantine_check(d)]
+                      if not is_quarantined(d)]
 
         # Emergency intents also evaluate every emergency_capable device, tags or
         # not (F2b): a safety device must never be dropped by a tag filter. This
@@ -354,7 +378,7 @@ class CapabilityMatchingResolver(BaseResolver):
         if intent.urgency == Urgency.EMERGENCY:
             seen = {d.device_id for d in candidates}
             for device in self.registry.find_emergency_capable():
-                if device.device_id not in seen and not _quarantine_check(device):
+                if device.device_id not in seen and not is_quarantined(device):
                     candidates.append(device)
         return candidates
 

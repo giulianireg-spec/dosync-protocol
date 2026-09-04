@@ -177,8 +177,12 @@ def test_the_resolvers_do_not_import_the_hub_at_module_level():
             f"resolvers.py imports {mod!r} at module level; hub.py imports "
             "resolvers.py, so this closes an import cycle")
 
-    assert "return is_quarantined(manifest)" in src, \
-        "the quarantine wrapper is not delegating to the real function"
+    # The lazy-import wrapper this used to check is gone: `is_quarantined` now
+    # lives in resolvers.py itself, which is where its callers were. The debt
+    # was declared when the resolvers moved and paid separately.
+    assert "def is_quarantined" in src, (
+        "is_quarantined is no longer defined in resolvers.py — if it moved "
+        "back to hub.py, the lazy import and its cycle come back with it")
 
 
 def test_hub_is_smaller_than_it_was():
