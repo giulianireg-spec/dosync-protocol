@@ -10,6 +10,36 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The import endpoint answered 500 on every request, and hid a second defect
+  behind the first.** Two errors, one line apart:
+
+  It walked `_adapters` calling `adapter.adapter_name()` — a property, so that
+  tried to invoke a string. And the success path used `time.time()` where this
+  module imports it as `_time`. The first error meant nothing ever reached the
+  second.
+
+  `_adapters` is keyed by adapter name, so the walk was unnecessary anyway.
+
+  **1,123 tests passed over both.** Nothing exercised the route — the same gap
+  that let the import loop ship with a missing import an hour earlier, and the
+  aliased import is the same class of error wearing a different mask.
+
+  The test that now covers it took three attempts, and the two failures are
+  worth recording because each looked like success:
+
+  With no bridge registered, the broken loop never iterated, so the defect was
+  unreachable and the test passed. **A stub has to be registered for the code
+  path to exist.**
+
+  With auth in place, the request was rejected before the handler ran. A 401
+  says nothing about code that never executed, so the test passed again.
+  **`dependency_overrides` on `require_auth` is what makes the handler run.**
+
+  Verified in both directions: the test fails with either defect restored and
+  passes on the corrected code.
+
+
+### Fixed
 - **The import loop died on its first cycle: `time` was never imported.**
   Shipped an hour earlier, with 1,122 tests green, and it raised
   `NameError: name 'time' is not defined` sixty seconds after startup in

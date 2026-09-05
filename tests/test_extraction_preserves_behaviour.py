@@ -306,3 +306,56 @@ def test_the_import_loop_actually_runs():
     assert bridge.last_import["ok"] is False
     assert "unreachable" in bridge.last_import["error"], (
         "the recorded error does not say what went wrong")
+
+
+def test_the_import_endpoint_answers_rather_than_500s():
+    """The endpoint answered 500 on every request and no test noticed.
+
+    Its first version walked `_adapters` calling `adapter.adapter_name()` —
+    which is a property, so that tried to invoke a string. 1,123 tests passed
+    over it, because nothing exercised the route: the same gap that let the
+    import loop ship with a missing import an hour earlier.
+
+    Without HA_TOKEN no bridge is registered, so this asserts the honest 404
+    rather than constructing one. What it pins is that the handler RUNS: a 500
+    here means the code path is broken again.
+    """
+    from fastapi.testclient import TestClient
+
+    import dosync.server as srv
+
+    # A stub must be registered for this to mean anything. With an empty
+    # `_adapters` the broken loop never iterated, so a first version of this
+    # test passed with the defect in place — the endpoint only failed once
+    # there was something to walk over.
+    class _Stub:
+        @property
+        def adapter_name(self):
+            return "homeassistant"
+
+        async def import_devices(self):
+            return {"new": 0, "updated": 0, "skipped": 0, "total": 0}
+
+    adapters = getattr(srv._adapter_executor, "_adapters", None)
+    if adapters is None:
+        pytest.skip("no adapter executor on this build")
+
+    # Auth is overridden, not bypassed with a token: without this the request
+    # is rejected before the handler runs, and a second version of this test
+    # passed with the defect in place for exactly that reason — a 401 tells you
+    # nothing about code that never executed.
+    from dosync.auth_fastapi import require_auth
+
+    adapters["homeassistant"] = _Stub()
+    srv.app.dependency_overrides[require_auth] = lambda: "test"
+    try:
+        response = TestClient(srv.app).post("/v1/bridges/homeassistant/import")
+    finally:
+        srv.app.dependency_overrides.pop(require_auth, None)
+        adapters.pop("homeassistant", None)
+
+    assert response.status_code != 500, (
+        f"the import endpoint raised: {response.text[:200]}")
+    assert response.status_code == 200, (
+        f"expected 200 with a bridge registered, got {response.status_code}: "
+        f"{response.text[:200]}")

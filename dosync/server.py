@@ -2505,11 +2505,13 @@ async def import_from_home_assistant(auth: str = Depends(require_auth)):
     same shape either way, so a caller can tell "nothing changed" from "could
     not ask".
     """
-    bridge = None
-    for adapter in getattr(_adapter_executor, "_adapters", {}).values():
-        if adapter.adapter_name() == "homeassistant":
-            bridge = adapter
-            break
+    # `_adapters` is keyed by adapter name — see AdapterExecutor.register — so
+    # there is no need to walk it. The first version did, and called
+    # `adapter.adapter_name()` on the way: it is a property, so that tried to
+    # invoke a string and every request answered 500. Nothing caught it because
+    # no test exercises this endpoint, which is the same gap that let the
+    # import loop ship with a missing import an hour earlier.
+    bridge = getattr(_adapter_executor, "_adapters", {}).get("homeassistant")
 
     if bridge is None:
         raise HTTPException(
@@ -2527,7 +2529,11 @@ async def import_from_home_assistant(auth: str = Depends(require_auth)):
             status_code=502,
             detail=f"Home Assistant did not answer: {e}")
 
-    bridge.last_import = {"at": time.time(), "ok": True, **result}
+    # `_time`, not `time`: this module imports it aliased, and the first
+    # version of this handler used the bare name. Same class of error as the
+    # import loop an hour earlier, wearing a different mask — and again nothing
+    # caught it, because no test reached this line.
+    bridge.last_import = {"at": _time.time(), "ok": True, **result}
     return {"imported": result, "at": bridge.last_import["at"]}
 
 
