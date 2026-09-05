@@ -10,6 +10,41 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The Home Assistant bridge imported once and never again.**
+  `import_devices` existed, worked, and nothing called it: its only appearance
+  outside its own definition was an example in the module docstring. Registering
+  the bridge at startup wires it up to *execute* actions, and nothing ever asked
+  it to *import*. The registry froze at whatever a manual invocation had once
+  put there — add a sensor to Home Assistant and DoSync never sees it. Nothing
+  fails and nothing says so.
+
+  Found while trying to validate an unrelated change: three service restarts
+  produced no import lines in the journal at all. Same shape as the state
+  refresher, whose own docstring records it spending months not running behind a
+  `log.debug`.
+
+  Now a periodic loop (`DOSYNC_HA_IMPORT_INTERVAL`, 15 minutes by default), plus
+  `POST /v1/bridges/homeassistant/import` for when waiting is not useful — a
+  device was just added, a token was just replaced, or someone needs to know
+  whether the bridge can reach HA without reading the journal.
+
+  Periodic rather than at startup, deliberately: a hub that runs for weeks is
+  the case that matters, and importing only at boot leaves it blind until the
+  next restart.
+
+  **Failure is loud and non-fatal.** Home Assistant unreachable or a token
+  expired — both of which happened this week — must not stop a hub that also
+  governs devices HA knows nothing about. But a silent failure is exactly how
+  the expired token went unnoticed for days, so every failed cycle warns and the
+  outcome is readable from `last_import` rather than only from the log.
+
+  Known and not addressed here: import only adds and updates. A device removed
+  from Home Assistant stays in the registry, and the hub keeps trying to act on
+  it. Deleting automatically is worse — one unanswered call and half a registry
+  is gone — so the answer is to mark absence, in a separate change.
+
+
+### Fixed
 - **The Home Assistant bridge stopped throwing away what a sensor measures.**
   Its mapping was by HA *domain*, so every `binary_sensor` arrived as `boolean`
   and every `sensor` as `float` — the shape of the reading, not its meaning. A

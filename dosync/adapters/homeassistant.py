@@ -33,6 +33,7 @@ Usage:
 """
 
 from __future__ import annotations
+import asyncio
 import os
 import logging
 from typing import Optional, TYPE_CHECKING
@@ -317,6 +318,11 @@ class HABridge(DoSyncAdapter):
                               if p.strip()])
         self._exclude_prefixes = tuple(raw_excludes)
 
+        # Outcome of the most recent import cycle, readable through the hub's
+        # status. The log alone was not enough: an expired token produced 401s
+        # for days and nobody read the journal.
+        self.last_import: dict | None = None
+
     @property
     def adapter_name(self) -> str:
         return "homeassistant"
@@ -406,6 +412,59 @@ class HABridge(DoSyncAdapter):
             new_count, updated_count, skipped_count, total, self._url,
         )
         return {"new": new_count, "updated": updated_count, "skipped": skipped_count, "total": total}
+
+    async def start_import_loop(self, interval: float = None) -> None:
+        """Re-import from Home Assistant on a schedule.
+
+        `import_devices` existed, worked, and nothing called it. Its only
+        appearance outside its own definition was an example in this module's
+        docstring, so the bridge registered itself at startup — for EXECUTING
+        actions — and the registry froze at whatever a manual invocation had
+        put there. Add a sensor to Home Assistant and DoSync never sees it.
+        Nothing fails and nothing says so.
+
+        Found on 5 September while trying to validate a change to how sensor
+        types are read: three service restarts produced no import lines at all.
+        The same shape as `start_state_refresh`, whose own docstring records it
+        never running for months behind a `log.debug`.
+
+        Periodic rather than at startup, deliberately: a hub that runs for weeks
+        is exactly the case that matters, and importing only at boot leaves it
+        blind until the next restart. The interval defaults to 15 minutes —
+        entities do not appear often, and each cycle is a full state fetch.
+
+        Failure is loud and non-fatal. Home Assistant being unreachable, or a
+        token having expired — both of which happened this week — must not stop
+        a hub that also governs devices HA knows nothing about. But a silent
+        failure is how the expired token went unnoticed for days, so every
+        failed cycle is a warning and the outcome is readable from the hub's
+        status, not only from the log.
+        """
+        if interval is None:
+            interval = float(os.environ.get("DOSYNC_HA_IMPORT_INTERVAL", "900"))
+
+        log.info("HA bridge: periodic import started (interval=%.0fs)", interval)
+
+        while True:
+            try:
+                await asyncio.sleep(interval)
+                result = await self.import_devices()
+                self.last_import = {
+                    "at": time.time(),
+                    "ok": True,
+                    **{k: result.get(k) for k in ("new", "updated", "skipped", "total")},
+                }
+                if result.get("new") or result.get("updated"):
+                    log.info("HA bridge: import cycle — %d new, %d updated",
+                             result.get("new", 0), result.get("updated", 0))
+            except asyncio.CancelledError:
+                log.info("HA bridge: periodic import stopped")
+                break
+            except Exception as e:
+                # Warning and not debug: this is the level at which an expired
+                # token becomes visible to whoever reads the journal.
+                self.last_import = {"at": time.time(), "ok": False, "error": str(e)}
+                log.warning("HA bridge: import cycle failed: %s", e)
 
     def _state_to_manifest(self, state: dict) -> Optional[CapabilityManifest]:
         """Convert an HA state object into a DoSync CapabilityManifest."""

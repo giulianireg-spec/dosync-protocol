@@ -191,6 +191,20 @@ else:
             ha_bridge = HABridge(ha_url=_ha_url, ha_token=_ha_token, hub=hub)
             executor.register(ha_bridge)
             logging.getLogger("dosync.server").info("HABridge registered")
+            # Registering the bridge wires it up to EXECUTE actions. Until
+            # 5 September nothing ever asked it to IMPORT: `import_devices`
+            # existed, worked, and its only caller was an example in a
+            # docstring — so the registry froze at whatever a manual invocation
+            # had put there, and a device added to Home Assistant was never
+            # seen. Same shape as the state refresher, which spent months not
+            # running behind a `log.debug`.
+            # Module-level, like the other two background tasks. asyncio keeps
+            # only a weak reference to a running task, so a local variable can
+            # be garbage-collected mid-flight and the loop stops with no error
+            # — which would reproduce the exact defect this fixes, in a form
+            # even harder to see.
+            global _ha_import_task
+            _ha_import_task = asyncio.create_task(ha_bridge.start_import_loop())
         logging.getLogger("dosync.server").info(
             "AdapterExecutor initialized — %d adapter(s) registered",
             len(getattr(executor, "_adapters", {}) or {})
@@ -379,6 +393,12 @@ else:
 # isinstance checks below (the arbiter delegates everything else transparently).
 from dosync.device_arbiter import DeviceArbiter
 _adapter_executor = executor
+
+#: The HA import loop, kept at module level so asyncio's weak reference to a
+#: running task is not the only one. A local would be collectible mid-flight and
+#: the loop would stop without an error — the same silence this whole change
+#: exists to remove.
+_ha_import_task = None
 executor = DeviceArbiter(executor, audit_hook=hub.audit_log.append)
 
 # Hub-initiated intents (the capability-anomaly security alert) have no caller to
@@ -909,6 +929,15 @@ async def lifespan(app: FastAPI):
             log.warning("MQTTAdapter startup connect failed: %s", _mc)
 
     yield
+
+    # Cancel the HA import loop on shutdown, like the refresher below. Without
+    # this, shutdown logs a cancelled-task error on the way out.
+    if _ha_import_task and not _ha_import_task.done():
+        _ha_import_task.cancel()
+        try:
+            await _ha_import_task
+        except asyncio.CancelledError:
+            pass
 
     # Cancel background refresher on shutdown
     if _refresh_task and not _refresh_task.done():
@@ -2461,6 +2490,45 @@ def _already_here(discovered) -> dict | None:
                     "device_name": device.device_name,
                     "matched_on": "address"}
     return None
+
+
+@app.post("/v1/bridges/homeassistant/import", tags=["Discovery"])
+async def import_from_home_assistant(auth: str = Depends(require_auth)):
+    """Re-import every entity from Home Assistant, now.
+
+    The bridge imports on a schedule (DOSYNC_HA_IMPORT_INTERVAL, 15 minutes by
+    default). This is for when waiting is not useful: a device was just added,
+    a token was just replaced, or someone needs to know whether the bridge can
+    reach HA at all without reading the journal.
+
+    Returns what the cycle did — new, updated, skipped — or the error, with the
+    same shape either way, so a caller can tell "nothing changed" from "could
+    not ask".
+    """
+    bridge = None
+    for adapter in getattr(_adapter_executor, "_adapters", {}).values():
+        if adapter.adapter_name() == "homeassistant":
+            bridge = adapter
+            break
+
+    if bridge is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No Home Assistant bridge is registered. It requires "
+                   "HA_TOKEN to be set at startup.")
+
+    try:
+        result = await bridge.import_devices()
+    except Exception as e:
+        # 502 and not 500: the hub is fine, the upstream did not answer. An
+        # expired token lands here, which is the case that went unnoticed for
+        # days when the only signal was a 401 buried in execution stats.
+        raise HTTPException(
+            status_code=502,
+            detail=f"Home Assistant did not answer: {e}")
+
+    bridge.last_import = {"at": time.time(), "ok": True, **result}
+    return {"imported": result, "at": bridge.last_import["at"]}
 
 
 @app.get("/v1/discovery/scan", tags=["Discovery"])

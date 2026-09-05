@@ -914,6 +914,7 @@ server grows past this list.
 | DELETE | `/v1/intent-classes/{name}` | Remove one |
 | POST | `/v1/device/action` | One action on one named device — policy-evaluated and audited |
 | GET | `/v1/discovery/scan` | List candidates on every searchable transport; registers nothing |
+| POST | `/v1/bridges/homeassistant/import` | Re-import every entity from Home Assistant now, rather than waiting for the periodic cycle |
 | POST | `/v1/discovery/adopt` | Register one candidate under a name the operator chose |
 | POST | `/v1/discovery/run` | Scan and register unattended (recorded as not operator-approved) |
 | POST | `/v1/heartbeat` | Device-initiated liveness over an authenticated channel |

@@ -199,3 +199,64 @@ def test_hub_is_smaller_than_it_was():
     assert lines < 2050, (
         f"hub.py is back to {lines} lines: something moved back in, or an "
         "extraction was reverted")
+
+
+# ── The bridge that never re-imported (2026-09-05) ────────────────────────────
+
+def test_something_actually_calls_import_devices():
+    """`import_devices` existed, worked, and nothing invoked it.
+
+    Its only appearance outside its own definition was an example in the
+    module's docstring. The bridge registered itself at startup — for executing
+    actions — and the registry froze at whatever a manual invocation had once
+    put there. A device added to Home Assistant was never seen, nothing failed,
+    and nothing said so.
+
+    Found while trying to validate an unrelated change: three service restarts
+    produced no import lines in the journal at all.
+    """
+    src = (REPO / "dosync" / "adapters" / "homeassistant.py").read_text(encoding="utf-8")
+    code = "\n".join(l for l in src.split("\n")
+                     if l.strip() and not l.lstrip().startswith("#"))
+    body = code.split('"""', 2)[-1]          # drop the module docstring example
+
+    assert "await self.import_devices()" in body, (
+        "nothing inside the bridge calls import_devices; if the periodic loop "
+        "was removed, the registry freezes again and says nothing")
+
+    server = (REPO / "dosync" / "server.py").read_text(encoding="utf-8")
+    assert "start_import_loop()" in server, (
+        "the import loop is never started at hub startup — registering the "
+        "bridge only wires it up to execute actions")
+
+
+def test_a_failed_import_is_visible_without_reading_the_journal():
+    """An expired token produced 401s for days and nobody noticed.
+
+    The only signal was a warning in the log and a success rate of zero buried
+    in execution stats. A cycle that fails must leave something a caller can
+    read.
+    """
+    src = (REPO / "dosync" / "adapters" / "homeassistant.py").read_text(encoding="utf-8")
+
+    assert "self.last_import" in src, (
+        "the bridge keeps no record of its last import, so a failing cycle is "
+        "visible only to whoever reads the journal")
+    assert 'log.warning("HA bridge: import cycle failed' in src, (
+        "a failed import cycle does not warn — debug level is how the expired "
+        "token stayed invisible")
+
+
+def test_the_import_loop_cannot_take_the_hub_down():
+    """Home Assistant being unreachable must not stop a hub that also governs
+    devices HA knows nothing about — which was the live situation this week,
+    with a revoked token returning 401 on every call."""
+    src = (REPO / "dosync" / "adapters" / "homeassistant.py").read_text(encoding="utf-8")
+    loop = src[src.index("async def start_import_loop"):]
+    loop = loop[:loop.index("\n    def ")]
+
+    assert "except Exception" in loop, (
+        "an unhandled exception in the import cycle would kill the task and "
+        "silently stop all future imports")
+    assert "except asyncio.CancelledError" in loop, (
+        "the loop does not handle cancellation, so shutdown logs an error")
