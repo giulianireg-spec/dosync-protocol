@@ -10,6 +10,23 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The import loop died on its first cycle: `time` was never imported.**
+  Shipped an hour earlier, with 1,122 tests green, and it raised
+  `NameError: name 'time' is not defined` sixty seconds after startup in
+  production.
+
+  The three tests guarding that loop all read `homeassistant.py` as text — that
+  the loop exists, that failure is visible, that nothing can kill the hub — and
+  all three passed on code that could not complete a single cycle. **Reading the
+  source is not running it**, and this is the fifth silent failure of the week,
+  committed while fixing one.
+
+  A fourth test now executes a cycle against a stubbed `import_devices` that
+  raises, and checks that the failure is recorded. Verified by mutation:
+  removing the `time` import fails it, and leaves the other three passing.
+
+
+### Fixed
 - **The Home Assistant bridge imported once and never again.**
   `import_devices` existed, worked, and nothing called it: its only appearance
   outside its own definition was an example in the module docstring. Registering

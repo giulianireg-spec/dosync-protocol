@@ -260,3 +260,49 @@ def test_the_import_loop_cannot_take_the_hub_down():
         "silently stop all future imports")
     assert "except asyncio.CancelledError" in loop, (
         "the loop does not handle cancellation, so shutdown logs an error")
+
+
+def test_the_import_loop_actually_runs():
+    """Reading the source is not running it.
+
+    The three tests above check that the loop exists, that failure is visible
+    and that nothing can kill the hub — all by reading `homeassistant.py` as
+    text. All three passed on a version that raised `NameError: name 'time' is
+    not defined` on its first cycle, because `time` was never imported.
+
+    1,122 tests were green and the loop died sixty seconds after startup in
+    production. This one executes a cycle.
+    """
+    import asyncio
+
+    from dosync.adapters.homeassistant import HABridge
+
+    bridge = HABridge.__new__(HABridge)
+    bridge.last_import = None
+
+    calls = []
+
+    async def fake_import():
+        calls.append(1)
+        raise RuntimeError("upstream unreachable")
+
+    bridge.import_devices = fake_import
+
+    async def run_one_cycle():
+        task = asyncio.create_task(bridge.start_import_loop(interval=0.01))
+        await asyncio.sleep(0.05)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    asyncio.run(run_one_cycle())
+
+    assert calls, "the loop never called import_devices"
+    assert bridge.last_import is not None, (
+        "a failed cycle left no record — this is the field that makes the "
+        "failure visible without reading the journal")
+    assert bridge.last_import["ok"] is False
+    assert "unreachable" in bridge.last_import["error"], (
+        "the recorded error does not say what went wrong")
