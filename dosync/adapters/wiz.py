@@ -101,15 +101,15 @@ def wiz_manifest(
             # kind="device_state": these describe the LAMP, not the room. Real
             # telemetry, truthfully declared — but "read the environment" should
             # not sweep them (SENSOR-KIND, 2026-07-17).
-            SensorSpec("brightness", "integer", "Brillo actual", unit="%",
+            SensorSpec("brightness", "integer", "Current brightness", unit="%",
                        kind="device_state"),
-            SensorSpec("state",      "boolean", "Encendida/apagada",
+            SensorSpec("state",      "boolean", "On or off",
                        kind="device_state"),
         ],
         actuators=[
-            ActuatorSpec("turn_on",         "turn_on",         "Encender"),
-            ActuatorSpec("turn_off",        "turn_off",        "Apagar"),
-            ActuatorSpec("set_brightness",  "set_brightness",  "Brillo 0-100%",
+            ActuatorSpec("turn_on",         "turn_on",         "Turn on"),
+            ActuatorSpec("turn_off",        "turn_off",        "Turn off"),
+            ActuatorSpec("set_brightness",  "set_brightness",  "Brightness 0-100%",
                          {"type": "object",
                           "properties": {"brightness": {"type": "integer", "minimum": 0, "maximum": 100}},
                           "required": ["brightness"]}),
@@ -119,7 +119,7 @@ def wiz_manifest(
                                          "g": {"type": "integer", "minimum": 0, "maximum": 255},
                                          "b": {"type": "integer", "minimum": 0, "maximum": 255}},
                           "required": ["r", "g", "b"]}),
-            ActuatorSpec("set_color_temp",  "set_color_temp",  "Temperatura de color",
+            ActuatorSpec("set_color_temp",  "set_color_temp",  "Colour temperature",
                          {"type": "object",
                           "properties": {"kelvin": {"type": "integer", "minimum": 2200, "maximum": 6500}},
                           "required": ["kelvin"]}),

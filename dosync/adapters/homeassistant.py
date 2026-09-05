@@ -58,9 +58,9 @@ HA_DOMAIN_MAP = {
         "category": DeviceCategory.HYBRID,
         "tags":      ["light"],
         "actuators": [
-            ActuatorSpec("turn_on",        "turn_on",        "Encender"),
-            ActuatorSpec("turn_off",       "turn_off",       "Apagar"),
-            ActuatorSpec("set_brightness", "set_brightness", "Brillo 0-100%",
+            ActuatorSpec("turn_on",        "turn_on",        "Turn on"),
+            ActuatorSpec("turn_off",       "turn_off",       "Turn off"),
+            ActuatorSpec("set_brightness", "set_brightness", "Brightness 0-100%",
                          {"type": "object",
                           "properties": {"brightness": {"type": "integer", "minimum": 0, "maximum": 100}},
                           "required": ["brightness"]}),
@@ -74,14 +74,14 @@ HA_DOMAIN_MAP = {
                          {"type": "object",
                           "properties": {"effect": {"type": "string"}},
                           "required": ["effect"]}),
-            ActuatorSpec("set_color_temp", "set_color_temp", "Temperatura de color",
+            ActuatorSpec("set_color_temp", "set_color_temp", "Colour temperature",
                          {"type": "object",
                           "properties": {"kelvin": {"type": "integer", "minimum": 2200, "maximum": 6500}},
                           "required": ["kelvin"]}),
         ],
         "sensors": [
-            SensorSpec("state",      "boolean",  "Encendida/apagada", kind="device_state"),
-            SensorSpec("brightness", "integer",  "Brillo actual", unit="%", kind="device_state"),
+            SensorSpec("state",      "boolean",  "On or off", kind="device_state"),
+            SensorSpec("brightness", "integer",  "Current brightness", unit="%", kind="device_state"),
         ],
         # Bridged devices reach DoSync through the HA hop: an emergency response
         # should rely on natively-integrated devices, not on a bridge dependency.
@@ -96,28 +96,28 @@ HA_DOMAIN_MAP = {
         # native adapters stopped emitting it — the HA map lagged behind.
         "tags":      ["appliance"],
         "actuators": [
-            ActuatorSpec("turn_on",  "turn_on",  "Encender"),
-            ActuatorSpec("turn_off", "turn_off", "Apagar"),
+            ActuatorSpec("turn_on",  "turn_on",  "Turn on"),
+            ActuatorSpec("turn_off", "turn_off", "Turn off"),
         ],
-        "sensors": [SensorSpec("state", "boolean", "Estado", kind="device_state")],
+        "sensors": [SensorSpec("state", "boolean", "State", kind="device_state")],
         "emergency_capable": False,
     },
     "climate": {
         "category": DeviceCategory.HYBRID,
         "tags":      ["thermostat", "climate"],
         "actuators": [
-            ActuatorSpec("set_temperature", "set_temperature", "Temperatura",
+            ActuatorSpec("set_temperature", "set_temperature", "Temperature",
                          {"type": "object",
                           "properties": {"celsius": {"type": "number"}},
                           "required": ["celsius"]}),
-            ActuatorSpec("turn_off",        "turn_off",        "Apagar clima"),
+            ActuatorSpec("turn_off",        "turn_off",        "Turn the climate off"),
         ],
         "sensors": [
             # The per-sensor grain earning its keep: current_temp MEASURES THE
             # ROOM (environment — a thermostat is also a thermometer); target_temp
             # is the setpoint, the device's own configuration (device_state).
-            SensorSpec("current_temp", "temperature", "Temperatura actual", unit="celsius"),
-            SensorSpec("target_temp",  "temperature", "Temperatura objetivo", unit="celsius",
+            SensorSpec("current_temp", "temperature", "Current temperature", unit="celsius"),
+            SensorSpec("target_temp",  "temperature", "Target temperature", unit="celsius",
                        kind="device_state"),
         ],
         "emergency_capable": False,
@@ -144,7 +144,7 @@ HA_DOMAIN_MAP = {
             ActuatorSpec("unlock", "unlock", "Desbloquear"),
             ActuatorSpec("lock",   "lock",   "Bloquear"),
         ],
-        "sensors": [SensorSpec("state", "boolean", "Bloqueado/desbloqueado",
+        "sensors": [SensorSpec("state", "boolean", "Locked or unlocked",
                                 kind="device_state")],
         "emergency_capable": True,
     },
@@ -152,14 +152,14 @@ HA_DOMAIN_MAP = {
         "category": DeviceCategory.SENSOR,
         "tags":      ["sensor"],
         "actuators": [],
-        "sensors":   [SensorSpec("state", "boolean", "Estado")],
+        "sensors":   [SensorSpec("state", "boolean", "State")],
         "emergency_capable": False,
     },
     "sensor": {
         "category": DeviceCategory.SENSOR,
         "tags":      ["sensor"],
         "actuators": [],
-        "sensors":   [SensorSpec("value", "float", "Valor del sensor")],
+        "sensors":   [SensorSpec("value", "float", "Sensor reading")],
         "emergency_capable": False,
     },
     "camera": {
@@ -167,9 +167,9 @@ HA_DOMAIN_MAP = {
         "tags":      ["camera", "emergency"],
         "actuators": [
             ActuatorSpec("record", "record", "Start recording"),
-            ActuatorSpec("stream", "stream", "Activar streaming"),
+            ActuatorSpec("stream", "stream", "Start streaming"),
         ],
-        "sensors":   [SensorSpec("state", "boolean", "Activa", kind="device_state")],
+        "sensors":   [SensorSpec("state", "boolean", "Active", kind="device_state")],
         "emergency_capable": True,
     },
     "alarm_control_panel": {
@@ -177,9 +177,9 @@ HA_DOMAIN_MAP = {
         "tags":      ["alarm", "emergency", "security"],
         "actuators": [
             ActuatorSpec("arm",   "arm",   "Armar"),
-            ActuatorSpec("alarm", "alarm", "Activar alarma"),
+            ActuatorSpec("alarm", "alarm", "Trigger the alarm"),
         ],
-        "sensors":   [SensorSpec("state", "string", "Estado de alarma",
+        "sensors":   [SensorSpec("state", "string", "Alarm state",
                                   kind="device_state")],
         "emergency_capable": True,
     },
@@ -187,11 +187,11 @@ HA_DOMAIN_MAP = {
         "category": DeviceCategory.HYBRID,
         "tags":      ["display", "communication"],
         "actuators": [
-            ActuatorSpec("turn_on",  "turn_on",  "Encender"),
-            ActuatorSpec("turn_off", "turn_off", "Apagar"),
+            ActuatorSpec("turn_on",  "turn_on",  "Turn on"),
+            ActuatorSpec("turn_off", "turn_off", "Turn off"),
             ActuatorSpec("display",  "display",  "Mostrar mensaje"),
         ],
-        "sensors":   [SensorSpec("state", "string", "Estado", kind="device_state")],
+        "sensors":   [SensorSpec("state", "string", "State", kind="device_state")],
         "emergency_capable": False,
     },
 }
@@ -446,7 +446,19 @@ class HABridge(DoSyncAdapter):
 
         mapping = HA_DOMAIN_MAP[domain]
 
-        # Inferir tags adicionales del nombre
+        # The domain map alone types every binary_sensor as `boolean` and every
+        # sensor as `float`, which is the SHAPE of the reading and not what it
+        # measures. A motion detector, a door contact and a smoke alarm all
+        # arrive as `boolean`, and a resolver deciding participation by declared
+        # capability cannot tell them apart — measured in production, the
+        # deployment's two HA binary sensors dropped out of every intent.
+        #
+        # Home Assistant already knows which is which: `device_class` is a
+        # published, bounded enum (`motion`, `smoke`, `door`, `occupancy`, …).
+        # The bridge was reading `attributes` for the friendly name and throwing
+        # the rest away.
+        sensors = self._typed_sensors(mapping, attributes)
+
         extra_tags = self._infer_tags(friendly, entity_id)
 
         manifest = CapabilityManifest(
@@ -457,7 +469,7 @@ class HABridge(DoSyncAdapter):
             firmware="auto",
             category=mapping["category"],
             tags=list(set(mapping["tags"] + extra_tags)),
-            sensors=mapping.get("sensors", []),
+            sensors=sensors,
             actuators=mapping.get("actuators", []),
             events=[],
             emergency_capable=mapping.get("emergency_capable", False),
@@ -470,6 +482,36 @@ class HABridge(DoSyncAdapter):
             "ha_url":    self._url,
         }
         return manifest
+
+    def _typed_sensors(self, mapping: dict, attributes: dict) -> list:
+        """Replace a shape with a meaning when Home Assistant supplies one.
+
+        `device_class` is HA's own vocabulary and it is bounded: this reads it
+        verbatim rather than translating it, so an unfamiliar class arrives as
+        itself instead of being flattened to `boolean`. A class DoSync does not
+        recognise still says more than a shape does — and nothing here needs
+        updating when HA adds one.
+
+        When the attribute is absent, the domain default stands.
+        """
+        sensors = list(mapping.get("sensors", []))
+        device_class = (attributes.get("device_class") or "").strip()
+        if not device_class or not sensors:
+            return sensors
+
+        # Only the reading itself is retyped. Sensors marked `device_state` are
+        # the hub's own bookkeeping — whether a light is on — and a device class
+        # says nothing about those.
+        retyped = []
+        for spec in sensors:
+            if getattr(spec, "kind", None) == "device_state":
+                retyped.append(spec)
+                continue
+            retyped.append(SensorSpec(
+                spec.id, device_class, spec.description,
+                unit=getattr(spec, "unit", None),
+                kind=getattr(spec, "kind", None)))
+        return retyped
 
     def _infer_tags(self, friendly_name: str, entity_id: str) -> list[str]:
         """Infer location and type tags from the device name."""

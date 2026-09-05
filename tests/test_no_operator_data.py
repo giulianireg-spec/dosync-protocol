@@ -223,6 +223,52 @@ def test_the_rule_is_written_down():
         "CONTRIBUTING.md no longer states the rule this file enforces"
 
 
+def test_adapter_descriptions_reaching_an_agent_are_in_english():
+    """The device descriptions an adapter publishes are read by a model.
+
+    These are short strings — "Estado", "Activa", "Brillo 0-100%" — with no
+    accents and no function words, which is the documented blind spot of the
+    general detector and the reason fourteen of them survived five rewrites of
+    it. They are not internal comments: they are what an agent receives when it
+    asks what a device does, and a model reasoning in English got
+    "Bloqueado/desbloqueado" as the meaning of a lock's state.
+
+    A general language classifier is not needed here. The strings live in
+    bounded mapping tables, so a word list specific to this narrow context is
+    both sufficient and honest about its scope.
+    """
+    import re
+    from pathlib import Path
+
+    # `sensor`, `temperatura`, `color` and `valor` are deliberately absent:
+    # the first is spelled identically in both languages, the rest are close
+    # enough that they fired on correct English ("Sensor reading", "Color RGB").
+    # A guard that flags correct text gets switched off, and these carry no
+    # signal the remaining words do not.
+    spanish = re.compile(
+        r"\b(?:estado|activa|activar|brillo|bloqueado|desbloqueado|encendida|"
+        r"apagada|alarma|puerta|luces|posicion|abierto|cerrado|nivel|"
+        r"objetivo|apagar|encender|actual)\b", re.I)
+
+    root = Path(__file__).resolve().parent.parent / "dosync" / "adapters"
+    hits = []
+    for path in sorted(root.glob("*.py")):
+        for i, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+            if "Spec(" not in line:
+                continue
+            for quoted in re.findall(r'"([^"]{2,})"', line):
+                # Identifiers are the protocol's own vocabulary, not prose.
+                if quoted in ("set_brightness", "set_color_temp", "set_temperature",
+                              "sensor", "alarm", "temperature", "state", "value"):
+                    continue
+                if spanish.search(quoted):
+                    hits.append(f"{path.name}:{i} → {quoted}")
+
+    assert not hits, (
+        "adapter descriptions an agent will read are in Spanish:\n  "
+        + "\n  ".join(hits))
+
+
 def test_the_core_and_the_spec_are_in_english():
     """The protocol, its adapters and its specification are written in English.
 

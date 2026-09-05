@@ -89,14 +89,14 @@ def matter_manifest(
         base_tags.append(room)
 
     actuators_map = {
-        "light":   [("turn_on", "Encender"), ("turn_off", "Apagar"),
+        "light":   [("turn_on", "Turn on"), ("turn_off", "Turn off"),
                     ("set_brightness", "Brillo"), ("set_color", "Color")],
-        "switch":  [("turn_on", "Encender"), ("turn_off", "Apagar")],
+        "switch":  [("turn_on", "Turn on"), ("turn_off", "Turn off")],
         "cover":   [("open", "Abrir"), ("close", "Cerrar"),
                     ("set_position", "Position 0-100%")],
         "lock":    [("lock", "Cerrar"), ("unlock", "Abrir")],
-        "climate": [("set_temperature", "Temperatura"), ("turn_on", "Encender"),
-                    ("turn_off", "Apagar")],
+        "climate": [("set_temperature", "Temperatura"), ("turn_on", "Turn on"),
+                    ("turn_off", "Turn off")],
     }
     actuators = [
         ActuatorSpec(id=f"{device_id}-{a[0]}", type=a[0], description=a[1])

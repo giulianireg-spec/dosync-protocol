@@ -99,7 +99,7 @@ def shelly_manifest(
         "dimmer": [("turn_on", "Encender dimmer"), ("turn_off", "Apagar dimmer"),
                    ("set_brightness", "Ajustar brillo 0-100%")],
         "plug":   [("turn_on", "Encender enchufe"), ("turn_off", "Apagar enchufe")],
-        "rgbw":   [("turn_on", "Encender"), ("turn_off", "Apagar"),
+        "rgbw":   [("turn_on", "Turn on"), ("turn_off", "Turn off"),
                    ("set_brightness", "Brillo"), ("set_color", "Color RGB")],
     }
     actuators = [

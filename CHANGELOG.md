@@ -10,6 +10,42 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The Home Assistant bridge stopped throwing away what a sensor measures.**
+  Its mapping was by HA *domain*, so every `binary_sensor` arrived as `boolean`
+  and every `sensor` as `float` — the shape of the reading, not its meaning. A
+  motion detector, a door contact and a smoke alarm were indistinguishable, and
+  once participation started coming from declared capability, the deployment's
+  two HA binary sensors dropped out of every intent.
+
+  Home Assistant knew all along: `device_class` is a published, bounded enum,
+  and the bridge was already reading `attributes` for the friendly name and
+  discarding the rest. It is now read verbatim rather than translated, so an
+  unfamiliar class arrives as itself instead of being flattened — a class DoSync
+  does not recognise still says more than a shape does, and nothing here needs
+  updating when HA adds one.
+
+  Verified: `binary_sensor` with `device_class: motion` now declares `motion`;
+  a door declares `door`; one with no class keeps `boolean`; and a light's own
+  state sensors are untouched, because a device class says nothing about whether
+  a lamp is on.
+
+- **Nineteen Spanish descriptions across four adapters, the sixth occurrence.**
+  `"Estado"`, `"Encender"`, `"Bloqueado/desbloqueado"`, `"Brillo 0-100%"`. Short
+  strings with no accents and no function words — the documented blind spot of
+  the general detector, which is why they survived five rewrites of it.
+
+  These are not internal comments. They are what an agent receives when it asks
+  what a device does: a model reasoning in English was being handed
+  `"Bloqueado/desbloqueado"` as the meaning of a lock's state.
+
+  Guarded by a check scoped to adapter capability descriptions rather than a
+  sixth general detector, since the strings live in bounded mapping tables.
+  `sensor`, `temperatura`, `color` and `valor` are deliberately outside its
+  vocabulary: they fired on correct English, and a guard that flags correct text
+  gets switched off.
+
+
+### Fixed
 - **A device could qualify on a sensor and then score zero.** The gate started
   admitting devices for declaring a sensor an intent needs; the score still
   counted only tags, location, emergency and actuators. A thermometer declaring
