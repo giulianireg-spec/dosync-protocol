@@ -256,3 +256,60 @@ def test_the_exclusion_reason_names_a_capability_not_a_tag():
         f"the exclusion reason does not say what the device declares: {reason}")
     assert "tag" not in reason.lower(), (
         f"the exclusion reason still blames tags: {reason}")
+
+
+def test_a_sensor_match_scores_like_an_actuator_match():
+    """Qualifying and ranking must read the same fields.
+
+    When the gate started admitting devices by declared sensor, the score still
+    only counted tags, location, emergency and actuators. A thermometer
+    declaring `temperature` for an intent that asks for it passed the gate,
+    scored 0.0, and never reached a plan — admitted and then silently dropped,
+    which is worse than being excluded, because `explain` said it was included.
+    """
+    from dosync.models import (CapabilityManifest, DeviceCategory, Intent,
+                               IntentClass, SensorSpec, Urgency)
+    from dosync.hub import CapabilityRegistry
+    from dosync.resolvers import CapabilityMatchingResolver
+
+    reg = CapabilityRegistry()
+    reg.register(CapabilityManifest(
+        device_id="therm-01", device_name="Thermometer", manufacturer="t",
+        model="t", firmware="1", category=DeviceCategory.SENSOR, tags=[],
+        sensors=[SensorSpec(id="t", type="temperature", description="")]))
+
+    r = CapabilityMatchingResolver(reg)
+    bd = r._score_breakdown(reg.get("therm-01"),
+                            Intent(intent_id="t", intent=IntentClass("alert_anomaly"),
+                                   urgency=Urgency.ALERT, context={}),
+                            {"tags": [], "actuators": [], "sensors": ["temperature"]})
+
+    assert not bd.hard_filtered, "the sensor match did not qualify the device"
+    assert bd.total > 0, (
+        "the device qualified on a sensor and scored zero: the gate reads "
+        "sensors and the score does not")
+
+
+def test_the_emergency_intent_asks_for_actuators_only():
+    """Checked against the operator, not reasoned from first principles.
+
+    A panel concluded unanimously that a motion detector belongs in an
+    emergency plan — an agent with actuators and no sensors has hands and no
+    eyes. The operator ground truth, written before the question arose, lists
+    sensors for `alert_anomaly` and `report_status` and none for
+    `ensure_safety`, `control_access` or `notify`. Held consistently across five
+    intents, that is a distinction rather than an oversight: an emergency is for
+    acting.
+
+    Adding sensors here was measured and reverted — `ensure_safety` precision
+    fell from 0.75 to 0.706 against that criterion.
+    """
+    from dosync.hub import DoSyncHub
+
+    hub = DoSyncHub(db_path=":memory:")
+    assert hub.db.get_intent_class("ensure_safety")["resolution_sensors"] == [], (
+        "ensure_safety asks for sensors again; the operator criterion says an "
+        "emergency is answered by acting, and it measured worse")
+    assert hub.db.get_intent_class("alert_anomaly")["resolution_sensors"], (
+        "alert_anomaly stopped asking for sensors — that is where the operator "
+        "does expect them")

@@ -191,6 +191,30 @@ class DoSyncDB:
         # make those devices resolve. That tag is kept for now: removing it is a
         # behaviour change that belongs in the resolver redesign, not here.
         #
+        # `ensure_safety` declares NO sensors, and that was checked rather than
+        # assumed. When the capability gate removed the deployment's PIR from
+        # the emergency plan, an expert panel reasoned unanimously that a
+        # detector belongs there — an agent with actuators and no sensors has
+        # hands and no eyes.
+        #
+        # The operator ground truth says otherwise, and it is the one criterion
+        # here that was not derived from the resolver's own tags. Written before
+        # this question came up, it lists sensors for `alert_anomaly` (four of
+        # five devices) and for `report_status` (four of four), and lists none
+        # for `ensure_safety`, `control_access` or `notify`. That is not an
+        # omission; it is a distinction held consistently across five intents:
+        # an emergency is for acting, an alert is for detecting.
+        #
+        # Adding sensors here measured worse against that criterion —
+        # `ensure_safety` precision 0.75 → 0.706 — so the reasoning lost to the
+        # measurement. The PIR's absence from emergency plans is correct; its
+        # presence before was an artifact of the tag `emergency`.
+        #
+        # `control_access` and `notify` stay empty for the same reason: access
+        # is granted by acting on a lock, and a notification is delivered, not
+        # sensed. `report_status` stays empty because an empty resolution is
+        # already its contract — read everything readable.
+        #
         # `number` is deliberately NOT in the list, though several devices
         # declare it. It is a shape, not a meaning: a particulate counter and a
         # pressure gauge both report `number`, and including it made every

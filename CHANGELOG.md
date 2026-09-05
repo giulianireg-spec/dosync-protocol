@@ -9,6 +9,36 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **A device could qualify on a sensor and then score zero.** The gate started
+  admitting devices for declaring a sensor an intent needs; the score still
+  counted only tags, location, emergency and actuators. A thermometer declaring
+  `temperature` passed the gate, scored 0.0 and never reached a plan — admitted
+  and silently dropped, which is worse than exclusion, because `explain` said it
+  was included.
+
+  A sensor match now scores the same as an actuator match. A device that answers
+  by detecting is not worth less than one that answers by acting.
+
+### Decided
+- **`ensure_safety` asks for actuators only, and that was checked rather than
+  reasoned.** When the capability gate removed the deployment's PIR from the
+  emergency plan, an expert panel concluded unanimously that a detector belongs
+  there: an agent with actuators and no sensors has hands and no eyes.
+
+  The operator ground truth disagrees, and it is the one criterion here not
+  derived from the resolver's own tags. Written before the question came up, it
+  lists sensors for `alert_anomaly` (four of five devices) and `report_status`
+  (four of four), and none for `ensure_safety`, `control_access` or `notify`.
+  Held consistently across five intents, that is a distinction and not an
+  oversight: an emergency is for acting, an alert is for detecting.
+
+  Adding sensors there measured worse — `ensure_safety` precision 0.75 → 0.706,
+  tuned fixture 1.00 → 0.97 — so the reasoning lost to the measurement. The
+  PIR's absence from emergency plans is correct; its presence before was an
+  artifact of the tag `emergency`.
+
+
 ### Changed
 - **Participation is decided by declared capability, not by curated tags.**
   First step of the resolver redesign the Phase 1 measurements called for.

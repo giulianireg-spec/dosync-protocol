@@ -108,6 +108,7 @@ class ScoreBreakdown:
     # reason. Under the capability gate a device is excluded for what it cannot
     # do, and telling an operator "no tag overlap" would send them to edit the
     # wrong field.
+    sensor_component: float = 0.0
     matched_sensors: list = field(default_factory=list)
     device_capabilities: list = field(default_factory=list)
 
@@ -118,7 +119,8 @@ class ScoreBreakdown:
         if self.hard_filtered:
             return 0.0
         return (self.tag_component + self.location_component
-                + self.emergency_component + self.actuator_component)
+                + self.emergency_component + self.actuator_component
+                + self.sensor_component)
 
     def exclusion_reason(self) -> str:
         """Why this device is not in the plan, in terms of what the operator can
@@ -349,6 +351,16 @@ class CapabilityMatchingResolver(BaseResolver):
     _W_LOCATION   = 15.0   # context location matches a device tag
     _W_EMERGENCY  = 30.0   # emergency urgency + emergency_capable device
     _W_ACTUATOR   = 12.0   # per matching actuator type
+    # Same weight as an actuator, deliberately (2026-09-04). A device that
+    # answers an intent by detecting is not worth less than one that answers by
+    # acting: in an emergency, knowing which room has movement directs
+    # everything the actuators then do.
+    #
+    # Without this the sensor gate was decorative. A thermometer declaring
+    # `temperature` for `ensure_safety` passed the gate, scored 0.0 — nothing in
+    # the score read sensors — and never reached a plan. Qualifying and ranking
+    # were reading different fields.
+    _W_SENSOR     = 12.0   # per matching sensor type
     _FORCED_SCORE = 50.0   # emergency force-inclusion floor (mirrors resolve())
 
     def _candidates(self, intent: Intent, resolution: dict) -> list:
@@ -498,6 +510,7 @@ class CapabilityMatchingResolver(BaseResolver):
             emergency_component=self._W_EMERGENCY if emergency_hit else 0.0,
             matched_actuators=sorted(matched_actuators),
             actuator_component=len(matched_actuators) * self._W_ACTUATOR,
+            sensor_component=len(matched_sensors) * self._W_SENSOR,
             hard_filtered=hard_filtered,
             # Kept for the explain path, which reports what a device would have
             # needed. Under the capability gate what it needed is a capability,
