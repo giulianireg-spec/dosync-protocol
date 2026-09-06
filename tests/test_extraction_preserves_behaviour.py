@@ -359,3 +359,83 @@ def test_the_import_endpoint_answers_rather_than_500s():
     assert response.status_code == 200, (
         f"expected 200 with a bridge registered, got {response.status_code}: "
         f"{response.text[:200]}")
+
+
+def test_a_device_home_assistant_stops_reporting_is_marked_not_deleted():
+    """Import only added and updated: a device removed from HA stayed forever.
+
+    In production that shows as entries with success_rate 0.0 and dozens of
+    attempts, indistinguishable from a device that is present and broken —
+    different problems with different fixes.
+
+    Deleting on absence is worse: one unanswered call to HA and half a registry
+    is gone, and that cannot be undone. So absence is recorded with a date and
+    the device stays.
+    """
+    import asyncio
+
+    from dosync.adapters.homeassistant import HABridge
+    from dosync.hub import DoSyncHub
+    from dosync.models import CapabilityManifest, DeviceCategory
+
+    hub = DoSyncHub(db_path=":memory:")
+    hub.registry.register(CapabilityManifest(
+        device_id="ha-light-gone", device_name="Removed lamp", manufacturer="t",
+        model="t", firmware="1", category=DeviceCategory.ACTUATOR,
+        tags=["light"], adapter_config={}))
+
+    bridge = HABridge.__new__(HABridge)
+    bridge._hub = hub
+    bridge._url = "http://example.invalid"
+    bridge._simulated = False
+    bridge.last_import = None
+
+    async def no_states():
+        """HA answers, and reports nothing — the device is gone, not
+        unreachable. A failed fetch raises and never reaches this code."""
+        return []
+
+    bridge._fetch_states = no_states
+    result = asyncio.run(bridge.import_devices())
+
+    device = hub.registry.get("ha-light-gone")
+    assert device is not None, (
+        "the device was deleted; one unanswered call to HA would wipe a "
+        "registry and that cannot be undone")
+    assert device.adapter_config.get("absent_since"), (
+        "absence was not recorded, so a device gone from HA is still "
+        "indistinguishable from one that is present and failing")
+    assert result.get("absent") == 1, (
+        f"the import result does not report the absence: {result}")
+
+
+def test_adapter_config_survives_a_restart_without_an_adapter(tmp_path):
+    """The mirror of a defect fixed in `to_dict` on 29 August.
+
+    Restore read `adapter_config` only when the manifest also had an `adapter`,
+    so a device with no adapter lost it on every restart — silently. Quarantine
+    lives in that field, and since 5 September so does absence: the marks would
+    have been cleared by each restart and re-applied by the next import cycle
+    with a fresh timestamp. "Absent since Thursday" would have read as "absent
+    for ten minutes", every time, which is the one thing the date exists for.
+
+    Writing worked; reading did not. The value was in the database the whole
+    time.
+    """
+    from dosync.hub import DoSyncHub
+    from dosync.models import CapabilityManifest, DeviceCategory
+
+    db = str(tmp_path / "restart.db")
+
+    hub = DoSyncHub(db_path=db)
+    hub.register_device(CapabilityManifest(
+        device_id="ha-no-adapter", device_name="Bridged thing", manufacturer="t",
+        model="t", firmware="1", category=DeviceCategory.ACTUATOR,
+        tags=["light"], adapter_config={"absent_since": 1788666178.0}))
+
+    restored = DoSyncHub(db_path=db).registry.get("ha-no-adapter")
+
+    assert restored is not None, "the device did not survive the restart"
+    assert restored.adapter_config.get("absent_since") == 1788666178.0, (
+        "adapter_config was dropped on restore for a device with no adapter — "
+        f"got {restored.adapter_config}")

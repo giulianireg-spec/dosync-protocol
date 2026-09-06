@@ -10,6 +10,35 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A device Home Assistant stops reporting is marked absent, with a date.**
+  Import only ever added and updated, so a device removed from HA stayed in the
+  registry for good and the hub kept trying to act on it. In production that
+  shows as entries with `success_rate: 0.0` and dozens of attempts —
+  indistinguishable from a device that is present and broken, which is a
+  different problem with a different fix.
+
+  **Marked, not deleted.** One unanswered call to Home Assistant would otherwise
+  wipe half a registry, and that cannot be undone. A failed fetch raises before
+  this code is reached, so absence is only ever recorded when HA answered and
+  did not mention the device.
+
+  It does not exclude the device from resolution. Quarantine already does that
+  and means something stronger — a decision that a device must not take part.
+  **Absence is an observation, not a decision.** A device that comes back has
+  the mark cleared and says so in the log.
+
+  Only devices the bridge owns are judged: an entry that does not start with
+  `ha-` is not the bridge's to mark.
+
+### Changed
+- **`_fetch_states` is its own method.** It was four lines inside
+  `import_devices`, and a test of the absence decision needs to control what
+  Home Assistant returns. Code that cannot be tested is telling you something
+  about its shape — the rule taken from a loop that shipped with a missing
+  import three hours earlier.
+
+
+### Added
 - **`spec/CAPABILITY-TYPES.md` — what belongs in a `type`.** Participation has
   come from declared capability since 4 September, which made that field
   load-bearing while nothing described its contents. A manufacturer asking what

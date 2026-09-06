@@ -347,6 +347,26 @@ class HABridge(DoSyncAdapter):
 
     # ── Import devices from HA ────────────────────────────────────────────────
 
+    async def _fetch_states(self) -> list:
+        """Every entity Home Assistant currently reports.
+
+        A method rather than four lines inside `import_devices`, because import
+        is now the only thing that decides a device is absent, and a test of
+        that decision needs to control what HA returns. Code that cannot be
+        tested is telling you something about its shape.
+        """
+        try:
+            session = await self._get_session()
+            async with session.get(f"{self._url}/api/states") as resp:
+                if resp.status == 401:
+                    raise ValueError("Invalid HA token — check your Long-Lived Access Token")
+                if resp.status != 200:
+                    raise ConnectionError(f"HA returned status {resp.status}")
+                return await resp.json()
+        except Exception as e:
+            log.error("Failed to connect to HA at %s: %s", self._url, e)
+            raise
+
     async def import_devices(self) -> dict:
         """
         Reads all HA states and registers devices in the hub.
@@ -363,17 +383,7 @@ class HABridge(DoSyncAdapter):
             count = self._import_simulated()
             return {"new": count, "updated": 0, "skipped": 0, "total": count}
 
-        try:
-            session = await self._get_session()
-            async with session.get(f"{self._url}/api/states") as resp:
-                if resp.status == 401:
-                    raise ValueError("Invalid HA token — check your Long-Lived Access Token")
-                if resp.status != 200:
-                    raise ConnectionError(f"HA returned status {resp.status}")
-                states = await resp.json()
-        except Exception as e:
-            log.error("Failed to connect to HA at %s: %s", self._url, e)
-            raise
+        states = await self._fetch_states()
 
         new_count = 0
         updated_count = 0
@@ -407,12 +417,56 @@ class HABridge(DoSyncAdapter):
                     skipped_count += 1
                     log.debug("HA bridge: unchanged %s (skipped)", manifest.device_id)
 
+        # ── Devices Home Assistant no longer reports (2026-09-05) ─────────────
+        #
+        # Import only ever added and updated. A device removed from HA stayed in
+        # the registry for good, and the hub kept trying to act on it — visible
+        # in production as entries with success_rate 0.0 and dozens of attempts,
+        # indistinguishable from a device that is present and broken.
+        #
+        # Marked, not deleted. One unanswered call to HA would otherwise wipe
+        # half a registry, and that cannot be undone. Absence carries a date so
+        # an operator — or an agent reading the manifest — can tell "gone since
+        # Thursday" from "answering and failing", which are different problems
+        # with different fixes.
+        #
+        # It does not exclude the device from resolution. Quarantine already
+        # does that and means something stronger: a decision that this device
+        # must not take part. Absence is an observation, not a decision.
+        seen_ids = {m.device_id for m in
+                    (self._state_to_manifest(st) for st in states) if m}
+        absent_count = 0
+        for device in self._hub.registry.all():
+            if not device.device_id.startswith("ha-"):
+                continue          # not ours to judge
+            cfg = getattr(device, "adapter_config", None)
+            if device.device_id in seen_ids:
+                if cfg and cfg.pop("absent_since", None) is not None:
+                    self._hub.register_device(device)
+                    log.info("HA bridge: %s is back", device.device_id)
+                continue
+            if cfg is None:
+                continue
+            if "absent_since" not in cfg:
+                cfg["absent_since"] = time.time()
+                # Re-registered, not just mutated: the registry holds objects in
+                # memory and the database holds the manifest. Setting the field
+                # on the object alone looked right and did nothing — every hub
+                # restart would clear the marks, the next cycle would set them
+                # again, and "absent since Thursday" would read as "absent for
+                # ten minutes" forever. Which is the one thing the date is for.
+                self._hub.register_device(device)
+                absent_count += 1
+                log.warning(
+                    "HA bridge: %s no longer reported by Home Assistant — "
+                    "marked absent, not removed", device.device_id)
+
         total = new_count + updated_count + skipped_count
         log.info(
             "HA bridge: %d new, %d updated, %d unchanged — %d device(s) from %s",
             new_count, updated_count, skipped_count, total, self._url,
         )
-        return {"new": new_count, "updated": updated_count, "skipped": skipped_count, "total": total}
+        return {"new": new_count, "updated": updated_count, "absent": absent_count, "skipped": skipped_count, "total": total}
 
     async def start_import_loop(self, interval: float = None) -> None:
         """Re-import from Home Assistant on a schedule.

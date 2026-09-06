@@ -383,10 +383,20 @@ class DoSyncHub:
                     emergency_capable=manifest_dict.get("emergency_capable", False),
                     cert_tier=CertTier(manifest_dict["cert_tier"]) if manifest_dict.get("cert_tier") else None,
                 )
-                # Restore adapter fields — critical for physical device control
+                # Restore adapter fields — critical for physical device control.
+                #
+                # `adapter_config` is restored unconditionally, not only
+                # alongside an adapter. This is the mirror of a defect fixed in
+                # `to_dict` on 29 August, which dropped the same field for the
+                # same reason: adapter_config carries more than adapter settings
+                # — quarantine lives there, and since 5 September so does
+                # absence. A device with no adapter lost both on every restart,
+                # silently, and the next import cycle would re-mark it with a
+                # fresh date. "Absent since Thursday" would have read as "absent
+                # for ten minutes", forever.
                 if manifest_dict.get("adapter"):
-                    manifest.adapter        = manifest_dict["adapter"]
-                    manifest.adapter_config = manifest_dict.get("adapter_config", {})
+                    manifest.adapter = manifest_dict["adapter"]
+                manifest.adapter_config = manifest_dict.get("adapter_config", {})
                 self.registry.register(manifest)
             except Exception as e:
                 log.warning("Could not restore device %s: %s",
