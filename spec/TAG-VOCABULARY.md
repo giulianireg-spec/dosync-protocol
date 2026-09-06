@@ -8,7 +8,25 @@
 
 ## Overview
 
-Tags are the primary mechanism for semantic device discovery in DoSync. When a hub resolves an intent, it matches the intent's resolution tags against each device's declared tags to determine which devices are relevant.
+> **Changed 4 September 2026.** Tags no longer decide which devices take part in
+> an intent. Participation comes from declared capability — the actuator or
+> sensor an intent needs — and tags contribute to *ranking* among the devices
+> that already qualify.
+>
+> The change was measured. A lock declaring `lock` and `unlock` was excluded
+> from `control_access` for want of the tag `lock`, on a device tagged `access`
+> and `security` — which is what anyone would write for a lock. Against a ground
+> truth written from what the deployment's owner wants, precision went from
+> 0.514 to 0.645; on two corpora it had never been tuned on, F1 went from 0.64
+> and 0.61 to 0.85 and 0.83.
+>
+> What a device can do belongs in `spec/CAPABILITY-TYPES.md`. What it means in a
+> particular deployment — where it is, what it must never touch — is what tags
+> are for, and that is a decision only the installer can make.
+
+Tags describe a device's place in a deployment. When a hub resolves an intent it
+first admits every device declaring a needed capability, then ranks them, and
+matching tags raise a device's score.
 
 This document defines the standard vocabulary. Implementors **SHOULD** use these tags when applicable to ensure interoperability between hubs and devices from different vendors.
 

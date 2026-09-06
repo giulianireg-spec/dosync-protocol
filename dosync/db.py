@@ -979,6 +979,12 @@ class DoSyncDB:
             "urgency":              r["urgency"],
             "resolution_tags":      json.loads(r["resolution_tags"]),
             "resolution_actuators": json.loads(r["resolution_actuators"]),
+            # Missing until 5 September: `get_intent_class` exposed this and
+            # the listing did not, so anything reading the list — the dashboard,
+            # an agent over MCP — could not see which sensors answer an intent.
+            # The field existed and half the readers were blind to it.
+            "resolution_sensors":   json.loads(
+                r["resolution_sensors"] if "resolution_sensors" in r.keys() else "[]"),
             "description":          r["description"],
             "domain":               r["domain"],
             "is_universal":         bool(r["is_universal"]),

@@ -466,3 +466,47 @@ def test_the_shipped_unit_carries_no_environment_secrets():
                     f"a placeholder:\n    {stripped[:100]}\n"
                     "Secrets belong in an untracked drop-in, not in the template "
                     "everyone copies.")
+
+
+def test_the_capability_vocabulary_is_documented():
+    """A manufacturer asking what to write in `type` needs an answer.
+
+    Participation has come from declared capability since 4 September, which
+    made the contents of `type` load-bearing while nothing described what
+    belongs there. The measured consequence: a motion detector declaring
+    `motion_detected` was excluded from every alert asking for `motion`. Both
+    names are reasonable; there was no document saying which to use.
+    """
+    from pathlib import Path
+
+    doc = Path(__file__).resolve().parent.parent / "spec" / "CAPABILITY-TYPES.md"
+    assert doc.exists(), "spec/CAPABILITY-TYPES.md is gone"
+
+    text = doc.read_text(encoding="utf-8")
+
+    # The types the universal intents ask for must be listed, or an integrator
+    # following the document produces devices that cannot be selected.
+    for required in ("motion", "smoke", "temperature", "humidity"):
+        assert f"| `{required}` |" in text, (
+            f"`{required}` is asked for by a universal intent and is not in "
+            "the capability vocabulary")
+
+    assert "never the shape of the data" in text, (
+        "the document no longer states the rule that separates a type from a "
+        "data shape — the distinction the whole vocabulary exists to make")
+
+
+def test_the_tag_document_does_not_claim_tags_decide_participation():
+    """It said tags determine which devices are relevant. That stopped being
+    true on 4 September, and a specification describing a mechanism the code
+    does not have is worse than no specification: an integrator would curate
+    tags to fix a resolution problem that tags no longer cause."""
+    from pathlib import Path
+
+    text = (Path(__file__).resolve().parent.parent / "spec" /
+            "TAG-VOCABULARY.md").read_text(encoding="utf-8")
+
+    assert "to determine which devices are relevant" not in text, (
+        "TAG-VOCABULARY.md still says tags decide which devices participate")
+    assert "CAPABILITY-TYPES.md" in text, (
+        "the tag document does not point at where capabilities are defined")

@@ -9,6 +9,41 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **`spec/CAPABILITY-TYPES.md` — what belongs in a `type`.** Participation has
+  come from declared capability since 4 September, which made that field
+  load-bearing while nothing described its contents. A manufacturer asking what
+  to write had no answer, and "whatever you like" guarantees nothing matches.
+
+  The rule: **a type names what the device measures or does, never the shape of
+  the data.** `boolean`, `integer` and `float` say how a value is encoded and
+  nothing about whether it detects motion, smoke or an open door. Measured: a
+  particulate counter and a pressure gauge both declaring `number` made every
+  numeric sensor in the industrial corpus qualify for any alert, and precision
+  fell from 0.73 to 0.60.
+
+  Aligned with Home Assistant's `device_class` where an equivalent exists,
+  deliberately: the bridge reads those names verbatim, so any deployment with HA
+  behind it produces them anyway, and a parallel vocabulary would mean two names
+  for one thing inside a single hub.
+
+  Unknown types are allowed and will not match an intent that does not ask for
+  them — the same outcome as `boolean`, except they carry information a human or
+  a later version can act on.
+
+### Fixed
+- **`TAG-VOCABULARY.md` described a mechanism the code no longer has.** It said
+  tags determine which devices are relevant, which stopped being true on
+  4 September. A specification claiming a mechanism the implementation lacks is
+  worse than none: an integrator would curate tags to fix a resolution problem
+  tags no longer cause.
+
+- **`list_intent_classes` did not expose `resolution_sensors`.**
+  `get_intent_class` did, so half the readers were blind to a field that
+  existed — anything working from the list, including the dashboard and an
+  agent over MCP, could not see which sensors answer an intent.
+
+
 ### Fixed
 - **The import endpoint answered 500 on every request, and hid a second defect
   behind the first.** Two errors, one line apart:
