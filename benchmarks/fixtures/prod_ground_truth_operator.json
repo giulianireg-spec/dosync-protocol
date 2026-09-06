@@ -67,5 +67,14 @@
         "notifier-01"
       ]
     }
-  ]
+  ],
+  "_provenance": {
+    "author": "the deployment owner",
+    "independent_raters": 0,
+    "written": "before the resolver redesign, from what the owner wants to happen — not from the tags the resolver reads",
+    "confirmed": "2026-09-05",
+    "criterion": "An emergency is answered by acting; an alert is answered by detecting. Sensors are expected in alert_anomaly and report_status, and in neither ensure_safety, control_access nor notify.",
+    "why_this_matters": "This file is the only criterion here that a resolver change cannot invalidate, because it was not derived from the resolver's own tags. The 0.994 the paper reported for production was circular for exactly that reason. Five design decisions have now been settled against this file; it was re-read and confirmed rather than assumed.",
+    "limit": "Still one person. Two ground truths by the same author are not two raters, and no amount of solo work fixes that."
+  }
 }
