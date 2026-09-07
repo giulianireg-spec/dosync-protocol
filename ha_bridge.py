@@ -60,9 +60,9 @@ Examples:
         """,
     )
     parser.add_argument("--ha-url",   default=os.environ.get("HA_URL", ""),
-                        help="URL de Home Assistant (o env HA_URL)")
+                        help="Home Assistant URL (or the HA_URL environment variable)")
     parser.add_argument("--ha-token", default=os.environ.get("HA_TOKEN", ""),
-                        help="Long-lived access token de HA (o env HA_TOKEN)")
+                        help="Home Assistant long-lived access token (or HA_TOKEN)")
     parser.add_argument("--simulated", action="store_true",
                         help="Use sample devices instead of a real HA")
     parser.add_argument("--register",  action="store_true",

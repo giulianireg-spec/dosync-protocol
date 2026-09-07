@@ -15,7 +15,7 @@ echo "==================================="
 # Detect the address when none was given
 if [ -z "$HUB_IP" ]; then
     HUB_IP=$(hostname -I | awk '{print $1}')
-    echo "  Hub IP detectada: $HUB_IP"
+    echo "  Hub IP detected: $HUB_IP"
 else
     echo "  Hub IP: $HUB_IP"
 fi
@@ -32,7 +32,7 @@ echo "  openssl: $(openssl version)"
 
 # Check that the repository is there
 if [ ! -d "$REPO_DIR" ]; then
-    echo "ERROR: Repo no encontrado en $REPO_DIR"
+    echo "ERROR: repository not found at $REPO_DIR"
     exit 1
 fi
 
@@ -40,7 +40,7 @@ cd "$REPO_DIR"
 
 # Check that security.py is in dosync/
 if [ ! -f "dosync/security.py" ]; then
-    echo "ERROR: dosync/security.py no encontrado."
+    echo "ERROR: dosync/security.py not found."
     echo "Copy the file before running this script."
     exit 1
 fi
@@ -68,7 +68,7 @@ echo "    --host 0.0.0.0 --port 47200 \\"
 echo "    --ssl-keyfile certs/hub.key \\"
 echo "    --ssl-certfile certs/hub.crt"
 echo ""
-echo "  Para mTLS (requiere cert de cliente):"
+echo "  For mTLS (requires a client certificate):"
 echo "  uvicorn server:app \\"
 echo "    --host 0.0.0.0 --port 47200 \\"
 echo "    --ssl-keyfile certs/hub.key \\"

@@ -22,12 +22,12 @@ logging.basicConfig(level=logging.WARNING)
 
 async def main():
     parser = argparse.ArgumentParser(
-        description="DoSync Device Discovery — escanea la red local",
+        description="DoSync Device Discovery — scans the local network",
     )
     parser.add_argument("--register", action="store_true",
-                        help="Registrar dispositivos encontrados en la DB")
+                        help="Register the devices found in the database")
     parser.add_argument("--timeout",  type=float, default=5.0,
-                        help="Timeout de escaneo en segundos (default: 5)")
+                        help="Scan timeout in seconds (default: 5)")
     args = parser.parse_args()
 
     from dosync.discovery import Discovery, discover_wiz
@@ -44,10 +44,10 @@ async def main():
     if args.register:
         print(f"\n  Escaneando y registrando (timeout: {args.timeout}s)...\n")
         new = await disc.run()
-        print(f"  Dispositivos nuevos registrados: {new}")
+        print(f"  Newly registered devices: {new}")
         print(f"  Total en registry: {len(hub.registry.all())}")
         print()
-        print("  Dispositivos registrados:")
+        print("  Registered devices:")
         for d in hub.registry.all():
             adapter = getattr(d, 'adapter', 'simulated') or 'simulated'
             config  = getattr(d, 'adapter_config', {})

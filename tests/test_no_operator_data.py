@@ -223,6 +223,54 @@ def test_the_rule_is_written_down():
         "CONTRIBUTING.md no longer states the rule this file enforces"
 
 
+def test_what_a_user_reads_on_screen_is_in_english():
+    """`--help` text and shell echo lines, which the main check cannot see.
+
+    Widening that check to the repository root on 6 September translated the
+    docstrings and comments, and left the strings a person actually reads:
+
+        discover.py --help  →  "Registrar dispositivos encontrados en la DB"
+        setup_pki.sh        →  "ERROR: Repo no encontrado en ..."
+
+    The main check missed them because they are short argument strings with at
+    most one closed-class word — `Registrar dispositivos encontrados en la DB`
+    has none at all. It reported the repository clean while the first script an
+    integrator runs answered in Spanish.
+
+    Scoped to what is printed rather than to a language model: only lines
+    containing `help=`, `description=`, `echo "` or `print("`, and only in the
+    scripts a stranger executes.
+    """
+    import re
+    from pathlib import Path
+
+    # Words that are Spanish and would not appear in English UI text. `de`,
+    # `en` and `con` are excluded: they occur inside English words the regex
+    # would otherwise split on, and one false positive retires a check.
+    spanish_ui = re.compile(
+        r"\b(?:escanea|escaneo|registrar|encontrados?|encontrada?|"
+        r"dispositivos?|detectada?|segundos|archivo|archivos|"
+        r"requiere|deshabilitar|habilitar|autenticar|ejecutar|"
+        r"muestra|guarda|carga|genera|usar|debe|puede)\b", re.I)
+    printed = re.compile(r'help=|description=|echo "|print\(')
+
+    root = Path(__file__).resolve().parent.parent
+    scripts = ("discover.py", "ha_bridge.py", "gpio_adapter.py",
+               "ws_client.py", "setup_pki.sh")
+
+    hits = []
+    for name in scripts:
+        path = root / name
+        if not path.exists():
+            continue
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if printed.search(line) and spanish_ui.search(line):
+                hits.append(f"{name}:{i} → {line.strip()[:72]}")
+
+    assert not hits, (
+        "text a user reads on screen is in Spanish:\n  " + "\n  ".join(hits))
+
+
 def test_adapter_descriptions_reaching_an_agent_are_in_english():
     """The device descriptions an adapter publishes are read by a model.
 

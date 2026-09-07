@@ -10,6 +10,35 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The check passed and the user still read Spanish.** Widening the language
+  check to the repository root translated the docstrings and comments, and left
+  the strings a person actually sees:
+
+  ```
+  discover.py --help  →  "Registrar dispositivos encontrados en la DB"
+  ha_bridge.py --help →  "URL de Home Assistant (o env HA_URL)"
+  setup_pki.sh        →  "ERROR: Repo no encontrado en ..."
+  ```
+
+  Found by running the scripts rather than by reading them. The main check
+  misses these because they are short argument strings with at most one
+  closed-class word — `Registrar dispositivos encontrados en la DB` has none at
+  all — and it reported the repository clean while the first script an
+  integrator runs answered in a language they may not read.
+
+  This is the same mistake as the scope, one level down: a better detector,
+  pointed at the wrong text. Comments and docstrings are what a maintainer
+  reads; `--help` and `echo` are what a stranger reads.
+
+  Ten strings translated, and a check scoped to what is printed — lines
+  containing `help=`, `description=`, `echo "` or `print("`, in the five
+  scripts a stranger executes. It immediately found one more the manual pass
+  had missed.
+
+  Verified by mutation.
+
+
+### Fixed
 - **The language check never looked at the repository root.** Its scope was
   `dosync/`, `tools/` and `spec/`, so the scripts a stranger actually runs were
   never scanned. `setup_pki.sh` — the first thing anyone executes on a new hub —
