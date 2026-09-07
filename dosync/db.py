@@ -3,7 +3,7 @@ DoSync — Persistence Layer (SQLite)
 Every piece of critical hub state survives a restart.
 
 A single dosync.db file in the project directory.
-Sin dependencias externas — sqlite3 viene con Python.
+No external dependencies — sqlite3 ships with Python.
 """
 
 from __future__ import annotations

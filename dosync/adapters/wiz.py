@@ -315,7 +315,7 @@ class WiZAdapter(DoSyncAdapter):
 
         if action.action == "set_brightness":
             pct = params.get("brightness", 100)
-            # Si viene 0 es apagar
+            # A value of 0 means turn off
             if pct == 0:
                 return None  # handled as turn_off in execute()
             return PilotBuilder(brightness=self._pct_to_wiz(pct))

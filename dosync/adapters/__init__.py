@@ -52,7 +52,7 @@ class DoSyncAdapter(ABC):
     """
     Base interface for physical device adapters.
 
-    Cada adapter traduce acciones DoSync al protocolo nativo
+    Each adapter translates DoSync actions into the device's native protocol
     del dispositivo (UDP, HTTP, GPIO, BLE, etc.).
 
     To implement a new adapter:

@@ -3,7 +3,7 @@ DoSync — MCP Server
 ====================
 Exposes the DoSync hub as an MCP (Model Context Protocol) server.
 
-Con esto, cualquier LLM que soporte MCP (Claude, ChatGPT, Cursor, etc.)
+With this, any LLM that speaks MCP (Claude, ChatGPT, Cursor, and others)
 can then act through DoSync with no further configuration.
 
 Usage:

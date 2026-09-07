@@ -871,6 +871,11 @@ it said about the second group is the part worth reading:
 > Estos tres últimos están registrados pero sin tags ni acciones definidas — el
 > hub sabe que existen pero no puede actuar sobre ellos todavía.
 
+<sub>Quoted verbatim, in the language the model answered in. Translating it
+would misrepresent what was said, which is the point of quoting it.
+("These last three are registered but with no tags or actions defined — the hub
+knows they exist but cannot act on them yet.")</sub>
+
 It did not invent capabilities for devices that have none. That is not the
 model being careful: the hub reports an undeclared device as undeclared, so
 there was nothing to invent from. Then it offered to describe one — the drafting

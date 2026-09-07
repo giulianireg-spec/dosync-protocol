@@ -8,7 +8,7 @@ Features:
 - Compatible con Shelly 1, 1PM, 2.5, Plug S, Dimmer, RGBW2, Pro series
 - Gen1: API /relay/0, /light/0 via GET requests
 - Gen2: API RPC via POST /rpc/Switch.Set, /rpc/Light.Set
-- No requiere dependencias externas — usa requests (ya en requirements.txt)
+- No external dependencies — uses requests (already in requirements.txt)
 
 Installation:
     No additional installation required.

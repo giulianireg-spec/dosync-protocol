@@ -2,9 +2,9 @@
 DoSync — WebSocket test client
 Escucha eventos en tiempo real del hub.
 
-Uso:
+Usage:
     PYTHONPATH=. python3 ws_client.py --token <tu-token>
-    PYTHONPATH=. python3 ws_client.py  # si auth está deshabilitado
+    PYTHONPATH=. python3 ws_client.py  # when auth is disabled
 """
 import argparse
 import asyncio

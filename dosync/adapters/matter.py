@@ -9,7 +9,7 @@ Este adapter soporta dos modos:
 Modo 1 — via Home Assistant (recomendado para v0.2):
     Reuses the existing HABridge: when HA has the Matter integration,
     Matter devices appear as HA entities and are controlled
-    via el HABridge. No requiere setup adicional.
+    through the HABridge. No additional setup required.
 
 Modo 2 — via python-matter-server (standalone, experimental):
     Conecta directamente a un python-matter-server corriendo localmente.

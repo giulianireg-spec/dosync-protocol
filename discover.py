@@ -1,12 +1,12 @@
 """
 DoSync — Discovery CLI
-Escanea la red local y muestra/registra dispositivos encontrados.
+Scans the local network and lists or registers the devices it finds.
 
-Uso:
+Usage:
     # Solo escanear (no registra nada):
     PYTHONPATH=. python3 discover.py
 
-    # Escanear y registrar en la DB local:
+    # Scan and register in the local database:
     PYTHONPATH=. python3 discover.py --register
 
     # Cambiar timeout (default 5s):
@@ -55,7 +55,7 @@ async def main():
             print(f"  · {d.device_id:<35} {adapter:<12} {ip}")
     else:
         await disc.scan_and_print()
-        print("  (Usá --register para registrarlos en la DB)")
+        print("  (use --register to add them to the database)")
 
 
 if __name__ == "__main__":

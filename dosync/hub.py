@@ -175,7 +175,7 @@ class DoSyncHub:
         self.policy_engine  = None  # set via hub.policy_engine = PolicyEngine()
         self._active_intents: dict[str, int] = {}  # intent_value -> priority
         self._active_intent_devices: dict[str, set] = {}  # intent_value -> device_ids
-        # v13 hygiene (parada técnica 2026-07-21, Paredes): progress_cb failures
+        # v13 hygiene (maintenance stop 2026-07-21, Paredes): progress_cb failures
         # are swallowed so an observer can't break execution — but swallowed !=
         # invisible. Count them so a real callback bug surfaces in /v1/status
         # instead of hiding in debug logs forever.

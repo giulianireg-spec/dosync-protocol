@@ -12,7 +12,7 @@ Flujo:
     1. Hub starts → with no keys, it generates one and shows it ONCE
     2. Cliente incluye: Authorization: Bearer <token>
     3. Hub hashes the token and looks it up in the DB
-    4. Si no coincide → 401 Unauthorized
+    4. On mismatch → 401 Unauthorized
 
 Uso en FastAPI (las dependencias viven en dosync.auth_fastapi):
     from dosync.auth_fastapi import require_auth

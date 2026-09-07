@@ -48,7 +48,7 @@ async def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Modo simulado — ver qué importaría sin HA real
+  # Simulated mode — see what would be imported without a real HA
   python3 ha_bridge.py --simulated
 
   # Modo simulado — registrar dispositivos de ejemplo en el hub
@@ -64,11 +64,11 @@ Examples:
     parser.add_argument("--ha-token", default=os.environ.get("HA_TOKEN", ""),
                         help="Long-lived access token de HA (o env HA_TOKEN)")
     parser.add_argument("--simulated", action="store_true",
-                        help="Usar dispositivos de ejemplo sin HA real")
+                        help="Use sample devices instead of a real HA")
     parser.add_argument("--register",  action="store_true",
-                        help="Registrar dispositivos en la DB del hub")
+                        help="Register devices in the hub database")
     parser.add_argument("--db", default="dosync.db",
-                        help="Path a la DB del hub (default: dosync.db)")
+                        help="Path to the hub database (default: dosync.db)")
     args = parser.parse_args()
 
     if not args.simulated and not args.ha_url:

@@ -1,9 +1,9 @@
 """
 DoSync — GPIO Adapter para Raspberry Pi 5
 ==========================================
-Escucha el PIR HC-SR501 y el DHT22 y envía eventos al hub DoSync.
+Listens to an HC-SR501 PIR and a DHT22, and sends events to the DoSync hub.
 
-Uso:
+Usage:
     python3 gpio_adapter.py --hub http://192.168.100.X:47200 --token <token>
 
 Variables de entorno (alternativa):
@@ -44,7 +44,7 @@ _SSL_CTX = ssl.create_default_context(cafile=CA_CERT) if CA_CERT else ssl.create
 PIR_GPIO  = 17   # GPIO 17 — Pin 11
 DHT_GPIO  = 4    # GPIO 4  — Pin 7
 
-# Cooldown entre eventos del mismo tipo (segundos)
+# Cooldown between events of the same kind, in seconds
 PIR_COOLDOWN = 10
 DHT_INTERVAL = 30  # leer DHT cada 30 segundos
 
@@ -73,7 +73,7 @@ def hub_post(path: str, body: dict) -> dict:
 
 
 def send_event(device_id: str, event_id: str, severity: str, data: dict = None):
-    """Envía un evento de dispositivo al hub."""
+    """Send a device event to the hub."""
     body = {
         "device_id": device_id,
         "event_id":  event_id,
@@ -87,7 +87,7 @@ def send_event(device_id: str, event_id: str, severity: str, data: dict = None):
 
 
 def fire_intent(intent: str, urgency: str, context: dict = None):
-    """Dispara un intent semántico en el hub."""
+    """Fire a semantic intent on the hub."""
     body = {
         "intent":  intent,
         "urgency": urgency,
@@ -106,7 +106,7 @@ def fire_intent(intent: str, urgency: str, context: dict = None):
 
 
 def register_devices():
-    """Registra los dispositivos GPIO en el hub."""
+    """Register the GPIO devices with the hub."""
     devices = [
         {
             "device_id":   "sensor-motion-01",
@@ -151,7 +151,7 @@ def register_devices():
 # ── PIR loop ──────────────────────────────────────────────────────────────────
 
 async def pir_loop():
-    """Escucha el PIR y dispara intents cuando detecta movimiento."""
+    """Watch the PIR and fire intents when it detects movement."""
     try:
         import lgpio
     except ImportError:
@@ -213,7 +213,7 @@ async def pir_loop():
 # ── DHT22 loop ────────────────────────────────────────────────────────────────
 
 async def dht_loop():
-    """Lee el DHT22 periódicamente y envía los datos al hub."""
+    """Read the DHT22 on a schedule and send the readings to the hub."""
     try:
         import board
         import adafruit_dht
@@ -245,7 +245,7 @@ async def dht_loop():
                     },
                 )
 
-                # Alerta si temperatura muy alta
+                # Alert when the temperature runs high
                 if temp > 35:
                     log.warning("DHT22: temperatura alta %.1f°C", temp)
                     fire_intent(

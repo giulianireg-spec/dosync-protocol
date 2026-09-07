@@ -364,15 +364,37 @@ def test_the_core_and_the_spec_are_in_english():
     # to satisfy a language rule would be worse than the rule.
     allowed_names = re.compile(r"Benítez|Ordóñez|Aguirre|Nakamura|Ferreyra|Paredes|"
                                r"Llamar al 107")
+    # Quoted evidence, not prose. README.md and CHANGELOG.md cite Spanish that
+    # was FOUND — a model's answer reproduced verbatim, and the exact lines each
+    # earlier version of this check let through. Translating a quotation would
+    # misrepresent what was said, and translating the evidence would erase the
+    # record of what this check kept missing. Lines beginning with `>` or
+    # wrapped in the quote markers used in those files are left alone.
+    quoted_evidence = re.compile(r'^\s*>|^\s*\*"|`[^`]*`.*(?:let through|missed)')
     hits = []
     for path in _files():
         rel = str(path.relative_to(REPO))
-        if not rel.startswith(("dosync/", "tools/", "spec/")):
+        # Scope widened 6 September to the scripts at the repository root.
+        # They were never scanned, and `gpio_adapter.py`, `setup_pki.sh`,
+        # `discover.py`, `ha_bridge.py` and `ws_client.py` carried Spanish
+        # docstrings and operator-facing echo lines for months — the first
+        # script a stranger runs is `setup_pki.sh`, which told them
+        # `ERROR: openssl no encontrado`.
+        #
+        # examples/ stays out, as decided when this check was written: the
+        # demos narrate one deployment in its operator's own language, which
+        # is legitimate for a demo and not for a protocol.
+        #
+        # A root file is anything with no directory in its path.
+        at_root = "/" not in rel
+        if not (at_root or rel.startswith(("dosync/", "tools/", "spec/"))):
             continue
         if _allowed(path):
             continue
         for i, line in enumerate(_read(path).splitlines(), 1):
             if allowed_names.search(line):
+                continue
+            if rel in ("README.md", "CHANGELOG.md") and quoted_evidence.search(line):
                 continue
             if (accented.search(line)
                     or spanish_headers.search(line)

@@ -9,6 +9,32 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **The language check never looked at the repository root.** Its scope was
+  `dosync/`, `tools/` and `spec/`, so the scripts a stranger actually runs were
+  never scanned. `setup_pki.sh` — the first thing anyone executes on a new hub —
+  answered `ERROR: openssl no encontrado. Instalar con:`. `gpio_adapter.py`,
+  `discover.py`, `ha_bridge.py` and `ws_client.py` carried Spanish docstrings
+  and `--help` text.
+
+  Widened to include any file at the repository root. Twenty-nine lines
+  translated across those five scripts plus the core and adapters: `auth.py`,
+  `db.py`, `hub.py`, `mcp_server.py`, and four adapter modules.
+
+  `examples/` stays out, as decided when this check was written: the demos
+  narrate one deployment in its operator's own language, which is legitimate for
+  a demo and not for a protocol.
+
+  **Quoted evidence is now exempt, deliberately.** `README.md` reproduces a
+  model's answer verbatim and `CHANGELOG.md` cites the exact lines each earlier
+  version of this check let through. Translating a quotation would misrepresent
+  what was said; translating the evidence would erase the record of what this
+  check kept missing.
+
+  Verified by mutation: restoring the Spanish in `setup_pki.sh` fails the
+  check, which it did not before.
+
+
 ### Added
 - **A device Home Assistant stops reporting is marked absent, with a date.**
   Import only ever added and updated, so a device removed from HA stayed in the

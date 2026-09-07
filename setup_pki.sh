@@ -1,7 +1,7 @@
 #!/bin/bash
-# DoSync PKI Setup — corre una sola vez en la Pi
+# DoSync PKI setup — run once on the hub machine
 # Uso: bash setup_pki.sh
-# Con IP explícita: bash setup_pki.sh <hub-address>
+# With an explicit address: bash setup_pki.sh <hub-address>
 
 set -e
 
@@ -12,7 +12,7 @@ echo "==================================="
 echo "  DoSync PKI Setup"
 echo "==================================="
 
-# Detectar IP si no se pasó como argumento
+# Detect the address when none was given
 if [ -z "$HUB_IP" ]; then
     HUB_IP=$(hostname -I | awk '{print $1}')
     echo "  Hub IP detectada: $HUB_IP"
@@ -22,15 +22,15 @@ fi
 
 echo ""
 
-# Verificar que openssl está disponible
+# Check that openssl is available
 if ! command -v openssl &> /dev/null; then
-    echo "ERROR: openssl no encontrado. Instalar con:"
+    echo "ERROR: openssl not found. Install it with:"
     echo "  sudo apt-get install openssl"
     exit 1
 fi
 echo "  openssl: $(openssl version)"
 
-# Verificar que el repo existe
+# Check that the repository is there
 if [ ! -d "$REPO_DIR" ]; then
     echo "ERROR: Repo no encontrado en $REPO_DIR"
     exit 1
@@ -38,10 +38,10 @@ fi
 
 cd "$REPO_DIR"
 
-# Verificar que security.py está en dosync/
+# Check that security.py is in dosync/
 if [ ! -f "dosync/security.py" ]; then
     echo "ERROR: dosync/security.py no encontrado."
-    echo "Copiá el archivo antes de correr este script."
+    echo "Copy the file before running this script."
     exit 1
 fi
 
@@ -55,14 +55,14 @@ echo ""
 echo "Generando PKI..."
 echo ""
 
-# Correr setup con la IP detectada
+# Run setup with the detected address
 PYTHONPATH=. python3 -m dosync.security setup --ip "$HUB_IP" --hostname "dosync-hub"
 
 echo ""
 echo "==================================="
 echo "  Setup completo."
 echo ""
-echo "  Para iniciar el hub con HTTPS:"
+echo "  To start the hub with HTTPS:"
 echo "  uvicorn server:app \\"
 echo "    --host 0.0.0.0 --port 47200 \\"
 echo "    --ssl-keyfile certs/hub.key \\"
