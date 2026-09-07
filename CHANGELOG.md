@@ -10,6 +10,29 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Three more strings, and the reading found what the pattern could not.**
+  The check added an hour earlier reported the scripts clean. Running
+  `setup_pki.sh` showed `virtualenv: activado`, and reading every user-visible
+  string end to end — sixty lines, five minutes — turned up two more:
+  `Setup completo.` and `Total en registry:`.
+
+  Each escaped for a different reason, and both were predicted. `activado` is a
+  past participle, the shape an installer's progress messages take, and the word
+  list had none of that family. `Total en registry` uses `en`, which is
+  deliberately excluded because it occurs inside English words — the exact
+  limitation recorded when this check was written.
+
+  The participle family is now in the list. The `en` case cannot be fixed by a
+  word list without producing false positives, and a check that flags correct
+  text gets switched off.
+
+  **Which is the point.** This check backs up reading; it does not replace it.
+  Three iterations in two days each made the detector better and each left
+  something visible on screen — the text under it is small enough to read in
+  full, and that is what finally cleared it.
+
+
+### Fixed
 - **The check passed and the user still read Spanish.** Widening the language
   check to the repository root translated the docstrings and comments, and left
   the strings a person actually sees:

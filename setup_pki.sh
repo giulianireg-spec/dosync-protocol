@@ -48,7 +48,7 @@ fi
 # Activar virtualenv si existe
 if [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
-    echo "  virtualenv: activado"
+    echo "  virtualenv: active"
 fi
 
 echo ""
@@ -60,7 +60,7 @@ PYTHONPATH=. python3 -m dosync.security setup --ip "$HUB_IP" --hostname "dosync-
 
 echo ""
 echo "==================================="
-echo "  Setup completo."
+echo "  Setup complete."
 echo ""
 echo "  To start the hub with HTTPS:"
 echo "  uvicorn server:app \\"

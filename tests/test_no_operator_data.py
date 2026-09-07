@@ -251,7 +251,14 @@ def test_what_a_user_reads_on_screen_is_in_english():
         r"\b(?:escanea|escaneo|registrar|encontrados?|encontrada?|"
         r"dispositivos?|detectada?|segundos|archivo|archivos|"
         r"requiere|deshabilitar|habilitar|autenticar|ejecutar|"
-        r"muestra|guarda|carga|genera|usar|debe|puede)\b", re.I)
+        r"muestra|guarda|carga|genera|usar|debe|puede|"
+        # Past participles: the shape an installer's progress messages take,
+        # and the family this check missed on its first run. `virtualenv:
+        # activado` survived the previous pass, was reported clean, and was
+        # found by reading the output on the deployment.
+        r"activado|desactivado|creado|generado|guardado|copiado|"
+        r"iniciado|detenido|omitido|listo|falta|faltan|fallo|"
+        r"correcto|exitoso|completado|cancelado)\b", re.I)
     printed = re.compile(r'help=|description=|echo "|print\(')
 
     root = Path(__file__).resolve().parent.parent

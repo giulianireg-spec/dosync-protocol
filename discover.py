@@ -45,7 +45,7 @@ async def main():
         print(f"\n  Escaneando y registrando (timeout: {args.timeout}s)...\n")
         new = await disc.run()
         print(f"  Newly registered devices: {new}")
-        print(f"  Total en registry: {len(hub.registry.all())}")
+        print(f"  Total in registry: {len(hub.registry.all())}")
         print()
         print("  Registered devices:")
         for d in hub.registry.all():
