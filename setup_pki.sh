@@ -52,7 +52,7 @@ if [ -f "venv/bin/activate" ]; then
 fi
 
 echo ""
-echo "Generando PKI..."
+echo "Generating PKI..."
 echo ""
 
 # Run setup with the detected address

@@ -258,7 +258,15 @@ def test_what_a_user_reads_on_screen_is_in_english():
         # found by reading the output on the deployment.
         r"activado|desactivado|creado|generado|guardado|copiado|"
         r"iniciado|detenido|omitido|listo|falta|faltan|fallo|"
-        r"correcto|exitoso|completado|cancelado)\b", re.I)
+        r"correcto|exitoso|completado|cancelado|"
+        # Gerunds, the other half of the progress-message family. The
+        # participles above were added an hour earlier and `Generando PKI...`
+        # and `Escaneando y registrando...` survived, because a word list holds
+        # whichever half you happened to be looking at. Both were found by
+        # reading the output, not by this check.
+        r"generando|escaneando|registrando|creando|guardando|cargando|"
+        r"iniciando|conectando|esperando|buscando|verificando|leyendo|"
+        r"escribiendo|instalando|configurando)\b", re.I)
     printed = re.compile(r'help=|description=|echo "|print\(')
 
     root = Path(__file__).resolve().parent.parent

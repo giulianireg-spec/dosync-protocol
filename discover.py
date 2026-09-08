@@ -42,7 +42,7 @@ async def main():
     disc = Discovery(hub, executor, wiz_timeout=args.timeout)
 
     if args.register:
-        print(f"\n  Escaneando y registrando (timeout: {args.timeout}s)...\n")
+        print(f"\n  Scanning and registering (timeout: {args.timeout}s)...\n")
         new = await disc.run()
         print(f"  Newly registered devices: {new}")
         print(f"  Total in registry: {len(hub.registry.all())}")

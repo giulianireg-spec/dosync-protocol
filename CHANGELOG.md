@@ -10,6 +10,25 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Two more, and they were the other half of a family already added.**
+  `Generando PKI...` and `Escaneando y registrando...` — gerunds. The
+  participles went into the word list an hour earlier and these survived,
+  because **a word list holds whichever half you happened to be looking at.**
+
+  Both were found by reading the output on the deployment, again. One of them
+  begins with `\n`, so an earlier extraction that truncated its output had never
+  shown it at all — the reading only worked the time it was not cut short.
+
+  Gerunds are now in the list. All 56 user-visible strings across the five
+  scripts were then read in full and checked for Spanish grammatical
+  constructions rather than individual words: none remain.
+
+  Fourth iteration of this check in two days. Each added the family the previous
+  one lacked, and each was corrected by someone running the script and reading
+  the screen.
+
+
+### Fixed
 - **Three more strings, and the reading found what the pattern could not.**
   The check added an hour earlier reported the scripts clean. Running
   `setup_pki.sh` showed `virtualenv: activado`, and reading every user-visible
