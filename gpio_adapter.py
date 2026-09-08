@@ -110,20 +110,34 @@ def register_devices():
     devices = [
         {
             "device_id":   "sensor-motion-01",
-            "device_name": "PIR — Sensor de movimiento",
+            "device_name": "PIR motion sensor",
             "manufacturer": "DoSync GPIO",
             "model":       "HC-SR501",
             "firmware":    "1.0.0",
             "category":    "sensor",
             "tags":        ["sensor", "motion", "security", "emergency"],
-            "sensors":     [{"id": "motion", "type": "motion_detected", "unit": "boolean"}],
+            # `motion`, not `motion_detected`. The type says what the device
+            # MEASURES; `motion_detected` is the id of the EVENT this script
+            # emits when it fires (see send_event below). Declaring the event
+            # name as the sensor type kept this device out of every intent
+            # asking for `motion` — participation is decided by declared
+            # capability, and the capability was named after the event.
+            # See spec/CAPABILITY-TYPES.md.
+            "sensors":     [{"id": "motion", "type": "motion", "unit": "boolean"}],
+            # Declared so the hub knows what this device reports. It was
+            # emitting `motion_detected` without ever saying it could, which
+            # is also why the registry-level guard could not have caught the
+            # type mix-up: it compares a sensor type against the device's own
+            # declared events, and there were none.
+            "events":      [{"id": "motion_detected", "severity": "alert",
+                             "description": "Movement detected in the covered area"}],
             "actuators":   [],
             "emergency_capable": False,
             "cert_tier":   "basic",
         },
         {
             "device_id":   "sensor-climate-01",
-            "device_name": "DHT22 — Temperatura y Humedad",
+            "device_name": "DHT22 temperature and humidity sensor",
             "manufacturer": "DoSync GPIO",
             "model":       "DHT22",
             "firmware":    "1.0.0",
@@ -133,6 +147,11 @@ def register_devices():
                 {"id": "temperature", "type": "temperature", "unit": "celsius"},
                 {"id": "humidity",    "type": "humidity",    "unit": "percent"},
             ],
+            # This script sends `sensor_reading` on every cycle and the manifest
+            # never said so. Both GPIO devices were emitting events they had not
+            # declared — the hub accepted them, so nothing looked wrong.
+            "events":      [{"id": "sensor_reading", "severity": "info",
+                             "description": "Periodic temperature and humidity reading"}],
             "actuators":   [],
             "emergency_capable": False,
             "cert_tier":   "basic",

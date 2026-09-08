@@ -9,6 +9,29 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **The GPIO sensors declared an event name as their sensor type, and emitted
+  events they never declared.** The PIR typed its sensor `motion_detected` — the
+  id of the event this same script fires — so it matched no intent asking for
+  `motion`, which is the measurement. Type is now `motion`.
+
+  Both devices were emitting events the manifest did not mention:
+  `motion_detected` from the PIR and `sensor_reading` from the DHT22. The hub
+  accepted them, so nothing looked wrong. Both are declared now.
+
+  **That absence is why the registry guard could not have caught this.** It
+  compares a sensor type against the device's own declared events, and there
+  were none — the defect was invisible to the check written for it. Verified
+  after the fix: with the event declared, registering the old manifest warns;
+  the corrected one does not.
+
+  The DHT22 was correctly typed all along, which is why it kept resolving into
+  `alert_anomaly` while the PIR did not.
+
+  Also translated: `PIR — Sensor de movimiento` and `DHT22 — Temperatura y
+  Humedad`. Device names reach an agent asking what a device is.
+
+
 ### Added
 - **Health says when a device is simply gone.** Absence was recorded in the
   manifest two days ago and nothing showed it, so a device whose source no
