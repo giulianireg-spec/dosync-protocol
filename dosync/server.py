@@ -1398,6 +1398,27 @@ async def get_device_health(
     all_health = hub.db.get_all_health(last_n=last_n)
     alerts     = hub.db.get_health_alerts(threshold=threshold, last_n=last_n)
 
+    # A device whose source no longer lists it looks exactly like one that is
+    # present and failing: success_rate 0.0 with dozens of attempts. They are
+    # different problems — one needs the device fixed, the other needs it
+    # removed — and until 7 September the operator could not tell them apart.
+    #
+    # The import loop records `absent_since` in the manifest. Attaching it here
+    # rather than filtering the device out: a device that stopped being reported
+    # still has a history worth reading, and hiding it would replace an
+    # ambiguous answer with a missing one.
+    for entry in all_health:
+        device = hub.registry.get(entry.get("device_id"))
+        absent = (getattr(device, "adapter_config", None) or {}).get("absent_since")
+        if absent:
+            entry["absent_since"] = absent
+
+    absent = {e["device_id"]: e["absent_since"]
+              for e in all_health if e.get("absent_since")}
+    for alert in alerts:
+        if alert.get("device_id") in absent:
+            alert["absent_since"] = absent[alert["device_id"]]
+
     return {
         "devices":    all_health,
         "alerts":     alerts,
@@ -1405,6 +1426,9 @@ async def get_device_health(
         "last_n":     last_n,
         "total_devices_monitored": len(all_health),
         "total_alerts": len(alerts),
+        # Counted separately so a caller can see at a glance how much of the
+        # alert list is devices that are simply gone.
+        "total_absent": len(absent),
     }
 
 

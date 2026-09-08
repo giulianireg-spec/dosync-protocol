@@ -439,3 +439,97 @@ def test_adapter_config_survives_a_restart_without_an_adapter(tmp_path):
     assert restored.adapter_config.get("absent_since") == 1788666178.0, (
         "adapter_config was dropped on restore for a device with no adapter — "
         f"got {restored.adapter_config}")
+
+
+def test_health_says_when_a_device_is_simply_gone():
+    """Absence was marked and nothing showed it.
+
+    A device whose source no longer lists it reads as success_rate 0.0 with
+    dozens of attempts — identical to one that is present and failing. One needs
+    the device fixed, the other needs it removed, and the operator could not
+    tell which they were looking at.
+    """
+    from fastapi.testclient import TestClient
+
+    import dosync.server as srv
+    from dosync.auth_fastapi import require_auth
+    from dosync.models import CapabilityManifest, DeviceCategory
+
+    srv.hub.register_device(CapabilityManifest(
+        device_id="ha-vanished", device_name="Gone", manufacturer="t", model="t",
+        firmware="1", category=DeviceCategory.ACTUATOR, tags=["light"],
+        adapter_config={"absent_since": 1788666178.0}))
+    srv.hub.db.record_execution("ha-vanished", "turn_on", False, "unreachable")
+
+    srv.app.dependency_overrides[require_auth] = lambda: "test"
+    try:
+        body = TestClient(srv.app).get("/v1/health/devices").json()
+    finally:
+        srv.app.dependency_overrides.pop(require_auth, None)
+
+    entry = next((d for d in body["devices"]
+                  if d["device_id"] == "ha-vanished"), None)
+    assert entry is not None, (
+        "the device was filtered out — an ambiguous answer replaced by a "
+        "missing one; its history is still worth reading")
+    assert entry.get("absent_since") == 1788666178.0, (
+        "health does not say the device is gone, so a failing device and a "
+        "removed one still look the same")
+    assert body.get("total_absent", 0) >= 1, (
+        "the count of absent devices is missing from the summary")
+
+
+def test_a_sensor_type_that_is_really_an_event_warns(caplog):
+    """The PIR's mistake, reproduced.
+
+    It declared its sensor type as `motion_detected` — a name this project uses
+    for an EVENT the policy engine weights, not for a measurement — and fell out
+    of every alert asking for `motion`. Nothing flagged it because nothing knew
+    the two vocabularies were distinct.
+
+    A warning, not a rejection: unknown sensor types are allowed by design, so
+    that a Home Assistant device_class DoSync has never seen arrives as itself
+    rather than flattened.
+    """
+    import logging
+
+    from dosync.hub import CapabilityRegistry
+    from dosync.models import (CapabilityManifest, DeviceCategory, EventSpec,
+                               SensorSpec, Severity)
+
+    manifest = CapabilityManifest(
+        device_id="pir-01", device_name="Hall PIR", manufacturer="t", model="t",
+        firmware="1", category=DeviceCategory.SENSOR, tags=["sensor"],
+        sensors=[SensorSpec(id="motion", type="motion_detected", description="")],
+        events=[EventSpec(id="motion_detected", severity=Severity.ALERT)])
+
+    with caplog.at_level(logging.WARNING):
+        CapabilityRegistry().register(manifest)
+
+    assert any("motion_detected" in r.message and "event id" in r.message
+               for r in caplog.records), (
+        "registering a sensor typed with the device's own event id said "
+        f"nothing: {[r.message for r in caplog.records]}")
+
+
+def test_a_correctly_typed_sensor_does_not_warn(caplog):
+    """The same device, named properly. A guard that fires on correct
+    manifests gets ignored, and then it is worth nothing."""
+    import logging
+
+    from dosync.hub import CapabilityRegistry
+    from dosync.models import (CapabilityManifest, DeviceCategory, EventSpec,
+                               SensorSpec, Severity)
+
+    manifest = CapabilityManifest(
+        device_id="pir-02", device_name="Hall PIR", manufacturer="t", model="t",
+        firmware="1", category=DeviceCategory.SENSOR, tags=["sensor"],
+        sensors=[SensorSpec(id="motion", type="motion", description="")],
+        events=[EventSpec(id="motion_detected", severity=Severity.ALERT)])
+
+    with caplog.at_level(logging.WARNING):
+        CapabilityRegistry().register(manifest)
+
+    assert not [r for r in caplog.records if "event id" in r.message], (
+        "a device declaring `motion` and emitting `motion_detected` — which is "
+        "exactly right — was warned about")

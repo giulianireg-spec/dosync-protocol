@@ -9,6 +9,38 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Health says when a device is simply gone.** Absence was recorded in the
+  manifest two days ago and nothing showed it, so a device whose source no
+  longer lists it still read as `success_rate: 0.0` with dozens of attempts —
+  identical to one that is present and failing. One needs the device fixed, the
+  other needs it removed, and the operator could not tell which they were
+  looking at.
+
+  `/v1/health/devices` now carries `absent_since` on the entries that have it,
+  and a `total_absent` count. Attached rather than filtered: a device that
+  stopped being reported still has a history worth reading, and hiding it would
+  replace an ambiguous answer with a missing one.
+
+- **Registering a sensor typed with the device's own event id warns.** The
+  deployment's PIR declared `motion_detected` as a sensor type. That name exists
+  in this project — the policy engine weights `motion_detected at night` as a
+  possible intrusion — but as an event, not a measurement. The device fell out
+  of every alert asking for `motion` and nothing flagged it, because nothing
+  knew the two vocabularies were distinct.
+
+  A warning and not a rejection: unknown sensor types are allowed by design, so
+  that a Home Assistant `device_class` DoSync has never seen arrives as itself
+  rather than flattened. Refusing here would close that door to catch a naming
+  slip.
+
+  The signal is narrow on purpose — the type must match an event id the **same**
+  device declares. Two devices in one deployment using each other's vocabulary
+  is not evidence of anything. A test pins that a correctly named sensor emitting
+  `motion_detected` does not warn: a guard that fires on correct manifests gets
+  ignored.
+
+
 ### Fixed
 - **Two more, and they were the other half of a family already added.**
   `Generando PKI...` and `Escaneando y registrando...` — gerunds. The

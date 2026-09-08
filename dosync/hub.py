@@ -33,6 +33,40 @@ log = logging.getLogger("dosync.hub")
 
 
 
+def _warn_if_sensor_type_is_an_event(manifest) -> None:
+    """A sensor type that matches one of this device's own event ids.
+
+    The deployment's PIR declared its sensor type as `motion_detected`. That
+    name exists in this project — the policy engine weights
+    `motion_detected at night` as a possible intrusion — but as an EVENT, not a
+    measurement. The device was excluded from every alert asking for `motion`,
+    and nothing flagged it, because nothing knew the two vocabularies were
+    distinct.
+
+    A warning and not a rejection. Unknown sensor types are allowed by design:
+    the HA bridge reads `device_class` verbatim so that a class DoSync has never
+    heard of arrives as itself. Refusing here would close that door to catch a
+    naming slip.
+
+    The signal is narrow on purpose — the type matches an event id the SAME
+    device declares. Two devices in a deployment using each other's vocabulary
+    is not evidence of anything.
+    """
+    event_ids = {e.id for e in getattr(manifest, "events", []) or []}
+    if not event_ids:
+        return
+    for spec in getattr(manifest, "sensors", []) or []:
+        if spec.type in event_ids:
+            log.warning(
+                "Device %s declares sensor '%s' with type '%s', which is also "
+                "one of its own event ids. A sensor type says what is measured "
+                "(`motion`); an event id says what happened (`motion_detected`). "
+                "If that was the intent, ignore this — otherwise the device will "
+                "not match intents asking for the measurement. See "
+                "spec/CAPABILITY-TYPES.md",
+                manifest.device_id, spec.id, spec.type)
+
+
 class CapabilityRegistry:
     """
     Stores device manifests and answers capability queries.
@@ -49,6 +83,7 @@ class CapabilityRegistry:
         self._emergency_ids: set[str] = set()
 
     def register(self, manifest: CapabilityManifest) -> None:
+        _warn_if_sensor_type_is_an_event(manifest)
         old = self._devices.get(manifest.device_id)
         if old:
             for tag in old.tags:
