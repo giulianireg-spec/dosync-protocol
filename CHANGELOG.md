@@ -10,6 +10,31 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Device ownership is declared, not inferred from a name.** The absence check
+  read `device_id.startswith("ha-")`, because no manifest ever set `adapter` —
+  a naming convention doing the work of a declared field, which is the shape of
+  defect this project keeps finding.
+
+  Both adapters now declare it. With ownership stated, absence detection works
+  for any adapter that can enumerate its devices, rather than only for the one
+  whose devices happen to share a prefix.
+
+  **The first version of the ownership test failed, correctly.** It was written
+  as `declared == ours OR the name starts with ha-`, so this bridge claimed a
+  GPIO device called `ha-looking-name` and marked it absent. The prefix is a
+  fallback for devices registered before this change, and a fallback that
+  overrides an explicit answer is not a fallback: it now applies only when
+  nothing is declared.
+
+  Two assertions in that test, one per direction — a device that declares this
+  adapter and is named nothing like it, and a device named like it that declares
+  another adapter.
+
+  Also caught here: the operator-data guard rejected the first draft of a
+  comment for naming real device ids from the reference deployment.
+
+
+### Fixed
 - **The GPIO sensors declared an event name as their sensor type, and emitted
   events they never declared.** The PIR typed its sensor `motion_detected` — the
   id of the event this same script fires — so it matched no intent asking for

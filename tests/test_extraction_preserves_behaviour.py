@@ -533,3 +533,55 @@ def test_a_correctly_typed_sensor_does_not_warn(caplog):
     assert not [r for r in caplog.records if "event id" in r.message], (
         "a device declaring `motion` and emitting `motion_detected` — which is "
         "exactly right — was warned about")
+
+
+def test_absence_is_decided_by_the_adapter_field_not_a_name_prefix():
+    """Ownership is declared, not inferred from a device_id.
+
+    The absence check read `device_id.startswith("ha-")`, because no manifest
+    ever set `adapter` — a naming convention doing the work of a declared field.
+    A device named `ha-something` by another adapter would have been marked
+    absent by this bridge, and a Home Assistant device named anything else would
+    have been invisible to it.
+    """
+    import asyncio
+
+    from dosync.adapters.homeassistant import HABridge
+    from dosync.hub import DoSyncHub
+    from dosync.models import CapabilityManifest, DeviceCategory
+
+    hub = DoSyncHub(db_path=":memory:")
+
+    # Owned: declares the adapter, and is named nothing like `ha-`.
+    hub.register_device(CapabilityManifest(
+        device_id="kitchen-lamp", device_name="Lamp", manufacturer="t",
+        model="t", firmware="1", category=DeviceCategory.ACTUATOR,
+        tags=["light"], adapter="homeassistant", adapter_config={}))
+
+    # Not owned: another adapter's device, whatever it is called.
+    hub.register_device(CapabilityManifest(
+        device_id="ha-looking-name", device_name="GPIO thing", manufacturer="t",
+        model="t", firmware="1", category=DeviceCategory.SENSOR,
+        tags=["sensor"], adapter="gpio", adapter_config={}))
+
+    bridge = HABridge.__new__(HABridge)
+    bridge._hub = hub
+    bridge._url = "http://example.invalid"
+    bridge._simulated = False
+    bridge.last_import = None
+
+    async def no_states():
+        return []
+
+    bridge._fetch_states = no_states
+    asyncio.run(bridge.import_devices())
+
+    owned = hub.registry.get("kitchen-lamp")
+    assert owned.adapter_config.get("absent_since"), (
+        "a device declaring adapter=homeassistant was not marked absent — "
+        "ownership is still being read from the device_id")
+
+    other = hub.registry.get("ha-looking-name")
+    assert not other.adapter_config.get("absent_since"), (
+        "the HA bridge marked a device belonging to the gpio adapter, because "
+        "its name happens to start with `ha-`")

@@ -133,6 +133,12 @@ def register_devices():
                              "description": "Movement detected in the covered area"}],
             "actuators":   [],
             "emergency_capable": False,
+            # Says who registered this device, so the hub can tell a stale
+            # entry from a live one. When an earlier version of this script
+            # used different device ids, the old entries stayed in the registry
+            # after the change — nothing feeding them, and nothing able to say
+            # they were orphaned.
+            "adapter":     "gpio",
             "cert_tier":   "basic",
         },
         {
@@ -154,6 +160,12 @@ def register_devices():
                              "description": "Periodic temperature and humidity reading"}],
             "actuators":   [],
             "emergency_capable": False,
+            # Says who registered this device, so the hub can tell a stale
+            # entry from a live one. When an earlier version of this script
+            # used different device ids, the old entries stayed in the registry
+            # after the change — nothing feeding them, and nothing able to say
+            # they were orphaned.
+            "adapter":     "gpio",
             "cert_tier":   "basic",
         },
     ]

@@ -437,7 +437,26 @@ class HABridge(DoSyncAdapter):
                     (self._state_to_manifest(st) for st in states) if m}
         absent_count = 0
         for device in self._hub.registry.all():
-            if not device.device_id.startswith("ha-"):
+            # `adapter`, not a device_id prefix. A device registered by another
+            # adapter — or by hand — is not this bridge's to mark absent, and
+            # asking the manifest who owns it is more honest than reading a
+            # naming convention.
+            #
+            # Devices imported before 8 September have no `adapter` set, so the
+            # prefix is still accepted as a fallback: dropping it would make
+            # every pre-existing HA device invisible to this check until it was
+            # next re-imported.
+            declared = getattr(device, "adapter", None)
+            owned = (declared == self.adapter_name
+                     # Only when nothing is declared: a device that names its
+                     # adapter is answered by that answer, whatever it is
+                     # called. Written the other way round first — `declared ==
+                     # ours OR name starts with ha-` — this bridge claimed a
+                     # GPIO device called `ha-looking-name` and marked it
+                     # absent. A fallback that overrides an explicit answer is
+                     # not a fallback.
+                     or (declared is None and device.device_id.startswith("ha-")))
+            if not owned:
                 continue          # not ours to judge
             cfg = getattr(device, "adapter_config", None)
             if device.device_id in seen_ids:
@@ -581,6 +600,14 @@ class HABridge(DoSyncAdapter):
             manufacturer="Home Assistant",
             model=f"HA {domain}",
             firmware="auto",
+            # Says who registered this device. It was never set, so the absence
+            # check had to infer ownership from the `ha-` prefix on the
+            # device_id — a naming convention doing the work of a declared
+            # field, which is the shape of defect this project keeps finding.
+            #
+            # With it declared, absence detection works for any adapter that
+            # can enumerate its devices, not just this one.
+            adapter="homeassistant",
             category=mapping["category"],
             tags=list(set(mapping["tags"] + extra_tags)),
             sensors=sensors,
