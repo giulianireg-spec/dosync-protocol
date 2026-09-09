@@ -9,6 +9,44 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Diagnosed
+- **`audit_integrity: False` in production, and nothing was tampered with.**
+  12,394 entries, reported broken at index 9999. The sequence numbers give the
+  mechanism away:
+
+  ```
+  [9998]  seq=147170  device_event
+  [9999]  seq=147172  audit_archived     <- reads as broken
+  [10000] seq=147171  device_event
+  ```
+
+  The hashes chain 9998 → 10000 → 9999. **The chain is intact; the order it is
+  read back in is not.**
+
+  `append` sets `timestamp` when it computes an entry. The archiver computes its
+  marker, writes a 1.4 MB segment to disk, and persists afterwards — and a
+  sensor emitting every thirty seconds slipped an entry into that window with an
+  earlier timestamp. `ORDER BY timestamp, id` then returns them the wrong way
+  round. Twenty-three archive markers in the chain; one is misplaced.
+
+  **The archiving guard did its job**: it refused to archive from a chain that
+  does not verify, rather than sealing the inconsistency into a segment that
+  would later read as trusted history.
+
+  Tests added, no fix yet. The first reproduces the failure from its own data
+  and shows that following `prev_hash` recovers the written order with no
+  reference to any clock.
+
+  The second is a correction of two earlier attempts. It claimed concurrent
+  writers could take the same sequence number; they cannot under CPython,
+  because nothing between reading `_next_seq` and incrementing it releases the
+  GIL. Both versions passed while demonstrating nothing — including one with a
+  deliberately slow persistence callback, which does not help because the
+  callback runs after the critical section. **The guarantee is real and
+  accidental**: it rests on the GIL and on entries being small, neither of which
+  `append` states or checks.
+
+
 ### Changed
 - **Restoration moved to `dosync/restore.py`.** 140 lines that run once at
   startup, read five things from the database — devices, audit chain, occupancy,
