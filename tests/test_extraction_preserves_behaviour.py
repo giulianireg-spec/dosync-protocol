@@ -585,3 +585,51 @@ def test_absence_is_decided_by_the_adapter_field_not_a_name_prefix():
     assert not other.adapter_config.get("absent_since"), (
         "the HA bridge marked a device belonging to the gpio adapter, because "
         "its name happens to start with `ha-`")
+
+
+def test_a_restarted_hub_gets_its_devices_back(tmp_path):
+    """Restoration moved to its own module; it still restores.
+
+    140 lines that run once at startup and only ever write onto the hub — which
+    is why they extracted cleanly, and why `register_device` did not: that one
+    fires an alert_anomaly intent when a device's capabilities change without a
+    firmware bump. A security decision does not belong inside a data structure.
+    """
+    from dosync.hub import DoSyncHub
+    from dosync.models import CapabilityManifest, DeviceCategory
+
+    db = str(tmp_path / "restart.db")
+
+    hub = DoSyncHub(db_path=db)
+    hub.register_device(CapabilityManifest(
+        device_id="lamp-01", device_name="Lamp", manufacturer="t", model="t",
+        firmware="1", category=DeviceCategory.ACTUATOR, tags=["light"],
+        adapter="gpio", adapter_config={"absent_since": 1788666178.0}))
+
+    restored = DoSyncHub(db_path=db)
+    device = restored.registry.get("lamp-01")
+
+    assert device is not None, "the hub came back empty"
+    assert device.adapter == "gpio", "ownership was lost on restore"
+    assert device.adapter_config.get("absent_since") == 1788666178.0, (
+        "adapter_config was dropped — the defect fixed on 5 September, back")
+
+
+def test_the_restorer_does_not_call_back_into_the_hub():
+    """It reads the database and writes onto the hub. Nothing else.
+
+    That one-way flow is what made the extraction safe, and a call back into
+    the hub — `execute_intent`, a resolver, a policy — would make startup
+    order matter in a way it currently does not.
+    """
+    import ast
+
+    src = (REPO / "dosync" / "restore.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+
+    called = {n.func.attr for n in ast.walk(tree)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+    for forbidden in ("execute_intent", "resolve", "explain", "evaluate"):
+        assert forbidden not in called, (
+            f"the restorer calls {forbidden}() — restoration now depends on "
+            "the rest of the hub being ready, which it did not before")

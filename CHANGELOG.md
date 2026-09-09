@@ -9,6 +9,34 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Restoration moved to `dosync/restore.py`.** 140 lines that run once at
+  startup, read five things from the database — devices, audit chain, occupancy,
+  family profile, device state — and call nothing back. That one-way flow is why
+  they extracted cleanly, and a test now pins it: a call into `execute_intent` or
+  a resolver would make startup order matter in a way it currently does not.
+
+  `hub.py`: 2,020 → 1,878 lines. Five of eleven responsibilities extracted.
+
+  The code is identical apart from five attribute renames, verified by AST.
+
+### Corrected
+- **`register_device` is not a registry method, and the plan said it was.** The
+  inventory listed it for this phase as registration logic belonging in
+  `CapabilityRegistry`. Reading it first showed otherwise: it fires an
+  `alert_anomaly` intent when a device's capabilities change without a firmware
+  bump. **That is a security path, not registration.**
+
+  Its own comments record that the path was dead for months — it called
+  `execute_intent` with no executor, raised `TypeError` on every anomaly, and a
+  bare `except` swallowed it whole, so the alert had never once fired. The
+  anomaly was always audited; only the dispatch was missing.
+
+  Moving that into a registry would bury a security decision inside a data
+  structure. It stays in the hub, which is where orchestration belongs — the
+  same conclusion `execute_intent` reached for the same reason.
+
+
 ### Fixed
 - **Device ownership is declared, not inferred from a name.** The absence check
   read `device_id.startswith("ha-")`, because no manifest ever set `adapter` —
