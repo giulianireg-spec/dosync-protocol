@@ -118,6 +118,59 @@ class AuditLog:
         self._record_head()
         return entry_hash
 
+    def _in_chain_order(self, entries: list[dict]) -> list[dict] | None:
+        """The entries in the order they were chained, or None if they do not
+        chain at all.
+
+        The chain already says what order it was written in: every entry names
+        the hash of the one before it. Until 9 September verification read them
+        in whatever order the database returned — `ORDER BY timestamp, id` —
+        and a production hub reported corruption over an intact chain because
+        two entries shared a moment: the archiver computed a marker, spent a
+        second writing a 1.4 MB segment, and persisted after a sensor had
+        already written. Reconstructing a linked structure by sorting on a
+        clock is using a weak source while holding a strong one.
+
+        This changes the order verification walks, never what it accepts.
+        Every check that ran before still runs, on the same entries:
+
+          * an ALTERED entry still fails — its hash no longer matches its
+            content, whatever order it is read in;
+          * a REMOVED entry still fails — the walk cannot find what follows it,
+            and a chain that does not reach all its entries returns None here
+            rather than quietly verifying a shorter one;
+          * a TRUNCATED tail still fails — the sequence numbers are checked for
+            gaps exactly as before, and `head_mark` still detects a tail cut
+            off below its high-water mark.
+
+        Returning None and not a partial list matters: a shorter chain that
+        links is precisely what an attacker who deleted the middle would leave.
+        """
+        if not entries:
+            return entries
+
+        by_prev: dict[str, dict] = {}
+        for entry in entries:
+            key = entry.get("prev_hash")
+            if key in by_prev:
+                # Two entries claiming the same predecessor. The chain forks,
+                # which no honest append can produce.
+                return None
+            by_prev[key] = entry
+
+        ordered: list[dict] = []
+        cursor = self.anchor_prev_hash
+        while cursor in by_prev:
+            entry = by_prev.pop(cursor)
+            ordered.append(entry)
+            cursor = entry.get("hash")
+
+        if len(ordered) != len(entries):
+            # Entries exist that the walk never reached: the chain is broken,
+            # not merely out of order.
+            return None
+        return ordered
+
     def verify(self, head_mark: dict | None = None) -> bool:
         """Verify the chain's links, and optionally that it still CONTAINS a
         previously recorded point.
@@ -138,11 +191,15 @@ class AuditLog:
         the tail is a marker the mark had never seen. A security check that
         cries wolf during normal operation teaches operators to ignore it.
         """
+        entries = self._in_chain_order(self._entries)
+        if entries is None:
+            return False
+
         prev = self.anchor_prev_hash
         prev_seq = None
         max_seq = None
         by_seq: dict[int, str] = {}
-        for entry in self._entries:
+        for entry in entries:
             stored_hash = entry.pop("hash")
             raw = json.dumps(entry, sort_keys=True)
             calc = hashlib.sha256(raw.encode()).hexdigest()

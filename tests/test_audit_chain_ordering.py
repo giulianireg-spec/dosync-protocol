@@ -111,3 +111,92 @@ def test_concurrent_appends_still_produce_a_linked_chain():
         "guarded")
     assert _chain_reads_in_order(entries), (
         "concurrent appends produced a chain that does not link")
+
+
+# ── The fix, and the three detections it must not lose ───────────────────────
+
+def _log_with(n: int) -> AuditLog:
+    log = AuditLog()
+    for i in range(n):
+        log.append({"type": "device_event", "device_id": f"dev-{i}"})
+    return log
+
+
+def test_a_chain_read_out_of_order_still_verifies():
+    """The production failure, fixed.
+
+    Entries stored in clock order rather than chain order used to fail two
+    checks at once: the prev_hash link, and the requirement that sequence
+    numbers be consecutive. Walking the chain satisfies both, because the order
+    it recovers is the order they were written in.
+    """
+    log = _log_with(5)
+    assert log.verify(), "the chain does not verify before we disturb it"
+
+    # Exactly what the database returned in production: two adjacent entries
+    # swapped, everything else untouched.
+    log._entries[2], log._entries[3] = log._entries[3], log._entries[2]
+
+    assert log.verify(), (
+        "a chain that is intact but stored out of order still fails — the "
+        "production defect is not fixed")
+
+
+def test_an_altered_entry_still_fails():
+    """Detection one. Changing any content breaks its hash, and no amount of
+    reordering hides that."""
+    log = _log_with(5)
+    log._entries[2]["device_id"] = "somebody-elses-device"
+
+    assert not log.verify(), (
+        "an entry was edited and the chain still verifies — walking the chain "
+        "has replaced tamper detection rather than preserving it")
+
+
+def test_an_entry_removed_from_the_middle_still_fails():
+    """Detection two, and the one this change could most easily have lost.
+
+    Deleting from the middle leaves every surviving link intact. What it breaks
+    is reachability: the walk stops at the gap. If `_in_chain_order` returned
+    the part it could reach instead of refusing, a chain with its middle cut
+    out would verify — which is exactly what someone removing an inconvenient
+    entry would want.
+    """
+    log = _log_with(5)
+    del log._entries[2]
+
+    assert not log.verify(), (
+        "an entry was deleted from the middle and the chain verifies: the walk "
+        "is accepting a partial chain")
+
+
+def test_a_truncated_tail_still_fails():
+    """Detection three. Links alone cannot see this — every remaining link of
+    a truncated chain is intact — so it relies on the head mark recorded
+    elsewhere, which the reordering must leave working."""
+    log = _log_with(5)
+    tail = log._entries[-1]
+    mark = {"seq": tail["seq"], "hash": tail["hash"]}
+
+    assert log.verify(head_mark=mark), "the mark does not match its own chain"
+
+    del log._entries[-1]
+    assert not log.verify(head_mark=mark), (
+        "the tail was cut off and the chain verifies against a mark it no "
+        "longer reaches")
+
+
+def test_a_forked_chain_fails():
+    """Two entries claiming the same predecessor.
+
+    No honest append produces this: `prev_hash` comes from the previous entry's
+    hash, one at a time. A fork means someone built an alternative history —
+    and the walk would otherwise pick whichever arrived first and ignore the
+    rest.
+    """
+    log = _log_with(4)
+    log._entries[3] = dict(log._entries[3], prev_hash=log._entries[1]["prev_hash"])
+
+    assert not log.verify(), (
+        "two entries share a predecessor and the chain verifies — one branch "
+        "was silently ignored")

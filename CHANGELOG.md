@@ -9,6 +9,43 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Audit verification walks the chain instead of trusting stored order.** A
+  production hub reported corruption over an intact chain: the archiver
+  computed a marker, spent a second writing a 1.4 MB segment to disk, and
+  persisted after a sensor had already written, so `ORDER BY timestamp, id`
+  returned two entries the wrong way round. Both checks failed — the
+  `prev_hash` link and the requirement that sequence numbers be consecutive.
+
+  **Reconstructing a linked structure by sorting on a clock is using a weak
+  source while holding a strong one.** Every entry names the hash of the one
+  before it; that is the order, and now it is the order verification reads.
+
+  This changes how the entries are walked, never what is accepted. The three
+  detections are unchanged and each has a test:
+
+  **Altered** — the hash no longer matches the content, in any order.
+  **Removed from the middle** — every surviving link is intact, so the walk is
+  what catches it: it cannot reach the entries past the gap. `_in_chain_order`
+  returns `None` rather than the part it could reach, because a shorter chain
+  that links is exactly what someone deleting an inconvenient entry would
+  leave.
+  **Truncated tail** — links cannot see this at all, so it still rests on the
+  head mark recorded elsewhere, which the reordering leaves working.
+
+  A fourth case the old code could not express: **two entries claiming the same
+  predecessor.** No honest append produces a fork, and a walk would otherwise
+  follow one branch and ignore the other.
+
+  Verified by mutation, one test per defect: removing the reordering fails the
+  out-of-order test and nothing else; accepting a partial walk fails the
+  deleted-entry test and nothing else.
+
+  The production chain needs no repair. It was never corrupt — 9,998 → 10,000
+  → 9,999 chains correctly — and it verifies under this change without a byte
+  being rewritten.
+
+
 ### Diagnosed
 - **`audit_integrity: False` in production, and nothing was tampered with.**
   12,394 entries, reported broken at index 9999. The sequence numbers give the
