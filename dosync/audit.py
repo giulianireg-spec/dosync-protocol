@@ -215,6 +215,15 @@ class AuditLog:
         if entries is None:
             return False
 
+        # Sequence numbers a leaf consumed. A leaf is a real entry that took a
+        # number and then failed to join the chain, so the walk shows a gap
+        # where it should be — and a gap is how a deletion looks too. The
+        # difference is that the leaf is still here: present in the log,
+        # absent from the sequence. Without this, verification reports as
+        # truncation the very entry it just reported as a leaf.
+        leaf_seqs = {e.get("seq") for e in self._entries
+                     if e not in entries and e.get("seq") is not None}
+
         prev = self.anchor_prev_hash
         prev_seq = None
         max_seq = None
@@ -228,9 +237,14 @@ class AuditLog:
                 return False
             seq = entry.get("seq")
             if seq is not None:
-                # Gaps and reordering are breaks even when every hash matches.
+                # Gaps and reordering are breaks even when every hash
+                # matches — unless every number in the gap belongs to a leaf,
+                # in which case nothing is missing: those entries are in the
+                # log, beside the chain rather than in it.
                 if prev_seq is not None and seq != prev_seq + 1:
-                    return False
+                    missing = set(range(prev_seq + 1, seq))
+                    if not missing or not missing.issubset(leaf_seqs):
+                        return False
                 prev_seq = seq
                 max_seq = seq
                 by_seq[seq] = stored_hash

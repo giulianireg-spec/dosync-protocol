@@ -10,6 +10,33 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The hole a leaf leaves in the sequence is no longer read as truncation.**
+  On the production hub the chain verified, the leaf was reported by name, and
+  verification still returned False — for the gap that same leaf had left:
+  147171 to 147173, with 147172 sitting right there as the entry it had just
+  warned about.
+
+  A gap now passes only when **every number in it belongs to an entry still
+  present in the log.** Missing from the sequence is not missing from the
+  record. An unexplained gap fails exactly as before.
+
+  **Three tests written for this, and mutation showed two of them proved
+  nothing:**
+
+  The leaf test gave the leaf and the next entry the same sequence number, so
+  the walk saw no gap at all and never exercised the rule.
+
+  The unexplained-gap test renumbered an existing entry, which changes its
+  content and breaks its hash — it failed on the hash check and never reached
+  the rule. Now the gap is made by skipping numbers on the way in, so nothing
+  is altered.
+
+  Both now fail under their matching mutation and pass otherwise. That is the
+  third time today a test ran, passed, and asserted nothing: the previous two
+  were the branch choice in the chain walk, and this pair.
+
+
+### Fixed
 - **A leaf is reported; a deletion still fails.** Verification walked the chain
   as of this morning, and refused anything it could not reach in full — which
   refused the production chain, because that chain has a leaf.

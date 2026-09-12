@@ -300,3 +300,60 @@ def test_the_walk_follows_the_branch_that_continues():
         f"the walk recovered {len(ordered)} entries, not the four that chain")
     assert all(e["hash"] != "f" * 64 for e in ordered), (
         "the leaf is in the reconstructed chain")
+
+
+def test_the_gap_a_leaf_leaves_is_not_read_as_truncation():
+    """A leaf takes a sequence number and then fails to join the chain.
+
+    The walk skips it, so the numbers it visits have a hole — and a hole is
+    how a deleted entry looks. On the production hub the chain verified, the
+    leaf was reported, and verification still returned False for exactly this:
+    147171 to 147173, with 147172 sitting right there as the leaf it had just
+    warned about.
+
+    The difference is that the leaf is present. Missing from the sequence,
+    not missing from the log.
+    """
+    log = _log_with(4)
+    head = log._entries[-1]
+
+    # The leaf takes its own number and the next entry takes the one after,
+    # which is what leaves the hole. A first version had the leaf and the next
+    # entry share a number, so the walk saw 0,1,2,3,4 with no gap at all and
+    # the test passed without exercising the rule — mutation caught it.
+    leaf = dict(head, seq=head["seq"] + 1, type="audit_archived",
+                hash="a" * 64, prev_hash=log._entries[-2]["prev_hash"])
+    log._entries.append(leaf)
+    log._next_seq = leaf["seq"] + 1
+    log.append({"type": "device_event", "device_id": "after-the-leaf"})
+
+    walked = log._in_chain_order(log._entries)
+    seqs = [e["seq"] for e in walked]
+    assert any(b - a > 1 for a, b in zip(seqs, seqs[1:])), (
+        "the scenario produces no gap, so it is not testing the rule")
+
+    assert log.verify(), (
+        "the hole a leaf leaves in the sequence is being read as truncation — "
+        "verification fails over the entry it just reported as intact")
+
+
+def test_a_gap_with_no_leaf_to_explain_it_still_fails():
+    """The other side, and the one that matters.
+
+    Accepting gaps because leaves exist would accept a deletion in any chain
+    that also has a leaf. A number is only excused when the entry that took it
+    is still in the log.
+    """
+    log = _log_with(4)
+
+    # The gap is made by skipping numbers on the way in, not by renumbering an
+    # entry afterwards. A first version did the latter, which changes the
+    # entry's content and breaks its hash — so the test passed on the hash
+    # check and never reached the rule it was written for. Mutation caught it:
+    # "accept any gap" left it green.
+    log._next_seq += 5
+    log.append({"type": "device_event", "device_id": "after-the-gap"})
+
+    assert not log.verify(), (
+        "a sequence number vanished with no entry accounting for it and the "
+        "chain verifies — leaf handling is excusing real gaps")
