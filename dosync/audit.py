@@ -149,26 +149,46 @@ class AuditLog:
         if not entries:
             return entries
 
-        by_prev: dict[str, dict] = {}
+        by_prev: dict[str, list[dict]] = {}
         for entry in entries:
-            key = entry.get("prev_hash")
-            if key in by_prev:
-                # Two entries claiming the same predecessor. The chain forks,
-                # which no honest append can produce.
-                return None
-            by_prev[key] = entry
+            by_prev.setdefault(entry.get("prev_hash"), []).append(entry)
+
+        # Where two entries claim the same predecessor, the chain continues
+        # through whichever one something else chains from; the other is a
+        # leaf. `claimed` is every predecessor any entry names, so an entry
+        # whose hash appears there is one the chain goes on through.
+        claimed = {e.get("prev_hash") for e in entries}
 
         ordered: list[dict] = []
+        seen: set[int] = set()
         cursor = self.anchor_prev_hash
-        while cursor in by_prev:
-            entry = by_prev.pop(cursor)
+        while True:
+            candidates = [e for e in by_prev.get(cursor, [])
+                          if id(e) not in seen]
+            if not candidates:
+                break
+            entry = next((c for c in candidates if c.get("hash") in claimed),
+                         candidates[0])
+            seen.add(id(entry))
             ordered.append(entry)
             cursor = entry.get("hash")
 
-        if len(ordered) != len(entries):
-            # Entries exist that the walk never reached: the chain is broken,
-            # not merely out of order.
-            return None
+        reached = {e["hash"] for e in ordered}
+        unvisited = [e for e in entries if id(e) not in seen]
+
+        for entry in unvisited:
+            if entry.get("prev_hash") not in reached:
+                # Hangs off nothing the walk saw: a break, not a leaf. This is
+                # what deleting from the middle leaves behind, and refusing it
+                # is the point.
+                return None
+            log.warning(
+                "Audit entry seq=%s (%s) is a leaf: its predecessor is in the "
+                "chain but nothing chains from it. A writer persisted after "
+                "the chain had moved on. The entry is intact and outside the "
+                "sequence.",
+                entry.get("seq"), entry.get("type"))
+
         return ordered
 
     def verify(self, head_mark: dict | None = None) -> bool:

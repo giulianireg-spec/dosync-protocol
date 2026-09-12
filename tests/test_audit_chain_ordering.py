@@ -186,17 +186,117 @@ def test_a_truncated_tail_still_fails():
         "longer reaches")
 
 
-def test_a_forked_chain_fails():
-    """Two entries claiming the same predecessor.
+def test_a_fork_whose_branches_both_continue_fails():
+    """Two histories from one point, both going somewhere.
 
-    No honest append produces this: `prev_hash` comes from the previous entry's
-    hash, one at a time. A fork means someone built an alternative history —
-    and the walk would otherwise pick whichever arrived first and ignore the
-    rest.
+    This test asserted the opposite of what it does now, and the change is the
+    substance rather than the wording. It used to say any shared predecessor
+    was a forged history — which refused the real production chain, where the
+    6 September archiver left a marker sharing a predecessor with the entry
+    that overtook it.
+
+    A shared predecessor where one side continues and the other does not is a
+    leaf: a slow writer that persisted late. A shared predecessor where BOTH
+    sides continue is two histories, and no sequence of appends produces that.
     """
-    log = _log_with(4)
-    log._entries[3] = dict(log._entries[3], prev_hash=log._entries[1]["prev_hash"])
+    log = _log_with(6)
+
+    # Re-point entry 4 at entry 1's predecessor, so two chains run on from the
+    # same point: 0-1-2-3... and 0-4-5...
+    log._entries[4] = dict(log._entries[4],
+                           prev_hash=log._entries[1]["prev_hash"])
 
     assert not log.verify(), (
-        "two entries share a predecessor and the chain verifies — one branch "
-        "was silently ignored")
+        "two branches both continue from one predecessor and the chain "
+        "verifies — an alternative history was accepted")
+
+
+def test_a_leaf_is_reported_and_does_not_fail_the_chain(caplog):
+    """The production failure of 6 September, reproduced.
+
+    Eleven WiZ devices registered inside the same millisecond while the
+    archiver was writing a 659 KB segment. The archiver had computed its marker
+    from the chain head; by the time it persisted, those eleven had moved the
+    head on. The marker was written, is intact, and nothing chains from it.
+
+    Measured on the hub: 20,904 of 20,905 entries reachable, zero orphans, one
+    shared predecessor. The chain is whole — one entry is beside it.
+
+    Failing the whole chain over that costs an operator twenty thousand
+    verified entries to flag one that is provably fine, and the thing it
+    describes — the archived segment — is on disk with its hash.
+    """
+    import logging
+
+    log = _log_with(5)
+    head = log._entries[-1]
+
+    # An entry computed from an earlier head, persisted after the chain moved:
+    # its predecessor is in the chain, and nothing follows it.
+    leaf = dict(head, seq=head["seq"] + 1, type="audit_archived",
+                prev_hash=log._entries[-2]["prev_hash"])
+    log._entries.append(leaf)
+
+    with caplog.at_level(logging.WARNING):
+        result = log.verify()
+
+    assert result, (
+        "a leaf failed the whole chain — twenty thousand verified entries lost "
+        "over one that is intact and simply never joined")
+    assert any("leaf" in r.message for r in caplog.records), (
+        "the leaf verified silently; an entry hanging off the chain has to be "
+        "reported or nobody learns the writer has a defect")
+
+
+def test_a_leaf_and_a_deletion_are_told_apart():
+    """Both leave entries the walk does not visit. Only one is an attack.
+
+    A leaf's predecessor is IN the chain — the walk saw it and carried on past.
+    A deletion removes something the chain points at, so the walk stops. If
+    these were conflated in the permissive direction, removing an inconvenient
+    entry would verify.
+    """
+    with_leaf = _log_with(5)
+    head = with_leaf._entries[-1]
+    with_leaf._entries.append(
+        dict(head, seq=head["seq"] + 1,
+             prev_hash=with_leaf._entries[-2]["prev_hash"]))
+
+    with_hole = _log_with(5)
+    del with_hole._entries[2]
+
+    assert with_leaf.verify(), "the leaf case is being treated as a break"
+    assert not with_hole.verify(), (
+        "an entry deleted from the middle now verifies — leaf handling was "
+        "made permissive enough to cover a deletion")
+
+
+def test_the_walk_follows_the_branch_that_continues():
+    """Which of two entries sharing a predecessor the chain goes on through.
+
+    Mutation testing caught this gap: replacing the choice with "take whichever
+    came first" passed every other test in this file. Order of insertion
+    happened to be right in all of them, so nothing was actually asserting the
+    rule.
+
+    It matters because the leaf can arrive first. On 6 September the archiver's
+    marker was written before the entry that overtook it, and following the
+    first candidate would walk into the leaf and abandon the twenty thousand
+    entries behind the other branch.
+    """
+    log = _log_with(4)
+
+    # A leaf sharing entry 2's predecessor, placed BEFORE it in storage so that
+    # "first candidate" picks the wrong one.
+    leaf = dict(log._entries[2], seq=999, type="audit_archived",
+                hash="f" * 64)
+    log._entries.insert(2, leaf)
+
+    assert log.verify(), (
+        "the walk followed the leaf and abandoned the rest of the chain")
+
+    ordered = log._in_chain_order(log._entries)
+    assert len(ordered) == 4, (
+        f"the walk recovered {len(ordered)} entries, not the four that chain")
+    assert all(e["hash"] != "f" * 64 for e in ordered), (
+        "the leaf is in the reconstructed chain")

@@ -10,6 +10,41 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **A leaf is reported; a deletion still fails.** Verification walked the chain
+  as of this morning, and refused anything it could not reach in full — which
+  refused the production chain, because that chain has a leaf.
+
+  **6 September, 11:23:22.** The archiver computed a marker from the chain head
+  and began writing a 659 KB segment. In the same millisecond eleven WiZ
+  devices registered and moved the head on. The marker persisted afterwards: it
+  is intact, its predecessor is in the chain, and nothing chains from it.
+  Measured on the hub — 20,904 of 20,905 entries reachable, zero orphans, one
+  shared predecessor.
+
+  **A leaf is not a missing entry, and they are distinguishable.** Deleting
+  from the middle leaves the walk unable to continue; a leaf leaves the walk
+  complete with one entry beside it. The first still fails. The second verifies
+  and warns, because refusing the whole chain costs an operator twenty thousand
+  verified entries over one that is provably fine and describes a segment
+  sitting on disk with its hash.
+
+  **Nothing is rewritten.** The chain will verify on the production hub as it
+  stands.
+
+  Two things this took three attempts to get right, both caught by mutation:
+
+  A shared predecessor was treated as a forged history. That refused the real
+  chain. A fork where one branch continues and the other does not is a leaf;
+  a fork where **both** continue is two histories, and that is what fails now.
+
+  And the walk chose whichever candidate came first. Replacing the rule with
+  exactly that passed every test in the file — insertion order happened to be
+  right in all of them. **The leaf can arrive first**: on 6 September the
+  marker was written before the entry that overtook it, and following it would
+  abandon everything behind the other branch. Now tested.
+
+
+### Fixed
 - **Audit verification walks the chain instead of trusting stored order.** A
   production hub reported corruption over an intact chain: the archiver
   computed a marker, spent a second writing a 1.4 MB segment to disk, and
