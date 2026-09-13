@@ -124,9 +124,20 @@ class HubRestorer:
         if _anchor:
             self._hub.audit_log.anchor_prev_hash = _anchor.get("anchor_prev_hash", "0" * 64)
             self._hub.audit_log._prev_hash = self._hub.audit_log.anchor_prev_hash
-        for entry in self._hub.db.load_audit_log():
-            self._hub.audit_log._entries.append(entry)
-            self._hub.audit_log._prev_hash = entry.get("hash", "0" * 64)
+        # The chain loads one entry at a time below, so for the length of this
+        # loop the last-loaded entry has no successor yet and a verify() racing
+        # it (a /v1/status poll during startup) would read it as a leaf -- the
+        # 10:34:13 false positive of 6 September. Suppress the leaf warning until
+        # the chain is whole. The reset is in `finally`: a guard that latched on
+        # after a failed load would silence a real leaf for the life of the
+        # process.
+        self._hub.audit_log._restoring = True
+        try:
+            for entry in self._hub.db.load_audit_log():
+                self._hub.audit_log._entries.append(entry)
+                self._hub.audit_log._prev_hash = entry.get("hash", "0" * 64)
+        finally:
+            self._hub.audit_log._restoring = False
         # Continue the sequence rather than restart it: a restart must not make
         # two entries share a number, nor hand out a number BELOW one already
         # used. Take the highest `seq` present, not the row count — after

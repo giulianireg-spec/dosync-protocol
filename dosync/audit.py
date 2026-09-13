@@ -71,6 +71,20 @@ class AuditLog:
         self.anchor_prev_hash = "0" * 64
         self.anchor_prev_hash = "0" * 64
 
+        # A leaf is a property of a chain that still verifies, not an event: an
+        # entry whose predecessor is in the chain but which nothing chains from,
+        # because a writer persisted after the chain had moved on. It is
+        # surfaced as state (`leaves`, /v1/status) and warned about ONCE per
+        # occurrence, never on every verify() -- which turned one known leaf
+        # into 123 identical log lines in 45 minutes, the exact way a guardian
+        # teaches an operator to ignore it. `_restoring` suppresses the warning
+        # while the chain loads in pieces, when an as-yet-unloaded continuation
+        # makes a real entry look like a leaf (the 10:34:13 false positive of
+        # 6 September).
+        self._leaves: list[dict] = []
+        self._warned_leaf_hashes: set[str] = set()
+        self._restoring = False
+
     def _record_head(self, force: bool = False) -> None:
         """Persist the head high-water mark, batched. Best-effort by design: a
         failure here weakens truncation detection, it does not corrupt the
@@ -182,12 +196,10 @@ class AuditLog:
                 # what deleting from the middle leaves behind, and refusing it
                 # is the point.
                 return None
-            log.warning(
-                "Audit entry seq=%s (%s) is a leaf: its predecessor is in the "
-                "chain but nothing chains from it. A writer persisted after "
-                "the chain had moved on. The entry is intact and outside the "
-                "sequence.",
-                entry.get("seq"), entry.get("type"))
+            # Otherwise it is a leaf: predecessor reached, nothing chains from
+            # it. Reporting it is not this walk's job -- the walk runs on every
+            # verify(), and a warning here fired 123 times in 45 minutes.
+            # verify() records leaves as state and warns once (see _note_leaves).
 
         return ordered
 
@@ -211,6 +223,10 @@ class AuditLog:
         the tail is a marker the mark had never seen. A security check that
         cries wolf during normal operation teaches operators to ignore it.
         """
+        # Cleared up front so a chain that fails below does not leave stale
+        # leaves in /v1/status; _note_leaves repopulates it on the verifying
+        # path.
+        self._leaves = []
         entries = self._in_chain_order(self._entries)
         if entries is None:
             return False
@@ -260,7 +276,49 @@ class AuditLog:
                 # which is a documented operation, not tampering.
                 if max_seq is not None and m_seq > max_seq:
                     return False
+
+        # The chain's links are intact. Any entry present but outside the walk
+        # is a leaf -- a property of a verifying chain, recorded and reported
+        # here so it is visible without the log repeating on every call.
+        self._note_leaves(entries)
         return True
+
+    def _note_leaves(self, ordered: list[dict]) -> None:
+        """Record the current leaves as chain state, and warn about each ONE
+        time.
+
+        A leaf verifies -- it is not a failure -- so this runs only for a chain
+        whose links are intact. It is kept out of the walk on purpose: the walk
+        runs on every verify(), and warning there turned one known leaf into 123
+        identical log lines in 45 minutes, which is how a guardian teaches
+        operators to ignore it. Suppressed while restoring, when the chain is
+        loaded in pieces and an as-yet-unloaded continuation makes a real entry
+        momentarily look like a leaf.
+        """
+        if self._restoring:
+            return
+        ordered_ids = {id(e) for e in ordered}
+        leaves = [e for e in self._entries if id(e) not in ordered_ids]
+        self._leaves = [{"seq": e.get("seq"), "type": e.get("type"),
+                         "hash": e.get("hash")} for e in leaves]
+        for e in leaves:
+            h = e.get("hash")
+            if h in self._warned_leaf_hashes:
+                continue
+            self._warned_leaf_hashes.add(h)
+            log.warning(
+                "Audit entry seq=%s (%s) is a leaf: its predecessor is in the "
+                "chain but nothing chains from it. A writer persisted after the "
+                "chain had moved on. The entry is intact and outside the "
+                "sequence; the chain still verifies. Reported once.",
+                e.get("seq"), e.get("type"))
+
+    @property
+    def leaves(self) -> list[dict]:
+        """Entries that verify but sit beside the chain, as {seq, type, hash}.
+        A property of the chain, surfaced (e.g. in /v1/status) so a reader sees
+        it as state instead of a log line that no longer repeats."""
+        return list(self._leaves)
 
     def entries(self) -> list[dict]:
         return list(self._entries)

@@ -9,6 +9,25 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **A leaf is a property of the chain, reported once -- not on every `verify()`.**
+  The warning lived inside the chain walk, which runs on every verification, so
+  a hub whose dashboard polled `/v1/status` logged the same known leaf 123 times
+  in 45 minutes. That is precisely how a guardian teaches an operator to ignore
+  it -- the pattern this project names elsewhere and had reproduced in its own
+  log.
+
+  The walk no longer warns. `verify()` records the current leaves as state and
+  logs each one a single time, and `/v1/status` now carries `audit_leaves`, so a
+  reader sees the leaf as data rather than as a repeating line. Verification is
+  unchanged: `verify()` still returns the same bool and accepts the same chains
+  -- the warning was always a side effect.
+
+  The warning is also suppressed while the chain is restoring. It loads one
+  entry at a time, so a `verify()` racing startup sees the last-loaded entry with
+  no successor yet and read it as a leaf -- the isolated 10:34:13 false positive
+  of 6 September, now explained and silenced.
+
 ### Fixed
 - **The hole a leaf leaves in the sequence is no longer read as truncation.**
   On the production hub the chain verified, the leaf was reported by name, and

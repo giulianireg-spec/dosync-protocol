@@ -5,6 +5,7 @@ Production reported `audit_integrity: False` over 12,394 entries on
 what failed was reconstructing the order they were written in.
 """
 import json
+import logging
 import threading
 import time
 
@@ -357,3 +358,59 @@ def test_a_gap_with_no_leaf_to_explain_it_still_fails():
     assert not log.verify(), (
         "a sequence number vanished with no entry accounting for it and the "
         "chain verifies — leaf handling is excusing real gaps")
+
+
+def _log_with_leaf():
+    """A five-entry chain with one verifying leaf hanging off the third entry:
+    predecessor in the chain, nothing chaining from it. Same construction the
+    other leaf tests use."""
+    log = _log_with(5)
+    head = log._entries[-1]
+    leaf = dict(head, seq=head["seq"] + 1, type="audit_archived",
+                prev_hash=log._entries[-2]["prev_hash"], hash="leaf" + "0" * 60)
+    log._entries.append(leaf)
+    return log, leaf
+
+
+def test_a_leaf_is_warned_once_not_on_every_verify(caplog):
+    """The leaf is a property of the chain, not an event. The warning used to
+    live in the chain walk, which runs on every verify(), so a hub whose
+    dashboard polled /v1/status logged the same known leaf 123 times in 45
+    minutes -- the exact pattern that trains an operator to ignore the guardian.
+    Three verify() calls must produce exactly one warning."""
+    log, _ = _log_with_leaf()
+    with caplog.at_level(logging.WARNING):
+        assert log.verify()
+        assert log.verify()
+        assert log.verify()
+    warnings = [r for r in caplog.records if "leaf" in r.message]
+    assert len(warnings) == 1, (
+        f"the leaf was warned {len(warnings)} times across three verify() calls; "
+        "a property of the chain is reported once, not on every read")
+
+
+def test_a_leaf_is_surfaced_as_state():
+    """Warned once in the log, but always available as data, so a reader sees
+    the leaf without depending on a line that no longer repeats."""
+    log, leaf = _log_with_leaf()
+    assert log.verify()
+    assert [l["seq"] for l in log.leaves] == [leaf["seq"]], (
+        "the leaf did not appear in .leaves; it must be visible as state, not "
+        "only in a one-time log line")
+    # A chain with no leaf reports none.
+    clean = _log_with(5)
+    assert clean.verify()
+    assert clean.leaves == []
+
+
+def test_no_leaf_warning_while_the_chain_is_restoring(caplog):
+    """A verify() racing an incremental restore sees the last-loaded entry with
+    no successor yet and would read it as a leaf -- the 10:34:13 false positive
+    of 6 September. While restoring, the chain still verifies but says nothing."""
+    log, _ = _log_with_leaf()
+    log._restoring = True
+    with caplog.at_level(logging.WARNING):
+        assert log.verify(), "the chain must still verify during restore"
+    assert not any("leaf" in r.message for r in caplog.records), (
+        "a leaf was warned during restore; a partial chain's unloaded "
+        "continuation is not a real leaf")

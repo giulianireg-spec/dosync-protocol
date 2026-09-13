@@ -3031,6 +3031,10 @@ def get_status():
         "devices":         len(hub.registry.all()),
         "audit_entries":   len(hub.audit_log.entries()),
         "audit_integrity": hub.audit_log.verify(),
+        # A leaf verifies but sits beside the chain; surface it as state so a
+        # reader (or the dashboard) sees it here instead of in a repeated log
+        # line. Populated by the verify() call on the line above.
+        "audit_leaves":    hub.audit_log.leaves,
         # AUDIT-ARCHIVE: surface whether the chain is anchored (segmented) so a
         # conformance test can verify the anchor is honored end to end.
         "audit_anchored":  hub.audit_log.anchor_prev_hash != "0" * 64,
