@@ -439,10 +439,16 @@ class DoSyncDB:
         return json.loads(row[0]) if row else default
 
     def load_audit_log(self) -> list[dict]:
-        """Load the whole audit log, ordered by timestamp."""
+        """Load the whole audit log in the order it was written.
+
+        Ordered by `id` (insertion), not by `timestamp`: the chain is a linked
+        structure, and a clock can reorder a linked structure while insertion
+        cannot. Sorting audit entries by a clock is the same defect this project
+        removed from verification; it has no place in loading either.
+        """
         with self._cursor() as cur:
             cur.execute(
-                "SELECT entry_json FROM audit_log ORDER BY timestamp, id"
+                "SELECT entry_json FROM audit_log ORDER BY id"
             )
             rows = cur.fetchall()
         entries = [json.loads(r["entry_json"]) for r in rows]

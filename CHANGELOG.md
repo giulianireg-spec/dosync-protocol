@@ -9,6 +9,29 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **A block of the chain duplicated in memory is no longer read as leaves.**
+  After a restart on 13 September the hub reported sixty leaves the database did
+  not have. The chain on disk was linear and whole -- walking it gave one leaf,
+  the known archive marker. The sixty lived only in `_entries`: a restart race
+  left a contiguous block of the chain in memory twice, and the walk read each
+  twin as a leaf beside a chain that still verified -- sixty spurious warnings
+  against a record that was intact.
+
+  Two entries with the same hash are the same entry -- a hash is content, not a
+  name -- so verification now collapses `_entries` to one entry per hash before
+  walking. A memory artifact is no longer read as a break in the record. When
+  duplicates are found they are removed and reported once, so the artifact is
+  seen rather than masked or misreported.
+
+  `load_audit_log` also stops ordering by `timestamp`: a clock can reorder a
+  linked structure, insertion (`id`) cannot. Same defect removed from
+  verification, on the last surface that still carried it.
+
+  Found by measurement, not by reasoning -- the walk on the database gave one
+  leaf, the hub gave sixty, and the gap is the duplicate. Reproduced in a test
+  that fails under the matching mutation.
+
 ### Changed
 - **A leaf is a property of the chain, reported once -- not on every `verify()`.**
   The warning lived inside the chain walk, which runs on every verification, so

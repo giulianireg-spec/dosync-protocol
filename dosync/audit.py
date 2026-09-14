@@ -226,6 +226,12 @@ class AuditLog:
         # Cleared up front so a chain that fails below does not leave stale
         # leaves in /v1/status; _note_leaves repopulates it on the verifying
         # path.
+        # A hash is content, not a name: two entries that share one are the
+        # same entry. A restart race can leave a block of the chain in memory
+        # twice, and each twin would read as a leaf beside a chain that still
+        # verifies. Collapse to one entry per hash first, so verification
+        # reflects the persisted record and not the accident.
+        self._collapse_duplicates()
         self._leaves = []
         entries = self._in_chain_order(self._entries)
         if entries is None:
@@ -319,6 +325,33 @@ class AuditLog:
         A property of the chain, surfaced (e.g. in /v1/status) so a reader sees
         it as state instead of a log line that no longer repeats."""
         return list(self._leaves)
+
+    def _collapse_duplicates(self) -> int:
+        """Keep one entry per hash. Two entries with the same hash are the same
+        entry -- a hash is content, not a name -- so a duplicate in memory (a
+        restart race can leave a whole block of the chain twice) is an artifact,
+        not a second event. Left in place it reads as a leaf beside the chain,
+        which teaches the operator to distrust a chain that is actually intact.
+        Removed here, and reported once so the artifact is seen, not masked.
+        Returns how many were removed.
+        """
+        seen: set[str] = set()
+        deduped: list[dict] = []
+        for e in self._entries:
+            h = e.get("hash")
+            if h in seen:
+                continue
+            seen.add(h)
+            deduped.append(e)
+        removed = len(self._entries) - len(deduped)
+        if removed:
+            self._entries = deduped
+            log.warning(
+                "Removed %d duplicate audit entr%s from memory: the same hash "
+                "was present more than once, a memory artifact of a restart "
+                "race. The persisted chain holds each once and still verifies.",
+                removed, "y" if removed == 1 else "ies")
+        return removed
 
     def entries(self) -> list[dict]:
         return list(self._entries)

@@ -234,8 +234,11 @@ def test_a_leaf_is_reported_and_does_not_fail_the_chain(caplog):
 
     # An entry computed from an earlier head, persisted after the chain moved:
     # its predecessor is in the chain, and nothing follows it.
+    # A real leaf is its own entry with its own hash, computed from its own
+    # content -- not a copy of the head it was derived from. Sharing the head's
+    # hash would make it the same entry, i.e. a duplicate, not a leaf beside it.
     leaf = dict(head, seq=head["seq"] + 1, type="audit_archived",
-                prev_hash=log._entries[-2]["prev_hash"])
+                prev_hash=log._entries[-2]["prev_hash"], hash="a" * 64)
     log._entries.append(leaf)
 
     with caplog.at_level(logging.WARNING):
@@ -260,7 +263,7 @@ def test_a_leaf_and_a_deletion_are_told_apart():
     with_leaf = _log_with(5)
     head = with_leaf._entries[-1]
     with_leaf._entries.append(
-        dict(head, seq=head["seq"] + 1,
+        dict(head, seq=head["seq"] + 1, hash="b" * 64,
              prev_hash=with_leaf._entries[-2]["prev_hash"]))
 
     with_hole = _log_with(5)
@@ -414,3 +417,27 @@ def test_no_leaf_warning_while_the_chain_is_restoring(caplog):
     assert not any("leaf" in r.message for r in caplog.records), (
         "a leaf was warned during restore; a partial chain's unloaded "
         "continuation is not a real leaf")
+
+
+def test_a_duplicated_block_in_memory_is_not_read_as_leaves(caplog):
+    """A restart race can leave a contiguous block of the chain in `_entries`
+    twice. Each twin has its predecessor in the chain and nothing chaining from
+    it, so the walk read all of them as leaves beside a chain that still
+    verified -- a memory artifact wearing a break's clothes, and on production
+    60 spurious leaf warnings against a database that held the chain intact.
+    Two entries with the same hash are the same entry; the duplicates are
+    collapsed by hash, and the artifact is reported once, not read as a leaf."""
+    log = _log_with(12)
+    block = [dict(e) for e in log._entries if 4 <= e["seq"] <= 8]
+    log._entries.extend(block)                       # the block now appears twice
+    assert len(log._entries) == 17
+
+    with caplog.at_level(logging.WARNING):
+        assert log.verify(), "the chain still verifies -- the twins are not a break"
+    assert log.leaves == [], (
+        "a duplicated block was read as leaves; two entries with the same hash "
+        "are the same entry, not a leaf sitting beside the chain")
+    assert len(log._entries) == 12, "the duplicate entries were not collapsed"
+    assert any("duplicate" in r.message for r in caplog.records), (
+        "the duplication was collapsed silently; a memory artifact must be "
+        "surfaced, not masked")
