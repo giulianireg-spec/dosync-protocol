@@ -10,6 +10,30 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Archiving no longer refuses a chain that verifies: the two verifiers now agree.**
+  The reference hub stopped archiving on 6 September and its live chain grew
+  from 21,000 entries to 35,000 in eight days -- unbounded, slowing every
+  restart and hanging `/v1/status`. The chain was intact: walking it gave one
+  leaf, the archive marker a concurrent write left on 6 September. But
+  `maybe_archive` gated on `audit_backup.verify_entries`, a naive linear check
+  that reads entries in list order and refuses at the first leaf -- while
+  `AuditLog.verify`, rewritten in September to walk by links, accepted the same
+  chain. One property, two implementations, drifted apart: the archive path
+  refused what the live chain trusted.
+
+  There is now one chain walk, `walk_chain`. `AuditLog.verify` and
+  `verify_entries` both route through it, so the live chain, segments and
+  backups read the record by the same leaf-tolerant rule. A leaf verifies; a
+  real deletion still returns None. Segments may now carry a leaf and still
+  verify, so archiving a block that contains one -- as the reference hub's
+  did -- writes an archive that reads back sound.
+
+  Unblocking archiving also caps the live chain at its keep, which bounds the
+  per-request verification cost -- the same growth that was hanging
+  `/v1/status`. Found by measurement: the walk on the database gave one leaf,
+  the archive check gave a refusal, and the gap was two verifiers. Reproduced
+  in tests that fail under the matching mutation.
+
 - **A block of the chain duplicated in memory is no longer read as leaves.**
   After a restart on 13 September the hub reported sixty leaves the database did
   not have. The chain on disk was linear and whole -- walking it gave one leaf,

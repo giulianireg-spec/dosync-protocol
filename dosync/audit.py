@@ -32,6 +32,54 @@ log = logging.getLogger("dosync.hub")
 
 # ── Audit log ─────────────────────────────────────────────────────────────────
 
+def walk_chain(entries: list[dict], anchor_prev_hash: str) -> list[dict] | None:
+    """The entries in the order they were chained, or None if they do not chain.
+
+    The one chain walk in the system: AuditLog.verify() uses it for the live
+    chain, and audit_backup.verify_entries() for segments and backups, so all
+    three read the record by the same rule. It walks by `prev_hash` from the
+    anchor, never by list order -- a clock or a concurrent write can reorder the
+    list without breaking the record. Where two entries claim one predecessor
+    the chain continues through whichever one something else chains from; the
+    other is a leaf, tolerated -- it sits outside the returned order without
+    failing it. Only a real break, an entry the walk cannot reach from the
+    anchor, returns None; that is what deleting from the middle leaves behind.
+    """
+    if not entries:
+        return entries
+
+    by_prev: dict[str, list[dict]] = {}
+    for entry in entries:
+        by_prev.setdefault(entry.get("prev_hash"), []).append(entry)
+
+    claimed = {e.get("prev_hash") for e in entries}
+
+    ordered: list[dict] = []
+    seen: set[int] = set()
+    cursor = anchor_prev_hash
+    while True:
+        candidates = [e for e in by_prev.get(cursor, [])
+                      if id(e) not in seen]
+        if not candidates:
+            break
+        entry = next((c for c in candidates if c.get("hash") in claimed),
+                     candidates[0])
+        seen.add(id(entry))
+        ordered.append(entry)
+        cursor = entry.get("hash")
+
+    reached = {e["hash"] for e in ordered}
+    unvisited = [e for e in entries if id(e) not in seen]
+
+    for entry in unvisited:
+        if entry.get("prev_hash") not in reached:
+            # Hangs off nothing the walk saw: a break, not a leaf.
+            return None
+        # Otherwise a leaf: predecessor reached, nothing chains from it.
+
+    return ordered
+
+
 class AuditLog:
     """
     Tamper-evident chained log for all intent executions.
@@ -160,48 +208,10 @@ class AuditLog:
         Returning None and not a partial list matters: a shorter chain that
         links is precisely what an attacker who deleted the middle would leave.
         """
-        if not entries:
-            return entries
-
-        by_prev: dict[str, list[dict]] = {}
-        for entry in entries:
-            by_prev.setdefault(entry.get("prev_hash"), []).append(entry)
-
-        # Where two entries claim the same predecessor, the chain continues
-        # through whichever one something else chains from; the other is a
-        # leaf. `claimed` is every predecessor any entry names, so an entry
-        # whose hash appears there is one the chain goes on through.
-        claimed = {e.get("prev_hash") for e in entries}
-
-        ordered: list[dict] = []
-        seen: set[int] = set()
-        cursor = self.anchor_prev_hash
-        while True:
-            candidates = [e for e in by_prev.get(cursor, [])
-                          if id(e) not in seen]
-            if not candidates:
-                break
-            entry = next((c for c in candidates if c.get("hash") in claimed),
-                         candidates[0])
-            seen.add(id(entry))
-            ordered.append(entry)
-            cursor = entry.get("hash")
-
-        reached = {e["hash"] for e in ordered}
-        unvisited = [e for e in entries if id(e) not in seen]
-
-        for entry in unvisited:
-            if entry.get("prev_hash") not in reached:
-                # Hangs off nothing the walk saw: a break, not a leaf. This is
-                # what deleting from the middle leaves behind, and refusing it
-                # is the point.
-                return None
-            # Otherwise it is a leaf: predecessor reached, nothing chains from
-            # it. Reporting it is not this walk's job -- the walk runs on every
-            # verify(), and a warning here fired 123 times in 45 minutes.
-            # verify() records leaves as state and warns once (see _note_leaves).
-
-        return ordered
+        # The walk itself is `walk_chain` (module-level), shared with
+        # audit_backup so segments and backups verify by the same leaf-tolerant
+        # rule as the live chain -- one walk, not two that drift apart.
+        return walk_chain(entries, self.anchor_prev_hash)
 
     def verify(self, head_mark: dict | None = None) -> bool:
         """Verify the chain's links, and optionally that it still CONTAINS a

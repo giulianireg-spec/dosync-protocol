@@ -46,9 +46,10 @@ GENESIS = "0" * 64
 def verify_entries(entries: list[dict], anchor_prev_hash: str = GENESIS) -> bool:
     """Re-run the live AuditLog SHA-256 chain check over a list of entries.
 
-    Imported from hub to guarantee identical semantics; falls back to an inline
-    equivalent only if the import shape ever changes (kept byte-for-byte the
-    same as AuditLog.verify).
+    Linkage is checked by `walk_chain` -- the same leaf-tolerant walk the live
+    AuditLog uses -- so this and AuditLog.verify() share one chain walk instead
+    of drifting into two that disagree (a single leaf once refused this one and
+    kept archiving blocked for a week over a chain that verified).
 
     AUDIT-ARCHIVE (2026-07-19): a chain no longer necessarily starts at the
     genesis hash. When older entries have been archived to a segment file, the
@@ -56,18 +57,21 @@ def verify_entries(entries: list[dict], anchor_prev_hash: str = GENESIS) -> bool
     the anchor, and verification starts from it. Genesis is just the anchor of
     a chain that has never been archived.
     """
-    prev = anchor_prev_hash
+    from .audit import walk_chain
+
+    # Integrity: every entry's stored hash matches its own content, whatever
+    # order it is read in.
     for entry in entries:
-        entry = dict(entry)
-        stored_hash = entry.pop("hash", None)
-        if stored_hash is None:
+        e = dict(entry)
+        stored = e.pop("hash", None)
+        if stored is None:
             return False
-        raw = json.dumps(entry, sort_keys=True)
-        calc = hashlib.sha256(raw.encode()).hexdigest()
-        if calc != stored_hash or entry.get("prev_hash") != prev:
+        if hashlib.sha256(json.dumps(e, sort_keys=True).encode()).hexdigest() != stored:
             return False
-        prev = stored_hash
-    return True
+
+    # Linkage by the shared walk, not by list order: a leaf is tolerated, a real
+    # break (an entry the walk cannot reach from the anchor) returns None.
+    return walk_chain(entries, anchor_prev_hash) is not None
 
 
 def build_backup(entries: list[dict],

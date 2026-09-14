@@ -165,3 +165,52 @@ def test_keep_below_one_is_refused_and_small_chains_are_left_alone(tmp_path):
     assert r.returncode != 0
     r2 = _manage(dbp, "audit-archive", "--keep", "10", "--out", str(tmp_path/"x.json"), "--apply")
     assert "Nothing to do" in r2.stdout
+
+
+def _chain_with_leaf():
+    """Eight linked entries plus one real leaf: a valid entry hanging off a
+    mid-chain predecessor that nothing chains from -- a concurrent write that
+    lost the head race, intact and outside the sequence."""
+    import tempfile, os, hashlib
+    from dosync.db import DoSyncDB
+    from dosync.audit import AuditLog
+    db = DoSyncDB(os.path.join(tempfile.mkdtemp(), "t.db")); db.init()
+    log = AuditLog(); log._persist_cb = db.append_audit
+    for i in range(8):
+        log.append({"type": "test_entry", "n": i})
+    parent = log._entries[4]
+    leaf = {"type": "audit_archived", "n": 500,
+            "seq": log._entries[-1]["seq"] + 1,
+            "prev_hash": parent["prev_hash"], "timestamp": 1.0}
+    leaf["hash"] = hashlib.sha256(
+        json.dumps(leaf, sort_keys=True).encode()).hexdigest()
+    return log, leaf
+
+
+def test_verify_entries_accepts_a_leaf_like_the_live_chain():
+    """The archive path used a naive linear check that a single leaf refused,
+    while the live chain (AuditLog.verify) tolerated it -- two verifiers, one
+    property, and archiving stayed blocked for a week over a chain that
+    verified. They now share one walk: a leaf verifies, a real break does not."""
+    log, leaf = _chain_with_leaf()
+    entries = list(log._entries) + [leaf]
+
+    assert log.verify(), "the live chain verifies with the leaf"
+    assert verify_entries(entries, GENESIS), (
+        "verify_entries refused a chain with a leaf -- it must agree with the "
+        "live chain, which tolerates it")
+
+    broken = [dict(e) for e in log._entries]
+    del broken[4]                                   # a real deletion in the middle
+    assert not verify_entries(broken, GENESIS), (
+        "a real break must still fail -- leaf tolerance is not break tolerance")
+
+
+def test_a_segment_that_contains_a_leaf_verifies():
+    """The reference hub's leaf sat inside the archive window, so archiving
+    writes a segment that contains it. The segment reader must accept it by the
+    same walk, or the archive just written would read as corrupt on restore."""
+    log, leaf = _chain_with_leaf()
+    segment = log._entries[:6] + [leaf]             # the leaf, beside its chain
+    assert verify_entries(segment, GENESIS), (
+        "a segment containing a leaf did not verify")
