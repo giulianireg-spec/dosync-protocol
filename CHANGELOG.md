@@ -71,6 +71,16 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that fails under the matching mutation.
 
 ### Changed
+- **CapabilityRegistry extracted to `dosync/registry.py`.**
+  The sixth of the eleven responsibilities out of hub.py: the device-manifest
+  store and its queries -- the inverted tag index, the emergency and actuator
+  lookups -- were a self-contained thing sharing a file with the orchestrator
+  that consults them. hub.py drops from 1,882 to 1,744 lines. Re-exported from
+  hub so every existing import keeps working; the sensor-type warning moved with
+  it (its only caller), and `is_quarantined` stays in resolvers and is imported.
+  No behaviour change: the seam touches two modules, and the registry's contract
+  is now guarded directly in tests/test_registry.py.
+
 - **A leaf is a property of the chain, reported once -- not on every `verify()`.**
   The warning lived inside the chain walk, which runs on every verification, so
   a hub whose dashboard polled `/v1/status` logged the same known leaf 123 times
