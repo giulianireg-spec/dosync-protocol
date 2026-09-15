@@ -71,6 +71,15 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that fails under the matching mutation.
 
 ### Changed
+- **OccupancyEngine extracted to `dosync/occupancy.py`.**
+  The seventh of the eleven: the presence-signal aggregator that infers whether
+  the home is occupied -- the confidence-weighted vote, the five-minute TTL, the
+  per-device replace -- was a self-contained state machine sharing a file with
+  the orchestrator that reads it. hub.py drops from 1,744 to 1,660 lines.
+  Re-exported from hub; the seam touches two modules (nothing outside hub
+  referenced it). No behaviour change, guarded directly in
+  tests/test_occupancy.py.
+
 - **CapabilityRegistry extracted to `dosync/registry.py`.**
   The sixth of the eleven responsibilities out of hub.py: the device-manifest
   store and its queries -- the inverted tag index, the emergency and actuator
