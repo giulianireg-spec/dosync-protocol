@@ -10,6 +10,20 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **verify() scales linearly again, so `/v1/status` stops hanging.**
+  verify() runs on every `/v1/status` request, and it built its leaf set with
+  an O(n^2) scan -- `e not in entries`, a linear list search repeated once per
+  entry. On the reference hub's 10,000-entry chain that was 1.7 seconds a
+  request; before archiving was unblocked and the chain was 35,000, it timed
+  out -- which is why the dashboard's polling hung the endpoint.
+
+  `entries` (the ordered chain) holds the same objects as the live list, so
+  membership is identity, not equality. Building the leaf set from an id() set
+  -- the way `_note_leaves` already did -- makes it O(n): verify() dropped from
+  1,766 ms to 75 ms on a 10k chain, and doubling the chain now roughly doubles
+  the time instead of quadrupling it. Guarded by a scaling test that fails if
+  the quadratic returns.
+
 - **Archiving no longer refuses a chain that verifies: the two verifiers now agree.**
   The reference hub stopped archiving on 6 September and its live chain grew
   from 21,000 entries to 35,000 in eight days -- unbounded, slowing every

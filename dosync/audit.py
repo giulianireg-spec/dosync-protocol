@@ -253,8 +253,14 @@ class AuditLog:
         # difference is that the leaf is still here: present in the log,
         # absent from the sequence. Without this, verification reports as
         # truncation the very entry it just reported as a leaf.
+        # `entries` (the ordered chain) holds the same objects as _entries, so
+        # membership is identity, not equality: an id() set turns what was an
+        # O(n^2) list scan (`e not in entries`, once per entry) into O(n). On a
+        # 10k chain this took verify() from ~1.7s to ~60ms -- the cost that hung
+        # /v1/status, which calls verify() on every request.
+        ordered_ids = {id(e) for e in entries}
         leaf_seqs = {e.get("seq") for e in self._entries
-                     if e not in entries and e.get("seq") is not None}
+                     if id(e) not in ordered_ids and e.get("seq") is not None}
 
         prev = self.anchor_prev_hash
         prev_seq = None

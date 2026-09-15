@@ -441,3 +441,28 @@ def test_a_duplicated_block_in_memory_is_not_read_as_leaves(caplog):
     assert any("duplicate" in r.message for r in caplog.records), (
         "the duplication was collapsed silently; a memory artifact must be "
         "surfaced, not masked")
+
+
+def test_verify_scales_linearly_not_quadratically():
+    """verify() built its leaf set with an O(n^2) membership scan (`e not in
+    entries`, once per entry) that took 1.7s on a 10k chain and hung
+    /v1/status, which calls verify() every request. The leaf set now comes from
+    an id() set, O(n). This guards the scaling: doubling the chain must roughly
+    double the time, not quadruple it."""
+    import time
+
+    def timed(n):
+        log = AuditLog()
+        for i in range(n):
+            log.append({"type": "device_event", "n": i})
+        log.verify()                                    # warm
+        t0 = time.perf_counter()
+        for _ in range(3):
+            log.verify()
+        return (time.perf_counter() - t0) / 3
+
+    small, big = timed(3000), timed(6000)
+    ratio = big / max(small, 1e-6)
+    assert ratio < 3.0, (
+        f"verify() scaled {ratio:.1f}x when the chain doubled; linear is ~2x, "
+        "quadratic ~4x -- the O(n^2) leaf scan is back")
