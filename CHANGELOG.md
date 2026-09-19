@@ -10,6 +10,23 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Every database write is serialized, so transactions stop interfering.**
+  The hub opened one SQLite connection and shared it across FastAPI's thread
+  pool. Two requests committing on it interfered: one thread's write would
+  commit another thread's open transaction. On the reference hub (Python 3.11)
+  that surfaced as `sqlite3.OperationalError: cannot commit - no transaction is
+  active` in the auth path -- twice in forty minutes, whenever a request raced
+  another write. On Python 3.12 the same race is silent, which is worse: a
+  partial write committed, or a rollback undone, by an unrelated request.
+
+  A reentrant lock now serializes every write. `_cursor` holds it for the whole
+  operation; the raw writers that do not go through `_cursor` -- rate-limit
+  events, operations, device tokens, emergency snapshots, intent classes --
+  carry an `@_synchronized` decorator that takes the same lock. Reads are
+  untouched. Guarded by tests that let one thread roll a write back while
+  another commits, failing under the matching mutation on both the `_cursor`
+  and the raw path.
+
 - **verify() scales linearly again, so `/v1/status` stops hanging.**
   verify() runs on every `/v1/status` request, and it built its leaf set with
   an O(n^2) scan -- `e not in entries`, a linear list search repeated once per

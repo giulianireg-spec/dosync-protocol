@@ -9,13 +9,29 @@ No external dependencies — sqlite3 ships with Python.
 from __future__ import annotations
 import json
 import logging
+import functools
 import sqlite3
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
 log = logging.getLogger("dosync.db")
+
+
+def _synchronized(method):
+    """Serialize a raw connection write on the DB's lock, the way `_cursor`
+    already does. A write that does not go through `_cursor` still must not
+    interleave its transaction with another thread's on the shared connection.
+    The lock is an RLock, so a synchronized method that calls `_cursor` (or
+    another synchronized method) does not deadlock on itself.
+    """
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return wrapper
 
 # Schema SQL
 SCHEMA = """
@@ -124,6 +140,12 @@ class DoSyncDB:
     def __init__(self, db_path: str = "dosync.db"):
         self.db_path = Path(db_path)
         self._conn: Optional[sqlite3.Connection] = None
+        # One connection, shared across FastAPI's thread pool. Every write is
+        # serialized on this lock so two requests cannot interleave their
+        # transactions -- one committing the other's open write, which raised
+        # 'cannot commit - no transaction is active' on Python 3.11 and did it
+        # silently on 3.12. Reentrant: a locked path may call another.
+        self._lock = threading.RLock()
 
     # ── Conexion ──────────────────────────────────────────────────────────────
 
@@ -259,15 +281,16 @@ class DoSyncDB:
 
     @contextmanager
     def _cursor(self):
-        cur = self._conn.cursor()
-        try:
-            yield cur
-            self._conn.commit()
-        except Exception:
-            self._conn.rollback()
-            raise
-        finally:
-            cur.close()
+        with self._lock:
+            cur = self._conn.cursor()
+            try:
+                yield cur
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+            finally:
+                cur.close()
 
     # ── Device registry ───────────────────────────────────────────────────────
 
@@ -462,6 +485,7 @@ class DoSyncDB:
 
     # ── Rate limit persistence ────────────────────────────────────────────────
 
+    @_synchronized
     def append_rate_limit_event(self, device_id: str, ts: float) -> None:
         """Record an actuator action for rate limit tracking."""
         self._conn.execute(
@@ -482,6 +506,7 @@ class DoSyncDB:
             result.setdefault(device_id, []).append(ts)
         return result
 
+    @_synchronized
     def purge_rate_limit_events(self, window_seconds: float) -> int:
         """Delete expired rate limit events. Call periodically to keep table small."""
         cutoff = __import__("time").time() - window_seconds
@@ -722,6 +747,7 @@ class DoSyncDB:
         """)
         self._conn.commit()
 
+    @_synchronized
     def save_device_token(self, device_id: str, token_hash: str, label: str = "") -> None:
         import time
         self._conn.execute("""
@@ -756,6 +782,7 @@ class DoSyncDB:
         )
         return cur.fetchone() is not None
 
+    @_synchronized
     def delete_device_token(self, device_id: str) -> bool:
         cur = self._conn.execute(
             "DELETE FROM device_tokens WHERE device_id=?", (device_id,)
@@ -786,6 +813,7 @@ class DoSyncDB:
         """)
         self._conn.commit()
 
+    @_synchronized
     def save_emergency_snapshot(self, intent_id: str, intent_class: str,
                                  urgency: str, context: dict) -> None:
         import time, json
@@ -796,6 +824,7 @@ class DoSyncDB:
         """, (intent_id, intent_class, urgency, json.dumps(context), time.time()))
         self._conn.commit()
 
+    @_synchronized
     def resolve_emergency_snapshot(self, intent_id: str) -> None:
         import time
         self._conn.execute("""
@@ -819,6 +848,7 @@ class DoSyncDB:
             for r in cur.fetchall()
         ]
 
+    @_synchronized
     def clear_old_snapshots(self, max_age_hours: int = 24) -> int:
         """Clear resolved or long-stale snapshots."""
         import time
@@ -859,6 +889,7 @@ class DoSyncDB:
         """)
         self._conn.commit()
 
+    @_synchronized
     def save_operation(self, op_dict: dict, terminal: bool) -> None:
         """Insert or update an operation. `op_dict` is Operation.to_dict();
         `terminal` records whether the operation reached a terminal state, so
@@ -903,6 +934,7 @@ class DoSyncDB:
         row = cur.fetchone()
         return json.loads(row[0]) if row else None
 
+    @_synchronized
     def clear_old_operations(self, max_age_hours: int = 24) -> int:
         """Clear terminal or long-stale operations. Active operations
         (terminal=0) are NEVER aged out — an old but live operation is exactly
@@ -919,6 +951,7 @@ class DoSyncDB:
 
     # ── Custom Intent Classes ─────────────────────────────────────────────────
 
+    @_synchronized
     def save_intent_class(self, name: str, urgency: str,
                                   resolution_tags: list, resolution_actuators: list,
                                   description: str, domain: str,
@@ -998,6 +1031,7 @@ class DoSyncDB:
             "created_at":           r["created_at"],
         } for r in rows]
 
+    @_synchronized
     def delete_intent_class(self, name: str) -> bool:
         cur = self._conn.execute(
             "DELETE FROM intent_classes WHERE name = ?", (name,)
