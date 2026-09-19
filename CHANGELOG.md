@@ -88,6 +88,15 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that fails under the matching mutation.
 
 ### Changed
+- **apply_telemetry extracted to `dosync/telemetry.py`.**
+  The eighth of the eleven: the generic bridge between a telemetry-emitting
+  adapter and the operation state machine -- find the device's active operation,
+  reconcile the fact, persist, audit -- depended on nothing of the hub beyond
+  the database and the audit log, which it now takes as arguments. hub.py drops
+  from 1,660 to 1,591 lines. `hub.apply_telemetry` stays as a thin delegate, so
+  every caller keeps working. No behaviour change, guarded directly in
+  tests/test_telemetry.py.
+
 - **OccupancyEngine extracted to `dosync/occupancy.py`.**
   The seventh of the eleven: the presence-signal aggregator that infers whether
   the home is occupied -- the confidence-weighted vote, the five-minute TTL, the
