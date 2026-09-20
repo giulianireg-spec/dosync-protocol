@@ -58,19 +58,19 @@ def _make_hub():
         _polls[operation_id] = _polls.get(operation_id, 0) + 1
         return "completed" if _polls[operation_id] >= 2 else "in_progress"
 
-    hub._read_operation_state = fake_read
+    hub._composite_executor._read_operation_state = fake_read
 
     # Make the supervisor poll fast in execute_composite_intent (it builds its own
     # SupervisorConfig default of 0.2s; patch execute_composite_intent to inject a
     # fast config so tests run instantly).
-    _orig = hub.execute_composite_intent
+    _orig = hub._composite_executor.execute_composite_intent
 
     async def fast_composite(intent, executor, context, guard_set=None, config=None):
         return await _orig(intent, executor, context,
                            guard_set=guard_set,
                            config=config or SupervisorConfig(poll_interval_s=0.001,
                                                              step_timeout_s=5.0))
-    hub.execute_composite_intent = fast_composite
+    hub._composite_executor.execute_composite_intent = fast_composite
     return hub
 
 

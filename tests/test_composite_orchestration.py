@@ -37,7 +37,7 @@ CLAT, CLON = -31.4201, -64.1888
 class _SimExecutor:
     """A simulated executor: every dispatch succeeds (unless fail_action matches).
     Records what it dispatched. Arrival confirmation is simulated separately by
-    patching the hub's _read_operation_state (see _make_hub) so we don't fight the
+    patching the composite executor's _read_operation_state (see _make_hub) so we don't fight the
     dispatch helper's own write-ahead transitions."""
     def __init__(self, hub, fail_action=None):
         self.hub = hub
@@ -71,7 +71,7 @@ def _make_hub():
     # drone, we simulate that confirmation by reporting `completed` on the second poll
     # of each operation — so the supervisor waits (proving it polls) then advances.
     _polls = {}
-    real_read = hub._read_operation_state
+    real_read = hub._composite_executor._read_operation_state
 
     def fake_read(operation_id):
         # If the real state is already terminal (e.g. a failed dispatch), honor it.
@@ -81,7 +81,7 @@ def _make_hub():
         _polls[operation_id] = _polls.get(operation_id, 0) + 1
         return "completed" if _polls[operation_id] >= 2 else "in_progress"
 
-    hub._read_operation_state = fake_read
+    hub._composite_executor._read_operation_state = fake_read
     return hub
 
 

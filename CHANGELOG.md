@@ -102,6 +102,18 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that fails under the matching mutation.
 
 ### Changed
+- **Composite-intent orchestration extracted to `dosync/composite_executor.py`.**
+  The tenth of the eleven: how a composition intent (inspect_area) runs as a
+  supervised, closed-loop sequence -- compose the route, build the
+  CompositeOperation, wire the OperationSupervisor to the hub's services, and
+  drive it to a terminal state. A ~240-line cluster in hub.py, moved to a
+  CompositeExecutor that takes the three hub services it uses (audit log,
+  database, policy engine) plus the plan executor's action-execution-model
+  classifier. hub.py drops from 1,330 to 1,091 lines. execute_composite_intent
+  and _route_composite_intent stay as thin delegates. _resolve_verify_bindings,
+  which sits in the same section but resolves verify bindings for every intent
+  (not only composites), correctly stayed in the hub. No behaviour change.
+
 - **The plan execution engine extracted to `dosync/plan_executor.py`.**
   The ninth of the eleven: how a resolved plan runs against devices --
   policy-aware execution, the parallel / abort / retry strategies, parameter
