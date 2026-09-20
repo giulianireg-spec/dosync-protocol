@@ -68,7 +68,9 @@ def walk_chain(entries: list[dict], anchor_prev_hash: str) -> list[dict] | None:
         ordered.append(entry)
         cursor = entry.get("hash")
 
-    reached = {e["hash"] for e in ordered}
+    # e.get, not e["hash"]: an entry with no hash cannot chain, but it must not
+    # crash the walk either -- every other access here already uses .get.
+    reached = {e.get("hash") for e in ordered if e.get("hash") is not None}
     unvisited = [e for e in entries if id(e) not in seen]
 
     for entry in unvisited:
@@ -242,6 +244,11 @@ class AuditLog:
         # verifies. Collapse to one entry per hash first, so verification
         # reflects the persisted record and not the accident.
         self._collapse_duplicates()
+        # An entry with no hash cannot be a chain link -- the walk reads
+        # e["hash"] and the re-hash below pops it, so one malformed in-memory
+        # entry would crash verify() (and /v1/status with it). Drop and report
+        # it, as with a duplicate, before the chain is walked.
+        self._drop_hashless()
         self._leaves = []
         entries = self._in_chain_order(self._entries)
         if entries is None:
@@ -366,6 +373,28 @@ class AuditLog:
                 "Removed %d duplicate audit entr%s from memory: the same hash "
                 "was present more than once, a memory artifact of a restart "
                 "race. The persisted chain holds each once and still verifies.",
+                removed, "y" if removed == 1 else "ies")
+        return removed
+
+    def _drop_hashless(self) -> int:
+        """Remove entries with no `hash` from memory. A hash is what chains an
+        entry to the record; an entry without one cannot be a link, cannot be
+        verified, and cannot be re-hashed -- it is a malformed in-memory
+        artifact, not a chain member. Left in place it crashes the walk (which
+        reads e["hash"]) and the re-hash in verify() (which pops it), taking
+        down /v1/status. Removed here and reported once, like a duplicate: the
+        persisted chain never held it -- every stored entry has a hash -- and
+        still verifies. Returns how many were removed.
+        """
+        kept = [e for e in self._entries if "hash" in e]
+        removed = len(self._entries) - len(kept)
+        if removed:
+            self._entries = kept
+            log.warning(
+                "Removed %d audit entr%s with no hash from memory: an entry "
+                "without a hash cannot be a chain link and is a memory "
+                "artifact. The persisted chain holds only hashed entries and "
+                "still verifies.",
                 removed, "y" if removed == 1 else "ies")
         return removed
 

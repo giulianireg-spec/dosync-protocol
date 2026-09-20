@@ -10,6 +10,20 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **A hashless in-memory audit entry no longer crashes verify() (and /v1/status).**
+  An entry with no `hash` key appeared in the live chain in memory -- the
+  persisted chain was clean, every stored entry hashed -- and crashed verify()
+  on every /v1/status poll: the chain walk read `e["hash"]` directly (the one
+  place it did not use `.get`), and the re-hash in verify() popped the same key.
+  An entry with no hash cannot be a chain link and cannot be verified; it is a
+  memory artifact, like the duplicate a restart race can leave. It is now dropped
+  and reported once before the chain is walked, exactly as a duplicate is, and
+  the walk uses `.get` throughout so it cannot crash on one either. Where the
+  artifact comes from is not yet identified -- it could not be reproduced from
+  the archive/restore cycle or from concurrent appends -- so this closes the
+  crash and surfaces the artifact (the log names how many) rather than claiming
+  to fix its source.
+
 - **Every database write is serialized, so transactions stop interfering.**
   The hub opened one SQLite connection and shared it across FastAPI's thread
   pool. Two requests committing on it interfered: one thread's write would
