@@ -10,6 +10,17 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The background state refresher starts again.**
+  The eleventh extraction moved the refresh loop to state_refresh.py but left
+  `import os` behind: with the default interval (interval=None, the server's
+  path) the loop read os.environ["DOSYNC_STATE_REFRESH_INTERVAL"] and died with
+  NameError before it logged "started" -- so on the reference hub active health
+  probing silently stopped running. Every test passed an explicit interval, so
+  none exercised the os.environ read; the full suite stayed green while the real
+  startup path was broken. Fixed by restoring the import, and guarded by a test
+  that fires the interval=None path exactly as the server does, failing under
+  the missing import.
+
 - **A hashless in-memory audit entry no longer crashes verify() (and /v1/status).**
   An entry with no `hash` key appeared in the live chain in memory -- the
   persisted chain was clean, every stored entry hashed -- and crashed verify()
