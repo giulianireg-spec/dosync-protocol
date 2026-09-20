@@ -102,6 +102,18 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that fails under the matching mutation.
 
 ### Changed
+- **Active state refresh extracted to `dosync/state_refresh.py` -- the eleventh and last.**
+  The background loop that probes every adapter-backed device's get_state() to
+  keep health current, without executing anything, moved to a StateRefresher
+  taking the three services it uses (resolver, device health, registry). The
+  event-loop task that drives it stays owned by the server; StateRefresher
+  provides the coroutine. hub.py drops from 1,091 to 991 lines.
+  start_state_refresh and _state_refresh_cycle stay as thin delegates. With this
+  the eleven responsibilities identified for extraction are all out of hub.py:
+  what remains -- execute_intent, register_device, execute_phased, the
+  unexecutable-device diagnostics, the collaborator wiring and the delegates --
+  is the orchestrator and the hub's own jobs. The core is closed.
+
 - **Composite-intent orchestration extracted to `dosync/composite_executor.py`.**
   The tenth of the eleven: how a composition intent (inspect_area) runs as a
   supervised, closed-loop sequence -- compose the route, build the
