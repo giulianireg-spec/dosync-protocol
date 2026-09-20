@@ -102,6 +102,20 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that fails under the matching mutation.
 
 ### Changed
+- **The plan execution engine extracted to `dosync/plan_executor.py`.**
+  The ninth of the eleven: how a resolved plan runs against devices --
+  policy-aware execution, the parallel / abort / retry strategies, parameter
+  validation, splitting a plan by execution model, and starting long-running
+  actions -- was a ~290-line cluster in hub.py. Moved to a PlanExecutor that
+  takes the five hub services it uses (resolver, device health, audit log,
+  capability registry, database) and owns the progress-callback failure counter
+  it maintains, which the hub re-exposes as a property. hub.py drops from 1,591
+  to 1,325 lines. The methods execute_intent, the composite section, and three
+  tests call by name stay as thin delegates, so every caller keeps working. No
+  behaviour change; the DOSYNC_INTENT_TIMEOUT row in the generated
+  CONFIGURATION.md is refreshed only because the setting's default now reads
+  from the new file.
+
 - **apply_telemetry extracted to `dosync/telemetry.py`.**
   The eighth of the eleven: the generic bridge between a telemetry-emitting
   adapter and the operation state machine -- find the device's active operation,

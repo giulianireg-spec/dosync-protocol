@@ -71,7 +71,7 @@ settings exist for deployments whose needs differ from that, not as a checklist.
 
 | Setting | Default |
 |---|---|
-| `DOSYNC_INTENT_TIMEOUT` | `5.0" if intent.urgency.value == "emergency" else "10.0` |
+| `DOSYNC_INTENT_TIMEOUT` | `5` |
 | `DOSYNC_UNREACHABLE_TTL` | `1800` |
 | `DOSYNC_FAILURE_THRESHOLD` | `3` |
 | `DOSYNC_STATE_REFRESH_INTERVAL` | `60` |
