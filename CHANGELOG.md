@@ -10,6 +10,21 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **verify() no longer cries tampering on a sound chain under concurrent writes.**
+  The database lock added earlier serialized database writes; it did not touch
+  the audit log's in-memory chain. verify() walks _entries -- and rebuilds it via
+  collapse/drop -- while append() mutates it from other request threads, and
+  archiving snapshots the entries, writes a segment, then rebuilds the list. A
+  verify() landing mid-write read a half-updated chain and returned
+  integrity=false on a chain that was in fact intact; an append landing
+  mid-archive could be dropped when the list was rebuilt. On the reference hub
+  this surfaced as an intermittent audit_integrity:false on /v1/status -- the
+  very "cries wolf during normal operation" the head-mark logic was written to
+  avoid, reappearing one layer down. A reentrant lock on the audit log now
+  serializes append, verify, entries, flush_head and archive. Guarded by a race
+  test that hammers append() from four threads while verifying, failing under
+  the missing lock.
+
 - **The background state refresher starts again.**
   The eleventh extraction moved the refresh loop to state_refresh.py but left
   `import os` behind: with the default interval (interval=None, the server's

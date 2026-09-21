@@ -22,6 +22,8 @@ import json
 import logging
 import os
 import time
+import threading
+import functools
 
 # Deliberately "dosync.hub" and not "dosync.audit": these records went to that
 # logger in 0.6.3, and an operator filtering on it would silently stop seeing
@@ -82,6 +84,32 @@ def walk_chain(entries: list[dict], anchor_prev_hash: str) -> list[dict] | None:
     return ordered
 
 
+def _synchronized(method):
+    """Serialize an AuditLog method on the log's own reentrant lock, so the live
+    chain (_entries, _prev_hash, _next_seq, the head) is never read or written
+    half-updated. append() and verify() both take it: the DB lock added earlier
+    guards the database, not these in-memory structures, and verify() walking the
+    chain while append() mutates it read a torn state and cried tampering on a
+    sound chain."""
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return wrapper
+
+
+def _synchronized_audit(method):
+    """For the CheckpointKeeper methods that rewrite the AuditLog's chain
+    (archiving snapshots the entries, writes a segment, then rebuilds _entries):
+    take the audit log's OWN lock, the same one append() and verify() hold, so an
+    append landing mid-archive is not silently dropped when the list is rebuilt."""
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._audit._lock:
+            return method(self, *args, **kwargs)
+    return wrapper
+
+
 class AuditLog:
     """
     Tamper-evident chained log for all intent executions.
@@ -89,6 +117,7 @@ class AuditLog:
     """
 
     def __init__(self):
+        self._lock = threading.RLock()
         self._entries: list[dict] = []
         self._prev_hash = "0" * 64
         self._persist_cb = None   # set by DoSyncHub after db.init()
@@ -151,11 +180,13 @@ class AuditLog:
         except Exception as e:  # pragma: no cover - defensive
             log.warning("Audit head not recorded: %s", e)
 
+    @_synchronized
     def flush_head(self) -> None:
         """Force the head to disk — called at shutdown and before operations
         that rewrite the log, so the mark is current when it matters."""
         self._record_head(force=True)
 
+    @_synchronized
     def append(self, entry: dict) -> str:
         # Monotonic sequence number (2026-07-25). The hash chain alone cannot see
         # a TRUNCATION: drop the last entry and what remains still verifies,
@@ -215,6 +246,7 @@ class AuditLog:
         # rule as the live chain -- one walk, not two that drift apart.
         return walk_chain(entries, self.anchor_prev_hash)
 
+    @_synchronized
     def verify(self, head_mark: dict | None = None) -> bool:
         """Verify the chain's links, and optionally that it still CONTAINS a
         previously recorded point.
@@ -398,6 +430,7 @@ class AuditLog:
                 removed, "y" if removed == 1 else "ies")
         return removed
 
+    @_synchronized
     def entries(self) -> list[dict]:
         return list(self._entries)
 
@@ -672,6 +705,7 @@ class CheckpointKeeper:
             log.error("Audit checkpoint export to %s FAILED: %s — the checkpoint "
                       "exists locally but is not yet evidence.", target, e)
 
+    @_synchronized_audit
     def maybe_archive(self, keep: int = None, directory: str = None) -> str | None:
         """Archive the oldest chain entries if the live chain has grown too big.
 
