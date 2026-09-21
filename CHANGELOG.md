@@ -10,6 +10,32 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Four modules no longer refer to names they never imported.** Each one
+  raised NameError only on the path that reached it, so the full suite stayed
+  green while the bug shipped:
+  - `restore.py` used `time` without importing it. Every presence signal failed
+    to restore on startup, and occupancy started empty after each restart. The
+    failure was caught and logged per signal, never raised.
+  - `execution.py` used the optional metrics module without importing it, so
+    `action_execution_seconds` recorded nothing. The NameError sat inside a
+    `try/except: pass`.
+  - `adapters/mqtt.py` and `adapters/notifications.py` called `failure_reason()`
+    without importing it: a failed publish or SMS raised NameError from its own
+    error handler instead of reporting why it failed. Shipped in 0.6.1–0.6.3.
+  The first two came from the extraction of those modules out of hub.py; the
+  missing `import os` in state_refresh.py, fixed earlier, was the same shape.
+
+### Added
+- **A static check for undefined names runs with the suite.**
+  `tests/test_no_undefined_names.py` runs pyflakes over the whole package and
+  fails on any undefined name -- the one class of bug above that tests only find
+  when they happen to execute the exact line. Type-only annotations moved behind
+  `TYPE_CHECKING` so the check starts at zero. pyflakes is now a declared test
+  dependency (requirements-dev.txt and the declared-floor CI job); if it is
+  missing the check errors instead of skipping. Behaviour behind the two silent
+  bugs is pinned in `tests/test_undefined_name_regressions.py`.
+
+### Fixed
 - **verify() no longer cries tampering on a sound chain under concurrent writes.**
   The database lock added earlier serialized database writes; it did not touch
   the audit log's in-memory chain. verify() walks _entries -- and rebuilds it via

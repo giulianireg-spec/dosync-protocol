@@ -18,6 +18,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # annotation only
+    from .executor import DeviceExecutor
 
 log = logging.getLogger("dosync.hub")
 

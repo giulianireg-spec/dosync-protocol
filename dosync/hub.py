@@ -15,7 +15,10 @@ try:
     from dosync import metrics as _M
 except Exception:  # metrics is optional; never let it break the hub
     _M = None
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
+
+if TYPE_CHECKING:  # annotation only
+    from .executor import DeviceExecutor
 
 from .db import DoSyncDB
 from dataclasses import dataclass, field

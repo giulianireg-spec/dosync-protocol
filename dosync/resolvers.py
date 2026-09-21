@@ -26,6 +26,11 @@ import json
 import logging
 import os
 import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # annotations only; importing these at runtime is circular
+    from .hub import DoSyncHub
+    from .registry import CapabilityRegistry
 from dataclasses import dataclass, field
 
 from .models import (ActionPlan, ActuatorSpec, CapabilityManifest, DeviceAction,

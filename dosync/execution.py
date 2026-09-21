@@ -23,6 +23,18 @@ import logging
 import os
 import threading
 import time
+from typing import TYPE_CHECKING
+
+# Same optional import as hub.py. It was left behind when this module was
+# extracted, so every `_M` reference raised NameError inside a try/except that
+# swallowed it, and action_execution_seconds silently stopped recording.
+try:
+    from dosync import metrics as _M
+except Exception:  # metrics is optional; never let it break execution
+    _M = None
+
+if TYPE_CHECKING:  # annotations only; importing the hub at runtime is circular
+    from .hub import DoSyncHub
 from collections import deque
 
 # "dosync.hub" and not "dosync.execution", deliberately: these records went to

@@ -46,7 +46,7 @@ import logging
 import os
 import time
 
-from . import DoSyncAdapter
+from . import DoSyncAdapter, failure_reason
 from ..models import ActionResult, DeviceAction, Urgency
 
 log = logging.getLogger("dosync.adapters.mqtt")

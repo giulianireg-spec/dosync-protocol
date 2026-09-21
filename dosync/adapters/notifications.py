@@ -21,7 +21,7 @@ import logging
 import os
 import json
 
-from . import DoSyncAdapter
+from . import DoSyncAdapter, failure_reason
 
 log = logging.getLogger("dosync.notifications")
 

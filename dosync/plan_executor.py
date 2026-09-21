@@ -22,6 +22,10 @@ from __future__ import annotations
 import asyncio
 import time
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # annotation only
+    from .models import DeviceAction
 
 # "dosync.hub" and not "dosync.plan_executor": these records went to that logger
 # before the move, and an operator filtering on it would otherwise stop seeing
