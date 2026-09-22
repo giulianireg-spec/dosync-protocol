@@ -10,6 +10,20 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Reading a Home Assistant sensor no longer fails, and no longer gets the
+  device excluded.** Every action was translated into a service call
+  (`POST /api/services/{domain}/{service}`), and `read_sensors` had no
+  translation, so it fell through to the default -- `turn_on`. Home Assistant
+  answered `400` for an entity with no such service, the action failed, and the
+  hub read that as the device not responding and excluded it for ~30 minutes.
+  On the reference hub, two binary sensors failed on every `report_status`.
+  `read_sensors` is now a state query (`GET /api/states/{entity_id}`, which the
+  bridge already spoke) reported as the sensors the device declares -- `state`
+  for a binary entity, `value` for a numeric one (as a number, not the string
+  Home Assistant sends), `brightness`, `current_temp`, `target_temp`, `position`
+  -- under the same `readings` shape every other read answers with.
+
+### Fixed
 - **Every test file passes on its own.** `server.py` decides at import time
   whether requests need a token (`DOSYNC_AUTH`, default on), so the first test
   to import it fixed auth for the whole run. Several modules set

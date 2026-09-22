@@ -274,6 +274,16 @@ def dosync_to_ha_service(domain: str, action: str, params: dict) -> tuple[str, s
     return domain, "turn_on", {}
 
 
+def _as_number(state_str):
+    """A numeric entity reports its reading as a string ("23.5"). Report it as a
+    number when it is one, and unchanged when it is not (e.g. "unavailable")."""
+    try:
+        value = float(state_str)
+    except (TypeError, ValueError):
+        return state_str
+    return int(value) if value.is_integer() else value
+
+
 # ── HA Bridge ─────────────────────────────────────────────────────────────────
 
 class HABridge(DoSyncAdapter):
@@ -734,6 +744,12 @@ class HABridge(DoSyncAdapter):
                 error="Device not found or missing adapter_config",
             )
 
+        # Reading a sensor is a state query, not a service call. Without this,
+        # read_sensors fell through to the default ("turn_on"), Home Assistant
+        # answered 400 for an entity with no such service, and the hub read that
+        # as the device not responding -- excluding it for ~30 minutes.
+        if action.action == "read_sensors":
+            return await self._read_sensors(device, action)
         entity_id = device.adapter_config.get("entity_id")
         domain    = device.adapter_config.get("domain", entity_id.split(".")[0])
 
@@ -797,6 +813,50 @@ class HABridge(DoSyncAdapter):
                 error=failure_reason(e),
             )
 
+    async def _read_sensors(self, device, action: DeviceAction) -> ActionResult:
+        """Report the entity's current state as the sensors the device declares.
+
+        The manifest built at import time names them: `state` for a binary
+        entity, `value` for a numeric one, `brightness`, `current_temp`,
+        `target_temp`, `position`. Reported under "readings", the same shape
+        every other read_sensors answer uses.
+        """
+        if self._simulated:
+            return ActionResult(
+                device_id=action.device_id, action=action.action, success=True,
+                response={"status": "simulated", "readings": {}},
+            )
+        state = await self.get_state(action.device_id)
+        if state is None:
+            return ActionResult(
+                device_id=action.device_id, action=action.action, success=False,
+                error="Could not read the entity state from Home Assistant",
+            )
+        readings = {}
+        for sensor in (device.sensors or []):
+            sid = sensor.id
+            if sid == "state":
+                readings[sid] = state.get("on")
+            elif sid == "value":
+                readings[sid] = _as_number(state.get("state"))
+            elif sid == "brightness":
+                readings[sid] = state.get("brightness")
+            elif sid == "current_temp":
+                readings[sid] = state.get("current_temperature")
+            elif sid == "target_temp":
+                readings[sid] = state.get("temperature")
+            else:
+                # Any other declared sensor: the normalized field if HA reported
+                # one, else the raw state string, so nothing is silently dropped.
+                readings[sid] = state.get(sid, state.get("state"))
+        requested = (action.params or {}).get("sensor_ids")
+        if requested:
+            readings = {k: v for k, v in readings.items() if k in requested}
+        return ActionResult(
+            device_id=action.device_id, action=action.action, success=True,
+            response={"readings": readings, "entity_state": state.get("state")},
+        )
+
     async def get_state(self, device_id: str) -> dict | None:
         """
         Query current HA entity state via REST API.
@@ -833,6 +893,8 @@ class HABridge(DoSyncAdapter):
                     result["temperature"] = attrs["temperature"]
                 if "current_temperature" in attrs:
                     result["current_temperature"] = attrs["current_temperature"]
+                if "current_position" in attrs:
+                    result["position"] = attrs["current_position"]
                 return result
         except Exception as e:
             log.debug("HABridge get_state %s (%s): %s", device_id, entity_id, e)
