@@ -10,6 +10,22 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Device health counts each real action once, and never a simulated one.**
+  Two recorders wrote the same row: `AdapterExecutor` recorded every adapter
+  execution and `_TimedExecutor` -- the wrapper every path goes through --
+  recorded it again, so every real action counted twice in a device's success
+  rate. The chokepoint test asserted `total >= 1`, which two rows satisfy. The
+  health record now lives only in `_TimedExecutor`. It also counted simulated
+  results: a device whose adapter is missing or unavailable is answered by
+  `SimulatedExecutor` with `success=True, simulated=True` -- nothing reached the
+  device -- and that went into its history as a success and refreshed it as
+  reachable. On the reference hub, sensors whose adapter was unavailable read as
+  100% healthy. A simulated result is now neither a health signal nor a
+  reachability refresh, and `action_execution_seconds` labels it
+  `result="simulated"` instead of counting it as a success. Found on the
+  reference hub, where one failed direct action produced two health rows.
+
+### Fixed
 - **Direct actions are recorded like every other action.** `_TimedExecutor`
   does more than time an action: it records it in device health (the
   success-rate history behind `/v1/health/devices`, and the reachability

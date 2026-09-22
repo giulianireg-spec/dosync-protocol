@@ -16,16 +16,36 @@ health and verification with them.
 """
 from fastapi.testclient import TestClient
 
-from dosync.models import ActuatorSpec, CapabilityManifest, CertTier, DeviceCategory
+from dosync.adapters import DoSyncAdapter
+from dosync.models import (ActionResult, ActuatorSpec, CapabilityManifest, CertTier,
+                           DeviceCategory)
+
+
+class _Answering(DoSyncAdapter):
+    """A real adapter, so the direct action is an execution -- a simulated one
+    is deliberately not a health signal (see test_health_recorded_once.py)."""
+    @property
+    def adapter_name(self):
+        return "fake-direct"
+
+    async def connect(self, config):
+        return True
+
+    async def disconnect(self):
+        pass
+
+    async def execute(self, action, urgency):
+        return ActionResult(device_id=action.device_id, action=action.action, success=True)
 
 
 def _register(srv, device_id):
+    srv._adapter_executor.register(_Answering())
     srv.hub.registry.register(CapabilityManifest(
         device_id=device_id, device_name=device_id, manufacturer="t", model="t",
         firmware="1", category=DeviceCategory.ACTUATOR, tags=["light"],
         sensors=[], events=[],
         actuators=[ActuatorSpec(id="turn_on", type="turn_on", description="")],
-        emergency_capable=False, cert_tier=CertTier.BASIC))
+        emergency_capable=False, cert_tier=CertTier.BASIC, adapter="fake-direct"))
 
 
 def test_a_direct_action_is_timed_and_recorded_in_device_health():

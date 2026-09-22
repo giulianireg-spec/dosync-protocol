@@ -64,39 +64,44 @@ class _TimedExecutor:
         _t0 = time.perf_counter()
         result = await self._inner.execute(action, urgency)
         success = bool(getattr(result, "success", False))
+        # A simulated result means nothing was sent to the device: the adapter is
+        # missing or unavailable and SimulatedExecutor answered instead. It is
+        # neither a success nor a health signal.
+        simulated = bool(getattr(result, "simulated", False))
         try:
             if _M is not None:
                 _M.action_execution_seconds.observe(
                     time.perf_counter() - _t0,
-                    {"result": "success" if success else "failed"},
+                    {"result": "simulated" if simulated
+                     else ("success" if success else "failed")},
                 )
         except Exception:
             pass
-        # Device health: every real action is a health signal, recorded at this
-        # single chokepoint (all execution paths funnel through here) rather than
-        # scattered across parallel/batch/retry paths. Two complementary sinks,
-        # both previously built-but-unwired (no code populated them, so the
-        # /v1/health endpoints returned empty in production):
-        #   1. execution stats (db.device_health) — success-rate history per
-        #      device, feeding /v1/health/devices. record_execution's own
-        #      docstring says "call after each adapter.execute()"; this is it.
-        #   2. passive reachability (hub.health) — reachable/unreachable + TTL.
+        # Device health, recorded here and only here -- every path goes through
+        # DoSyncHub.instrumented(). Two sinks:
+        #   1. execution stats (db.device_health) -- success-rate history per
+        #      device, feeding /v1/health/devices.
+        #   2. passive reachability (hub.health) -- reachable/unreachable + TTL.
+        # AdapterExecutor used to record (1) as well, so every real action landed
+        # twice. A simulated result records neither: counting it made a device
+        # nothing had ever reached read as 100% healthy and reachable.
         # A failed action records the failure but does NOT immediately mark a
         # device unreachable (a single command can fail transiently); only
         # execution-path timeouts do that. A success always refreshes reachable.
-        try:
-            if self._hub is not None and getattr(self._hub, "db", None) is not None:
-                self._hub.db.record_execution(
-                    action.device_id, action.action, success,
-                    error=None if success else getattr(result, "error", None))
-        except Exception:
-            pass
-        try:
-            if self._hub is not None and getattr(self._hub, "health", None) is not None:
-                if success:
-                    self._hub.health.mark_reachable(action.device_id)
-        except Exception:
-            pass
+        if not simulated:
+            try:
+                if self._hub is not None and getattr(self._hub, "db", None) is not None:
+                    self._hub.db.record_execution(
+                        action.device_id, action.action, success,
+                        error=None if success else getattr(result, "error", None))
+            except Exception:
+                pass
+            try:
+                if self._hub is not None and getattr(self._hub, "health", None) is not None:
+                    if success:
+                        self._hub.health.mark_reachable(action.device_id)
+            except Exception:
+                pass
 
         # INDEPENDENT-OBSERVATION (panel design 2026-07-21): if the action
         # declared a verify_with binding and it was ACCEPTED (success), read the
