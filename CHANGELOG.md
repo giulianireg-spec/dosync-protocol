@@ -9,6 +9,19 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **The dashboard's intent buttons work again.** They posted to
+  `POST /v1/intent`, which answers `410 Gone` on purpose, so every button showed
+  a "410 Gone" toast and fired nothing. The same stale path had already dropped
+  70 intents once, from `gpio_adapter.py`; the dashboard was the caller left
+  behind. It now fires through `POST /v1/intent/async` and polls
+  `GET /v1/intent/{id}` until the outcome is known, reporting an intent still
+  running after 30 s instead of waiting forever.
+- **The dashboard's audit panel asks for the 30 entries it shows** instead of the
+  whole live chain -- a request it makes on every device event over the
+  WebSocket, so on the reference hub every sensor reading made the hub serialize
+  10,000 entries.
+
 ### Added
 - **`GET /v1/audit` takes an optional `limit`.** The endpoint returned every
   live entry -- 10,000 on a busy hub by default -- so a caller wanting the last

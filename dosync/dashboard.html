@@ -1344,7 +1344,9 @@ async function loadDevices() {
 
 async function loadAudit() {
   try {
-    const data = await api('GET', '/v1/audit');
+    // Ask for the 30 entries shown below, not the whole live chain (10,000
+    // on a busy hub). This runs on every device event over the WebSocket.
+    const data = await api('GET', '/v1/audit?limit=30');
     const list = document.getElementById('auditList');
     list.innerHTML = '';
 
@@ -1378,9 +1380,22 @@ async function loadAudit() {
 }
 
 // ── Intent firing ─────────────────────────────────────────────────────────────
+// POST /v1/intent answers 410 Gone (see execute_intent_legacy in server.py),
+// so every intent button here failed with a "410 Gone" toast. Fire through
+// /v1/intent/async and poll GET /v1/intent/{id} until the outcome is known.
+async function waitForIntent(intentId, timeoutMs = 30000, everyMs = 500) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const r = await api('GET', `/v1/intent/${encodeURIComponent(intentId)}`);
+    if (r.status !== 'pending') return r;
+    await new Promise(res => setTimeout(res, everyMs));
+  }
+  return null;
+}
+
 async function fireIntent(intent, urgency, context = {}) {
   try {
-    const result = await api('POST', '/v1/intent', {
+    const started = await api('POST', '/v1/intent/async', {
       intent, urgency,
       context: {
         trigger: 'dashboard',
@@ -1389,6 +1404,12 @@ async function fireIntent(intent, urgency, context = {}) {
         ...context,
       },
     });
+    const result = await waitForIntent(started.intent_id);
+    if (!result) {
+      toast(`⏳ ${intent} — still running (${started.intent_id})`, 'info');
+      loadAudit();
+      return;
+    }
     const ok = result.success;
     toast(
       `${ok ? '✓' : '⚠'} ${intent} — ${result.actions_taken} action(s)` +
