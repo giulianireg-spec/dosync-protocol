@@ -9,6 +9,15 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **`GET /v1/audit` takes an optional `limit`.** The endpoint returned every
+  live entry -- 10,000 on a busy hub by default -- so a caller wanting the last
+  few threw almost all of it away. `limit` returns the most recent N (1-1000)
+  while `count` still reports the full total and `integrity` still verifies the
+  whole chain, and omitting it keeps the previous behaviour. The MCP audit tool
+  now asks for the entries it is about to show instead of pulling the chain and
+  slicing it locally.
+
 ### Fixed
 - **Reading a Home Assistant sensor no longer fails, and no longer gets the
   device excluded.** Every action was translated into a service call

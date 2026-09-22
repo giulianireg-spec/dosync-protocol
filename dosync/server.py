@@ -11,7 +11,8 @@ from typing import Any, Optional
 import json
 import os
 import re
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import (Depends, FastAPI, HTTPException, Query, Request, WebSocket,
+                     WebSocketDisconnect)
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                PlainTextResponse)
 from fastapi.staticfiles import StaticFiles
@@ -2219,12 +2220,29 @@ def create_key(label: str = "new_key", auth: str = Depends(require_auth)):
 
 
 @app.get("/v1/audit", tags=["Security"])
-def get_audit_log(auth: str = Depends(require_auth)):
+def get_audit_log(
+    limit: int | None = Query(
+        None, ge=1, le=1000,
+        description="Return only the most recent N entries. Omit for the whole "
+                    "live chain. `count` is always the full total."),
+    auth: str = Depends(require_auth),
+):
+    """The live audit chain, newest entries last.
+
+    A caller that wants the last few -- a dashboard tail, an agent showing recent
+    activity -- would otherwise receive the whole live chain (10,000 entries by
+    default) to display ten of them. `limit` returns just those, while `count`
+    still reports the full total and `integrity` still verifies the whole chain.
+    """
     entries = hub.audit_log.entries()
+    total = len(entries)
+    if limit is not None:
+        entries = entries[-limit:]
     return {
-        "count":    len(entries),
+        "count":     total,
+        "returned":  len(entries),
         "integrity": hub.audit_log.verify(),
-        "entries":  entries,
+        "entries":   entries,
     }
 
 

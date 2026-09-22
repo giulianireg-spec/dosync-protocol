@@ -728,7 +728,8 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     # ── dosync_get_audit_log ──────────────────────────────────────────────────
     elif name == "dosync_get_audit_log":
         last_n = arguments.get("last_n", 10)
-        result = await hub_request("GET", "/v1/audit")
+        # Ask for the entries we are about to show, not the whole chain.
+        result = await hub_request("GET", f"/v1/audit?limit={int(last_n)}")
 
         if "error" in result:
             return [types.TextContent(type="text", text=f"Error: {result['error']}")]
