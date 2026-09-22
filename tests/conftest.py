@@ -24,6 +24,17 @@ import os
 
 os.environ.setdefault("DOSYNC_DB", ":memory:")
 
+# The same trap, for authentication. server.py also decides at import time
+# whether requests need a token (DOSYNC_AUTH, default on), so the first test to
+# import it fixed auth for the whole run. Several test modules set
+# DOSYNC_AUTH=false before importing it and never restore it; everything after
+# them passed only by inheriting that. Run on its own, a file that relied on it
+# got 401 -- seven did. The suite now decides this once, here: auth off, like
+# the modules that set it already assumed. Enforcement with auth on is tested
+# explicitly against the real server in test_server_enforces_auth.py, since
+# require_auth reads the setting per request.
+os.environ.setdefault("DOSYNC_AUTH", "false")
+
 
 # ── Automatic test taxonomy (parada técnica 2026-07-21, Morales) ─────────────
 # Rather than tag 54 test files by hand (and let the tags rot), classify each

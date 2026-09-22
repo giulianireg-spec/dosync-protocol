@@ -10,6 +10,20 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Every test file passes on its own.** `server.py` decides at import time
+  whether requests need a token (`DOSYNC_AUTH`, default on), so the first test
+  to import it fixed auth for the whole run. Several modules set
+  `DOSYNC_AUTH=false` before importing it and never restored it, and everything
+  after them passed by inheriting that: run on its own, a file that relied on it
+  got 401. Seven did -- including the lightweight-heartbeat tests, whose fixture
+  provisioned a device over HTTP, got 401, and failed deriving a key from `None`.
+  `conftest.py` now sets the suite's auth mode once, before anything is imported,
+  the same way it already fixed `DOSYNC_DB` for the same reason. Since the suite
+  runs with auth off, `tests/test_server_enforces_auth.py` switches it on against
+  the real server and checks that no token and an invalid token are refused and a
+  valid one is accepted -- nothing covered that before.
+
+### Fixed
 - **Device health counts each real action once, and never a simulated one.**
   Two recorders wrote the same row: `AdapterExecutor` recorded every adapter
   execution and `_TimedExecutor` -- the wrapper every path goes through --
