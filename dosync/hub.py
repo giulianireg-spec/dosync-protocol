@@ -494,6 +494,21 @@ class DoSyncHub:
             if binding is not None:
                 action.verify_with = binding
 
+    def instrumented(self, executor):
+        """Wrap an executor so every action it runs is recorded.
+
+        The wrapper (_TimedExecutor) times the action, records it in device
+        health -- the success-rate history behind /v1/health/devices and the
+        reachability refresh -- and runs the independent verify_with check when
+        the action carries one. Every path that executes actions must go through
+        here: intents and direct actions alike. Idempotent, and deliberately not
+        conditional on the metrics module: losing latency numbers must never
+        also switch off health and verification.
+        """
+        if getattr(executor, "_dosync_timed", False):
+            return executor
+        return _TimedExecutor(executor, hub=self)
+
     async def execute_intent(
         self,
         intent: Intent,
@@ -502,13 +517,10 @@ class DoSyncHub:
     ) -> IntentResult:
         log.info("Executing intent: %s [%s]", intent.intent.value, intent.urgency.value)
 
-        # Wrap the executor once to time every device action regardless of the
-        # execution path (parallel/abort/retry/long-running). A timing wrapper
-        # here means we don't have to instrument each call site — and it never
-        # changes behavior: it awaits the real execute and records the elapsed
-        # time by result. Metrics are optional; a failure to record is swallowed.
-        if _M is not None and not getattr(executor, "_dosync_timed", False):
-            executor = _TimedExecutor(executor, hub=self)
+        # Wrap once, so every action on every path below (parallel/abort/retry/
+        # long-running/composite) is timed, recorded in device health and
+        # independently verified. See instrumented().
+        executor = self.instrumented(executor)
 
         # ── Composition routing (Level 2) ─────────────────────────────────────
         # A composition intent (declared with composition_kind, e.g. inspect_area

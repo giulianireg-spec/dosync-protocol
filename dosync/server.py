@@ -2785,7 +2785,9 @@ async def device_action(
                 detail=(f"Action '{action}' on '{device_id}' is not permitted by "
                         f"deployment policy '{presult.policy_name}': {presult.reason}"))
 
-    result = await executor.execute(dev_action, urgency)
+    # Same chokepoint as intents: timed, recorded in device health, and
+    # independently verified when bound. See DoSyncHub.instrumented().
+    result = await hub.instrumented(executor).execute(dev_action, urgency)
 
     # Unconditional: an action that touched a device is in the chain, success or
     # not. The chain answers "what did this system do", and a failed attempt is

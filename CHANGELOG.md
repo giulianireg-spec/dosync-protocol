@@ -10,6 +10,24 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Direct actions are recorded like every other action.** `_TimedExecutor`
+  does more than time an action: it records it in device health (the
+  success-rate history behind `/v1/health/devices`, and the reachability
+  refresh) and runs the independent `verify_with` check. Its comment called it
+  the single chokepoint all execution paths go through, but only
+  `execute_intent` wrapped the executor. `POST /v1/device/action` -- the path the
+  MCP device-control tool uses -- called it bare, so a direct action left no
+  latency metric and no health record: a lamp that failed on it did not count as
+  a failure anywhere. Found on the reference hub, where a failed direct action
+  was missing from `action_execution_seconds`. Both paths now go through
+  `DoSyncHub.instrumented()`, which also no longer depends on the metrics module
+  (it did: without metrics, health and verification were switched off too).
+- **The direct-action governance tests no longer depend on test order.** Run on
+  their own, five of eight returned 401: they passed only because an earlier test
+  had imported the server with `DOSYNC_AUTH=false`. They now authenticate with a
+  real token, like any caller.
+
+### Fixed
 - **Four modules no longer refer to names they never imported.** Each one
   raised NameError only on the path that reached it, so the full suite stayed
   green while the bug shipped:

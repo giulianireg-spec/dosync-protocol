@@ -36,6 +36,15 @@ def _register(srv, device_id, action="unlock"):
         emergency_capable=False, cert_tier=CertTier.BASIC))
 
 
+def _client(srv):
+    """A client carrying a real token. These tests used to pass only when an
+    earlier test in the run had imported the server with DOSYNC_AUTH=false; run
+    on their own they got 401. Authenticating like any caller makes them
+    independent of test order."""
+    token = srv._auth_manager.generate_key(label="test-direct-governance")
+    return TestClient(srv.app, headers={"Authorization": f"Bearer {token}"})
+
+
 def _entries(srv, etype):
     return [e for e in srv.hub.audit_log.entries() if e.get("type") == etype]
 
@@ -46,7 +55,7 @@ def test_direct_action_is_recorded_in_the_chain():
     """The regression itself: a device was actuated and left no trace."""
     import dosync.server as srv
     _register(srv, "lock-audit-1")
-    client = TestClient(srv.app)
+    client = _client(srv)
 
     before = len(srv.hub.audit_log.entries())
     r = client.post("/v1/device/action",
@@ -64,7 +73,7 @@ def test_audit_entry_marks_the_direct_path():
     one; both touched the device, but only one was a decision by the system."""
     import dosync.server as srv
     _register(srv, "lock-audit-2")
-    client = TestClient(srv.app)
+    client = _client(srv)
     client.post("/v1/device/action",
                 json={"device_id": "lock-audit-2", "action": "unlock"})
 
@@ -77,7 +86,7 @@ def test_audit_entry_marks_the_direct_path():
 def test_chain_stays_verifiable_after_direct_actions():
     import dosync.server as srv
     _register(srv, "lock-audit-3")
-    client = TestClient(srv.app)
+    client = _client(srv)
     for _ in range(3):
         client.post("/v1/device/action",
                     json={"device_id": "lock-audit-3", "action": "unlock"})
@@ -89,7 +98,7 @@ def test_failed_direct_action_is_also_recorded():
     part of that answer, so it is not filtered out."""
     import dosync.server as srv
     _register(srv, "lock-audit-4")
-    client = TestClient(srv.app)
+    client = _client(srv)
     client.post("/v1/device/action",
                 json={"device_id": "lock-audit-4", "action": "unlock"})
     # Every direct action, whatever its outcome, produced an entry
@@ -119,7 +128,7 @@ def test_deployment_policy_blocks_a_direct_action(tmp_path, monkeypatch):
 
     _register(srv, "lock-forbidden")
     _register(srv, "lock-allowed")
-    client = TestClient(srv.app)
+    client = _client(srv)
 
     blocked = client.post("/v1/device/action",
                           json={"device_id": "lock-forbidden", "action": "unlock"})
@@ -149,7 +158,7 @@ def test_blocked_action_is_audited_with_the_deciding_policy(tmp_path, monkeypatc
     importlib.reload(srv)
 
     _register(srv, "lock-denied")
-    client = TestClient(srv.app)
+    client = _client(srv)
     client.post("/v1/device/action",
                 json={"device_id": "lock-denied", "action": "unlock"})
 
