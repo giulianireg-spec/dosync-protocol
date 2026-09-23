@@ -1803,6 +1803,33 @@ async def execute_intent_legacy(req: IntentRequest, auth: str = Depends(require_
         })
 
 
+# Urgency label values come from the enum, not a copied list. The copy omitted
+# "warning", so every rejected intent that asked for it was labelled "_invalid".
+_URGENCY_LABELS = frozenset(u.value for u in Urgency)
+_REJECTION_REASONS = ("invalid_name", "not_registered", "invalid_urgency",
+                      "idempotency_conflict")
+
+
+def _count_rejection(reason: str, intent_class: str, urgency: str) -> None:
+    """Count a refused intent under its reason as well as in intents_total.
+
+    The labels are fixed values or already-validated names, never the raw
+    request string (see the cardinality rule below)."""
+    M.intents_total.inc({
+        "intent_class": intent_class,
+        "urgency": urgency if urgency in _URGENCY_LABELS else "_invalid",
+        "outcome": "rejected",
+    })
+    M.intent_rejections_total.inc({"reason": reason})
+
+
+def _rejections_by_reason() -> dict:
+    counts = {r: 0 for r in _REJECTION_REASONS}
+    for (reason,), n in M.intent_rejections_total.samples().items():
+        counts[reason] = int(n)
+    return counts
+
+
 @app.post("/v1/intent/async", tags=["AI"])
 async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_auth)):
     # Validate format: ^[a-z][a-z0-9_]*$
@@ -1811,12 +1838,12 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
     except ValueError as e:
         # Cardinality rule: rejected intents carry arbitrary user strings — never
         # use them as a label value. Count them under the fixed "_invalid" class.
-        M.intents_total.inc({"intent_class": "_invalid", "urgency": req.urgency if req.urgency in ("emergency", "alert", "info") else "_invalid", "outcome": "rejected"})
+        _count_rejection("invalid_name", "_invalid", req.urgency)
         raise HTTPException(status_code=422, detail=str(e))
     # Validate intent class is registered in DB
     if not hub.db.get_intent_class(req.intent):
         registered = [r["name"] for r in hub.db.list_intent_classes()]
-        M.intents_total.inc({"intent_class": "_invalid", "urgency": req.urgency if req.urgency in ("emergency", "alert", "info") else "_invalid", "outcome": "rejected"})
+        _count_rejection("not_registered", "_invalid", req.urgency)
         raise HTTPException(
             status_code=422,
             detail=f"Intent '{req.intent}' is not registered. "
@@ -1825,7 +1852,7 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
     try:
         urgency = Urgency(req.urgency)
     except ValueError:
-        M.intents_total.inc({"intent_class": req.intent, "urgency": "_invalid", "outcome": "rejected"})
+        _count_rejection("invalid_urgency", req.intent, "_invalid")
         raise HTTPException(status_code=422, detail=f"Urgency '{req.urgency}' not valid. Use: emergency, alert, warning, info")
 
     # ── Idempotency check (protocol v0.2, opt-in) ─────────────────────────
@@ -1847,6 +1874,7 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
                 }
             # Anti-suppression: same key, different body → reject. A key cannot
             # be reused to suppress a different intent.
+            _count_rejection("idempotency_conflict", req.intent, req.urgency)
             raise HTTPException(
                 status_code=409,
                 detail="Idempotency key reused with a different request body.",
@@ -3063,6 +3091,10 @@ def get_status():
         # swallowed so it never breaks execution, but surfaced here so a real
         # bug is visible instead of hidden in logs.
         "progress_cb_failures": getattr(hub, "progress_cb_failures", 0),
+        # Refused intents since the hub started, by reason. On the reference
+        # hub a sensor script fired an unregistered intent 1,837 times and the
+        # hub counted it only in /metrics, where nobody looked.
+        "intents_rejected": _rejections_by_reason(),
         # The hub cannot see whether checkpoints are EXPORTED — that happens
         # outside it — but it can report when it last produced one, so a routine
         # that has quietly stopped is visible to monitoring instead of being

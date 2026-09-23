@@ -701,6 +701,11 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         text += f"  DB:           {db.get('db_size_kb', '?')} KB en {db.get('db_path', '?')}\n"
         if result.get("family_profile"):
             text += f"  Perfil:       Familia {result['family_profile']}\n"
+        rejected = result.get("intents_rejected") or {}
+        total_rejected = sum(rejected.values())
+        if total_rejected:
+            detail = ", ".join(f"{k}: {v}" for k, v in rejected.items() if v)
+            text += f"  ⚠ Intents refused since start: {total_rejected} ({detail})\n"
 
         return [types.TextContent(type="text", text=text)]
 

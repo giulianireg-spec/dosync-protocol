@@ -126,6 +126,11 @@ class ActionResult:
 
 Always return an `ActionResult` — never raise an exception from `execute()`. If the device is unreachable, return `success=False` with an `error` message. The hub handles partial failures and logs them in the tamper-evident audit trail.
 
+A device that does not answer is the normal case, not the exception — a bulb switched off at the wall, a sensor out of battery, a controller on another network. Two more obligations follow from that, for `execute()` and `get_state()` alike:
+
+- **Release what a call opens, even when the call fails.** Open per call inside `async with` or close it in a `finally` (`dosync/adapters/declarative.py`), or keep one persistent connection and close it in `disconnect()` (`dosync/adapters/homeassistant.py`). A close placed only on the success path leaks on every failure, and the state refresher calls `get_state()` on every device each minute, so an unreachable device leaks a handle a minute until the process runs out. The WiZ reference adapter did exactly this until it was fixed.
+- **Never block the event loop.** The hub runs every adapter on one event loop. A blocking call — `requests`, a serial read, a vendor SDK without async support — belongs in `loop.run_in_executor(...)` (`dosync/adapters/shelly.py`); otherwise one device that does not answer stalls every other action, and the API, until its timeout expires.
+
 ---
 
 ## Optional methods

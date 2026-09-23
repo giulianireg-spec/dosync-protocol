@@ -203,6 +203,11 @@ intents_total = REGISTRY.counter(
     "Intents received by the hub, by class, urgency and acceptance outcome",
     ("intent_class", "urgency", "outcome"),   # outcome: accepted | rejected
 )
+intent_rejections_total = REGISTRY.counter(
+    "dosync_intent_rejections_total",
+    "Intents the hub refused, by reason",
+    ("reason",),   # invalid_name | not_registered | invalid_urgency | idempotency_conflict
+)
 intent_executions_total = REGISTRY.counter(
     "dosync_intent_executions_total",
     "Completed intent executions by outcome",

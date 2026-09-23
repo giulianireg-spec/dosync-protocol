@@ -10,6 +10,40 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The WiZ adapter no longer leaks a socket every time a bulb does not answer.**
+  Both bulb calls (actions and state reads) closed the connection on the success
+  path only. A bulb powered off at the wall raises, so the close was skipped and
+  the UDP socket stayed open for the life of the process -- the garbage
+  collector did not reclaim it. The background state refresher polls every bulb
+  each minute, so every unreachable bulb leaked one socket a minute: the
+  reference hub had 8,225 open sockets, growing by eight a minute, on its way to
+  the process's open-file limit. The close now runs in a `finally`, and a failed
+  close does not mask the call's result. Found from a pywizlight "Exception
+  ignored while calling deallocator" warning in the test run. WiZ is a reference
+  adapter -- it registers only when `pywizlight` is installed, and ships as the
+  worked example of how an adapter is written -- so the lasting fix is the rule
+  it broke, now written into the adapter contract (`docs/ADAPTER-GUIDE.md`):
+  release what a call opens even when the call fails, and never block the event
+  loop. Every other bundled adapter already did both.
+
+### Added
+- **Refused intents are counted by reason and shown where an operator looks.**
+  On the reference hub a sensor script fired an intent that was no longer
+  registered, 1,837 times. The hub refused and counted every one -- but only in
+  `/metrics`, as `dosync_intents_total{intent_class="_invalid"}`, which does not
+  say why and which nobody was reading. A new counter,
+  `dosync_intent_rejections_total{reason}` (`invalid_name`, `not_registered`,
+  `invalid_urgency`, `idempotency_conflict`), records why; `/v1/status` reports
+  it as `intents_rejected`, beside `progress_cb_failures`; and the MCP status
+  tool shows a line whenever any were refused. The existing counter keeps its
+  labels. Labels stay bounded: reasons are fixed values, never the request
+  string.
+
+### Fixed
+- **A refused intent asking for `warning` urgency is labelled `warning`.** The
+  urgency label list was a copy that omitted it, so those refusals were labelled
+  `_invalid`; the list is now derived from `Urgency`. And a reused idempotency
+  key refused with 409 is now counted, like every other refusal.
 - **149 tests that could not fail now can.** Thirteen test files -- composite
   operations and orchestration, composition kinds, geo, the four MAVLink
   suites, operation guards and supervisor, and the route composer -- asserted

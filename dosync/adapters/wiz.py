@@ -142,6 +142,24 @@ def wiz_manifest(
 
 # ── WiZ Adapter ───────────────────────────────────────────────────────────────
 
+
+async def _close_quietly(bulb) -> None:
+    """Close a bulb's UDP transport whether the call succeeded or not.
+
+    The close used to sit on the success path only. When a bulb did not answer
+    -- powered off at the wall, the usual case -- the call raised, the close was
+    skipped, and the socket stayed open for the life of the process: the garbage
+    collector did not reclaim them. The state refresher polls every bulb each
+    minute, so every unreachable bulb leaked one socket a minute; the reference
+    hub had 8,225 open. A failed close must not mask the result of the call.
+    """
+    if bulb is None:
+        return
+    try:
+        await bulb.async_close()
+    except Exception:
+        pass
+
 class WiZAdapter(DoSyncAdapter):
     #: Reference implementation. See DoSyncAdapter.adapter_kind — shipped as a
     #: worked example of how an adapter is written, not as vendor-endorsed
@@ -205,6 +223,7 @@ class WiZAdapter(DoSyncAdapter):
                 response={"status": "simulated", "ip": ip, "action": action.action},
             )
 
+        bulb = None
         try:
             bulb = wizlight(ip)
             pilot = await self._build_pilot(action, urgency)
@@ -220,8 +239,6 @@ class WiZAdapter(DoSyncAdapter):
                     "action": action.action,
                     "params": action.params,
                 }
-
-            await bulb.async_close()
 
             log.info(
                 "WiZ %s @ %s: %s → OK",
@@ -265,6 +282,8 @@ class WiZAdapter(DoSyncAdapter):
                 success=False,
                 error=reason,
             )
+        finally:
+            await _close_quietly(bulb)
 
     async def get_state(self, device_id: str) -> dict | None:
         """
@@ -281,11 +300,11 @@ class WiZAdapter(DoSyncAdapter):
             return None
         if not WIZ_AVAILABLE:
             return None
+        bulb = None
         try:
             import asyncio as _asyncio
             bulb = wizlight(ip)
             pilot = await _asyncio.wait_for(bulb.updateState(), timeout=3.0)
-            await bulb.async_close()
             if pilot:
                 pr = pilot.pilotResult
                 return {
@@ -300,6 +319,8 @@ class WiZAdapter(DoSyncAdapter):
         except Exception as e:
             log.debug("WiZ get_state %s @ %s: %s", device_id, ip, e)
             return None
+        finally:
+            await _close_quietly(bulb)
 
     async def _build_pilot(self, action: DeviceAction, urgency: Urgency) -> "PilotBuilder":
         """Build a pywizlight PilotBuilder for the given DoSync action."""
