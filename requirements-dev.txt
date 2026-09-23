@@ -20,3 +20,4 @@ pytest>=8.0
 pytest-asyncio>=0.23
 httpx2>=2.0          # starlette.testclient backend (see note above)
 pyflakes>=3.0        # tests/test_no_undefined_names.py (see that file)
+mcp>=1.0.0,<2.0      # the [mcp] extra: tests import the real dosync.mcp_server

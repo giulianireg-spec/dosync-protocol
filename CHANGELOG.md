@@ -10,6 +10,20 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The MCP server's own code is now under test.** CI installed the package
+  without extras and `mcp` lives in the `[mcp]` extra, so `dosync.mcp_server` --
+  the interface an agent uses -- was never imported by the suite. The tests for
+  its dynamic intent list exercised a hand-copied duplicate of
+  `_intent_property_schema` that had already drifted from the real one, and
+  reported through a `check()` helper that printed instead of failing: forced
+  false, they still passed. `mcp>=1.0.0,<2.0` is now a declared test dependency
+  (`requirements-dev.txt` and the declared-floor CI job), the tests call the real
+  function with the hub request stubbed, and importing the server without `mcp`
+  exits with an error rather than skipping. It also means an SDK incompatibility
+  like the 2.x one that broke `list_tools()` fails in CI instead of on an
+  operator's machine.
+
+### Fixed
 - **Composite intents are governed by the policy engine again.** A regression
   from the 10th extraction (`CompositeExecutor`, 733d0aa), found by making a
   silent test assert. `server.py` builds the hub first and installs the policy

@@ -483,7 +483,7 @@ jobs:
           # Both test-client backends: starlette <1.0 uses httpx, >=1.0 uses httpx2.
           # The floor pulls the older starlette, so requirements-dev.txt (which
           # declares httpx2 for the current resolution) is not sufficient here.
-          pip install pytest pytest-asyncio httpx httpx2 pyflakes
+          pip install pytest pytest-asyncio httpx httpx2 pyflakes "mcp>=1.0.0,<2.0"
 
       - name: Full suite on the declared floor
         run: |
