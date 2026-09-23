@@ -5,7 +5,7 @@ background loop that periodically queries get_state() on every device whose
 adapter supports it, WITHOUT executing any action, marking each responder
 reachable (active health probing) and noticing recoveries. It is a subsystem,
 not orchestration -- it runs on its own cadence and touches only the resolver,
-device health and the registry, which it takes as constructor arguments.
+device health and the registry, which it reads from the hub at the moment of use.
 
 The event loop task that drives it is owned by the server (which creates and
 cancels it around the app lifespan); this class provides the coroutine the task
@@ -27,10 +27,20 @@ log = logging.getLogger("dosync.hub")
 
 
 class StateRefresher:
-    def __init__(self, resolver, health, registry):
-        self.resolver = resolver
-        self.health = health
-        self.registry = registry
+    def __init__(self, hub):
+    # The hub, not its services. server.py builds the hub first and installs
+    # some of them afterwards -- `hub.policy_engine = policy_engine` always, and
+    # `hub.resolver = ExternalResolver(...)` when an external resolver is
+    # configured. Values captured here at construction froze the ones the hub
+    # started with: the policy engine was None, so every composite step was
+    # dispatched with no policy at all -- a 100 m geofence let a 1000 m waypoint
+    # through. Each service is read from the hub at the moment of use, as the
+    # code did before it moved out of hub.py.
+        self._hub = hub
+
+    resolver = property(lambda self: self._hub.resolver)
+    health   = property(lambda self: self._hub.health)
+    registry = property(lambda self: self._hub.registry)
 
     async def start_state_refresh(
         self,

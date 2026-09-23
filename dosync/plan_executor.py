@@ -9,7 +9,7 @@ It is not the device executor (that is `_TimedExecutor` in execution.py) and not
 device health (`DeviceHealth`, same file): it is the layer above them that turns
 one resolved ActionPlan into dispatched work. It depends on five hub services --
 the resolver, device health, the audit log, the capability registry and the
-database -- taken here as constructor arguments.
+database -- read from the hub at the moment of use (see __init__).
 
 The methods are unchanged; only their address is. `DoSyncHub` owns a PlanExecutor
 and delegates the entry points (execute_intent's calls, the composite section's
@@ -34,13 +34,23 @@ log = logging.getLogger("dosync.hub")
 
 
 class PlanExecutor:
-    def __init__(self, resolver, health, audit_log, registry, db):
-        self.resolver = resolver
-        self.health = health
-        self.audit_log = audit_log
-        self.registry = registry
-        self.db = db
+    def __init__(self, hub):
+    # The hub, not its services. server.py builds the hub first and installs
+    # some of them afterwards -- `hub.policy_engine = policy_engine` always, and
+    # `hub.resolver = ExternalResolver(...)` when an external resolver is
+    # configured. Values captured here at construction froze the ones the hub
+    # started with: the policy engine was None, so every composite step was
+    # dispatched with no policy at all -- a 100 m geofence let a 1000 m waypoint
+    # through. Each service is read from the hub at the moment of use, as the
+    # code did before it moved out of hub.py.
+        self._hub = hub
         self.progress_cb_failures = 0
+
+    resolver  = property(lambda self: self._hub.resolver)
+    health    = property(lambda self: self._hub.health)
+    audit_log = property(lambda self: self._hub.audit_log)
+    registry  = property(lambda self: self._hub.registry)
+    db        = property(lambda self: self._hub.db)
 
     async def _execute_with_policy_cb(self, plan, executor, intent, progress_cb=None):
         """MCP-V13: wrap the executor so each completed action can be published as

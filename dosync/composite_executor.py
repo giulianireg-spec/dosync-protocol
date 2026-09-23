@@ -15,7 +15,7 @@ The pieces (all built and tested independently):
 The tenth of the eleven responsibilities extracted from `hub.py`: the layer that
 WIRES those pieces to the live hub's services -- the PolicyEngine, the audit log,
 the database, and the plan executor's action-execution-model classifier -- which
-it takes as constructor arguments. `DoSyncHub` owns a CompositeExecutor and
+it reads from the hub at the moment of use. `DoSyncHub` owns a CompositeExecutor and
 delegates execute_composite_intent and _route_composite_intent to it, so every
 caller keeps working. The methods are unchanged; only their address is.
 """
@@ -29,11 +29,21 @@ log = logging.getLogger("dosync.hub")
 
 
 class CompositeExecutor:
-    def __init__(self, audit_log, db, policy_engine, action_execution_model):
-        self.audit_log = audit_log
-        self.db = db
-        self.policy_engine = policy_engine
-        self._action_execution_model = action_execution_model
+    def __init__(self, hub):
+    # The hub, not its services. server.py builds the hub first and installs
+    # some of them afterwards -- `hub.policy_engine = policy_engine` always, and
+    # `hub.resolver = ExternalResolver(...)` when an external resolver is
+    # configured. Values captured here at construction froze the ones the hub
+    # started with: the policy engine was None, so every composite step was
+    # dispatched with no policy at all -- a 100 m geofence let a 1000 m waypoint
+    # through. Each service is read from the hub at the moment of use, as the
+    # code did before it moved out of hub.py.
+        self._hub = hub
+
+    audit_log     = property(lambda self: self._hub.audit_log)
+    db            = property(lambda self: self._hub.db)
+    policy_engine = property(lambda self: self._hub.policy_engine)
+    _action_execution_model = property(lambda self: self._hub._action_execution_model)
 
     async def _dispatch_composite_step(self, step, executor, intent):
         """Dispatch ONE composite step as a long-running atomic operation, AFTER the

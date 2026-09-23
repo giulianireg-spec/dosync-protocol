@@ -108,11 +108,11 @@ class DoSyncHub:
         self.db             = DoSyncDB(db_path)
         self.db.init()
         self.health         = DeviceHealth(self)   # hub-owned passive device health
-        self._plan_executor = PlanExecutor(self.resolver, self.health,
-                                           self.audit_log, self.registry, self.db)
-        self._composite_executor = CompositeExecutor(
-            self.audit_log, self.db, self.policy_engine, self._action_execution_model)
-        self._state_refresher = StateRefresher(self.resolver, self.health, self.registry)
+        # Collaborators take the hub, not its services: server.py installs the
+        # policy engine (and optionally an external resolver) after this point.
+        self._plan_executor      = PlanExecutor(self)
+        self._composite_executor = CompositeExecutor(self)
+        self._state_refresher    = StateRefresher(self)
         self._checkpoints   = CheckpointKeeper(self.db, self.audit_log)
         # Load persisted state now that db is ready
         if hasattr(self, "resolver"):

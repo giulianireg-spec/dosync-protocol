@@ -10,6 +10,27 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Composite intents are governed by the policy engine again.** A regression
+  from the 10th extraction (`CompositeExecutor`, 733d0aa), found by making a
+  silent test assert. `server.py` builds the hub first and installs the policy
+  engine afterwards (`hub.policy_engine = policy_engine`; the hub starts with
+  `None`). The extraction passed the policy engine to `CompositeExecutor` as a
+  constructor argument, which froze that initial `None`: every composite step was
+  dispatched with no policy at all -- no geofence, no rate limit, no deployment
+  policy. A 100 m geofence let a 1000 m waypoint through; on the reference hub
+  this was the case from 2026-09-20 to this fix. The same freeze hit
+  `hub.resolver` in `PlanExecutor` and `StateRefresher` (9th and 11th
+  extractions), which kept the built-in resolver after `server.py` installed an
+  external one. The three collaborators now read every service from the hub at
+  the moment of use, as the code did before it moved out of hub.py.
+  `tests/test_collaborators_read_the_live_hub.py` replaces each service on the
+  hub and checks every collaborator sees the replacement, and flies the geofence
+  case with a real assertion. The test that should have caught it,
+  `test_admission_geofence_blocks_out_of_range_step`, reported the failure
+  through a `check()` helper that prints instead of failing -- it has been green
+  over a false condition since the extraction.
+
+### Fixed
 - **The dashboard's intent buttons work again.** They posted to
   `POST /v1/intent`, which answers `410 Gone` on purpose, so every button showed
   a "410 Gone" toast and fired nothing. The same stale path had already dropped
