@@ -10,6 +10,20 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **149 tests that could not fail now can.** Thirteen test files -- composite
+  operations and orchestration, composition kinds, geo, the four MAVLink
+  suites, operation guards and supervisor, and the route composer -- asserted
+  through a `check()` helper that printed a mark and bumped a counter. Pytest
+  fails a test on an exception, not on a print, so a false condition left the
+  test green: they caught crashes, never wrong results. One was false for days
+  (the geofence regression fixed above). Each helper now raises on a false
+  condition; run as scripts, the files still report every failure and exit
+  non-zero. Measured before the change: with the helpers raising, all 149 pass
+  once the geofence fix is in, so nothing else was hiding.
+  `tests/test_check_helpers_can_fail.py` fails if a `check()` helper that
+  cannot raise is added again.
+
+### Fixed
 - **The MCP server's own code is now under test.** CI installed the package
   without extras and `mcp` lives in the `[mcp]` extra, so `dosync.mcp_server` --
   the interface an agent uses -- was never imported by the suite. The tests for

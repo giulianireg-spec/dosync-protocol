@@ -17,13 +17,17 @@ _FAIL = 0
 
 
 def check(name, cond):
-    global _PASS, _FAIL
+    # A false condition raises. This helper used to only print and count, so
+    # under pytest a failed check could never fail its test: forced false, the
+    # test still passed, and a real regression (a geofence that stopped blocking)
+    # stayed green. The __main__ runner below still reports each failure.
+    global _PASS
     if cond:
         _PASS += 1
         print(f"  \u2713  {name}")
     else:
-        _FAIL += 1
         print(f"  \u2717  {name}")
+        raise AssertionError(name)
 
 
 def test_udp_connection_kept():
