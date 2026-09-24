@@ -10,6 +10,18 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **`dosync_get_scenarios` lists the intents the hub actually has.** The MCP tool
+  returned a hardcoded text that had drifted from the hub: on the reference hub
+  it offered six intents that were not registered (`bedtime_routine`,
+  `morning_routine`, `away_mode` and others -- each would have been refused as
+  `not_registered`) and left out some that were. The same file already built
+  `dosync_fire_intent`'s list from `GET /v1/intent-classes` so the MCP would not
+  carry a copy that diverges; this tool had been left out of that change. It now
+  reads the same endpoint and lists each intent with its urgency and description,
+  most urgent first, noting which need geographic context. If the hub cannot be
+  reached it says so and lists nothing, rather than a guess.
+
+### Fixed
 - **The WiZ adapter no longer leaks a socket every time a bulb does not answer.**
   Both bulb calls (actions and state reads) closed the connection on the success
   path only. A bulb powered off at the wall raises, so the close was skipped and

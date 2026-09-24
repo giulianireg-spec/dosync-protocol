@@ -394,8 +394,9 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="dosync_get_scenarios",
             description=(
-                "Devuelve la lista de escenarios disponibles en DoSync "
-                "with a description of when each one applies."
+                "List the intents this hub has registered -- each one's "
+                "urgency and description, read live from the hub -- so you "
+                "know which intents dosync_fire_intent will accept."
             ),
             inputSchema={
                 "type": "object",
@@ -767,41 +768,38 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
     # ── dosync_get_scenarios ──────────────────────────────────────────────────
     elif name == "dosync_get_scenarios":
-        text = """🏠 Escenarios disponibles en DoSync:
+        # The hub declares its intents in /v1/intent-classes -- the same source
+        # dosync_fire_intent's enum is built from. This tool used to return a
+        # fixed text that had drifted from it: on the reference hub it offered
+        # six intents that were not registered (any of them would have been
+        # refused as not_registered) and left out some that were.
+        try:
+            listing = await hub_request("GET", "/v1/intent-classes")
+        except Exception as e:
+            return [types.TextContent(type="text", text=(
+                f"Could not reach the hub to list its intents ({e}). "
+                "No intents are listed rather than a guess."))]
+        classes = listing.get("intent_classes") if isinstance(listing, dict) else None
+        if not classes:
+            return [types.TextContent(type="text", text=(
+                "This hub has no intents registered. "
+                "Register one with POST /v1/intent-classes."))]
 
-EMERGENCIAS (urgency=emergency):
-  ensure_safety    — Someone is in danger. Opens access, alerts, sounds alarms.
-  (+ send_event)   — Enviar evento smoke_detected para emergencia de incendio (3 fases).
-
-NOTIFICACIONES (urgency=warning/info):
-  notify           — Push information to any target (people, displays, channels).
-  alert_anomaly    — An unexpected condition was detected.
-  remind_chore     — Remind about a completed or pending task.
-
-ENERGY:
-  save_energy      — Nadie en casa, activar modo ahorro (luces, clima).
-  away_mode        — Todos salieron, armar seguridad y bajar consumo.
-
-RUTINAS:
-  morning_routine  — Start-of-day routine declared by the deployment.
-  bedtime_routine  — Hora de dormir: atenuar luces, bajar persianas.
-  # Domain-specific intents (e.g. children arrival, shift change) can be registered via POST /v1/intent-classes
-
-AMBIENTE:
-  set_environment  — Ajustar luces, temperatura, persianas.
-  control_access   — Bloquear/desbloquear puertas.
-  monitor_health   — Activar monitoreo continuo de una persona.
-
-INFORMATION:
-  report_status    — Read the state of every sensor.
-
-Niveles de urgencia:
-  info      — rutinas, recordatorios
-  warning   — non-critical alerts
-  alert     — a condition that needs attention
-  emergency — acts immediately, without confirmation
-"""
-        return [types.TextContent(type="text", text=text)]
+        order = {"emergency": 0, "alert": 1, "warning": 2, "info": 3}
+        lines = [f"Intents registered on this hub ({len(classes)}):", ""]
+        for c in sorted(classes, key=lambda c: (order.get(c.get("urgency"), 9),
+                                                c.get("name", ""))):
+            line = f"  {c.get('name')}  [{c.get('urgency', '?')}]"
+            if c.get("description"):
+                line += f"  -- {c['description']}"
+            if c.get("composition_kind"):
+                line += ("  (composition intent: needs geographic context, "
+                         "e.g. center=[lat,lon], radius_m, altitude_m, "
+                         "in the 'context' object)")
+            lines.append(line)
+        lines += ["", "Domain-specific intents can be registered with "
+                      "POST /v1/intent-classes."]
+        return [types.TextContent(type="text", text="\n".join(lines))]
 
     # ── dosync_control_device ─────────────────────────────────────────────────
     elif name == "dosync_control_device":
