@@ -74,6 +74,5 @@ def test_each_intent_says_what_a_location_does(monkeypatch):
         {"name": "alert_anomaly", "urgency": "alert", "location_role": "informs"},
     ]))
     lines = {l.split()[0]: l for l in text.splitlines() if l.startswith("  ")}
-    assert "(location: restricts, except in an emergency)" in lines["light_room"], \
-        "the agent is not told that an emergency is never narrowed by location"
+    assert "(location: restricts)" in lines["light_room"]
     assert "(location: informs)" in lines["alert_anomaly"]

@@ -302,7 +302,7 @@ Every intent carries an urgency level that controls execution behavior across th
 
 | Level | Value | Behavior |
 |---|---|---|
-| `emergency` | `"emergency"` | Bypasses all policy constraints. Executes immediately without confirmation. Emergency-capable devices always included. All actions logged as critical with SHA-256 chain. |
+| `emergency` | `"emergency"` | Bypasses every policy that declares `bypass_on_emergency` (time windows, confirmation, rate limits); `BlockIntentPolicy`, and a `DeviceExclusionPolicy` declared not to bypass, still hold. Executes immediately without confirmation. Emergency-capable devices are included even without a matching capability — within the intent's location when its class restricts. All actions logged as critical with SHA-256 chain. |
 | `alert` | `"alert"` | High priority. Confirmation policies may apply depending on hub configuration. Devices with `emergency_capable: true` score higher. |
 | `warning` | `"warning"` | Elevated priority. A condition that warrants attention but does not require immediate action. All policies apply. Used for anomalies that are notable but not urgent (e.g. high temperature, unusual sensor reading). |
 | `info` | `"info"` | Normal priority. All policies apply. Default for routine operations, status updates, and scheduled events. |
@@ -355,13 +355,17 @@ Two properties of this table are normative and easy to miss:
 - **Capabilities select, tags rank, a location restricts.** A device takes
   part when it declares an actuator or sensor the intent needs; its tag overlap
   only ranks it. When the context carries a `location` and the class declares
-  `location_role: "restricts"` (the default), only devices tagged with that
-  location act. A class that declares `"informs"` — `alert_anomaly`, `notify` —
-  reads the location as where something happened, since its notifier is in no
-  room. An `emergency` never narrows by location, and emergency-capable devices
-  take part regardless (the full-capability fallback). A restricting location
-  that no registered device declares is refused (`422`, `unknown_location`)
-  rather than resolved to an empty plan.
+  `location_role: "restricts"` (the default), only devices at that location
+  act — a device's operator-set `location` path contained in it (by whole
+  segment: `plant-1/line-3` holds `plant-1/line-3/cell-2`, not
+  `plant-1/line-30`), or a legacy location tag equal to it. A class that declares
+  `"informs"` — `alert_anomaly`, `notify`, `ensure_safety` — reads the location
+  as where something happened. The role holds in an `emergency`: a restricting
+  emergency stays in its zone, and the emergency force-inclusion of
+  emergency-capable devices stays in it too. A restricting location no device is
+  at is refused (`422`, `unknown_location`) — except in an emergency, which is
+  never refused: it acts as if no location were given and records
+  `emergency_location_not_found`.
 
 This table is generated from and verified against the reference seed
 (`tests/test_universal_intent_contract.py`): if the implementation and this
@@ -833,6 +837,8 @@ log, not evidence.
 | `device_updated` | An existing device re-registered with a changed manifest |
 | `device_unregistered` | A device was removed from the registry |
 | `device_renamed` | A device's display name changed; capabilities untouched |
+| `device_relocated` | An operator moved a device to another location (`previous_location`, `location`); it decides which location-restricted intents can act on it |
+| `emergency_location_not_found` | An emergency named a location no device is at; never refused, it acted on every capable device instead |
 | `device_adopted` | A scanned candidate was approved and named by an operator |
 | `devices_auto_adopted` | Devices registered by an unattended scan (`approved_by_operator: false`) |
 | `device_quarantined` | A device is registered but excluded from intents, with a reason |

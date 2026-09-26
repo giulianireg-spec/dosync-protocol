@@ -38,80 +38,18 @@ class HubRestorer:
         Restore state from SQLite when the hub starts.
         Los dispositivos, perfil y audit log sobreviven reinicios.
         """
-        from .models import (
-            ActuatorSpec, CapabilityManifest, CertTier, ContextSignal,
-            ContextSignalType, DeviceCategory, EventSpec, SensorSpec, Severity,
-        )
+        from .models import CapabilityManifest, ContextSignalType
 
         # Restore devices
         for manifest_dict in self._hub.db.load_devices():
             try:
-                # Rebuild CapabilityManifest from persisted dict
-                caps = manifest_dict.get("capabilities", {})
-
-                sensors = [
-                    SensorSpec(
-                        id=s["id"], type=s["type"],
-                        description=s.get("description", ""),
-                        unit=s.get("unit"),
-                        poll_interval_ms=s.get("poll_interval_ms", 30000),
-                        kind=s.get("kind", "environment"),   # legacy manifests default
-                    )
-                    for s in caps.get("sensors", [])
-                ]
-                actuators = [
-                    ActuatorSpec(
-                        id=a["id"], type=a["type"],
-                        description=a.get("description", ""),
-                    )
-                    for a in caps.get("actuators", [])
-                ]
-                events = [
-                    EventSpec(
-                        id=e["id"],
-                        severity=Severity(e.get("severity", "info")),
-                        description=e.get("description", ""),
-                    )
-                    for e in caps.get("events", [])
-                ]
-                context_signals = [
-                    ContextSignal(
-                        type=ContextSignalType(c["type"]),
-                        description=c.get("description", ""),
-                        confidence_weight=c.get("confidence_weight", 1.0),
-                    )
-                    for c in caps.get("context_signals", [])
-                ]
-
-                manifest = CapabilityManifest(
-                    device_id=manifest_dict["device_id"],
-                    device_name=manifest_dict["device_name"],
-                    manufacturer=manifest_dict["manufacturer"],
-                    model=manifest_dict["model"],
-                    firmware=manifest_dict["firmware"],
-                    category=DeviceCategory(manifest_dict["category"]),
-                    tags=manifest_dict["tags"],
-                    sensors=sensors,
-                    actuators=actuators,
-                    events=events,
-                    context_signals=context_signals,
-                    emergency_capable=manifest_dict.get("emergency_capable", False),
-                    cert_tier=CertTier(manifest_dict["cert_tier"]) if manifest_dict.get("cert_tier") else None,
-                )
-                # Restore adapter fields — critical for physical device control.
-                #
-                # `adapter_config` is restored unconditionally, not only
-                # alongside an adapter. This is the mirror of a defect fixed in
-                # `to_dict` on 29 August, which dropped the same field for the
-                # same reason: adapter_config carries more than adapter settings
-                # — quarantine lives there, and since 5 September so does
-                # absence. A device with no adapter lost both on every restart,
-                # silently, and the next import cycle would re-mark it with a
-                # fresh date. "Absent since Thursday" would have read as "absent
-                # for ten minutes", forever.
-                if manifest_dict.get("adapter"):
-                    manifest.adapter = manifest_dict["adapter"]
-                manifest.adapter_config = manifest_dict.get("adapter_config", {})
+                # One inverse of to_dict(), in models.py. Rebuilding by hand here
+                # read back only part of what was saved -- actuators lost their
+                # params_schema, execution_model and verify_with, and
+                # provenance/discovery_evidence were dropped -- on every restart.
+                # adapter_config is restored even with no adapter: quarantine and
+                # absence live there too (the 29 August fix, kept).
+                manifest = CapabilityManifest.from_dict(manifest_dict)
                 self._hub.registry.register(manifest)
             except Exception as e:
                 log.warning("Could not restore device %s: %s",

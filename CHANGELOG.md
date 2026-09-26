@@ -9,6 +9,57 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Devices have an operator-set, hierarchical `location`.** The protocol could
+  restrict an intent to a place, but an operator had no safe, audited way to say
+  where a device is: re-registering wiped the address the API hides, and
+  `PATCH /v1/devices/{id}`'s `room` was stored nowhere and read by nothing -- the
+  one thing its docstring says it exists for. The manifest now has a `location`
+  path (`kitchen`, `plant-1/line-3/cell-2`, `building-b/floor-4/room-412`,
+  `iss/us-lab/rack-4`): set by `PATCH` (`room` stays an alias) or at adoption,
+  persisted, audited as `device_relocated`, and never touched when a device
+  re-registers itself. A place contains everything below it, by whole segment
+  (`plant-1/line-3` holds `.../cell-2`, not `plant-1/line-30`); a device placed
+  above the requested place is not included. Any language, no vocabulary:
+  ISA-95, Brick or IFC are examples of naming, never requirements. A location
+  written as a tag still works, matched exactly. It is where a device was placed
+  -- the live position of something that moves is telemetry, out of scope here.
+
+### Changed
+- **A location restricts in an emergency too, when the class says so.** The rule
+  shipped days earlier -- "an emergency never narrows by location" -- was right
+  for a house on fire and wrong for a plant: an emergency stop on line 3 would
+  have stopped every line (ISO 13850 scopes it to the hazard zone). An emergency
+  now follows its class's `location_role`, and the emergency force-inclusion of
+  emergency-capable devices stays inside the zone. `ensure_safety` becomes
+  `informs`, so a fire "in the kitchen" still reaches every alarm, as before.
+  An emergency is never refused for its location: if no device is there it acts
+  as an emergency without a location would, and records it -- an
+  `emergency_location_not_found` audit entry, a `location_not_found` note in the
+  response, `emergency_location_fallbacks` in `/v1/status` and the MCP status.
+  Limits a deployment needs in emergencies go in policies (`BlockIntentPolicy`,
+  a non-bypassing `DeviceExclusionPolicy`), which the spec now states correctly:
+  it said an emergency "bypasses all policy constraints".
+
+### Fixed
+- **A restart no longer loses most of what a device declared.** `restore.py`
+  rebuilt manifests by hand and read back only part of what `to_dict()` wrote:
+  every actuator lost `params_schema`, `execution_model`, `supports_progress`,
+  `supports_cancel`, `emits_telemetry` and `verify_with`; sensors lost `range`;
+  `provenance` and `discovery_evidence` were dropped. After each restart,
+  parameter validation stopped applying and a long-running action was treated as
+  instant, until something re-registered the device. `CapabilityManifest.from_dict`
+  is now the one inverse of `to_dict`, held to it by a round-trip test over a
+  manifest with every field set.
+- **A device declaring `verify_with` on its manifest can be registered.** The
+  binding stayed an object inside `to_dict()` and `json.dumps` raised -- the
+  documented place for it had never worked for a stored device.
+- **Registration accepts what a device declares about its actions and sensors**
+  (`execution_model`, `supports_progress`, `supports_cancel`, `emits_telemetry`,
+  `verify_with`, sensor `range`); a drone registering over HTTP was stored as
+  instant. And **re-registering never erases what it did not send**: the address
+  (unless the adapter changed), `provenance` and `discovery_evidence` are kept.
+
 ### Fixed
 - **The verify() scaling test no longer fails on a noisy CI runner.** It timed
   each chain size as the mean of three runs and required doubling the chain to

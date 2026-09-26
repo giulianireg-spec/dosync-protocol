@@ -263,10 +263,12 @@ class DoSyncDB:
         # The 9th field is location_role. alert_anomaly and notify only say
         # WHERE something happened -- their devices (a notifier, a display) are
         # not in that place, and restricting them would silence the alert.
-        # ensure_safety restricts in name only: an emergency never narrows by
-        # location (evacuating means every exit), see the resolver.
+        # ensure_safety informs too: it protects people everywhere, so a fire
+        # "in the kitchen" still sounds every alarm. An emergency that stops a
+        # localised hazard (an emergency stop on one line) is a class that
+        # restricts -- the resolver honours location in emergencies.
         universals = [
-            ("ensure_safety",  "emergency", ["emergency","alarm","communication","notification"], ["alarm","notify","call","turn_on","set_brightness"], [],                                    "Safety emergency — protect people and property",    "universal", 1, "restricts"),
+            ("ensure_safety",  "emergency", ["emergency","alarm","communication","notification"], ["alarm","notify","call","turn_on","set_brightness"], [],                                    "Safety emergency — protect people and property",    "universal", 1, "informs"),
             ("alert_anomaly",  "alert",     ["communication","notification","sensor"],            ["notify","call"],            ["motion","temperature","humidity","smoke"], "Unexpected condition detected — investigate",        "universal", 1, "informs"),
             ("control_access", "alert",     ["lock"],                                             ["lock","unlock"],            [],                                    "Manage physical access to a space",                 "universal", 1, "restricts"),
             ("report_status",  "info",      [],                                                   [],                          [],                                    "Generate a status report of the environment",        "universal", 1, "restricts"),

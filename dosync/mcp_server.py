@@ -237,12 +237,15 @@ async def list_tools() -> list[types.Tool]:
                     "location": {
                         "type": "string",
                         "description": (
-                            "A location tag the deployment declares. For an intent "
-                            "whose location restricts (see dosync_get_scenarios), "
-                            "only devices at that location act, and a location no "
-                            "device declares is refused. For an alert or "
-                            "notification it only says where the situation is. "
-                            "An emergency is never narrowed by location."
+                            "A place the deployment defines, as a path such as "
+                            "'kitchen' or 'plant-1/line-3'; a place contains "
+                            "everything below it. For an intent whose location "
+                            "restricts (see dosync_get_scenarios), only devices "
+                            "there act -- in an emergency too -- and a place no "
+                            "device is at is refused, except in an emergency, "
+                            "which then acts everywhere and records it. For an "
+                            "intent whose location informs (alerts, notifications, "
+                            "ensure_safety) it only says where the situation is."
                         ),
                     },
                 },
@@ -714,6 +717,10 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         if total_rejected:
             detail = ", ".join(f"{k}: {v}" for k, v in rejected.items() if v)
             text += f"  ⚠ Intents refused since start: {total_rejected} ({detail})\n"
+        fallbacks = result.get("emergency_location_fallbacks") or 0
+        if fallbacks:
+            text += (f"  ⚠ Emergencies at an unknown location since start: {fallbacks} "
+                     f"(acted on every capable device)\n")
 
         return [types.TextContent(type="text", text=text)]
 
@@ -797,13 +804,12 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         for c in sorted(classes, key=lambda c: (order.get(c.get("urgency"), 9),
                                                 c.get("name", ""))):
             line = f"  {c.get('name')}  [{c.get('urgency', '?')}]"
-            # An emergency is never narrowed by location, whatever the class
-            # says -- "restricts" alone read as if a location could confine an
-            # emergency response to one room.
+            # The role holds in an emergency too: a restricting emergency stays
+            # in its zone; ensure_safety informs, so it still reaches everyone.
             if c.get("location_role") == "informs":
                 line += "  (location: informs)"
             else:
-                line += "  (location: restricts, except in an emergency)"
+                line += "  (location: restricts)"
             if c.get("description"):
                 line += f"  -- {c['description']}"
             if c.get("composition_kind"):

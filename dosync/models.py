@@ -196,6 +196,67 @@ class ContextSignal:
     confidence_weight: float = 1.0    # relative weight in occupancy inference (0.0-1.0)
                                       # phone GPS weighs more than a PIR for presence
 
+
+LOCATION_MAX_LENGTH = 256
+
+
+def normalize_location(value) -> str:
+    """Validate an operator-given location path and return it normalized.
+
+    A location is a path of non-empty segments separated by "/": "kitchen",
+    "plant-1/line-3/cell-2", "building-b/floor-4/room-412", "iss/us-lab/rack-4".
+    The protocol fixes the structure and nothing else -- any language, any
+    naming scheme (ISA-95, Brick, IFC or none). Surrounding whitespace is
+    trimmed; case is kept, so "Kitchen" and "kitchen" are different places.
+    "" means not placed. Raises ValueError for anything else.
+    """
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ValueError("a location is a string path such as 'plant-1/line-3'")
+    path = value.strip()
+    if not path:
+        return ""
+    if len(path) > LOCATION_MAX_LENGTH:
+        raise ValueError(f"a location is at most {LOCATION_MAX_LENGTH} characters")
+    if path.startswith("/") or path.endswith("/"):
+        raise ValueError("a location has no leading or trailing '/'")
+    segments = path.split("/")
+    if any(not seg.strip() for seg in segments):
+        raise ValueError("every segment of a location must be non-empty")
+    if any(seg != seg.strip() for seg in segments):
+        raise ValueError("a location segment cannot start or end with whitespace")
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in path):
+        raise ValueError("a location cannot contain control characters")
+    return path
+
+
+def device_at_location(device, location: str) -> bool:
+    """Whether a device is at `location` or somewhere below it -- the one rule
+    the resolver and the hub's location check both use.
+
+    Two sources: the operator-assigned `location` path, matched by containment,
+    and a location written as a tag before that field existed, matched exactly
+    (a tag cannot be told apart from a category, so it gets no hierarchy).
+    """
+    if not location:
+        return False
+    return (location in (device.tags or [])
+            or location_contains(location, getattr(device, "location", "") or ""))
+
+
+def location_contains(area: str, place: str) -> bool:
+    """Whether `place` is `area` itself or somewhere below it.
+
+    By whole segments, never by string prefix: "plant-1/line-3" contains
+    "plant-1/line-3/cell-2" but not "plant-1/line-30". A place above the area is
+    not contained -- a floor-wide system is not "in" one room of that floor, so
+    restricting to the room leaves it out.
+    """
+    if not area or not place:
+        return False
+    return place == area or place.startswith(area + "/")
+
 @dataclass
 class CapabilityManifest:
     device_id: str
@@ -245,6 +306,15 @@ class CapabilityManifest:
     #: hand-written one, it is differently attested, and that is the operator's
     #: judgement to make with the fact in front of them.
     provenance: dict                       = field(default_factory=dict)
+    #: Where the operator placed this device: a path such as "main-bedroom",
+    #: "plant-1/line-3/cell-2" or "iss/us-lab/rack-4". The device does not know
+    #: which room, cell or module it is in -- this is deployment knowledge, so
+    #: only the operator sets it (PATCH /v1/devices/{id}, or adoption), and a
+    #: device re-registering itself never touches it. A place contains every
+    #: place below it: see location_contains(). Empty means not placed.
+    #: It is where the device was ASSIGNED; the live position of something that
+    #: moves is telemetry, not this.
+    location: str                          = ""
 
     def to_dict(self) -> dict:
         d = {
@@ -258,7 +328,13 @@ class CapabilityManifest:
             "tags": self.tags,
             "capabilities": {
                 "sensors":   [s.__dict__ for s in self.sensors],
-                "actuators": [a.__dict__ for a in self.actuators],
+                # verify_with is a VerifyBinding; a.__dict__ alone left the object
+                # in the dict and json.dumps raised, so a device declaring it on
+                # its manifest -- the documented place -- could not be registered.
+                "actuators": [{**a.__dict__,
+                               "verify_with": (dict(a.verify_with.__dict__)
+                                               if a.verify_with is not None else None)}
+                              for a in self.actuators],
                 "events":    [{**e.__dict__, "severity": e.severity.value if hasattr(e.severity, "value") else e.severity}
                               for e in self.events],
                 "context_signals": [
@@ -285,7 +361,101 @@ class CapabilityManifest:
             d["discovery_evidence"] = self.discovery_evidence
         if self.provenance:
             d["provenance"] = self.provenance
+        if self.location:
+            d["location"] = self.location
         return d
+
+    def carry_over_from(self, existing: "CapabilityManifest") -> None:
+        """Keep what a re-registration of `existing` did not send.
+
+        A device re-registering declares what IT knows; what it leaves out must
+        not be erased. The API hides adapter_config (addresses, credentials), so
+        the natural path -- read the device, change something, register it
+        again -- wiped the address and left the device unreachable; provenance
+        and discovery_evidence went the same way. The location is the operator's
+        and is never taken from a registration at all.
+        Descriptive data only: nothing here decides whether an action may run.
+        """
+        self.location = existing.location
+        if (not self.adapter_config and existing.adapter_config
+                and (self.adapter or None) == (existing.adapter or None)):
+            self.adapter_config = dict(existing.adapter_config)
+        if not self.provenance:
+            self.provenance = dict(existing.provenance or {})
+        if not self.discovery_evidence:
+            self.discovery_evidence = dict(existing.discovery_evidence or {})
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "CapabilityManifest":
+        """Rebuild a manifest from to_dict()'s output -- every field of it.
+
+        restore.py used to rebuild manifests by hand, and read back only part of
+        what to_dict() wrote: every actuator lost params_schema,
+        execution_model, supports_progress, supports_cancel, emits_telemetry and
+        verify_with; sensors lost range; provenance and discovery_evidence were
+        dropped. After each restart, parameter validation stopped applying and a
+        long-running action was treated as instant, until something
+        re-registered the device. This is the one inverse of to_dict(), and a
+        round-trip test holds the two together.
+        """
+        caps = d.get("capabilities", {})
+        sensors = [
+            SensorSpec(
+                id=x["id"], type=x["type"],
+                description=x.get("description", ""),
+                unit=x.get("unit"),
+                range=x.get("range"),
+                poll_interval_ms=x.get("poll_interval_ms", 30_000),
+                kind=x.get("kind", "environment"),   # legacy manifests default
+            )
+            for x in caps.get("sensors", [])
+        ]
+        actuators = [
+            ActuatorSpec(
+                id=x["id"], type=x["type"],
+                description=x.get("description", ""),
+                params_schema=x.get("params_schema") or {},
+                execution_model=x.get("execution_model", "instant"),
+                supports_progress=x.get("supports_progress", False),
+                supports_cancel=x.get("supports_cancel", False),
+                emits_telemetry=x.get("emits_telemetry", False),
+                verify_with=(VerifyBinding(**x["verify_with"])
+                             if x.get("verify_with") else None),
+            )
+            for x in caps.get("actuators", [])
+        ]
+        events = [
+            EventSpec(id=x["id"], severity=Severity(x.get("severity", "info")),
+                      description=x.get("description", ""))
+            for x in caps.get("events", [])
+        ]
+        context_signals = [
+            ContextSignal(type=ContextSignalType(x["type"]),
+                          description=x.get("description", ""),
+                          confidence_weight=x.get("confidence_weight", 1.0))
+            for x in caps.get("context_signals", [])
+        ]
+        return cls(
+            device_id=d["device_id"],
+            device_name=d["device_name"],
+            manufacturer=d["manufacturer"],
+            model=d["model"],
+            firmware=d["firmware"],
+            category=DeviceCategory(d["category"]),
+            tags=list(d.get("tags", [])),
+            sensors=sensors,
+            actuators=actuators,
+            events=events,
+            context_signals=context_signals,
+            emergency_capable=d.get("emergency_capable", False),
+            cert_tier=CertTier(d["cert_tier"]) if d.get("cert_tier") else CertTier.BASIC,
+            dosync_version=d.get("dosync_version", "0.1"),
+            adapter=d.get("adapter"),
+            adapter_config=dict(d.get("adapter_config") or {}),
+            discovery_evidence=dict(d.get("discovery_evidence") or {}),
+            provenance=dict(d.get("provenance") or {}),
+            location=d.get("location", ""),
+        )
 
     def to_public_dict(self) -> dict:
         """

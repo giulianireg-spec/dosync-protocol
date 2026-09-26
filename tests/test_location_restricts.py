@@ -10,7 +10,10 @@ targeted" and the MCP described `location` as the place to act; neither was true
 An intent class now declares location_role. "restricts" (the default): with a
 location in the context, only devices tagged with it act. "informs": the
 location only says where the situation is -- alert_anomaly and notify, whose
-notifier is not in that room. An emergency never narrows by location.
+notifier is not in that room, and ensure_safety, which protects people
+everywhere. An emergency follows its class: a restricting emergency stays in its
+zone (see test_device_location.py for the hierarchy and the unknown-location
+rule).
 """
 import os
 import sqlite3
@@ -69,14 +72,16 @@ def test_explain_reports_the_devices_outside_the_location_and_why():
     assert "main-bedroom" in reasons["lamp-kids"] and "main-bedroom" in reasons["lamp-kitchen"]
 
 
-def test_an_emergency_never_narrows_by_location():
-    # Lamps that are NOT emergency_capable: the emergency force-inclusion would
-    # re-add capable ones anyway, so only these show whether the location rule
-    # itself stands aside in an emergency.
-    lamps = [_device("lamp-main", ["light", "main-bedroom"], ["turn_on"]),
-             _device("lamp-kids", ["light", "bedroom"], ["turn_on"]),
-             _device("lamp-kitchen", ["light", "kitchen"], ["turn_on"])]
-    assert _acting(_resolver(lamps, LIGHT), {"location": "main-bedroom"},
+def test_an_emergency_follows_its_class_role():
+    # A class that restricts keeps its zone in an emergency too -- an emergency
+    # stop on one line is not a plant-wide stop. The lamps ARE emergency_capable,
+    # so this also shows the force-inclusion no longer pulls in the rest.
+    assert _acting(_resolver(LAMPS, LIGHT), {"location": "main-bedroom"},
+                   urgency=Urgency.EMERGENCY) == {"lamp-main"}
+    # A class whose location informs (ensure_safety: protect people everywhere)
+    # acts on every capable device, wherever the emergency is.
+    informs = {**LIGHT, "location_role": "informs"}
+    assert _acting(_resolver(LAMPS, informs), {"location": "main-bedroom"},
                    urgency=Urgency.EMERGENCY) == {"lamp-main", "lamp-kids", "lamp-kitchen"}
 
 
@@ -118,7 +123,7 @@ def test_the_universal_classes_declare_their_location_role():
     db = DoSyncDB(":memory:")
     db.init()
     roles = {c["name"]: c["location_role"] for c in db.list_intent_classes()}
-    assert roles == {"ensure_safety": "restricts", "alert_anomaly": "informs",
+    assert roles == {"ensure_safety": "informs", "alert_anomaly": "informs",
                      "control_access": "restricts", "report_status": "restricts",
                      "notify": "informs"}
 

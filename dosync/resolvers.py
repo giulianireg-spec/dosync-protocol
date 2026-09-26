@@ -34,7 +34,7 @@ if TYPE_CHECKING:  # annotations only; importing these at runtime is circular
 from dataclasses import dataclass, field
 
 from .models import (ActionPlan, ActuatorSpec, CapabilityManifest, DeviceAction,
-                     Intent, Urgency)
+                     Intent, Urgency, device_at_location)
 
 # Imported at call time inside the methods that need them: hub.py imports this
 # module, so importing hub.py here at module level would close the cycle.
@@ -381,21 +381,34 @@ class CapabilityMatchingResolver(BaseResolver):
         what the intent needs, and a location only added points -- so every
         capable device acted wherever it was: "light the main bedroom" lit the
         house, "unlock the front door" opened every lock that could open.
-        A location now restricts when the intent class says it does
-        (location_role "restricts", the default) and it is not an emergency:
-        evacuating means every exit, and a deployment that must narrow an
-        emergency says so in a policy, not here. Classes whose location only
-        says where something happened (alert_anomaly, notify: the notifier is
-        not in that room) declare "informs".
+        A location restricts when the intent class says it does (location_role
+        "restricts", the default), in an emergency too: an emergency stop on
+        line 3 stops line 3, not the plant (ISO 13850 scopes it to the hazard
+        zone). A class whose location only says where something happened
+        declares "informs" -- alert_anomaly, notify, and ensure_safety, whose
+        response protects people everywhere. A deployment that must keep a
+        device out of broad emergency action says so with a policy
+        (DeviceExclusionPolicy / BlockIntentPolicy, which hold in emergencies).
+
+        An emergency is never narrowed to nothing: if no device is at its
+        location (a typo, a place not yet assigned), it acts as an emergency
+        with no location would -- on every capable device -- rather than fail to
+        respond. The caller records that it happened; see server.py.
         """
         location = (intent.context or {}).get("location") or ""
         if not isinstance(location, str) or not location:
             return ""
         if resolution.get("location_role", "restricts") != "restricts":
             return ""
-        if intent.urgency == Urgency.EMERGENCY:
+        if (intent.urgency == Urgency.EMERGENCY
+                and not any(self._at_location(d, location) for d in self.registry.active())):
             return ""
         return location
+
+    @staticmethod
+    def _at_location(device, location: str) -> bool:
+        """See models.device_at_location -- the one rule, shared with the hub."""
+        return device_at_location(device, location)
 
     def _status_reads(self, intent: Intent, resolution: dict):
         """Which devices a read-only status query reads, and why the rest are not.
@@ -424,7 +437,7 @@ class CapabilityMatchingResolver(BaseResolver):
             if not d.sensors:
                 skipped.append((d, "read-only status query — device has no sensors to read"))
                 continue
-            if restrict_to and restrict_to not in d.tags:
+            if restrict_to and not self._at_location(d, restrict_to):
                 skipped.append((d, f"not at location '{restrict_to}': this status "
                                    f"query reads only where its context says"))
                 continue
@@ -508,9 +521,14 @@ class CapabilityMatchingResolver(BaseResolver):
         # caller. Quarantine still wins over it: force-inclusion exists to beat
         # the TAG filter, not to resurrect a device the operator withdrew.
         if intent.urgency == Urgency.EMERGENCY:
+            # ...and never outside the place the intent is restricted to: an
+            # emergency stop on line 3 must not pull in every emergency-capable
+            # device of the plant.
+            restrict_to = self._restricting_location(intent, resolution)
             seen = {d.device_id for d in candidates}
             for device in self.registry.find_emergency_capable():
-                if device.device_id not in seen and not is_quarantined(device):
+                if (device.device_id not in seen and not is_quarantined(device)
+                        and (not restrict_to or self._at_location(device, restrict_to))):
                     candidates.append(device)
         return candidates
 
@@ -575,10 +593,10 @@ class CapabilityMatchingResolver(BaseResolver):
             matched_actuators or matched_sensors)
 
         location = intent.context.get("location", "")
-        location_hit = bool(location) and location in device_tags
+        location_hit = bool(location) and self._at_location(device, location)
         restrict_to = self._restricting_location(intent, resolution)
         outside_location = (restrict_to
-                            if restrict_to and restrict_to not in device_tags else "")
+                            if restrict_to and not self._at_location(device, restrict_to) else "")
 
         emergency_hit = (intent.urgency == Urgency.EMERGENCY and device.emergency_capable)
 
@@ -702,7 +720,8 @@ class CapabilityMatchingResolver(BaseResolver):
             # devices always participate in an emergency response, even when
             # tags/actuators match nothing.
             forced_emergency = (score == 0.0 and intent.urgency == Urgency.EMERGENCY
-                                and device.emergency_capable)
+                                and device.emergency_capable
+                                and not bd.outside_location)
             if forced_emergency:
                 score = self._FORCED_SCORE
 
@@ -939,8 +958,10 @@ class CapabilityMatchingResolver(BaseResolver):
         forced_ids: set = set()
         if intent.urgency == Urgency.EMERGENCY:
             scored_ids = {d.device_id for _, d in scored}
+            restrict_to = self._restricting_location(intent, resolution)
             for device in candidates:
-                if device.emergency_capable and device.device_id not in scored_ids:
+                if (device.emergency_capable and device.device_id not in scored_ids
+                        and (not restrict_to or self._at_location(device, restrict_to))):
                     scored.append((50.0, device))
                     forced_ids.add(device.device_id)
 

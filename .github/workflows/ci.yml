@@ -499,6 +499,7 @@ jobs:
           PYTHONPATH=. python3 -m pytest tests/ -q \
             --ignore=tests/test_mcp_dynamic_intents.py \
             --ignore=tests/test_mcp_scenarios_are_live.py \
+            --ignore=tests/test_mcp_status.py \
             --deselect tests/test_intent_rejections_visible.py::test_the_mcp_status_tool_reports_refusals \
             --deselect tests/test_intent_rejections_visible.py::test_the_mcp_status_tool_is_quiet_when_nothing_was_refused
 

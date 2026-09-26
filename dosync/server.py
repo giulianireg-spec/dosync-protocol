@@ -29,6 +29,7 @@ from dosync.security import get_status as get_pki_status
 from dosync.models import (
     ActuatorSpec, CapabilityManifest, CertTier, DeviceCategory,
     DeviceEvent, EventSpec, Intent, IntentClass, SensorSpec, Urgency, Severity,
+    VerifyBinding, device_at_location, normalize_location,
 )
 
 logging.basicConfig(
@@ -560,12 +561,21 @@ class SensorIn(BaseModel):
     # SENSOR-KIND: "environment" (measures the world) | "device_state" (reports
     # the device's own condition). Default keeps every existing client valid.
     kind: str = "environment"
+    range: Optional[list[float]] = None
 
 class ActuatorIn(BaseModel):
     id: str
     type: str
     description: str = ""
     params_schema: dict = {}  # JSON Schema (draft 2020-12) for this action's params
+    # What the device declares about how the action runs. Registration used to
+    # accept none of it, so a device that registered over HTTP -- a drone whose
+    # take_off is long_running and emits telemetry -- was stored as instant.
+    execution_model:   str = "instant"
+    supports_progress: bool = False
+    supports_cancel:   bool = False
+    emits_telemetry:   bool = False
+    verify_with:       Optional[dict] = None
 
 class EventSpecIn(BaseModel):
     id: str
@@ -1197,26 +1207,56 @@ async def rename_device(device_id: str, req: dict, auth: str = Depends(require_a
     if not device:
         raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
 
-    new_name = (req.get("device_name") or "").strip()
-    if not new_name:
-        raise HTTPException(status_code=422, detail="device_name is required")
+    # Either or both: a new name, a new location. "room" is accepted as an alias
+    # of "location" for the clients that already send it; it was stored on an
+    # attribute to_dict() never wrote, so it was lost on the next restart and
+    # read by nothing -- the one thing this endpoint was for, per its docstring.
+    has_name = "device_name" in req
+    has_location = "location" in req or "room" in req
+    if not has_name and not has_location:
+        raise HTTPException(status_code=422,
+                            detail="Send device_name, location, or both")
 
-    previous = device.device_name
+    new_name = device.device_name
+    if has_name:
+        new_name = (req.get("device_name") or "").strip()
+        if not new_name:
+            raise HTTPException(status_code=422, detail="device_name cannot be empty")
+
+    new_location = device.location
+    if has_location:
+        raw = req.get("location") if "location" in req else req.get("room")
+        try:
+            new_location = normalize_location(raw)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=f"Invalid location: {e}")
+
+    previous, previous_location = device.device_name, device.location
     device.device_name = new_name
-    if "room" in req:
-        device.room = (req.get("room") or "").strip()
+    device.location = new_location
 
-    # Persisted the same way registration does, or the new name survives only
+    # Persisted the same way registration does, or the change survives only
     # until the next restart — a rename that silently un-renames itself would be
     # worse than not offering the feature.
     hub.db.save_device(device.device_id, device.to_dict())
-    hub.audit_log.append({
-        "type": "device_renamed",
-        "device_id": device_id,
-        "previous_name": previous,
-        "device_name": new_name,
-    })
-    return {"device_id": device_id, "device_name": new_name, "previous": previous}
+    if new_name != previous:
+        hub.audit_log.append({
+            "type": "device_renamed",
+            "device_id": device_id,
+            "previous_name": previous,
+            "device_name": new_name,
+        })
+    if new_location != previous_location:
+        # Where a device is decides which intents can act on it, so moving it
+        # is a governance event and goes on the record.
+        hub.audit_log.append({
+            "type": "device_relocated",
+            "device_id": device_id,
+            "previous_location": previous_location,
+            "location": new_location,
+        })
+    return {"device_id": device_id, "device_name": new_name, "previous": previous,
+            "location": new_location, "previous_location": previous_location}
 
 
 @app.post("/v1/devices/register", tags=["Devices"])
@@ -1275,10 +1315,17 @@ def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth
             category=DeviceCategory(req.category),
             tags=req.tags,
             sensors=[SensorSpec(s.id, s.type, s.description, s.unit,
+                                range=s.range,
                                 poll_interval_ms=s.poll_interval_ms,
                                 kind=s.kind)
                      for s in req.sensors],
-            actuators=[ActuatorSpec(a.id, a.type, a.description, a.params_schema)
+            actuators=[ActuatorSpec(a.id, a.type, a.description, a.params_schema,
+                                    execution_model=a.execution_model,
+                                    supports_progress=a.supports_progress,
+                                    supports_cancel=a.supports_cancel,
+                                    emits_telemetry=a.emits_telemetry,
+                                    verify_with=(VerifyBinding(**a.verify_with)
+                                                 if a.verify_with else None))
                        for a in req.actuators],
             events=[EventSpec(e.id, Severity(e.severity), e.description)
                     for e in req.events],
@@ -1287,6 +1334,12 @@ def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth
             adapter=req.adapter,
             adapter_config=dict(req.adapter_config or {}),
         )
+        # A re-registration never erases what it did not send (the address,
+        # provenance, discovery evidence) and never touches the operator's
+        # location: see CapabilityManifest.carry_over_from.
+        existing = hub.registry.get(req.device_id)
+        if existing is not None:
+            manifest.carry_over_from(existing)
         # Store mTLS authentication status in adapter_config
         if cert_authenticated:
             manifest.adapter_config = {
@@ -1873,19 +1926,25 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
     # device at all and the intent "completes" with zero actions -- silent. It
     # is refused here instead, and counted, like any other refusal. Only when
     # the location restricts: an alert's location just says where something
-    # happened, and an emergency never narrows by location.
+    # happened. An EMERGENCY is never refused: with no device at its location it
+    # acts as an emergency without one would, and that is recorded (below) --
+    # never narrowed to nothing, never silently widened.
     _location = (req.context or {}).get("location")
-    if isinstance(_location, str) and _location and urgency != Urgency.EMERGENCY:
+    _location_not_found = None
+    if isinstance(_location, str) and _location:
         _cls = hub.db.get_intent_class(req.intent) or {}
         if _cls.get("location_role", "restricts") == "restricts":
-            if not any(_location in d.tags for d in hub.registry.active()):
-                _count_rejection("unknown_location", req.intent, req.urgency)
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"No device is at location '{_location}'. '{req.intent}' "
-                           "acts only where context.location says, and no registered "
-                           "device declares that tag. Check the spelling, or omit "
-                           "location to act on every capable device.")
+            if not any(device_at_location(d, _location) for d in hub.registry.active()):
+                if urgency == Urgency.EMERGENCY:
+                    _location_not_found = _location
+                else:
+                    _count_rejection("unknown_location", req.intent, req.urgency)
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"No device is at location '{_location}'. '{req.intent}' "
+                               "acts only where context.location says, and no registered "
+                               "device is there. Check the spelling, or omit location "
+                               "to act on every capable device.")
 
     # ── Idempotency check (protocol v0.2, opt-in) ─────────────────────────
     # If the client supplied an idempotency key, deduplicate against prior
@@ -2003,14 +2062,29 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
     if urgency == Urgency.EMERGENCY:
         M.emergency_intents_total.inc()
 
+    if _location_not_found:
+        hub.audit_log.append({
+            "type":      "emergency_location_not_found",
+            "intent_id": intent.intent_id,
+            "intent":    req.intent,
+            "location":  _location_not_found,
+            "note":      "no device at this location; acting on every capable device",
+        })
+        M.emergency_location_fallbacks_total.inc()
+
     asyncio.create_task(_run_intent())
 
-    return {
+    response = {
         "intent_id": intent.intent_id,
         "status":    "pending",
         "intent":    req.intent,
         "urgency":   req.urgency,
     }
+    if _location_not_found:
+        response["location_not_found"] = _location_not_found
+        response["note"] = ("No device is at this location. An emergency is never "
+                            "refused, so it acts on every capable device.")
+    return response
 
 
 @app.get("/v1/intent/{intent_id}", tags=["AI"])
@@ -2413,12 +2487,18 @@ async def adopt_device(req: dict, auth: str = Depends(require_auth)):
     # discovery becomes an adapter capability (horizon item), this dispatch goes
     # away with it.
     name = (req.get("device_name") or "").strip() or device_id
+    # Where the operator is placing it. Stored in the manifest's location field,
+    # which the resolver reads; it used to become a tag through wiz_manifest's
+    # `room`, and was ignored for every other adapter. "room" stays an alias.
+    try:
+        location = normalize_location(req.get("location", req.get("room")))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"Invalid location: {e}")
     if adapter == "wiz":
         from dosync.adapters.wiz import wiz_manifest
         manifest = wiz_manifest(
             device_id=device_id, device_name=name,
-            ip=req.get("ip", ""), tags=req.get("tags"),
-            room=req.get("room", ""))
+            ip=req.get("ip", ""), tags=req.get("tags"))
     elif not adapter:
         # A device found by a transport discoverer — mDNS, SSDP — announced an
         # address and a service type and nothing else. Nobody has declared what
@@ -2481,17 +2561,19 @@ async def adopt_device(req: dict, auth: str = Depends(require_auth)):
             discovery_evidence=_evidence_from(req))
         manifest.adapter = adapter
 
+    manifest.location = location
     hub.register_device(manifest)
     hub.audit_log.append({
         "type": "device_adopted",
         "device_id": device_id,
         "device_name": name,
         "adapter": adapter,
+        "location": location,
         "source": "discovery_scan",
         "approved_by_operator": True,
     })
     return {"adopted": True, "device_id": device_id, "device_name": name,
-            "adapter": adapter}
+            "adapter": adapter, "location": location}
 
 
 @app.post("/v1/discovery/run", tags=["Discovery"])
@@ -3127,6 +3209,8 @@ def get_status():
         # hub a sensor script fired an unregistered intent 1,837 times and the
         # hub counted it only in /metrics, where nobody looked.
         "intents_rejected": _rejections_by_reason(),
+        "emergency_location_fallbacks": int(sum(
+            M.emergency_location_fallbacks_total.samples().values())),
         # The hub cannot see whether checkpoints are EXPORTED — that happens
         # outside it — but it can report when it last produced one, so a routine
         # that has quietly stopped is visible to monitoring instead of being

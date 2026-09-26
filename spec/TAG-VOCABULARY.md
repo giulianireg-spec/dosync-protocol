@@ -103,17 +103,57 @@ so that an intent written for one deployment means the same thing in another —
 location is a fact about one installation. The protocol has no opinion about
 where your devices are, and no list it would accept or reject.
 
-The mechanism is deliberately trivial: a device declares location tags, an intent
-carries `context.location`, and when the two strings are equal the device is at
-that place. For a class that restricts by location (`location_role:
-"restricts"`, the default) only devices at that place act; the rest are excluded,
-and `explain` says so. For a class whose location only informs (`alert_anomaly`,
-`notify`) the location ranks devices and is reported, but excludes none. An
-emergency never narrows by location. There is no enumeration, no normalisation, and no
-validation. `ward-2`, `cell-3`, `deck-b`, `sector-7g` and `death-star` all work
-exactly as well as `kitchen`, because the resolver is comparing strings, not
-interpreting places. A conforming hub MUST NOT reject a location tag for not
-appearing in any list, including this one.
+**Where a device is, is the operator's to say.** A lamp does not know which room
+it is in; a robot cell does not know its line. The manifest's `location` field
+holds that fact, set by the operator — `PATCH /v1/devices/{id}` or adoption —
+recorded in the audit log (`device_relocated`), and never touched when a device
+re-registers itself.
+
+**A location is a path, and a place contains everything below it.** Segments are
+separated by `/`: `kitchen`, `plant-1/line-3/cell-2`,
+`building-b/floor-4/room-412`, `store-12/frozen/aisle-7`, `iss/us-lab/rack-4`.
+An intent restricted to `plant-1/line-3` acts on `plant-1/line-3/cell-2`; it does
+not act on `plant-1/line-30` (containment is by whole segment, never by string
+prefix), and it does not act on something placed at `plant-1` — a device above
+the requested place serves more than was asked for. A device that spans several
+places (a conveyor through three cells, a floor-wide public-address system) is
+placed at the level that contains them all.
+
+The protocol fixes the shape and nothing else: non-empty segments, no leading or
+trailing `/`, at most 256 characters, any language. It has no vocabulary to
+enforce. ISA-95's site/area/line/cell, Brick's building/floor/room/zone and IFC's
+spatial structure are examples of how a deployment may name its places, never
+requirements. Case is kept: `Floor-2` and `floor-2` are different places.
+
+**A location written as a tag still works**, matched exactly and without
+hierarchy — the only form before the field existed. A tag cannot be told apart
+from a category, so it cannot be treated as a path. `ward-2`, `cell-3`, `deck-b`,
+`sector-7g` and `death-star` all work exactly as well as `kitchen`: a conforming
+hub MUST NOT reject a location tag, or a location path, for not appearing in any
+list, including this one.
+
+**What a location does depends on the intent class.** For a class that restricts
+by location (`location_role: "restricts"`, the default) only devices at that
+place act; the rest are excluded, and `explain` says so. A class whose location
+only informs — `alert_anomaly`, `notify`, `ensure_safety` — reads it as where
+something happened, and excludes nothing. This holds in an emergency too: an
+emergency stop on one line stops that line, not the plant (ISO 13850 scopes it to
+the hazard zone), while `ensure_safety` still reaches everyone. Whoever defines an
+emergency class chooses: `informs` when it protects people everywhere
+(evacuation, fire), `restricts` when it stops a localised hazard. A deployment that
+must keep a device out of any broad emergency action says so with a policy
+(`DeviceExclusionPolicy` or `BlockIntentPolicy`, both of which can hold in
+emergencies).
+
+**An emergency is never refused for its location.** If no device is at the place
+an emergency names, it acts as an emergency without a location would — on every
+capable device — and records `emergency_location_not_found`. Any other intent
+restricted to a place nothing is at is refused (`422`, `unknown_location`).
+
+**The field is where a device was placed, not where it is now.** For something
+that moves — a warehouse robot, a store cart, a drone — assign the area it
+operates in. Its live position is telemetry; restricting by live position is not
+part of this version of the protocol.
 
 Two consequences worth stating:
 
@@ -128,16 +168,16 @@ Examples from three real registries, to show the range rather than prescribe it:
 | Deployment | Location tags in use |
 |---|---|
 | Residential | `entrance`, `bedroom`, `living-room`, `kitchen`, `bathroom`, `hallway`, `office`, `garage`, `outdoor`, `dining-room`, `basement` |
-| Industrial | `floor-2`, `line-2`, `cell-2`, `plant` |
+| Industrial | `floor-2`, `line-2`, `cell-2`, `plant` (as a path: `plant/line-2/cell-2`) |
 | Clinical | `or-3`, `ward-2`, `corridor-b` |
 
 The residential row is the longest only because the reference deployment is
 residential — it carries no more weight than the others.
 
-> **Deployment note:** Location tags are optional but strongly recommended. A hub
-> without location tags cannot restrict an intent to a place — every capable
-> device acts, wherever it is installed — and an intent naming a location no
-> device declares is refused.
+> **Deployment note:** Locations are optional but strongly recommended. A hub whose
+> devices have none cannot restrict an intent to a place — every capable device
+> acts, wherever it is installed — and a non-emergency intent naming a place no
+> device is at is refused.
 
 ---
 
