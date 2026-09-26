@@ -9,6 +9,14 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **`dosync_get_scenarios` no longer tells the agent a location can confine an
+  emergency.** It labelled each class `(location: restricts)` from the column
+  alone, including the three emergency classes -- read by an agent as "a
+  location narrows the safety response to one room", the opposite of what the
+  hub does. Restricting classes now read `(location: restricts, except in an
+  emergency)`.
+
 ### Changed
 - **A location in the context restricts where an intent acts.** Since the
   capability gate (2026-09-04) a device takes part when it declares what the

@@ -797,10 +797,13 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         for c in sorted(classes, key=lambda c: (order.get(c.get("urgency"), 9),
                                                 c.get("name", ""))):
             line = f"  {c.get('name')}  [{c.get('urgency', '?')}]"
+            # An emergency is never narrowed by location, whatever the class
+            # says -- "restricts" alone read as if a location could confine an
+            # emergency response to one room.
             if c.get("location_role") == "informs":
                 line += "  (location: informs)"
             else:
-                line += "  (location: restricts)"
+                line += "  (location: restricts, except in an emergency)"
             if c.get("description"):
                 line += f"  -- {c['description']}"
             if c.get("composition_kind"):
