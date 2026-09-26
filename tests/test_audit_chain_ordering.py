@@ -448,7 +448,13 @@ def test_verify_scales_linearly_not_quadratically():
     entries`, once per entry) that took 1.7s on a 10k chain and hung
     /v1/status, which calls verify() every request. The leaf set now comes from
     an id() set, O(n). This guards the scaling: doubling the chain must roughly
-    double the time, not quadruple it."""
+    double the time, not quadruple it.
+
+    Each size is timed as the best of seven runs, not the mean of three. Noise
+    -- a GC pause, a busy CI runner -- only ever adds time, so the minimum is
+    the run closest to the algorithm's own cost. A mean of three failed once on
+    CI at 3.03x while the same code measures ~2.1x locally in every run; an
+    O(n^2) scan still reads ~4x on its best run, so the guard keeps its teeth."""
     import time
 
     def timed(n):
@@ -456,10 +462,12 @@ def test_verify_scales_linearly_not_quadratically():
         for i in range(n):
             log.append({"type": "device_event", "n": i})
         log.verify()                                    # warm
-        t0 = time.perf_counter()
-        for _ in range(3):
+        best = float("inf")
+        for _ in range(7):
+            t0 = time.perf_counter()
             log.verify()
-        return (time.perf_counter() - t0) / 3
+            best = min(best, time.perf_counter() - t0)
+        return best
 
     small, big = timed(3000), timed(6000)
     ratio = big / max(small, 1e-6)

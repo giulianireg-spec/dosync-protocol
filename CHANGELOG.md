@@ -10,6 +10,17 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The verify() scaling test no longer fails on a noisy CI runner.** It timed
+  each chain size as the mean of three runs and required doubling the chain to
+  cost under 3x. On GitHub's shared runner one measurement read 3.03x and failed
+  the main job, while the same code measures ~2.1x locally in every run, with
+  and without the audit lock (checked: medians 2.09 and 2.08 over 15 runs each).
+  Each size is now the best of seven runs: noise only adds time, so the minimum
+  is the run closest to the algorithm's cost. The guard keeps its purpose --
+  with the O(n^2) leaf scan put back it fails at 3.8x -- and it passed 20 runs
+  in a row. It was the suite's only test that asserts on measured time.
+
+### Fixed
 - **The declared-floor CI job tests the floor again.** When the MCP tests started
   importing the real server (afc96d5), `mcp` was added to that job's install --
   after the floor. pip then lifted starlette to 1.x and pydantic from 2.7.0 to
