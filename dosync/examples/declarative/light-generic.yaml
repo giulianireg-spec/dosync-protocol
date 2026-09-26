@@ -8,7 +8,7 @@ device:
   id: light-hallway
   name: Hallway light
   category: actuator
-  room: hallway              # folded into tags; that is how DoSync matches location
+  location: hallway          # where you placed it; a path works too: building-a/floor-1/hallway
   tags: [light, energy]
   emergency_capable: true    # lights matter in an evacuation — this is why
 

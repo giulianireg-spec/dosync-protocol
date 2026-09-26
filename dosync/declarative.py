@@ -103,6 +103,7 @@ def build_manifest(data: dict, source: str = "<declarative>"):
     """
     from .models import (
         ActuatorSpec, CapabilityManifest, CertTier, DeviceCategory, SensorSpec,
+        normalize_location,
     )
 
     device = data.get("device")
@@ -125,13 +126,23 @@ def build_manifest(data: dict, source: str = "<declarative>"):
             f"{source}: device.category '{raw_category}' is not one of: {valid}")
 
     tags = [str(t) for t in (device.get("tags") or [])]
-    room = str(device.get("room", "")).strip()
-    if room and room not in tags:
-        # Accepted for readability — "room: kitchen" is what someone writing a
-        # device file reaches for — and folded into tags, because that is how
-        # every other device in DoSync expresses location and how the resolver
-        # matches it.
-        tags.append(room)
+    # Where the operator placed the device: `location`, or `room` as an alias
+    # ("room: kitchen" is what someone writing a file reaches for). It goes in
+    # the manifest's location field -- a path, so "plant-1/line-3/cell-2" works
+    # -- not into tags, where it used to be folded and where a place cannot be
+    # told apart from a category. This file is the operator's own statement, so
+    # when it declares a location the file is the source of truth for it.
+    raw_location, raw_room = device.get("location"), device.get("room")
+    if (raw_location is not None and raw_room is not None
+            and str(raw_location).strip() != str(raw_room).strip()):
+        raise DeclarativeError(
+            f"{source}: device declares location '{raw_location}' and room "
+            f"'{raw_room}'. They are the same field; keep one.")
+    raw = raw_location if raw_location is not None else raw_room
+    try:
+        location = normalize_location(None if raw is None else str(raw))
+    except ValueError as e:
+        raise DeclarativeError(f"{source}: device.location: {e}")
     if not tags:
         # Not fatal, but worth saying: a device with no tags is reachable by
         # direct action and invisible to every intent, which is almost never
@@ -244,14 +255,42 @@ def build_manifest(data: dict, source: str = "<declarative>"):
         adapter="declarative",
         # The transport definition rides in adapter_config, which is what that
         # field is for — the generic adapter reads it back to know where to send
-        # the request. A room is expressed as a tag (`living-room`), like every
-        # other device in DoSync, rather than as a field only these devices have.
+        # the request. `location_from_file` records that this file owns the
+        # location, so PATCH can refuse a change the next reload would undo and
+        # say which file to edit instead.
         adapter_config={
             "transport": data.get("transport") or {},
             "actions": actions,
             "sensors": data.get("sensors") or {},
+            **({"location_from_file": source} if location else {}),
         },
+        location=location,
     )
+
+
+def register_declared(hub, declared) -> None:
+    """Register devices loaded from declarative files, keeping the location right.
+
+    Every start re-registers each device from its file, replacing what was there.
+    A location the operator set with PATCH, on a device whose file declares none,
+    is kept -- otherwise every restart would silently move it back to nowhere.
+    A file that declares a location wins, and when that moves a device it is
+    audited like any other move: the file is the operator's own statement, and a
+    move nobody can see in the log is not one the protocol allows.
+    """
+    for manifest, _definition in declared:
+        existing = hub.registry.get(manifest.device_id)
+        if existing is not None and not manifest.location and existing.location:
+            manifest.location = existing.location
+        elif existing is not None and manifest.location != existing.location:
+            hub.audit_log.append({
+                "type": "device_relocated",
+                "device_id": manifest.device_id,
+                "previous_location": existing.location,
+                "location": manifest.location,
+                "source": manifest.adapter_config.get("location_from_file", "declarative file"),
+            })
+        hub.register_device(manifest)
 
 
 def bundled_examples_dir() -> Path:

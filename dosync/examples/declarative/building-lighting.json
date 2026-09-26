@@ -14,7 +14,8 @@
     "id": "lighting-floor-3",
     "name": "Third floor lighting",
     "category": "actuator",
-    "tags": ["light", "emergency", "floor-3", "commercial"],
+    "location": "building-a/floor-3",
+    "tags": ["light", "emergency", "commercial"],
     "emergency_capable": true
   },
   "transport": {

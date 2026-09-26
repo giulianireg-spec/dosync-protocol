@@ -828,8 +828,8 @@ async def lifespan(app: FastAPI):
             from dosync.hub import is_quarantined as _is_q
             _was_quarantined = {d.device_id for d in hub.registry.all() if _is_q(d)}
 
-            for _manifest, _definition in _declared:
-                hub.register_device(_manifest)
+            from dosync.declarative import register_declared
+            register_declared(hub, _declared)
             log.info("Declarative adapters: %d device(s) registered from %s",
                      len(_declared),
                      str(resolve_config_dir("declarative", "DOSYNC_DECLARATIVE_DIR")))
@@ -1224,6 +1224,14 @@ async def rename_device(device_id: str, req: dict, auth: str = Depends(require_a
             raise HTTPException(status_code=422, detail="device_name cannot be empty")
 
     new_location = device.location
+    if has_location and (device.adapter_config or {}).get("location_from_file"):
+        # The file declares it and is re-applied on every start: accepting the
+        # change here would silently revert on the next restart.
+        raise HTTPException(
+            status_code=409,
+            detail=f"This device's location is declared in its file "
+                   f"'{device.adapter_config['location_from_file']}', which is "
+                   "re-applied on every start. Change it there.")
     if has_location:
         raw = req.get("location") if "location" in req else req.get("room")
         try:

@@ -11,7 +11,7 @@ device:
   id: tv-living
   name: Living room TV
   category: actuator
-  room: living-room
+  location: living-room
   tags: [display, communication, entertainment]
   emergency_capable: false
 

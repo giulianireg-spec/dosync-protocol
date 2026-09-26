@@ -8,8 +8,8 @@ device:
   id: printer-workshop
   name: Workshop 3D printer
   category: actuator
-  room: workshop
-  tags: [appliance, workshop, emergency]
+  location: workshop
+  tags: [appliance, emergency]
   emergency_capable: true    # a printer runs a hot end unattended for hours;
                              # an emergency stop must be able to reach it
 

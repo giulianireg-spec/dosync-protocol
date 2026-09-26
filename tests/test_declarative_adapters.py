@@ -51,12 +51,14 @@ def test_the_manifest_carries_tags_and_emergency_capability():
     assert [a.type for a in m.actuators] == ["turn_on"]
 
 
-def test_room_is_folded_into_tags():
-    """Accepted for readability — `room: kitchen` is what someone reaches for —
-    and stored as a tag, because that is how the resolver matches location."""
+def test_room_is_an_alias_for_the_location_field():
+    """`room: kitchen` is what someone reaches for. It lands in the manifest's
+    location field -- where the resolver reads places, as a path -- and no longer
+    in tags, where a place could not be told apart from a category."""
     data = _minimal()
     data["device"]["room"] = "kitchen"
-    assert "kitchen" in build_manifest(data).tags
+    m = build_manifest(data)
+    assert m.location == "kitchen" and "kitchen" not in m.tags
 
 
 def test_a_device_with_no_tags_is_loaded_but_warned_about(caplog):

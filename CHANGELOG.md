@@ -9,6 +9,30 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **A declarative file's location goes in the location field, and the file owns
+  it.** `room:` was folded into the device's tags -- the last way a place was
+  still stored as a tag, where it cannot be told apart from a category. Files
+  now take `location:` (a path, so `plant-1/floor-2` works), with `room:` kept
+  as an alias; a file declaring both with different values is refused, as is a
+  malformed path. Every start re-registers declarative devices from their files,
+  so the rules follow the operator's intent: a file that declares a location is
+  the source of truth for it, and a move it causes is audited as
+  `device_relocated` with the file as source; a file that declares none keeps
+  the location the operator set with PATCH, instead of moving the device back to
+  nowhere on every restart; and PATCH refuses (409) to change a location the file
+  will re-apply, naming the file to edit. A device whose file used `room:` keeps
+  matching the same place, now through the field; the place no longer appears
+  among its tags.
+- **The bundled examples teach this form.** They are also the template the
+  adapter-drafting tool shows a model: `light-generic.yaml` said
+  `room: hallway  # folded into tags; that is how DoSync matches location`. The
+  six examples use `location:` (the conveyor as a path), the printer and the
+  building-lighting example no longer repeat their place as a tag, and a test
+  keeps it so. `INTENT-CLASSES-GUIDE.md` sent `"room": "OR-3"` in an intent's
+  context -- a key the resolver does not read, so the example would have
+  prepared every operating room; it now sends `"location": "or-3"`.
+
 ### Added
 - **Devices have an operator-set, hierarchical `location`.** The protocol could
   restrict an intent to a place, but an operator had no safe, audited way to say

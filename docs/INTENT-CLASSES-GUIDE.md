@@ -281,11 +281,16 @@ Content-Type: application/json
   "intent": "prepare_operating_room",
   "urgency": "alert",
   "context": {
-    "room": "OR-3",
+    "location": "or-3",
     "procedure": "cardiac"
   }
 }
 ```
+
+`location` is what restricts the intent to one operating room: only devices placed
+at `or-3` (or below it, such as `or-3/anesthesia`) act. A key the resolver does not
+read — `room`, `zone`, `area` — is carried along and restricts nothing: the intent
+would prepare every operating room.
 
 The resolver automatically looks up the intent class in the database, retrieves its resolution tags and actuators, and builds the action plan. No code changes required on the resolver side.
 
