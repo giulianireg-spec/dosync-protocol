@@ -239,11 +239,18 @@ class DoSyncHub:
             self.registry.register(manifest)
             self.db.save_device(manifest.device_id, manifest.to_dict())
             self._warn_if_unexecutable(manifest)
-            self.audit_log.append({
+            entry = {
                 "type":        "device_registered",
                 "device_id":   manifest.device_id,
                 "device_name": manifest.device_name,
-            })
+            }
+            if manifest.location:
+                # Where a device is decides which intents can act on it. A later
+                # move is a device_relocated entry; the first placement -- a
+                # declarative file placing a new device -- belongs here, or it is
+                # recorded nowhere.
+                entry["location"] = manifest.location
+            self.audit_log.append(entry)
             return
 
         # ── Re-registration: compute diff ────────────────────────────────────

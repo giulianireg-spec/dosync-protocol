@@ -9,6 +9,14 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **A new device's first location is on the record.** `device_registered` named
+  the device only. A later move is a `device_relocated` entry, but a declarative
+  file placing a NEW device has no earlier location to move from, so where it was
+  placed was recorded nowhere -- found on the reference hub while testing the
+  declarative rules with a probe device. The entry now carries `location` when
+  the device has one.
+
 ### Changed
 - **A declarative file's location goes in the location field, and the file owns
   it.** `room:` was folded into the device's tags -- the last way a place was

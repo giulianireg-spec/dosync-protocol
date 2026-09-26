@@ -94,3 +94,15 @@ def test_the_bundled_examples_teach_the_location_field():
         if manifest.location:
             assert manifest.location not in manifest.tags, \
                 f"{manifest.device_id} states its location twice: as the field and as a tag"
+
+
+def test_a_file_that_places_a_new_device_records_where():
+    # Found on the reference hub: the first load of a file placing a new device
+    # left the location out of the audit -- a device_registered entry named the
+    # device only, and there was no earlier location to "relocate" from.
+    srv = _hub()
+    register_declared(srv.hub, [(build_manifest(_data(id="decl-new", location="lab/bench-1"),
+                                                source="new.yaml"), {})])
+    entries = [e for e in srv.hub.audit_log.entries()
+               if e.get("type") == "device_registered" and e.get("device_id") == "decl-new"]
+    assert entries and entries[-1].get("location") == "lab/bench-1"
