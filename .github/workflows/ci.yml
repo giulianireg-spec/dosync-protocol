@@ -483,11 +483,24 @@ jobs:
           # Both test-client backends: starlette <1.0 uses httpx, >=1.0 uses httpx2.
           # The floor pulls the older starlette, so requirements-dev.txt (which
           # declares httpx2 for the current resolution) is not sufficient here.
-          pip install pytest pytest-asyncio httpx httpx2 pyflakes "mcp>=1.0.0,<2.0"
+          # Not mcp: the MCP server is the optional [mcp] extra, not part of the
+          # floor requirements.txt declares -- and no mcp 1.x installs at this
+          # floor at all (pydantic 2.7.0 and jsonschema 4.18 are below what every
+          # release needs: ResolutionImpossible). Installing it after the floor let
+          # pip lift starlette to 1.x and pydantic to 2.13, so this job stopped
+          # testing the floor and fastapi 0.115.0 could not even import.
+          pip install pytest pytest-asyncio httpx httpx2 pyflakes
 
       - name: Full suite on the declared floor
         run: |
-          PYTHONPATH=. python3 -m pytest tests/ -q
+          # The tests that exercise the [mcp] extra run in the main job, which
+          # installs it; here they are named rather than skipped, so a new MCP
+          # test fails this job visibly instead of passing unexamined.
+          PYTHONPATH=. python3 -m pytest tests/ -q \
+            --ignore=tests/test_mcp_dynamic_intents.py \
+            --ignore=tests/test_mcp_scenarios_are_live.py \
+            --deselect tests/test_intent_rejections_visible.py::test_the_mcp_status_tool_reports_refusals \
+            --deselect tests/test_intent_rejections_visible.py::test_the_mcp_status_tool_is_quiet_when_nothing_was_refused
 
   certify-structure:
     name: Certification suite — structural validation

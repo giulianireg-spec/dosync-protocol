@@ -10,6 +10,21 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The declared-floor CI job tests the floor again.** When the MCP tests started
+  importing the real server (afc96d5), `mcp` was added to that job's install --
+  after the floor. pip then lifted starlette to 1.x and pydantic from 2.7.0 to
+  2.13, so the job stopped testing the versions `requirements.txt` declares, and
+  fastapi 0.115.0 could not even import against the new starlette: five test
+  files failed to collect and the job exited 2. `mcp` is the optional `[mcp]`
+  extra, not part of that floor, and it cannot be: no `mcp` 1.x resolves with
+  pydantic 2.7.0 and jsonschema 4.18 (ResolutionImpossible). The job no longer
+  installs it, and names the four tests that exercise the extra instead of
+  skipping them; they run in the main job, which installs it. Consequence
+  recorded, not yet acted on: installing `dosync[mcp]` always lifts pydantic,
+  jsonschema and fastapi above the declared floor -- the extra has a higher floor
+  nobody has declared.
+
+### Fixed
 - **`dosync_get_scenarios` no longer tells the agent a location can confine an
   emergency.** It labelled each class `(location: restricts)` from the column
   alone, including the three emergency classes -- read by an agent as "a
