@@ -270,8 +270,7 @@ def test_what_a_user_reads_on_screen_is_in_english():
     printed = re.compile(r'help=|description=|echo "|print\(')
 
     root = Path(__file__).resolve().parent.parent
-    scripts = ("discover.py", "ha_bridge.py", "gpio_adapter.py",
-               "ws_client.py", "setup_pki.sh")
+    scripts = ("discover.py", "ha_bridge.py", "ws_client.py", "setup_pki.sh")
 
     hits = []
     for name in scripts:

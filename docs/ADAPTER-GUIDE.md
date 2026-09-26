@@ -261,11 +261,12 @@ There is no central registry — adapters are Python packages. Recommended conve
 | `homeassistant` | HTTP (aiohttp) | `dosync/adapters/homeassistant.py` | HA bridge — wraps 10 HA domains |
 | `notifications` | HTTP (Twilio) | `dosync/adapters/notifications.py` | SMS via Twilio |
 | `simulated` | In-memory | `dosync/executor.py` | Reference, no hardware needed |
-| `gpio` | GPIO (RPi.GPIO) | `gpio_adapter.py` | Raspberry Pi PIR + DHT22 |
 | `shelly` | HTTP | `dosync/adapters/shelly.py` | Shelly Gen1/Gen2 |
 | `matter` | HTTP (python-matter-server) | `dosync/adapters/matter.py` | Matter devices |
 
 Study `dosync/adapters/wiz.py` for a complete production example with emergency handling, state reading, and graceful error handling.
+
+Hardware wired to one particular machine — a motion sensor on a Raspberry Pi's GPIO pins, say — is deployment code, not an adapter this repository ships. It reports what it senses as events and, if the deployment wants, fires intents it has registered, over the same API any client uses; its pins, thresholds and intents belong to that installation. See [DEPLOYMENT-LAYOUT.md](DEPLOYMENT-LAYOUT.md) for where such files live.
 
 ---
 

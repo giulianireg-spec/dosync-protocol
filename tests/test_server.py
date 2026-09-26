@@ -192,13 +192,33 @@ def test_the_removed_intent_endpoint_refuses_rather_than_redirects():
         "and must say what to call instead, in the body where any client sees it"
 
 
-def test_the_shipped_gpio_adapter_uses_the_current_endpoint():
-    """The adapter this repository distributes called the deprecated path. A
-    project that deprecates an endpoint and keeps calling it from its own
-    example code has deprecated nothing."""
-    src = (REPO / "gpio_adapter.py").read_text()
-    assert 'hub_post("/v1/intent/async"' in src
-    assert 'hub_post("/v1/intent"' not in src
+def test_nothing_in_the_repository_calls_the_removed_intent_endpoint():
+    """POST /v1/intent answers 410. A project that removes an endpoint and keeps
+    calling it from its own code has removed nothing -- and it happened twice:
+    the Raspberry Pi GPIO script (70 intents dropped in thirty minutes) and the
+    dashboard's intent buttons (every one answered "410 Gone"). This used to
+    check only the GPIO script, so it would never have caught the dashboard. It
+    now checks every code file in the repository; the one allowed use is the
+    route that answers 410."""
+    import re
+    import subprocess
+    literal = re.compile(r"""["'`]/v1/intent["'`]""")
+    files = subprocess.run(["git", "ls-files", "*.py", "*.html", "*.js", "*.sh"],
+                           cwd=REPO, capture_output=True, text=True).stdout.split()
+    assert files, "git ls-files found no code files to check"
+    hits = []
+    for rel in files:
+        if rel.startswith("tests/") or rel == "dosync/server.py":
+            continue
+        path = REPO / rel
+        if not path.exists():
+            # Listed by git but gone from disk: deleted and not yet committed,
+            # the normal state while working. A deleted file calls nothing.
+            continue
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if literal.search(line):
+                hits.append(f"{rel}:{i} -> {line.strip()[:80]}")
+    assert not hits, "code calls the removed endpoint POST /v1/intent:\n  " + "\n  ".join(hits)
 
 
 def test_json_responses_declare_utf8():

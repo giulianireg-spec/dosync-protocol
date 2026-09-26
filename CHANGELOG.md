@@ -9,6 +9,29 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+- **Files that belonged to the reference deployment, not to the protocol.**
+  `gpio_adapter.py` and `config/dosync-gpio.service` were one Raspberry Pi's
+  motion and climate sensors: its pins, its device ids, a 35 degC threshold, and
+  a household intent (`children_arrived_home`) that was no longer registered,
+  so every detection was refused -- 1,837 times before it was noticed. That
+  script now lives with the deployment that owns it. `fix_production_tags.py` was
+  a one-off migration of that deployment's database, and
+  `examples/devices_export.sql` an export of its device inventory that began
+  with `DELETE FROM devices;` -- run by someone taking it for an example, it
+  would have wiped their registry. `docs/DEPLOYMENT-LAYOUT.md` already drew this
+  line; the test that guards it matches names and addresses, so these passed it.
+  The adapter guide, the README and the site no longer list a shipped GPIO
+  adapter; wiring sensors to a hub's own pins is documented as deployment code
+  that reports events over the API.
+
+### Changed
+- **The guard against the removed endpoint covers the whole repository.**
+  `POST /v1/intent` answers 410, and this project's own code called it twice:
+  the GPIO script and the dashboard's intent buttons. The test checked only the
+  GPIO script, so it could never have caught the dashboard. It now scans every
+  tracked code file; the one allowed use is the route that answers 410.
+
 ### Fixed
 - **A new device's first location is on the record.** `device_registered` named
   the device only. A later move is a `device_relocated` entry, but a declarative

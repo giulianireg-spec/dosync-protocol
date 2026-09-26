@@ -897,7 +897,7 @@ the other end.
 | Philips WiZ adapter (UDP local) | ✅ |
 | Home Assistant bridge (10 domains) | ✅ |
 | Native MCP server (Claude, ChatGPT, any LLM) | ✅ |
-| GPIO adapter — Raspberry Pi 5 (PIR + DHT22) | ✅ |
+| GPIO sensors on a Raspberry Pi 5 (PIR + DHT22), via deployment code over the API | ✅ reference deployment (not shipped) |
 | SMS notifications via Twilio | ✅ code (requires an active Twilio plan) |
 | MQTT transport adapter (Mosquitto) | ✅ |
 | Shelly adapter (HTTP local, Gen1 + Gen2) | ✅ code, not hardware-tested |
