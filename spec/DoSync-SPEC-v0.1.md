@@ -352,10 +352,16 @@ Two properties of this table are normative and easy to miss:
   an omission: it selects every device that declares sensors and issues
   read-only actions (§6.6). A hub that gives it tags changes what a status
   query means.
-- **Tags rank, actuators gate.** A device is selected on tag match; the
-  actions built for it come from the actuator intersection. A device whose
-  tags match but whose actuators do not is selected and contributes no action
-  — except under `emergency`, where the full-capability fallback applies.
+- **Capabilities select, tags rank, a location restricts.** A device takes
+  part when it declares an actuator or sensor the intent needs; its tag overlap
+  only ranks it. When the context carries a `location` and the class declares
+  `location_role: "restricts"` (the default), only devices tagged with that
+  location act. A class that declares `"informs"` — `alert_anomaly`, `notify` —
+  reads the location as where something happened, since its notifier is in no
+  room. An `emergency` never narrows by location, and emergency-capable devices
+  take part regardless (the full-capability fallback). A restricting location
+  that no registered device declares is refused (`422`, `unknown_location`)
+  rather than resolved to an empty plan.
 
 This table is generated from and verified against the reference seed
 (`tests/test_universal_intent_contract.py`): if the implementation and this

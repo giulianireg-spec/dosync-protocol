@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS intent_classes (
     domain               TEXT NOT NULL DEFAULT 'general',
     is_universal         INTEGER NOT NULL DEFAULT 0,
     composition_kind     TEXT DEFAULT NULL,
+    location_role        TEXT NOT NULL DEFAULT 'restricts',
     created_at           REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS rate_limit_log (
@@ -199,6 +200,20 @@ class DoSyncDB:
             self._conn.commit()
             log.info("Migration: added intent_classes.resolution_sensors")
 
+        # location_role: whether context.location RESTRICTS where the intent
+        # acts ("restricts") or only says where the situation is ("informs").
+        # Before this, a location only added points: every device declaring the
+        # needed capability acted, wherever it was, so "light the main bedroom"
+        # lit the whole house and "unlock the front door" opened every lock.
+        # A missing value restricts -- the narrower reading. The universals whose
+        # location is informational (alert_anomaly, notify) are set by the seed.
+        if not _has_column("intent_classes", "location_role"):
+            self._conn.execute(
+                "ALTER TABLE intent_classes ADD COLUMN location_role "
+                "TEXT NOT NULL DEFAULT 'restricts'")
+            self._conn.commit()
+            log.info("Migration: added intent_classes.location_role")
+
 
     def _seed_universal_intents(self) -> None:
         """Seed the 5 universal intent classes if not already present.
@@ -245,32 +260,37 @@ class DoSyncDB:
         # only "this reads a number" cannot decide participation, which is the
         # same reason the tag vocabulary keeps failing: a label that fits
         # everything selects nothing.
+        # The 9th field is location_role. alert_anomaly and notify only say
+        # WHERE something happened -- their devices (a notifier, a display) are
+        # not in that place, and restricting them would silence the alert.
+        # ensure_safety restricts in name only: an emergency never narrows by
+        # location (evacuating means every exit), see the resolver.
         universals = [
-            ("ensure_safety",  "emergency", ["emergency","alarm","communication","notification"], ["alarm","notify","call","turn_on","set_brightness"], [],                                    "Safety emergency — protect people and property",    "universal", 1),
-            ("alert_anomaly",  "alert",     ["communication","notification","sensor"],            ["notify","call"],            ["motion","temperature","humidity","smoke"], "Unexpected condition detected — investigate",        "universal", 1),
-            ("control_access", "alert",     ["lock"],                                             ["lock","unlock"],            [],                                    "Manage physical access to a space",                 "universal", 1),
-            ("report_status",  "info",      [],                                                   [],                          [],                                    "Generate a status report of the environment",        "universal", 1),
-            ("notify",         "info",      ["communication","notification","display"],            ["notify","display","call"],  [],                                    "Push information to any target",                    "universal", 1),
+            ("ensure_safety",  "emergency", ["emergency","alarm","communication","notification"], ["alarm","notify","call","turn_on","set_brightness"], [],                                    "Safety emergency — protect people and property",    "universal", 1, "restricts"),
+            ("alert_anomaly",  "alert",     ["communication","notification","sensor"],            ["notify","call"],            ["motion","temperature","humidity","smoke"], "Unexpected condition detected — investigate",        "universal", 1, "informs"),
+            ("control_access", "alert",     ["lock"],                                             ["lock","unlock"],            [],                                    "Manage physical access to a space",                 "universal", 1, "restricts"),
+            ("report_status",  "info",      [],                                                   [],                          [],                                    "Generate a status report of the environment",        "universal", 1, "restricts"),
+            ("notify",         "info",      ["communication","notification","display"],            ["notify","display","call"],  [],                                    "Push information to any target",                    "universal", 1, "informs"),
         ]
         now = time.time()
-        for name, urgency, tags, actuators, sensors, desc, domain, is_univ in universals:
+        for name, urgency, tags, actuators, sensors, desc, domain, is_univ, loc_role in universals:
             row = self._conn.execute(
-                "SELECT resolution_tags, resolution_actuators, resolution_sensors FROM intent_classes WHERE name = ?", (name,)
+                "SELECT resolution_tags, resolution_actuators, resolution_sensors, location_role FROM intent_classes WHERE name = ?", (name,)
             ).fetchone()
             if not row:
                 self._conn.execute(
-                    "INSERT INTO intent_classes (name,urgency,resolution_tags,resolution_actuators,resolution_sensors,description,domain,is_universal,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-                    (name, urgency, json.dumps(tags), json.dumps(actuators), json.dumps(sensors), desc, domain, is_univ, now)
+                    "INSERT INTO intent_classes (name,urgency,resolution_tags,resolution_actuators,resolution_sensors,description,domain,is_universal,location_role,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (name, urgency, json.dumps(tags), json.dumps(actuators), json.dumps(sensors), desc, domain, is_univ, loc_role, now)
                 )
             elif (row[0] != json.dumps(tags) or row[1] != json.dumps(actuators)
-                  or row[2] != json.dumps(sensors)):
+                  or row[2] != json.dumps(sensors) or row[3] != loc_role):
                 # Universal intent classes are protocol-defined, not user data:
                 # reconcile existing deployments to the canonical definition on
                 # startup (custom/domain classes are never touched). Without this,
                 # a seed fix would never reach an already-initialized DB.
                 self._conn.execute(
-                    "UPDATE intent_classes SET urgency=?, resolution_tags=?, resolution_actuators=?, resolution_sensors=?, description=? WHERE name=? AND is_universal=1",
-                    (urgency, json.dumps(tags), json.dumps(actuators), json.dumps(sensors), desc, name)
+                    "UPDATE intent_classes SET urgency=?, resolution_tags=?, resolution_actuators=?, resolution_sensors=?, description=?, location_role=? WHERE name=? AND is_universal=1",
+                    (urgency, json.dumps(tags), json.dumps(actuators), json.dumps(sensors), desc, loc_role, name)
                 )
         self._conn.commit()
 
@@ -956,7 +976,8 @@ class DoSyncDB:
                                   resolution_tags: list, resolution_actuators: list,
                                   description: str, domain: str,
                                   composition_kind: str | None = None,
-                                  resolution_sensors: list | None = None) -> None:
+                                  resolution_sensors: list | None = None,
+                                  location_role: str | None = None) -> None:
         """Insert or update an intent class. Never modifies is_universal flag.
 
         composition_kind: marks the intent as a composition intent (e.g. "perimeter"
@@ -964,23 +985,27 @@ class DoSyncDB:
         the existing value is preserved (so a plain re-save does not clear it)."""
         import time, json
         existing = self._conn.execute(
-            "SELECT is_universal, composition_kind FROM intent_classes WHERE name = ?",
+            "SELECT is_universal, composition_kind, location_role FROM intent_classes WHERE name = ?",
             (name,)
         ).fetchone()
         is_universal = existing["is_universal"] if existing else 0
         # Preserve an existing composition_kind unless a new one is explicitly given.
         if composition_kind is None and existing is not None:
             composition_kind = existing["composition_kind"]
+        # Same for location_role; a new class restricts unless told otherwise.
+        if location_role is None:
+            location_role = existing["location_role"] if existing is not None else "restricts"
         self._conn.execute("""
             INSERT OR REPLACE INTO intent_classes
             (name, urgency, resolution_tags, resolution_actuators,
              resolution_sensors, description, domain, is_universal,
-             composition_kind, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             composition_kind, location_role, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (name, urgency, json.dumps(resolution_tags),
               json.dumps(resolution_actuators),
               json.dumps(resolution_sensors or []),
-              description, domain, is_universal, composition_kind, time.time()))
+              description, domain, is_universal, composition_kind,
+              location_role, time.time()))
         self._conn.commit()
 
     def get_intent_class(self, name: str) -> dict | None:
@@ -1006,6 +1031,7 @@ class DoSyncDB:
             "created_at": row["created_at"],
             "is_universal":         bool(row["is_universal"]),
             "composition_kind":     row["composition_kind"] if "composition_kind" in row.keys() else None,
+            "location_role":        row["location_role"] if "location_role" in row.keys() else "restricts",
         }
 
     def list_intent_classes(self) -> list[dict]:
@@ -1028,6 +1054,7 @@ class DoSyncDB:
             "domain":               r["domain"],
             "is_universal":         bool(r["is_universal"]),
             "composition_kind":     r["composition_kind"] if "composition_kind" in r.keys() else None,
+            "location_role":        r["location_role"] if "location_role" in r.keys() else "restricts",
             "created_at":           r["created_at"],
         } for r in rows]
 

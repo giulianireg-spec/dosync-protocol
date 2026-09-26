@@ -64,3 +64,15 @@ def test_an_unreachable_hub_lists_nothing_rather_than_a_guess(monkeypatch):
 def test_a_hub_with_no_intents_says_so(monkeypatch):
     text = _scenarios(monkeypatch, _hub_with([]))
     assert "no intents registered" in text
+
+
+def test_each_intent_says_what_a_location_does(monkeypatch):
+    # The agent needs to know whether sending a location narrows where the
+    # intent acts or only says where the situation is.
+    text = _scenarios(monkeypatch, _hub_with([
+        {"name": "light_room", "urgency": "info", "location_role": "restricts"},
+        {"name": "alert_anomaly", "urgency": "alert", "location_role": "informs"},
+    ]))
+    lines = {l.split()[0]: l for l in text.splitlines() if l.startswith("  ")}
+    assert "(location: restricts)" in lines["light_room"]
+    assert "(location: informs)" in lines["alert_anomaly"]

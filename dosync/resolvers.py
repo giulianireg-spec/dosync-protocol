@@ -116,12 +116,15 @@ class ScoreBreakdown:
     sensor_component: float = 0.0
     matched_sensors: list = field(default_factory=list)
     device_capabilities: list = field(default_factory=list)
+    # The location the intent restricts to, when this device is not there.
+    # Empty when the intent may act anywhere or the device is at that location.
+    outside_location: str = ""
 
     @property
     def total(self) -> float:
         # The hard filter zeroes the score outright: an all-specific resolution
         # with no overlap is OUT, bonuses notwithstanding (F3b).
-        if self.hard_filtered:
+        if self.hard_filtered or self.outside_location:
             return 0.0
         return (self.tag_component + self.location_component
                 + self.emergency_component + self.actuator_component
@@ -140,6 +143,9 @@ class ScoreBreakdown:
             return (f"declares none of the capabilities this intent needs "
                     f"{self.required_specific_tags}; it declares "
                     f"{self.device_capabilities or 'none'}")
+        if self.outside_location:
+            return (f"not at location '{self.outside_location}': this intent "
+                    f"acts only where its context says (location_role 'restricts')")
         if not self.had_any_tag_overlap:
             return "no tag overlap with intent resolution tags"
         return "score = 0"
@@ -368,6 +374,71 @@ class CapabilityMatchingResolver(BaseResolver):
     _W_SENSOR     = 12.0   # per matching sensor type
     _FORCED_SCORE = 50.0   # emergency force-inclusion floor (mirrors resolve())
 
+    def _restricting_location(self, intent: Intent, resolution: dict) -> str:
+        """The location this intent may act in, or "" if it may act anywhere.
+
+        Since the capability gate (2026-09-04) a device takes part if it declares
+        what the intent needs, and a location only added points -- so every
+        capable device acted wherever it was: "light the main bedroom" lit the
+        house, "unlock the front door" opened every lock that could open.
+        A location now restricts when the intent class says it does
+        (location_role "restricts", the default) and it is not an emergency:
+        evacuating means every exit, and a deployment that must narrow an
+        emergency says so in a policy, not here. Classes whose location only
+        says where something happened (alert_anomaly, notify: the notifier is
+        not in that room) declare "informs".
+        """
+        location = (intent.context or {}).get("location") or ""
+        if not isinstance(location, str) or not location:
+            return ""
+        if resolution.get("location_role", "restricts") != "restricts":
+            return ""
+        if intent.urgency == Urgency.EMERGENCY:
+            return ""
+        return location
+
+    def _status_reads(self, intent: Intent, resolution: dict):
+        """Which devices a read-only status query reads, and why the rest are not.
+
+        The one answer for resolve() and explain(): explain() used to include
+        every sensing device while resolve() applied the status scope, so the
+        two could disagree about the same query.
+        Returns (reads, skipped): reads is [(device, sensor_ids)], skipped is
+        [(device, reason)].
+        """
+        # Invalid values warn and fall back rather than fail: a status query
+        # is read-only and harmless, and refusing it over a typo'd
+        # preference would be disproportionate.
+        scope = (intent.context or {}).get("scope")
+        if scope is not None and scope not in ("all", "environment"):
+            log.warning("status scope %r unknown — using deployment default", scope)
+            scope = None
+        if scope is None:
+            scope = os.environ.get("DOSYNC_STATUS_SCOPE", "all")
+            if scope not in ("all", "environment"):
+                log.warning("DOSYNC_STATUS_SCOPE=%r invalid — using 'all'", scope)
+                scope = "all"
+        restrict_to = self._restricting_location(intent, resolution)
+        reads, skipped = [], []
+        for d in self.registry.active():
+            if not d.sensors:
+                skipped.append((d, "read-only status query — device has no sensors to read"))
+                continue
+            if restrict_to and restrict_to not in d.tags:
+                skipped.append((d, f"not at location '{restrict_to}': this status "
+                                   f"query reads only where its context says"))
+                continue
+            sensor_ids = [
+                sn.id for sn in d.sensors
+                if scope == "all"
+                or getattr(sn, "kind", "environment") == "environment"
+            ]
+            if not sensor_ids:   # a device with only device_state sensors drops out
+                skipped.append((d, "status scope 'environment' — device reports only its own state"))
+                continue
+            reads.append((d, sensor_ids))
+        return reads, skipped
+
     def _candidates(self, intent: Intent, resolution: dict) -> list:
         """The ONE answer to "which devices does this intent evaluate?".
 
@@ -505,6 +576,9 @@ class CapabilityMatchingResolver(BaseResolver):
 
         location = intent.context.get("location", "")
         location_hit = bool(location) and location in device_tags
+        restrict_to = self._restricting_location(intent, resolution)
+        outside_location = (restrict_to
+                            if restrict_to and restrict_to not in device_tags else "")
 
         emergency_hit = (intent.urgency == Urgency.EMERGENCY and device.emergency_capable)
 
@@ -525,6 +599,7 @@ class CapabilityMatchingResolver(BaseResolver):
             had_any_tag_overlap=bool(matched_tags),
             matched_sensors=sorted(matched_sensors),
             device_capabilities=sorted(device_actuators | device_sensors),
+            outside_location=outside_location,
         )
 
     def _relevance_score(
@@ -553,26 +628,26 @@ class CapabilityMatchingResolver(BaseResolver):
         # Empty resolution = READ-ONLY status query — mirrors resolve() (F4a):
         # the plan reads sensors on every sensing device; actuators never fire.
         if not target_tags and not target_actuators:
-            for device in self.registry.active():
-                if device.sensors:
-                    included.append({
-                        "device_id":   device.device_id,
-                        "device_name": device.device_name,
-                        "device_tags": sorted(device.tags),
-                        "score":       1.0,
-                        "score_breakdown": {"read_only_status_query": True,
-                                            "sensors": [sn.id for sn in device.sensors]},
-                        "emergency_capable": device.emergency_capable,
-                        "included": True,
-                    })
-                else:
-                    excluded.append({
-                        "device_id":   device.device_id,
-                        "device_name": device.device_name,
-                        "device_tags": sorted(device.tags),
-                        "reason":      "read-only status query — device has no sensors to read",
-                        "included":    False,
-                    })
+            reads, skipped = self._status_reads(intent, resolution)
+            for device, sensor_ids in reads:
+                included.append({
+                    "device_id":   device.device_id,
+                    "device_name": device.device_name,
+                    "device_tags": sorted(device.tags),
+                    "score":       1.0,
+                    "score_breakdown": {"read_only_status_query": True,
+                                        "sensors": sensor_ids},
+                    "emergency_capable": device.emergency_capable,
+                    "included": True,
+                })
+            for device, reason in skipped:
+                excluded.append({
+                    "device_id":   device.device_id,
+                    "device_name": device.device_name,
+                    "device_tags": sorted(device.tags),
+                    "reason":      reason,
+                    "included":    False,
+                })
             return {
                 "intent":              intent.intent.value,
                 "urgency":             intent.urgency.value,
@@ -764,6 +839,7 @@ class CapabilityMatchingResolver(BaseResolver):
                     return {
                         "tags":      row["resolution_tags"],
                         "actuators": row["resolution_actuators"],
+                        "location_role": row.get("location_role", "restricts"),
                         # Which sensor types answer this intent. Empty for four
                         # of the five universals: only `alert_anomaly` is served
                         # by devices that participate by detecting rather than
@@ -832,37 +908,12 @@ class CapabilityMatchingResolver(BaseResolver):
             #   * otherwise "all" — today's behavior, so nothing changes for a
             #     deployment that has expressed no preference. The protocol has
             #     no opinion; it only makes the question expressible.
-            # Invalid values warn and fall back rather than fail: a status query
-            # is read-only and harmless, and refusing it over a typo'd
-            # preference would be disproportionate.
-            scope = (intent.context or {}).get("scope")
-            if scope is not None and scope not in ("all", "environment"):
-                log.warning("status scope %r unknown — using deployment default", scope)
-                scope = None
-            if scope is None:
-                scope = os.environ.get("DOSYNC_STATUS_SCOPE", "all")
-                if scope not in ("all", "environment"):
-                    log.warning("DOSYNC_STATUS_SCOPE=%r invalid — using 'all'", scope)
-                    scope = "all"
-
-            read_actions = []
-            for d in self.registry.active():
-                if not d.sensors:
-                    continue
-                sensor_ids = [
-                    sn.id for sn in d.sensors
-                    if scope == "all"
-                    or getattr(sn, "kind", "environment") == "environment"
-                ]
-                if sensor_ids:    # a device with only device_state sensors drops out
-                    read_actions.append(DeviceAction(
-                        device_id=d.device_id,
-                        action="read_sensors",
-                        params={"sensor_ids": sensor_ids},
-                    ))
+            reads, _skipped = self._status_reads(intent, resolution)
             return ActionPlan(
                 intent_id=intent.intent_id,
-                actions=read_actions,
+                actions=[DeviceAction(device_id=d.device_id, action="read_sensors",
+                                      params={"sensor_ids": ids})
+                         for d, ids in reads],
                 urgency=intent.urgency,
             )
 

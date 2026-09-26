@@ -104,8 +104,12 @@ location is a fact about one installation. The protocol has no opinion about
 where your devices are, and no list it would accept or reject.
 
 The mechanism is deliberately trivial: a device declares location tags, an intent
-carries `context.location`, and the resolver awards its location bonus when the
-two strings are equal. There is no enumeration, no normalisation, and no
+carries `context.location`, and when the two strings are equal the device is at
+that place. For a class that restricts by location (`location_role:
+"restricts"`, the default) only devices at that place act; the rest are excluded,
+and `explain` says so. For a class whose location only informs (`alert_anomaly`,
+`notify`) the location ranks devices and is reported, but excludes none. An
+emergency never narrows by location. There is no enumeration, no normalisation, and no
 validation. `ward-2`, `cell-3`, `deck-b`, `sector-7g` and `death-star` all work
 exactly as well as `kitchen`, because the resolver is comparing strings, not
 interpreting places. A conforming hub MUST NOT reject a location tag for not
@@ -131,8 +135,9 @@ The residential row is the longest only because the reference deployment is
 residential — it carries no more weight than the others.
 
 > **Deployment note:** Location tags are optional but strongly recommended. A hub
-> without location tags cannot use the resolver's location-match scoring — all
-> devices of the same type score equally regardless of where they are installed.
+> without location tags cannot restrict an intent to a place — every capable
+> device acts, wherever it is installed — and an intent naming a location no
+> device declares is refused.
 
 ---
 

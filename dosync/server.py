@@ -1673,6 +1673,10 @@ class CustomIntentClassRequest(BaseModel):
     description:           str = ""
     domain:                str = "general"
     composition_kind:      Optional[str] = None  # e.g. "perimeter"; None = flat intent
+    # Whether context.location restricts where this intent acts ("restricts")
+    # or only says where the situation is ("informs"). None keeps the class's
+    # current value; a new class restricts.
+    location_role:         Optional[str] = None
 
 @app.post("/v1/intent-classes", tags=["Protocol"], summary="Register a custom intent class")
 async def register_intent_class(
@@ -1721,6 +1725,13 @@ async def register_intent_class(
                    "Omit composition_kind for a normal (flat) intent."
         )
 
+    if req.location_role is not None and req.location_role not in ("restricts", "informs"):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown location_role '{req.location_role}'. Use 'restricts' "
+                   "(a context location limits where the intent acts) or 'informs' "
+                   "(it only says where the situation is, as for an alert)."
+        )
     hub.db.save_intent_class(
         name=name,
         urgency=req.urgency,
@@ -1729,6 +1740,7 @@ async def register_intent_class(
         description=req.description,
         domain=req.domain,
         composition_kind=req.composition_kind,
+        location_role=req.location_role,
     )
     return {
         "status":       "registered",
@@ -1739,6 +1751,7 @@ async def register_intent_class(
         "description":  req.description,
         "domain":       req.domain,
         "composition_kind": req.composition_kind,
+        "location_role": hub.db.get_intent_class(name)["location_role"],
     }
 
 
@@ -1807,7 +1820,7 @@ async def execute_intent_legacy(req: IntentRequest, auth: str = Depends(require_
 # "warning", so every rejected intent that asked for it was labelled "_invalid".
 _URGENCY_LABELS = frozenset(u.value for u in Urgency)
 _REJECTION_REASONS = ("invalid_name", "not_registered", "invalid_urgency",
-                      "idempotency_conflict")
+                      "unknown_location", "idempotency_conflict")
 
 
 def _count_rejection(reason: str, intent_class: str, urgency: str) -> None:
@@ -1854,6 +1867,25 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
     except ValueError:
         _count_rejection("invalid_urgency", req.intent, "_invalid")
         raise HTTPException(status_code=422, detail=f"Urgency '{req.urgency}' not valid. Use: emergency, alert, warning, info")
+
+    # A location that restricts where the intent acts must name a place some
+    # device is actually at. Otherwise a typo ("main-bedrom") resolves to no
+    # device at all and the intent "completes" with zero actions -- silent. It
+    # is refused here instead, and counted, like any other refusal. Only when
+    # the location restricts: an alert's location just says where something
+    # happened, and an emergency never narrows by location.
+    _location = (req.context or {}).get("location")
+    if isinstance(_location, str) and _location and urgency != Urgency.EMERGENCY:
+        _cls = hub.db.get_intent_class(req.intent) or {}
+        if _cls.get("location_role", "restricts") == "restricts":
+            if not any(_location in d.tags for d in hub.registry.active()):
+                _count_rejection("unknown_location", req.intent, req.urgency)
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"No device is at location '{_location}'. '{req.intent}' "
+                           "acts only where context.location says, and no registered "
+                           "device declares that tag. Check the spelling, or omit "
+                           "location to act on every capable device.")
 
     # ── Idempotency check (protocol v0.2, opt-in) ─────────────────────────
     # If the client supplied an idempotency key, deduplicate against prior

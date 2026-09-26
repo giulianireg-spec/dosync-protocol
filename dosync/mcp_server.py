@@ -222,7 +222,7 @@ async def list_tools() -> list[types.Tool]:
                             "Free-form by design — each intent reads what it needs. "
                             "Composition intents (e.g. inspect_area) need geographic "
                             "fields: device_id (the vehicle), center=[lat,lon], "
-                            "radius_m, altitude_m. Home intents may use location, "
+                            "radius_m, altitude_m. Other intents may carry location, "
                             "message, etc. The hub and resolver interpret it."
                         ),
                     },
@@ -232,11 +232,18 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "message": {
                         "type": "string",
-                        "description": "Mensaje a incluir en notificaciones",
+                        "description": "Message to include in notifications",
                     },
                     "location": {
                         "type": "string",
-                        "description": "Relevant location tag, as declared by the deployment",
+                        "description": (
+                            "A location tag the deployment declares. For an intent "
+                            "whose location restricts (see dosync_get_scenarios), "
+                            "only devices at that location act, and a location no "
+                            "device declares is refused. For an alert or "
+                            "notification it only says where the situation is. "
+                            "An emergency is never narrowed by location."
+                        ),
                     },
                 },
                 "required": ["intent"],
@@ -790,6 +797,10 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         for c in sorted(classes, key=lambda c: (order.get(c.get("urgency"), 9),
                                                 c.get("name", ""))):
             line = f"  {c.get('name')}  [{c.get('urgency', '?')}]"
+            if c.get("location_role") == "informs":
+                line += "  (location: informs)"
+            else:
+                line += "  (location: restricts)"
             if c.get("description"):
                 line += f"  -- {c['description']}"
             if c.get("composition_kind"):

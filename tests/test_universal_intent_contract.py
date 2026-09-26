@@ -182,15 +182,28 @@ def test_location_tags_are_an_open_namespace():
         sensors=[], actuators=[ActuatorSpec(id="alarm", type="alarm", description="a")]))
 
     resolver = CapabilityMatchingResolver(registry)
-    resolution = {"tags": ["emergency", "alarm"], "actuators": ["alarm"]}
-    resolver._get_resolution = lambda intent: dict(resolution)
     intent = Intent(intent=IntentClass("ensure_safety"), urgency=Urgency.ALERT,
                     context={"location": "death-star"})
 
-    scored = {d["device_id"]: d["score"]
-              for d in resolver.explain(intent).get("included", [])}
+    # A class whose location restricts (the default): the operator-defined
+    # string takes effect -- the device there acts, the one elsewhere does not.
+    resolver._get_resolution = lambda intent: {
+        "tags": ["emergency", "alarm"], "actuators": ["alarm"], "location_role": "restricts"}
+    report = resolver.explain(intent)
+    scored = {d["device_id"]: d["score"] for d in report.get("included", [])}
     assert "alarm-deathstar-01" in scored, \
         "a device was rejected for declaring a location outside the spec's examples"
+    assert "alarm-elsewhere-01" not in scored, \
+        "an operator-defined location did not restrict where the intent acts"
+    reasons = {d["device_id"]: d["reason"] for d in report.get("excluded", [])}
+    assert "death-star" in reasons["alarm-elsewhere-01"]
+
+    # A class whose location only informs: both act, and the bonus still ranks
+    # the device at the operator-defined location first.
+    resolver._get_resolution = lambda intent: {
+        "tags": ["emergency", "alarm"], "actuators": ["alarm"], "location_role": "informs"}
+    scored = {d["device_id"]: d["score"]
+              for d in resolver.explain(intent).get("included", [])}
     assert scored["alarm-deathstar-01"] > scored["alarm-elsewhere-01"], \
         "the location bonus did not apply to an operator-defined location"
 

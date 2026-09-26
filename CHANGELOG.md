@@ -9,6 +9,50 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **A location in the context restricts where an intent acts.** Since the
+  capability gate (2026-09-04) a device takes part when it declares what the
+  intent needs, and `context.location` only added points -- so every capable
+  device acted wherever it was. Measured on the reference hub: an intent for
+  the main bedroom light, with `location: "main-bedroom"`, resolved to every
+  light in the house; `control_access` with `unlock` would have opened every
+  lock that could open. The tag vocabulary promised the opposite ("location is
+  what makes a targeted intent targeted"), the MCP described `location` as the
+  place to act, and the spec still said devices are "selected on tag match",
+  which stopped being true on 2026-09-04.
+
+  An intent class now declares `location_role`. `"restricts"` (the default):
+  with a location in the context, only devices tagged with it act, and
+  `explain` reports the rest as excluded with the reason. `"informs"`: the
+  location only says where the situation is -- `alert_anomaly` and `notify`,
+  whose notifier is in no room; restricting them would silence the alert. An
+  `emergency` never narrows by location: evacuating means every exit, and a
+  deployment that must narrow an emergency says so in a policy. A restricting
+  location that no registered device declares is refused with `422` and counted
+  as `unknown_location`, rather than resolving to an empty plan that "completes"
+  with nothing done.
+
+  Additive migration: the column defaults to `"restricts"`, the narrower
+  reading, so a class from before it cannot widen; the five universals declare
+  their role in the seed, which reconciles existing databases. `POST
+  /v1/intent-classes` takes `location_role` (omitting it keeps the class's
+  current value) and `GET` lists it; `dosync_get_scenarios` shows it per
+  intent, so an agent knows what a location will do. Measured with
+  `tools/recall_benchmark.py` on all five registries before and after: every
+  case resolves to exactly the same devices -- none of the corpora carries a
+  location, so this confirms no regression and cannot measure the new
+  restriction, which is covered by tests. The contract test for the open
+  location namespace keeps its guarantee (any operator-defined string works)
+  and now asserts the restriction for `"restricts"` and the ranking for
+  `"informs"`; it had pinned the old premise that a device elsewhere still acts.
+
+### Fixed
+- **`explain` and `resolve` agree on a status query.** For `report_status`,
+  `resolve` applied the status scope (dropping devices that report only their
+  own state) while `explain` listed every sensing device. Both now read one
+  function. Also: the MCP's `message` field description was in Spanish and its
+  context description spoke of "home intents".
+
 ### Fixed
 - **`dosync_get_scenarios` lists the intents the hub actually has.** The MCP tool
   returned a hardcoded text that had drifted from the hub: on the reference hub
