@@ -9,6 +9,32 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Protocol 0.5.** The protocol's own contract changed in this release -- a
+  location in an intent's context now restricts where it acts, emergencies follow
+  their class, new fields, responses and audit events -- while the protocol
+  version still read 0.4. Another implementation following the 0.4 text to the
+  letter would have behaved differently while declaring the same number. The
+  specification now carries §10.5, "Changes in 0.5 (since 0.4)": the behavior
+  changes, the additions, the deprecations, and how to migrate a client and an
+  implementation. It also records a change made under 0.4 without a bump
+  (selection by capability, 2026-09-04). §10.4 says what it had left implicit:
+  before 1.0 a minor version may change behavior, only if it says so. The REST
+  API stays `v1` -- no endpoint, field or type was removed or changed.
+  GOVERNANCE.md no longer claims every protocol bump was additive.
+- **The protocol version has one source.** `server.py` kept its own literal for
+  the `X-DoSync-Protocol-Version` header, apart from `dosync.__protocol_version__`
+  -- bumping one would have made `/v1/status` and the header disagree. A test now
+  also requires the spec's §10 table and a "Changes in" section to match the
+  package's protocol version.
+
+### Deprecated
+- **`room` as an alias of `location`** (PATCH, adoption, declarative files) --
+  a household word in a protocol meant for plants, stores and vehicles. Removed
+  after 2027-03-26. As §10.3 requires, a response to a request that used it
+  carries `Deprecation` and `Sunset`; a declarative file using it is logged as a
+  warning.
+
 ### Removed
 - **Files that belonged to the reference deployment, not to the protocol.**
   `gpio_adapter.py` and `config/dosync-gpio.service` were one Raspberry Pi's

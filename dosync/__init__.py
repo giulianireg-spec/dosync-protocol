@@ -14,4 +14,4 @@ The two numbers move independently on purpose:
   __protocol_version__  the wire contract other implementations must match
 """
 __version__ = "0.6.3"
-__protocol_version__ = "0.4"
+__protocol_version__ = "0.5"

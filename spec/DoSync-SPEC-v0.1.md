@@ -1,6 +1,6 @@
 # DoSync Protocol — Specification
 
-*(Protocol version 0.4 — see the changelog / §10. The file keeps its original name to preserve external links.)*
+*(Protocol version 0.5 — what changed since 0.4 is in §10.5. The file keeps its original name to preserve external links.)*
 
 **Status:** Draft  
 **Authors:** DoSync Initiative  
@@ -1037,13 +1037,13 @@ DoSync maintains two independent versioned surfaces:
 
 | Surface | Current | Exposed as |
 |---|---|---|
-| **Protocol version** | `0.4` | `dosync/0.4` in `protocol` field of `/v1/status`; `X-DoSync-Protocol-Version` response header |
+| **Protocol version** | `0.5` | `dosync/0.5` in `protocol` field of `/v1/status`; `X-DoSync-Protocol-Version` response header |
 | **REST API version** | `1` | `/v1/` URL prefix; `X-DoSync-API-Version` response header |
 
 Every HTTP response from the hub includes both headers:
 
 ```
-X-DoSync-Protocol-Version: 0.1
+X-DoSync-Protocol-Version: 0.5
 X-DoSync-API-Version: 1
 ```
 
@@ -1098,6 +1098,43 @@ Protocol versions follow `MAJOR.MINOR` semantics:
 - **MAJOR** increment (e.g. `0.x` → `1.0`): breaking changes to the core data model, the intent format, or the CapabilityManifest schema. Clients may require updates.
 
 The transition from `v0.x` to `v1.0` marks the protocol's stability milestone — after `v1.0`, breaking changes require a MAJOR increment.
+
+Before `v1.0`, a MINOR increment may also change what existing behavior means, as `0.5` does. When it does, the change is listed with what clients and implementations must do (§10.5). A version number that changes behavior silently is not a version: another implementation that follows the previous text to the letter would behave differently while declaring the same number.
+
+### 10.5 Changes in 0.5 (since 0.4)
+
+`0.5` is the first protocol version that changes behavior rather than only adding it. The REST API stays `v1`: no endpoint, field or type was removed or changed; what changed is the meaning of an intent's context, which §10.1 assigns to the protocol version.
+
+**Behavior changes**
+
+1. **Devices are selected by capability.** A device takes part when it declares an actuator or sensor the intent needs; its tag overlap only ranks it. Under `0.4` a device was selected on tag match. This change was made on 2026-09-04 without a version increment; it is recorded here.
+2. **A location restricts.** When `context.location` is present and the intent class declares `location_role: "restricts"` (the default), only devices at that location act — in an `emergency` too, including the force-inclusion of emergency-capable devices. Under `0.4` a location only added to a device's score and every capable device acted. A class whose location only says where something happened declares `"informs"`; among the universal classes, `alert_anomaly`, `notify` and `ensure_safety` do.
+3. **An unknown location is refused, except in an emergency.** A restricting location that no registered device is at is refused (`422`, counted as `unknown_location`). An `emergency` is never refused for its location: it acts as if no location were given, and the hub records `emergency_location_not_found`.
+
+**Additions**
+
+- Intent classes: `location_role` (`"restricts"` | `"informs"`), accepted and listed by `/v1/intent-classes`.
+- Capability manifest: `location`, a path set by the operator (`PATCH /v1/devices/{id}`, adoption, or a declarative file) and never changed by a device re-registering itself. A place contains everything below it, by whole segment.
+- `PATCH /v1/devices/{id}`: takes `location`; `device_name` is no longer required; `409` when the device's declarative file declares its location.
+- Registration accepts the actuator fields `execution_model`, `supports_progress`, `supports_cancel`, `emits_telemetry`, `verify_with`, and the sensor field `range`. A re-registration keeps what it did not send: `adapter_config` (unless the adapter changed), `provenance`, `discovery_evidence`.
+- Audit event types `device_relocated` and `emergency_location_not_found`; `device_registered` carries `location` when the device has one.
+- `/v1/status`: `intents_rejected` (by reason) and `emergency_location_fallbacks`.
+
+**Deprecated**
+
+- `room` as an alias of `location` (in `PATCH /v1/devices/{id}`, adoption, and declarative files): deprecated 2026-09-26, removed after 2027-03-26. A response to a request that used it carries the `Deprecation` and `Sunset` headers (§10.3); a declarative file that uses it is logged as a warning.
+
+**Migrating a client**
+
+- If you send `context.location` to say where something happened rather than where to act, use a class whose `location_role` is `"informs"`, or carry that value under another context key.
+- If you rely on an intent reaching every capable device, do not send `location`.
+- Expect `422` with reason `unknown_location` for a restricting location no device is at. Locations are compared exactly and are case-sensitive.
+- Send `location` instead of `room`.
+
+**Migrating an implementation**
+
+- Implement `location_role`, segment containment of locations, the `422`, and the emergency rule above. Selection is by capability; tags only rank.
+- Keep an operator's location across re-registration, and record every change of it in the audit log.
 
 ---
 

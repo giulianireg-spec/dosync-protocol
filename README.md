@@ -3,7 +3,7 @@
 > Governance and accountability for AI that acts on physical devices.
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Protocol](https://img.shields.io/badge/protocol-v0.4-green.svg)](spec/DoSync-SPEC-v0.1.md)
+[![Protocol](https://img.shields.io/badge/protocol-v0.5-green.svg)](spec/DoSync-SPEC-v0.1.md)
 [![PyPI](https://img.shields.io/pypi/v/dosync.svg)](https://pypi.org/project/dosync/)
 [![Python](https://img.shields.io/pypi/pyversions/dosync.svg)](https://pypi.org/project/dosync/)
 [![CI](https://github.com/giulianireg-spec/dosync-protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/giulianireg-spec/dosync-protocol/actions/workflows/ci.yml)

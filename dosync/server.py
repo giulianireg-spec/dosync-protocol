@@ -11,14 +11,14 @@ from typing import Any, Optional
 import json
 import os
 import re
-from fastapi import (Depends, FastAPI, HTTPException, Query, Request, WebSocket,
+from fastapi import (Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket,
                      WebSocketDisconnect)
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                PlainTextResponse)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 
-from dosync import __version__
+from dosync import __protocol_version__, __version__
 import dosync.hub as _hubmod
 from dosync.hub import DoSyncHub
 from dosync import metrics as M
@@ -1009,7 +1009,10 @@ app = FastAPI(
 # API version:      the REST API version (URL prefix /v1/)
 # These are exposed as response headers on every request so clients can detect
 # the version without parsing the URL or the response body.
-DOSYNC_PROTOCOL_VERSION = "0.4"
+# From dosync/__init__.py, like __version__: the protocol number lived here as a
+# second literal, so /v1/status and the X-DoSync-Protocol-Version header could
+# disagree the moment one was bumped without the other.
+DOSYNC_PROTOCOL_VERSION = __protocol_version__
 DOSYNC_API_VERSION = "1"
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -1188,9 +1191,24 @@ async def describe_device(device_id: str, auth: str = Depends(require_auth)):
     return build_prompt(manifest, _Path(__file__).resolve().parent.parent)
 
 
+# `room` is kept as an alias of `location` and deprecated in protocol 0.5 (spec
+# §10.5): a household word in a protocol meant for plants, stores and vehicles.
+# §10.3 requires the Deprecation and Sunset headers wherever it is still used,
+# and at least six months before it goes.
+_ROOM_DEPRECATION = "Sat, 26 Sep 2026 00:00:00 GMT"
+_ROOM_SUNSET = "Fri, 26 Mar 2027 00:00:00 GMT"
+
+
+def _flag_room_alias(req: dict, response: Response) -> None:
+    if "room" in req and "location" not in req:
+        response.headers["Deprecation"] = _ROOM_DEPRECATION
+        response.headers["Sunset"] = _ROOM_SUNSET
+
+
 @app.patch("/v1/devices/{device_id}", tags=["Devices"])
-async def rename_device(device_id: str, req: dict, auth: str = Depends(require_auth)):
-    """Change a device's display name, and optionally its room.
+async def rename_device(device_id: str, req: dict, response: Response,
+                        auth: str = Depends(require_auth)):
+    """Change a device's display name, its location, or both.
 
     Renaming had no endpoint at all: the only way to fix a name was to
     re-register the whole manifest, which means reconstructing every capability
@@ -1207,6 +1225,7 @@ async def rename_device(device_id: str, req: dict, auth: str = Depends(require_a
     if not device:
         raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
 
+    _flag_room_alias(req, response)
     # Either or both: a new name, a new location. "room" is accepted as an alias
     # of "location" for the clients that already send it; it was stored on an
     # attribute to_dict() never wrote, so it was lost on the next restart and
@@ -2463,7 +2482,7 @@ def _adapter_can_discover(name: str) -> bool:
 
 
 @app.post("/v1/discovery/adopt", tags=["Discovery"])
-async def adopt_device(req: dict, auth: str = Depends(require_auth)):
+async def adopt_device(req: dict, response: Response, auth: str = Depends(require_auth)):
     """Register ONE discovered candidate, with a name the operator chose.
 
     Scanning and adopting are deliberately separate. `POST /v1/discovery/run`
@@ -2495,6 +2514,7 @@ async def adopt_device(req: dict, auth: str = Depends(require_auth)):
     # discovery becomes an adapter capability (horizon item), this dispatch goes
     # away with it.
     name = (req.get("device_name") or "").strip() or device_id
+    _flag_room_alias(req, response)
     # Where the operator is placing it. Stored in the manifest's location field,
     # which the resolver reads; it used to become a tag through wiz_manifest's
     # `room`, and was ignored for every other adapter. "room" stays an alias.

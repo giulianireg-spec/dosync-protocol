@@ -139,6 +139,11 @@ def build_manifest(data: dict, source: str = "<declarative>"):
             f"{source}: device declares location '{raw_location}' and room "
             f"'{raw_room}'. They are the same field; keep one.")
     raw = raw_location if raw_location is not None else raw_room
+    if raw_location is None and raw_room is not None:
+        # A file cannot receive the Deprecation header an API call gets, so the
+        # deprecation (protocol 0.5, spec §10.5) is said where its author reads.
+        log.warning("%s: `room:` is deprecated since protocol 0.5 and will be "
+                    "removed after 2027-03-26; write `location:` instead.", source)
     try:
         location = normalize_location(None if raw is None else str(raw))
     except ValueError as e:

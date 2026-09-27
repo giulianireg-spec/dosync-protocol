@@ -95,7 +95,7 @@ def test_version_is_declared_in_exactly_one_place():
     pyproject.toml carried its own copy. `import dosync; dosync.__version__`
     reported a number three releases stale."""
     server_src = (REPO / "dosync" / "server.py").read_text()
-    assert not re.search(r'"\d+\.\d+\.\d+"', server_src.replace('"0.4"', "")), \
+    assert not re.search(r'"\d+\.\d+\.\d+"', server_src), \
         "server.py hardcodes a version literal; import dosync.__version__ instead"
 
     pyproject = (REPO / "pyproject.toml").read_text()
