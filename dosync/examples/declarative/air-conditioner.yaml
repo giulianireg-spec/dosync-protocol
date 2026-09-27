@@ -10,7 +10,7 @@ device:
   name: Living room air conditioner
   category: actuator
   location: living-room
-  tags: [climate, comfort, energy]
+  tags: [hvac, energy]
   emergency_capable: false   # an AC is not part of an emergency response here;
                              # in a server room it would be, and that is a
                              # DEPLOYMENT decision, not a property of the device

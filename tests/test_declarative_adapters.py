@@ -119,11 +119,17 @@ def test_every_example_loads():
 
 def test_the_examples_are_not_all_household():
     """A format that only shows houses teaches that DoSync is for houses. The
-    3D printer and the building lighting controller are there on purpose."""
+    conveyor, the building lighting and the 3D printer are there on purpose.
+
+    Checked through where they are placed and what they are, not through
+    setting tags: `industrial` and `commercial` used to carry this, and a tag
+    that presumes a setting is exactly what the drafting prompt forbids."""
     loaded = load_directory(str(EXAMPLES))
-    tags = {t for m, _ in loaded for t in m.tags}
-    assert {"workshop", "commercial"} & tags, \
-        "at least one example must be outside the home"
+    locations = {m.location.split("/")[0] for m, _ in loaded if m.location}
+    assert {"plant-1", "building-a"} & locations, \
+        "at least one example must be placed outside the home"
+    assert any("machinery" in m.tags for m, _ in loaded), \
+        "at least one example must be production equipment"
 
 
 def test_both_yaml_and_json_examples_exist():

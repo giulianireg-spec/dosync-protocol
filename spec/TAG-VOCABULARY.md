@@ -53,6 +53,7 @@ This document defines the standard vocabulary. Implementors **SHOULD** use these
 | `display` | Screen for information output | Smart TV, information display, e-ink panel |
 | `speaker` | Audio output device | Smart speaker, soundbar |
 | `appliance` | Generic on/off appliance with no more specific role | Washing machine, industrial dryer, coffee maker |
+| `machinery` | Powered production equipment with moving parts — what an emergency stop exists for | Conveyor, press, pump, robot cell |
 
 ---
 

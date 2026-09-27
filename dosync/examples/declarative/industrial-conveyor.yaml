@@ -16,7 +16,7 @@ device:
   name: Line 2 conveyor
   category: actuator
   location: plant-1/floor-2   # a path: an intent restricted to plant-1 reaches this line too
-  tags: [machinery, conveyor, emergency, industrial]
+  tags: [machinery, emergency]   # what kind of machine it is, its actions say (stop, set_speed)
   emergency_capable: true    # an emergency stop MUST be able to reach this
 
 transport:

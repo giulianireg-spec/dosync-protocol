@@ -674,3 +674,29 @@ def test_the_drafting_tool_emits_a_block_the_hub_can_load():
     assert "provenance_header(" in manage, \
         "the human-readable header was dropped; both are needed, and stating " \
         "the same facts twice lets a reader see if one was quietly edited"
+
+
+def test_the_prompt_says_capabilities_decide_not_tags():
+    """The template told the model "Tags decide which goals a device
+    participates in at all: a device with no matching tag is never selected,
+    however capable it is" -- the opposite of selection by capability, and an
+    instruction that makes a model pad every adapter with tags. It must state
+    the rule a hub applies."""
+    prompt = build_prompt(DISCOVERED, REPO)
+    assert "never selected, however capable" not in prompt
+    assert "The actions you declare\ndecide which goals a device takes part in" in prompt
+
+
+def test_every_shipped_example_uses_only_vocabulary_tags():
+    """The examples are the template the model copies. Four of the six carried
+    tags outside the vocabulary -- `climate` among them, which the vocabulary
+    itself lists as deprecated -- while the prompt tells the model not to
+    invent alternatives."""
+    import re
+    from dosync.declarative import load_directory
+    text = (REPO / "spec" / "TAG-VOCABULARY.md").read_text(encoding="utf-8")
+    vocabulary = set(re.findall(r"^\| `([a-z0-9-]+)` \|", text.split("## Intent-to-tag mapping")[0], re.M))
+    deprecated = set(re.findall(r"^\| `([a-z0-9_-]+)` \|", text.split("## Deprecated tags")[1].split("\n## ")[0], re.M))
+    bad = [(m.device_id, t) for m, _ in load_directory(str(REPO / "examples" / "declarative"))
+           for t in m.tags if t not in vocabulary or t in deprecated]
+    assert not bad, f"examples carry tags outside the vocabulary: {bad}"

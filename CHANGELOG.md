@@ -10,6 +10,31 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The adapter-drafting prompt tells the model the rule a hub applies.** The
+  template said "Tags decide which goals a device participates in at all: a
+  device with no matching tag is never selected, however capable it is" -- the
+  opposite of selection by capability, and a direct instruction that makes a
+  model pad every adapter with tags. It now says the declared actions decide,
+  tags rank, and placement restricts. Rule 5 said `emergency_capable` makes a
+  device "act on every emergency in the deployment, forever"; since protocol 0.5
+  an emergency restricted to a place does not reach devices outside it.
+- **The shipped examples use only vocabulary tags.** They are the template the
+  model copies, and four of six did not: the air conditioner carried `climate`,
+  which the vocabulary lists as deprecated, and `comfort`; the television
+  `entertainment`; the building lighting `commercial` and the conveyor
+  `industrial` -- tags that presume a setting, which the prompt forbids -- and
+  `conveyor`, which its actions already say. A test holds every example to the
+  vocabulary. The test that examples are not all household checked for
+  `commercial`/`workshop` tags; it now checks where they are placed.
+
+### Added
+- **`machinery` in the tag vocabulary** -- powered production equipment with
+  moving parts, what an emergency stop exists for. The vocabulary had
+  `blinds`, `fan` and `appliance` ("washing machine") and no role for industrial
+  equipment; the project's own industrial corpus already tagged its conveyor and
+  press `machinery`, and the industrial `line_shutdown` class resolves on it.
+
+### Fixed
 - **The tag vocabulary describes the classes a hub actually ships with.** Since
   2026-06-03 a hub seeds five universal intent classes and each deployment
   registers its own; `spec/TAG-VOCABULARY.md` was never updated. Its mapping

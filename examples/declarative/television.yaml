@@ -12,7 +12,7 @@ device:
   name: Living room TV
   category: actuator
   location: living-room
-  tags: [display, communication, entertainment]
+  tags: [display, communication]
   emergency_capable: false
 
 transport:

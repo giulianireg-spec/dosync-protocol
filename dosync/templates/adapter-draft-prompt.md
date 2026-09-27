@@ -14,9 +14,11 @@ fences. It will be saved at:
 WHAT DOSYNC DOES WITH IT
 The hub resolves *goals* into device actions. It never reads your action NAMES;
 it reads each action's `type`, which says what the action MEANS. `pause_job`
-means nothing to the resolver — `type: pause` does. Tags decide which goals a
-device participates in at all: a device with no matching tag is never selected,
-however capable it is.
+means nothing to the resolver — `type: pause` does. The actions you declare
+decide which goals a device takes part in: a goal that needs `stop` reaches every
+device declaring one. Tags only rank the capable devices against each other, and
+where the device is placed restricts it — so declare what the device can really
+do, and add a tag only where it truly describes the device.
 
 TAGS — use these where one applies, and do not invent alternatives
 %%TAG_VOCABULARY%%
@@ -40,8 +42,9 @@ RULES
 4. Prefer read-only actions and status endpoints first. Those can be checked
    against the device before anyone relies on them; the rest cannot.
 5. Set `emergency_capable: true` only if this device genuinely matters in an
-   emergency, and say why in a comment. It makes the device act on every
-   emergency in the deployment, forever.
+   emergency, and say why in a comment. It lets emergency actions reach the
+   device in every emergency of the deployment, unless one is restricted to a
+   place the device is not in.
 6. Never include credentials. Where one is needed use a placeholder such as
    REPLACE_WITH_YOUR_API_KEY and note in a comment what it is and where the
    operator finds it.
