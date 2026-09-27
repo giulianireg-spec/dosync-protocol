@@ -10,6 +10,13 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The first example the drafting model sees no longer contradicts the prompt.**
+  `light-generic.yaml` opened by saying `tags` and each action's `type` are what
+  make DoSync understand a device, and that "without them" no intent would ever
+  choose it. With selection by capability that is true of the types, not the
+  tags; the comment now says so, and the prompt test covers the old sentence.
+
+### Fixed
 - **The adapter-drafting prompt tells the model the rule a hub applies.** The
   template said "Tags decide which goals a device participates in at all: a
   device with no matching tag is never selected, however capable it is" -- the

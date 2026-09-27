@@ -1,8 +1,9 @@
 # A generic HTTP light — the simplest useful example, and the one to copy first.
 #
-# The point of this file is not the HTTP. It is the two lines that make DoSync
-# understand what the device IS: `tags` and each action's `type`. Without them
-# the hub could switch this light and no intent would ever choose to.
+# The point of this file is not the HTTP. It is what makes DoSync understand
+# what the device IS: each action's `type`, which decides the goals it can serve,
+# and its `tags`, which rank it among the devices that can. Without the types the
+# hub could switch this light and no intent would ever choose to.
 
 device:
   id: light-hallway

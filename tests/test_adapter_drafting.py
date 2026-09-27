@@ -684,6 +684,9 @@ def test_the_prompt_says_capabilities_decide_not_tags():
     the rule a hub applies."""
     prompt = build_prompt(DISCOVERED, REPO)
     assert "never selected, however capable" not in prompt
+    # The first example said the same in a comment: "`tags` and each action's
+    # `type`. Without them ... no intent would ever choose to."
+    assert "`tags` and each action's `type`. Without them" not in prompt
     assert "The actions you declare\ndecide which goals a device takes part in" in prompt
 
 
