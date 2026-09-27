@@ -9,6 +9,37 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The certification suite runs in CI, every tier, against a live hub.** The
+  only CI job for it checked that `certify.py` compiled and described its tiers;
+  nothing ever ran it, so its checks were written, counted and never executed.
+  A new job starts a hub in certify mode -- authentication on with a known token,
+  and a fixture policy file (`.github/certification/policies.json`) so the policy
+  checks have a plan a policy modifies -- and requires basic, standard, emergency
+  and conformance to certify, each on its own. Run for the first time, the suite
+  passed 52 of its 56 checks; the 4 failures were the missing token and the
+  missing policy file, which the job now supplies.
+- **Conformance checks C13-C21 for protocol 0.5**: a location set by PATCH is
+  kept and audited; a location restricts to what it contains, by segment; an
+  `informs` class excludes nothing; a restricting emergency stays in its zone;
+  an unknown location is refused outside an emergency and reaches every capable
+  device in one; re-registration keeps the operator's location; and an emergency
+  at an unknown location is accepted and recorded. The suite builds its own scene
+  (probe devices and probe intent classes) and removes it whatever happens. It
+  checks through `explain`, which executes nothing, because it also runs against
+  hubs with physical devices. Checked against hubs that break each rule.
+- **"Not applicable" in the certification report.** The one check that must
+  fire a real emergency (C21) runs only in certify mode. Against a production hub
+  it is recorded as not applicable, with its reason, and the tier's expected
+  count drops by one: a pass would claim what nobody checked, a fail would make
+  every production hub uncertifiable. The signed report lists it.
+
+### Fixed
+- **A basic certification could never certify.** The report expected 12 checks
+  for a tier that runs 10, so every basic run ended "incomplete" -- invisible
+  until the suite was run. The banner also printed a second, stale table of
+  counts; there is now one.
+
 ### Changed
 - **Protocol 0.5.** The protocol's own contract changed in this release -- a
   location in an intent's context now restricts where it acts, emergencies follow

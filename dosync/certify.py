@@ -9,6 +9,8 @@ Tiers:
   basic     (10 tests) — connectivity, authentication, device manifest
   standard  (33 tests) — protocol conformance, events, health, version headers, manifest privacy, intent lifecycle
   emergency (44 tests) — everything in standard + emergency override, policy engine, audit log integrity, firmware re-registration
+  conformance (65 tests) — everything in emergency + protocol features through 0.5: sensor kind, policy provenance,
+                           chain archiving, adapters, discovery, and where a device is and what a location in an intent does
 
 Two testing modes:
 
@@ -227,6 +229,11 @@ class CertReport:
     signature: str = ""          # Ed25519 signature over the canonical report (optional)
     hub_version: str = ""        # hub's reported app version (reproducibility)
     hub_protocol: str = ""       # hub's reported protocol version (reproducibility)
+    #: Checks that could not be run safely in this mode, each with its reason.
+    #: Neither passed nor failed: a pass would claim what nobody checked, and a
+    #: fail would make every production hub uncertifiable for a check that only
+    #: certify mode can run without acting on physical devices.
+    not_applicable: list = field(default_factory=list)
 
     def add(self, result: TestResult):
         self.tests.append(result)
@@ -251,11 +258,16 @@ class CertReport:
     #: `unverifiable` is not `contradicted`, and "not searchable" is not "found
     #: nothing". A certification suite owes the same honesty.
     EXPECTED_COUNTS = {
-        "basic": 12, "standard": 33, "emergency": 44, "conformance": 56,
+        # basic said 12 while the tier runs B01-B10: a basic certification was
+        # always "incomplete" and could never certify. Nothing noticed because
+        # nothing ran the suite; CI now certifies every tier on its own.
+        "basic": 10, "standard": 33, "emergency": 44, "conformance": 65,
     }
 
     def finalize(self):
         expected = self.EXPECTED_COUNTS.get(self.tier)
+        if expected:
+            expected -= len(self.not_applicable)
         self.expected = expected
         self.executed = self.passed + self.failed
         self.incomplete = bool(expected and self.executed < expected)
@@ -263,6 +275,7 @@ class CertReport:
         raw = json.dumps({
             "host": self.host, "tier": self.tier,
             "timestamp": self.timestamp, "passed": self.passed, "failed": self.failed,
+            "not_applicable": [n for n, _ in self.not_applicable],
         }, sort_keys=True)
         self.fingerprint = hashlib.sha256(raw.encode()).hexdigest()
 
@@ -276,6 +289,7 @@ class CertReport:
             "executed": getattr(self, "executed", self.passed + self.failed),
             "expected": getattr(self, "expected", None),
             "incomplete": getattr(self, "incomplete", False),
+            "not_applicable": [{"check": n, "reason": r} for n, r in self.not_applicable],
             "tier": self.tier,
             "hub": f"{self.host}:{self.port}",
             "hub_version": self.hub_version,
@@ -908,7 +922,7 @@ def run_emergency(base: str, report: CertReport):
     ))
 
 
-# ── TIER CONFORMANCE — 8 tests for v0.4 protocol features (cumulative: 52) ────
+# ── TIER CONFORMANCE — protocol features through 0.5 (cumulative: 65) ─────────
 # Everything shipped in the 0.4 cycle (SENSOR-KIND, AUDIT-PROVENANCE,
 # EMERGENCY-UNSAT-ESCALATION, AUDIT-ARCHIVE) had unit tests but no CONFORMANCE
 # coverage — nothing proved, over the wire against a running hub, that the
@@ -1071,6 +1085,143 @@ def run_conformance(base: str, report: CertReport):
            else "enabled on this hub; the request was rejected on its merits"),
     ))
 
+    run_conformance_05(base, report)
+
+
+# C13-C21 cover protocol 0.5 (spec §10.5): where a device is, and what a
+# location in an intent's context does. The suite builds its own scene -- two
+# probe devices and two probe intent classes, prefixed certify- -- and removes it
+# whatever happens. It verifies through explain(), which executes nothing,
+# because this suite also runs against hubs with physical devices; the one check
+# that must fire an emergency runs only in certify mode.
+_PROBE_ACTION = "certify_probe"
+_PROBE_IN = "certify-probe-cell-2"      # placed at certify-site/line-3/cell-2
+_PROBE_OUT = "certify-probe-line-30"    # placed at certify-site/line-30/cell-1
+_CLASS_RESTRICTS = "certify_location_restricts"
+_CLASS_INFORMS = "certify_location_informs"
+
+
+def _probe_device(device_id: str) -> dict:
+    return {
+        "device_id": device_id, "device_name": f"Certification probe {device_id}",
+        "manufacturer": "DoSync Initiative", "model": "LocationProbe", "firmware": "0.5",
+        "category": "actuator", "tags": ["certify-probe"],
+        "actuators": [{"id": _PROBE_ACTION, "type": _PROBE_ACTION,
+                       "description": "No intent outside certification asks for this"}],
+    }
+
+
+def _explained(base: str, intent: str, location: str, urgency: str = "info") -> set:
+    from urllib.parse import quote
+    st, body = request("GET", f"{base}/v1/intents/{intent}/explain"
+                              f"?urgency={urgency}&location={quote(location)}")
+    return {d.get("device_id") for d in body.get("included", [])} if st == 200 else None
+
+
+def run_conformance_05(base: str, report: CertReport):
+    section("── Tier CONFORMANCE — v0.5 protocol features (spec §10.5) ──")
+    for did in (_PROBE_IN, _PROBE_OUT):
+        request("POST", f"{base}/v1/devices/register", _probe_device(did))
+    for name, role in ((_CLASS_RESTRICTS, "restricts"), (_CLASS_INFORMS, "informs")):
+        request("POST", f"{base}/v1/intent-classes", {
+            "name": name, "urgency": "info", "resolution_tags": ["certify-probe"],
+            "resolution_actuators": [_PROBE_ACTION], "location_role": role,
+            "description": "Certification probe class; removed when the suite ends"})
+    try:
+        # C13. The operator sets a location, and it is kept.
+        p_st, p_body = request("PATCH", f"{base}/v1/devices/{_PROBE_IN}",
+                               {"location": "certify-site/line-3/cell-2"})
+        request("PATCH", f"{base}/v1/devices/{_PROBE_OUT}", {"location": "certify-site/line-30/cell-1"})
+        g_st, g_body = request("GET", f"{base}/v1/devices/{_PROBE_IN}")
+        report.add(TestResult(
+            "C13  PATCH sets a device location and the hub keeps it",
+            p_st == 200 and g_body.get("location") == "certify-site/line-3/cell-2",
+            f"PATCH {p_st}, location now {g_body.get('location')!r}"))
+
+        # C14. A move is a governance event: it is in the audit log.
+        _, au = request("GET", f"{base}/v1/audit?limit=200")
+        moved = [e for e in au.get("entries", []) if e.get("type") == "device_relocated"
+                 and e.get("device_id") == _PROBE_IN]
+        report.add(TestResult(
+            "C14  A relocation is recorded as device_relocated",
+            bool(moved) and moved[-1].get("location") == "certify-site/line-3/cell-2",
+            f"{len(moved)} device_relocated entr{'y' if len(moved) == 1 else 'ies'}"))
+
+        # C15. A restricting location holds what is below it, by whole segment.
+        got = _explained(base, _CLASS_RESTRICTS, "certify-site/line-3")
+        probes = (got or set()) & {_PROBE_IN, _PROBE_OUT}
+        report.add(TestResult(
+            "C15  A location restricts to what it contains, by segment (line-3 is not line-30)",
+            probes == {_PROBE_IN},
+            f"included probes: {sorted(probes)}"))
+
+        # C16. A class whose location informs excludes nothing.
+        got = _explained(base, _CLASS_INFORMS, "certify-site/line-3")
+        probes = (got or set()) & {_PROBE_IN, _PROBE_OUT}
+        report.add(TestResult(
+            "C16  A location_role 'informs' class excludes no device for its location",
+            probes == {_PROBE_IN, _PROBE_OUT},
+            f"included probes: {sorted(probes)}"))
+
+        # C17. A restricting emergency stays in its zone -- force-inclusion too.
+        got = _explained(base, _CLASS_RESTRICTS, "certify-site/line-3", urgency="emergency")
+        report.add(TestResult(
+            "C17  A restricting emergency stays in its zone, force-inclusion included",
+            got == {_PROBE_IN},
+            f"included: {sorted(got) if got is not None else 'explain failed'}"))
+
+        # C18. Outside an emergency, a place nothing is at is refused.
+        _, s0 = request("GET", f"{base}/v1/status")
+        r_st, r_body = request("POST", f"{base}/v1/intent/async", {
+            "intent": _CLASS_RESTRICTS, "urgency": "info",
+            "context": {"location": "certify-nowhere"}})
+        _, s1 = request("GET", f"{base}/v1/status")
+        before = (s0.get("intents_rejected") or {}).get("unknown_location", 0)
+        after = (s1.get("intents_rejected") or {}).get("unknown_location", 0)
+        report.add(TestResult(
+            "C18  An unknown restricting location is refused (422, unknown_location)",
+            r_st == 422 and after == before + 1,
+            f"HTTP {r_st}, unknown_location {before}→{after}"))
+
+        # C19. In an emergency the resolver never narrows to nothing.
+        got = _explained(base, _CLASS_RESTRICTS, "certify-nowhere", urgency="emergency")
+        probes = (got or set()) & {_PROBE_IN, _PROBE_OUT}
+        report.add(TestResult(
+            "C19  An emergency at an unknown location reaches every capable device",
+            probes == {_PROBE_IN, _PROBE_OUT},
+            f"included probes: {sorted(probes)}"))
+
+        # C20. A device re-registering never erases the operator's location.
+        request("POST", f"{base}/v1/devices/register", _probe_device(_PROBE_IN))
+        _, g2 = request("GET", f"{base}/v1/devices/{_PROBE_IN}")
+        report.add(TestResult(
+            "C20  Re-registration keeps the location the operator set",
+            g2.get("location") == "certify-site/line-3/cell-2",
+            f"location after re-registration: {g2.get('location')!r}"))
+
+        # C21. The hub accepts that emergency and records it. Only in certify
+        # mode: firing an emergency on a production hub would act on physical
+        # devices, which no conformance check may do.
+        _, st = request("GET", f"{base}/v1/status")
+        name = "C21  An emergency at an unknown location is accepted and recorded"
+        if st.get("certify_mode"):
+            e_st, e_body = request("POST", f"{base}/v1/intent/async", {
+                "intent": _CLASS_RESTRICTS, "urgency": "emergency",
+                "context": {"location": "certify-nowhere"}})
+            report.add(TestResult(
+                name, e_st == 200 and e_body.get("location_not_found") == "certify-nowhere",
+                f"HTTP {e_st}, location_not_found={e_body.get('location_not_found')!r}"))
+        else:
+            reason = ("fires a real emergency; run in certify mode (DOSYNC_CERTIFY=true), "
+                      "as CI does, to check it")
+            report.not_applicable.append((name, reason))
+            warn(f"{name} — not applicable in production mode: {reason}")
+    finally:
+        for did in (_PROBE_IN, _PROBE_OUT):
+            request("DELETE", f"{base}/v1/devices/{did}")
+        for name in (_CLASS_RESTRICTS, _CLASS_INFORMS):
+            request("DELETE", f"{base}/v1/intent-classes/{name}")
+
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -1094,7 +1245,8 @@ Tier test counts:
   basic      10 tests  — connectivity, auth, registration, manifest
   standard   33 tests  — + intents, events, health, explainability, version headers, intent lifecycle
   emergency  44 tests  — + emergency override, audit log integrity, firmware re-registration
-  conformance 52 tests — + v0.4 protocol features: sensor-kind, policy provenance, chain archiving
+  conformance 65 tests — + protocol features through 0.5: sensor-kind, policy provenance, chain archiving,
+                         device locations and location-restricted intents
         """,
     )
     parser.add_argument("--host",   default="localhost",  help="Hub IP or hostname")
@@ -1136,7 +1288,9 @@ Tier test counts:
 
     # NOTE: cumulative totals — basic(10), +standard(23)=33, +emergency(11)=44.
     # The "CERTIFIED (passed/total)" line below uses the real runtime count; keep these in sync.
-    tier_counts = {"basic": 10, "standard": 33, "emergency": 44, "conformance": 52}
+    # One table: the report decides completeness from EXPECTED_COUNTS, and this
+    # banner used to print a second, stale copy (basic 10, conformance 52).
+    tier_counts = CertReport.EXPECTED_COUNTS
     print(f"\n{C.BOLD}DoSync Certification CLI v0.3{C.RESET}")
     print(f"  Hub:   {base}")
     print(f"  Tier:  {C.BOLD}{args.tier.upper()}{C.RESET} ({tier_counts[args.tier]} tests)")

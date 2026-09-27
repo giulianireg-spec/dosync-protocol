@@ -893,7 +893,7 @@ the other end.
 | Web dashboard | ✅ |
 | API key authentication + SHA-256 audit log | ✅ |
 | Capability-based resolver | ✅ |
-| Certification CLI — Standard 33/33 · Emergency 44/44 (signed reports) | ✅ |
+| Certification CLI — Basic 10 · Standard 33 · Emergency 44 · Conformance 65, each run in CI against a live hub (signed reports) | ✅ |
 | Philips WiZ adapter (UDP local) | ✅ |
 | Home Assistant bridge (10 domains) | ✅ |
 | Native MCP server (Claude, ChatGPT, any LLM) | ✅ |
@@ -946,8 +946,8 @@ python3 certify.py --host <hub-ip> --port 47200 --tier standard
 
 | Language | Location | Author | Certification |
 |---|---|---|---|
-| Python (reference) | `server.py` | this project | Standard 33/33 · Emergency 44/44 ✅ |
-| Node.js (companion) | [giulianireg-spec/dosync-node](https://github.com/giulianireg-spec/dosync-node) | this project | Standard 33/33, against the v0.3 suite — re-validation against the current 56-test suite pending |
+| Python (reference) | `server.py` | this project | Conformance 65/65 ✅ (every tier, in CI) |
+| Node.js (companion) | [giulianireg-spec/dosync-node](https://github.com/giulianireg-spec/dosync-node) | this project | Standard 33/33, against the v0.3 suite — re-validation against the current 65-check suite pending |
 
 The Node.js implementation is a **companion** port that validates the protocol
 is implementable in a second language against the same certification suite —

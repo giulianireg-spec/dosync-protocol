@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "_README": [
+    "Deployment policy file for the certification job in CI -- not an example of",
+    "what a deployment should declare. Checks C04-C06 need a plan that a policy",
+    "MODIFIES; a clean hub has none. This excludes one sensor that the job",
+    "registers for the purpose (ci-policy-probe) from report_status, which the",
+    "suite fires, leaving the certification's own test device untouched."
+  ],
+  "policies": [
+    {
+      "type": "device_exclusion",
+      "intent_classes": ["report_status"],
+      "excluded_device_ids": ["ci-policy-probe"],
+      "reason": "CI fixture: a plan a deployment policy modifies, for C04-C06"
+    }
+  ]
+}
