@@ -42,11 +42,6 @@ CREATE TABLE IF NOT EXISTS devices (
     updated_at      REAL NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS family_profile (
-    id              INTEGER PRIMARY KEY CHECK (id = 1),
-    profile_json    TEXT NOT NULL,
-    updated_at      REAL NOT NULL
-);
 
 CREATE TABLE IF NOT EXISTS audit_log (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -348,31 +343,6 @@ class DoSyncDB:
         with self._cursor() as cur:
             cur.execute("SELECT COUNT(*) as n FROM devices")
             return cur.fetchone()["n"]
-
-    # ── Family profile ────────────────────────────────────────────────────────
-
-    def save_family_profile(self, profile: dict) -> None:
-        """Store the deployment profile (single row, always id=1)."""
-        now = time.time()
-        with self._cursor() as cur:
-            cur.execute("""
-                INSERT INTO family_profile (id, profile_json, updated_at)
-                VALUES (1, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    profile_json = excluded.profile_json,
-                    updated_at   = excluded.updated_at
-            """, (json.dumps(profile), now))
-        log.debug("Saved family profile")
-
-    def load_family_profile(self) -> Optional[dict]:
-        """Load the deployment profile, or None if there is none."""
-        with self._cursor() as cur:
-            cur.execute("SELECT profile_json FROM family_profile WHERE id = 1")
-            row = cur.fetchone()
-        if row:
-            log.info("Loaded family profile from database")
-            return json.loads(row["profile_json"])
-        return None
 
     # ── Audit log ─────────────────────────────────────────────────────────────
 

@@ -886,7 +886,7 @@ log, not evidence.
 | Type | Meaning |
 |---|---|
 | `presence_updated` | Occupancy changed, with the signal that decided |
-| `profile_loaded` | A deployment profile was loaded |
+| `profile_loaded` | A family profile was loaded. Emitted only before protocol 0.5, which removed the family profile (§10.5); it may appear in older chains |
 | `audit_archived` | Chain entries were moved to a segment file, binding its hash |
 
 **Normative:** entries MUST NOT contain secrets. A token, a key or a password
@@ -1119,6 +1119,10 @@ Before `v1.0`, a MINOR increment may also change what existing behavior means, a
 - Registration accepts the actuator fields `execution_model`, `supports_progress`, `supports_cancel`, `emits_telemetry`, `verify_with`, and the sensor field `range`. A re-registration keeps what it did not send: `adapter_config` (unless the adapter changed), `provenance`, `discovery_evidence`.
 - Audit event types `device_relocated` and `emergency_location_not_found`; `device_registered` carries `location` when the device has one.
 - `/v1/status`: `intents_rejected` (by reason) and `emergency_location_fallbacks`.
+
+**Removed**
+
+- `family_profile` in `/v1/status`, and the family profile behind it (the `profile_loaded` audit event is no longer emitted). No API could set it, and nothing used its content. The protocol does not model households any more than production lines or crews: a deployment that does expresses its routines as intent classes, its hours as policies and its rooms as locations. A database from before 0.5 keeps the table, unused.
 
 **Deprecated**
 

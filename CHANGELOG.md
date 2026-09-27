@@ -9,6 +9,38 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+- **The family profile.** `FamilyProfile` modelled a household -- a family
+  name, morning, bedtime and away routines, a bedtime -- with one city's
+  timezone as the protocol's default. It was persisted, restored and reported in
+  `/v1/status`, but no API could set it and nothing used its content; only a
+  demo and a test (with the author's surname) ever created one. The project had
+  already decided where it belongs (ROADMAP: FamilyOS is a separate project; "the
+  protocol is the infrastructure, the domain is up to you"): a deployment that
+  models a household expresses its routines as intent classes, its hours as
+  policies and its rooms as locations. `/v1/status` no longer carries
+  `family_profile`; `profile_loaded` is no longer emitted (the spec keeps it for
+  older chains). A database from before keeps its table, unused; `manage.py
+  clean` drops it, since it holds a family's name. Recorded in spec §10.5.
+
+### Changed
+- **What the MCP server tells an agent is in English.** Replies said
+  "Acciones completadas", "Severidad", "WS clientes"; parameter descriptions an
+  agent reads to use a tool said "Tipo de evento", "Datos adicionales del
+  evento"; the status reply opened with a house and "Perfil: Familia". The
+  `effect` parameter of `dosync_control_device` listed one brand of television's
+  effects in a universal tool; it now says the device decides which names are
+  valid. `tests/test_mcp_speaks_english.py` holds it: every reply label must be
+  on a closed English list -- an allowed list, since the general guard's lists
+  of forbidden words were defeated five times -- and every description must be
+  free of accents and Spanish function words.
+- **The intent priority map names only the universal classes.** It listed
+  `morning_routine`, `bedtime_routine`, `away_mode`, `set_environment`,
+  `remind_chore` and `save_energy` -- classes a hub does not have. A
+  deployment's own classes take the default, as before.
+- The resolver's comment for `context.actions` says what it is -- parameters an
+  intent carries for a device tag -- instead of "FamilyProfile params".
+
 ### Added
 - **The certification suite runs in CI, every tier, against a live hub.** The
   only CI job for it checked that `certify.py` compiled and described its tiers;

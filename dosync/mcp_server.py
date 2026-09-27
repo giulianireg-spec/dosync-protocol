@@ -365,7 +365,7 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "event_id": {
                         "type": "string",
-                        "description": "Tipo de evento (ej: 'fall_detected', 'malfunction', 'motion')",
+                        "description": "Event type (e.g. 'fall_detected', 'malfunction', 'motion')",
                     },
                     "severity": {
                         "type": "string",
@@ -375,7 +375,7 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "data": {
                         "type": "object",
-                        "description": "Datos adicionales del evento",
+                        "description": "Additional event data",
                     },
                 },
                 "required": ["device_id", "event_id"],
@@ -394,7 +394,7 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {
                     "last_n": {
                         "type": "integer",
-                        "description": "Cantidad de entradas a mostrar (default: 10)",
+                        "description": "How many entries to show (default: 10)",
                         "default": 10,
                     },
                 },
@@ -451,11 +451,11 @@ async def list_tools() -> list[types.Tool]:
                     "b": {"type": "integer", "description": "Azul 0-255"},
                     "kelvin": {
                         "type": "integer",
-                        "description": "Temperatura de color en Kelvin (2200-6500)",
+                        "description": "Color temperature in Kelvin (2200-6500)",
                     },
                     "effect": {
                         "type": "string",
-                        "description": "Efecto Ambilight. Valores: FOLLOW_COLOR: HOT_LAVA, FOLLOW_COLOR: DEEP_WATER, FOLLOW_COLOR: FRESH_NATURE, FOLLOW_VIDEO: STANDARD, FOLLOW_VIDEO: VIVID, FOLLOW_AUDIO: ENERGY_ADAPTIVE_BRIGHTNESS, Mode: lounge",
+                        "description": "An effect or scene the device itself supports, by the name its adapter gives it (for example a lighting preset). Which names are valid depends on the device, not on DoSync.",
                     },
                 },
                 "required": ["device_id", "action"],
@@ -500,7 +500,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
         if "error" in fire_result:
             return [types.TextContent(type="text",
-                text=f"❌ Error ejecutando intent '{intent}': {fire_result['error']}")]
+                text=f"❌ Error firing intent '{intent}': {fire_result['error']}")]
 
         intent_id = fire_result.get("intent_id")
         if not intent_id:
@@ -576,13 +576,13 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         else:
             icon = "❌"
 
-        text  = f"{icon} Intent '{intent}' [{urgency}] ejecutado\n"
-        text += f"  Acciones completadas: {actions}\n"
+        text  = f"{icon} Intent '{intent}' [{urgency}] executed\n"
+        text += f"  Actions completed: {actions}\n"
 
         if failed:
             text += f"  No response from {len(failed)} device(s) — excluded for ~30 min\n"
         if aborted:
-            text += f"  Cancelados por FailurePolicy: {len(aborted)} dispositivos\n"
+            text += f"  Cancelled by FailurePolicy: {len(aborted)} device(s)\n"
 
         critical = [r for r in results_list
                    if r.get("success") and r.get("action") in
@@ -616,7 +616,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             return [types.TextContent(type="text",
                     text="No devices matched the given filters.")]
 
-        text = f"📡 {len(devices)} dispositivo(s) registrado(s):\n\n"
+        text = f"📡 {len(devices)} device(s) registered:\n\n"
         for d in devices:
             emerg   = "🚨 " if d.get("emergency_capable") else "   "
             adapter = d.get("adapter") or "simulated"
@@ -627,7 +627,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             text   += f"     Adapter: {adapter}\n"
             text   += f"     Tags: {tags}\n"
             if acts:
-                text += f"     Acciones: {', '.join(acts)}\n"
+                text += f"     Actions: {', '.join(acts)}\n"
             text += "\n"
 
         return [types.TextContent(type="text", text=text)]
@@ -702,16 +702,14 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         db         = result.get("db", {})
         integrity  = result.get("audit_integrity", True)
 
-        text  = f"🏠 DoSync Hub v{result.get('version', '?')}\n\n"
-        text += f"  Protocolo:    {result.get('protocol', '?')}\n"
-        text += f"  Dispositivos: {result.get('devices', 0)}\n"
+        text  = f"DoSync Hub v{result.get('version', '?')}\n\n"
+        text += f"  Protocol:     {result.get('protocol', '?')}\n"
+        text += f"  Devices:      {result.get('devices', 0)}\n"
         text += f"  Occupancy:    {'occupied' if occupied else 'unoccupied'}\n"
-        text += f"  Audit log:    {result.get('audit_entries', 0)} entradas "
+        text += f"  Audit log:    {result.get('audit_entries', 0)} entries "
         text += f"({'✓ intact' if integrity else '✗ compromised'})\n"
-        text += f"  WS clientes:  {ws_clients}\n"
-        text += f"  DB:           {db.get('db_size_kb', '?')} KB en {db.get('db_path', '?')}\n"
-        if result.get("family_profile"):
-            text += f"  Perfil:       Familia {result['family_profile']}\n"
+        text += f"  WS clients:   {ws_clients}\n"
+        text += f"  DB:           {db.get('db_size_kb', '?')} KB at {db.get('db_path', '?')}\n"
         rejected = result.get("intents_rejected") or {}
         total_rejected = sum(rejected.values())
         if total_rejected:
@@ -739,9 +737,9 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             text = f"❌ Error: {result['error']}"
         else:
             text = (f"✅ Event received by the hub:\n"
-                    f"  Dispositivo: {result.get('device_id')}\n"
-                    f"  Evento:      {result.get('event_id')}\n"
-                    f"  Severidad:   {result.get('severity')}\n")
+                    f"  Device:      {result.get('device_id')}\n"
+                    f"  Event:       {result.get('event_id')}\n"
+                    f"  Severity:    {result.get('severity')}\n")
 
         return [types.TextContent(type="text", text=text)]
 
@@ -759,8 +757,8 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         total     = result.get("count", 0)
 
         text  = f"📋 Audit Log DoSync\n"
-        text += f"   Total: {total} entradas | "
-        text += f"Integridad: {'✓ intact' if integrity else '✗ compromised'}\n\n"
+        text += f"   Total: {total} entries | "
+        text += f"Integrity: {'✓ intact' if integrity else '✗ compromised'}\n\n"
 
         # Show the most recent N
         for entry in list(reversed(entries))[:last_n]:
@@ -772,7 +770,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             elif kind == "device_event":
                 extra = f" → {entry.get('device_id')}: {entry.get('event_id')}"
             elif kind == "phase_executed":
-                extra = f" → fase '{entry.get('phase')}'"
+                extra = f" → phase '{entry.get('phase')}'"
             elif kind == "presence_updated":
                 conf = entry.get('occ_confidence', 0)
                 extra = f" → occupied={entry.get('occupied')} conf={conf:.0%}"
@@ -873,7 +871,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         if result.get("error"):
             text = f"❌ Error: {result['error']}"
         elif result.get("success"):
-            text = f"✅ {device_id}: {action} ejecutado correctamente"
+            text = f"✅ {device_id}: {action} executed"
         else:
             text = f"⚠️ {device_id}: {action} failed"
 
@@ -882,7 +880,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     else:
         return [types.TextContent(
             type="text",
-            text=f"Herramienta desconocida: {name}",
+            text=f"Unknown tool: {name}",
         )]
 
 

@@ -24,9 +24,9 @@ from .db import DoSyncDB
 from dataclasses import dataclass, field
 from .models import (
     ActionPlan, ActionResult, ActuatorSpec, CapabilityManifest,
-    ContextSignalType, DeviceAction, DeviceEvent, FamilyProfile,
+    ContextSignalType, DeviceAction, DeviceEvent,
     Intent, IntentClass, IntentResult, OccupancyState, Phase,
-    PhasedActionPlan, PhaseAction, PresenceSignal, RoutineAction, Urgency,
+    PhasedActionPlan, PhaseAction, PresenceSignal, Urgency,
 )
 
 log = logging.getLogger("dosync.hub")
@@ -103,7 +103,6 @@ class DoSyncHub:
         self.default_executor = None
         self.audit_log      = AuditLog()
         self.occupancy      = OccupancyEngine()
-        self.family_profile: FamilyProfile | None = None
         self._event_handlers: list[Callable] = []
         self.db             = DoSyncDB(db_path)
         self.db.init()
@@ -124,8 +123,6 @@ class DoSyncHub:
         # that anything calling it keeps working — `policies.py` has a method of
         # the same name that is a different thing entirely.
         HubRestorer(self).restore()
-
-    # ── Family profile ───────────────────────────────────────────────────────
 
     # ── DB restore ──────────────────────────────────────────────────────────
 
@@ -177,17 +174,6 @@ class DoSyncHub:
 
     def maybe_archive(self, *args, **kwargs):
         return self._checkpoints.maybe_archive(*args, **kwargs)
-
-    def set_family_profile(self, profile: FamilyProfile) -> None:
-        """Load the family profile into the hub and persist it."""
-        self.family_profile = profile
-        self.db.save_family_profile(profile.to_dict())
-        self.audit_log.append({
-            "type":        "profile_loaded",
-            "family_name": profile.family_name,
-            "bedtime":     f"{profile.bedtime_hour:02d}:{profile.bedtime_minute:02d}",
-        })
-        log.info("Family profile loaded: %s", profile.family_name)
 
     # ── Occupancy / presence ─────────────────────────────────────────────────
 

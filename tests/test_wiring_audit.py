@@ -8,8 +8,9 @@ class found two more, pinned here:
   * the background state refresher never ran in production (gated on
     isinstance(hub.resolver, StateAwareResolver), always False) — it is also the
     only "back online" detector.
-  * the family profile was persisted but never restored (db.load_family_profile
-    existed; nothing called it) despite _restore_from_db's docstring promising it.
+  * the family profile was persisted but never restored. (It was removed from
+    the protocol in 0.5 -- nothing set or used it -- so its regressions went
+    with it.)
   * the operations table had no cleanup wired (clear_old_snapshots was called,
     clear_old_operations never was).
 """
@@ -18,46 +19,7 @@ import asyncio
 import pytest
 
 from dosync.hub import DoSyncHub
-from dosync.models import (ActuatorSpec, CapabilityManifest, DeviceCategory,
-                           FamilyProfile, RoutineAction)
-
-
-# ── Family profile survives a restart ────────────────────────────────────────
-
-def test_family_profile_round_trips_through_dict():
-    profile = FamilyProfile(
-        family_name="Giuliani",
-        routine_morning=[RoutineAction(tag="light", action_type="turn_on",
-                                       params={"brightness": 80}, description="wake")],
-        bedtime_hour=22, bedtime_minute=15, timezone="America/Argentina/Cordoba",
-    )
-    restored = FamilyProfile.from_dict(profile.to_dict())
-    assert restored.family_name == "Giuliani"
-    assert restored.bedtime_hour == 22 and restored.bedtime_minute == 15
-    assert restored.timezone == "America/Argentina/Cordoba"
-    assert len(restored.routine_morning) == 1
-    assert restored.routine_morning[0].tag == "light"
-    assert restored.routine_morning[0].params == {"brightness": 80}
-
-
-def test_family_profile_survives_hub_restart(tmp_path):
-    """The bug: set the profile, restart, profile silently gone."""
-    db = str(tmp_path / "p.db")
-    hub = DoSyncHub(db_path=db)
-    hub.set_family_profile(FamilyProfile(family_name="Giuliani", bedtime_hour=22,
-                                         bedtime_minute=15))
-    hub2 = DoSyncHub(db_path=db)      # simulate a restart
-    assert hub2.family_profile is not None, "family profile did not survive restart"
-    assert hub2.family_profile.family_name == "Giuliani"
-    assert hub2.family_profile.bedtime_hour == 22
-
-
-def test_malformed_persisted_profile_does_not_break_startup(tmp_path):
-    db = str(tmp_path / "p2.db")
-    hub = DoSyncHub(db_path=db)
-    hub.db.save_family_profile({"family_name": "X", "bedtime": "not-a-time"})
-    hub2 = DoSyncHub(db_path=db)      # must not raise
-    assert hub2.family_profile.bedtime_hour == 21   # documented fallback
+from dosync.models import ActuatorSpec, CapabilityManifest, DeviceCategory
 
 
 # ── Operations cleanup is reachable ──────────────────────────────────────────

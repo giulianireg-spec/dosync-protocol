@@ -1,7 +1,7 @@
 """Rebuilding a hub from what the database holds.
 
 Extracted from `hub.py` on 8 September 2026. Restoration reads five things —
-devices, audit chain, occupancy, family profile and device state — and calls
+devices, audit chain, occupancy and device state — and calls
 nothing back: 140 lines that only ever wrote onto the hub it was handed.
 
 `register_device` was the other candidate the inventory named for this phase.
@@ -88,19 +88,6 @@ class HubRestorer:
         self._hub.audit_log._next_seq = (max(_seqs) + 1) if _seqs \
             else len(self._hub.audit_log._entries)
         self._hub.audit_log._checkpoint_cb = self._hub.db.set_audit_head
-
-        # Restore family profile. Until 2026-07-14 this was MISSING: the profile
-        # was persisted by set_family_profile() and db.load_family_profile()
-        # existed, but nothing ever called it — so every restart silently dropped
-        # the profile while this method's docstring promised it survives.
-        try:
-            profile_dict = self._hub.db.load_family_profile()
-            if profile_dict:
-                from .models import FamilyProfile
-                self._hub.family_profile = FamilyProfile.from_dict(profile_dict)
-                log.info("Restored family profile: %s", self._hub.family_profile.family_name)
-        except Exception as e:
-            log.warning("Could not restore family profile: %s", e)
 
         # Restore presence signals
         from .models import PresenceSignal

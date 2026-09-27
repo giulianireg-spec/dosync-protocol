@@ -23,8 +23,8 @@ logging.basicConfig(level=logging.WARNING)
 from dosync.models import (
     ActuatorSpec, CapabilityManifest, CertTier, ContextSignal,
     ContextSignalType, DeviceCategory, DeviceEvent, EventSpec,
-    FamilyProfile, Intent, IntentClass, Phase, PhaseAction,
-    PhasedActionPlan, PresenceSignal, RoutineAction, SensorSpec, Urgency,
+    Intent, IntentClass, Phase, PhaseAction,
+    PhasedActionPlan, PresenceSignal, SensorSpec, Urgency,
 )
 from dosync.hub import DoSyncHub
 from dosync.executor import SimulatedExecutor
@@ -252,27 +252,6 @@ def build_all_devices():
             emergency_capable=False, cert_tier=CertTier.STANDARD,
         ),
     ]
-
-
-def build_family_profile():
-    return FamilyProfile(
-        family_name="Giuliani",
-        routine_morning=[
-            RoutineAction("blinds",    "set_position",  {"position": 80}),
-            RoutineAction("appliance", "turn_on",       {}),
-        ],
-        routine_bedtime=[
-            RoutineAction("light",  "set_brightness", {"brightness": 10}),
-            RoutineAction("blinds", "set_position",   {"position": 0}),
-        ],
-        bedtime_hour=21, bedtime_minute=30,
-        routine_away=[
-            RoutineAction("light",      "turn_off",        {}),
-            RoutineAction("thermostat", "set_temperature", {"celsius": 17}),
-            RoutineAction("alarm",      "arm",             {"mode": "away"}),
-        ],
-        timezone="America/Argentina/Cordoba",
-    )
 
 
 # ── Escenarios ────────────────────────────────────────────────────────────────
@@ -523,9 +502,6 @@ Ejemplos:
     # Setup
     hub       = DoSyncHub(db_path=":memory:")   # demo usa DB en memoria
     executor  = SimulatedExecutor(failure_rate=0.0)
-
-    profile = build_family_profile()
-    hub.set_family_profile(profile)
 
     for device in build_all_devices():
         hub.register_device(device)

@@ -201,18 +201,16 @@ def db_stats(args):
     conn = sqlite3.connect(args.db)
     keys = conn.execute("SELECT COUNT(*) FROM api_keys").fetchone()[0]
     pres = conn.execute("SELECT COUNT(*) FROM presence_signals").fetchone()[0]
-    prof = conn.execute("SELECT COUNT(*) FROM family_profile").fetchone()[0]
     conn.close()
 
     info(f"API keys:      {keys}")
     info(f"Presence sig.: {pres}")
-    info(f"Family profile:{'yes' if prof else 'no'}")
     print()
 
 
 def db_clean(args):
     header("Clean Database")
-    warn("This removes ALL data: devices, audit log, presence signals, family profile.")
+    warn("This removes ALL data: devices, audit log, presence signals.")
     warn("API keys are kept so you don't lose access.")
     print()
 
@@ -226,7 +224,9 @@ def db_clean(args):
     conn.execute("DELETE FROM devices")
     conn.execute("DELETE FROM audit_log")
     conn.execute("DELETE FROM presence_signals")
-    conn.execute("DELETE FROM family_profile")
+    # Protocol 0.5 removed the family profile; a database from before it still
+    # holds that table, and a family's name in it. "ALL data" includes it.
+    conn.execute("DROP TABLE IF EXISTS family_profile")
     conn.commit()
     conn.close()
 

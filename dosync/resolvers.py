@@ -802,7 +802,8 @@ class CapabilityMatchingResolver(BaseResolver):
 
         for actuator in device.actuators:
             if not target_actuators or actuator.type in target_actuators:
-                # Prefer FamilyProfile params when available
+                # Params the intent carries for this device's tag, if any
+                # (context.actions); otherwise the actuator's defaults.
                 profile_p = self._profile_params(device, actuator.type, intent)
                 params = profile_p if profile_p is not None                     else self._default_params(actuator, intent)
                 actions.append(DeviceAction(

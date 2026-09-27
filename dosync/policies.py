@@ -782,23 +782,16 @@ class PolicyEngine:
 # ── Intent priority map ───────────────────────────────────────────────────────
 
 INTENT_PRIORITY: dict[str, int] = {
-    # Priority 1 — Emergency (highest)
-    "ensure_safety":         1,
-    "alert_anomaly":         1,
-    # Priority 2 — Security
-    "control_access":        2,
-    # Priority 3 — Notification
-    "notify":                3,
-    # Domain-specific intents (e.g. children_arrived_home) fall through to default 99
-    # Priority 4 — Comfort
-    "set_environment":       4,
-    "morning_routine":       4,
-    "bedtime_routine":       4,
-    "remind_chore":          4,
-    "report_status":         4,
-    # Priority 5 — Efficiency (lowest)
-    "save_energy":           5,
-    "away_mode":             5,
+    # The universal classes only. A deployment's own classes -- a plant's line
+    # stop, a clinic's room preparation -- take the default below. This map used
+    # to list household intents that are not universal classes (morning_routine,
+    # bedtime_routine, away_mode, set_environment, remind_chore, save_energy):
+    # names a hub does not have, carrying priorities nothing could use.
+    "ensure_safety":  1,   # emergency
+    "alert_anomaly":  1,
+    "control_access": 2,   # security
+    "notify":         3,   # notification
+    "report_status":  4,
 }
 
 def get_intent_priority(intent_value: str) -> int:

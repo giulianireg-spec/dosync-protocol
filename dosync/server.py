@@ -3258,8 +3258,6 @@ def get_status():
         "occupied":        occupancy.occupied,
         "ws_connections":  ws_manager.active_connections,
         "db":              db_stats,
-        "family_profile":  hub.family_profile.family_name
-                            if hub.family_profile else None,
     }
 
 

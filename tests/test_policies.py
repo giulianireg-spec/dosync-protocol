@@ -268,7 +268,10 @@ def test_intent_priority_known_intents():
     assert get_intent_priority("ensure_safety") == 1
     assert get_intent_priority("control_access") == 2
     assert get_intent_priority("notify") == 3
-    assert get_intent_priority("save_energy") == 5
+    assert get_intent_priority("report_status") == 4
+    # save_energy is a deployment's own class, not a universal one: it takes the
+    # default like any other (the map used to list household classes).
+    assert get_intent_priority("save_energy") == 99
 
 
 def test_intent_priority_unknown_defaults_to_99():
@@ -276,9 +279,9 @@ def test_intent_priority_unknown_defaults_to_99():
         "unknown/custom intents must default to priority 99"
 
 
-def test_emergency_intents_outrank_efficiency():
-    assert get_intent_priority("ensure_safety") < get_intent_priority("save_energy"), \
-        "emergency must outrank efficiency (lower number = higher priority)"
+def test_emergency_intents_outrank_a_deployments_own_classes():
+    assert get_intent_priority("ensure_safety") < get_intent_priority("line_shutdown"), \
+        "emergency must outrank a deployment's own class (lower number = higher priority)"
 
 
 # ── ConflictResolutionPolicy ──────────────────────────────────────────────────
