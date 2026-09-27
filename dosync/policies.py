@@ -14,8 +14,8 @@ Policies are evaluated in priority order. First matching policy wins.
 Example policies:
     "never unlock doors after midnight"
     "critical actions require confirmation"
-    "save_energy never turns off hallway lights"
-    "children cannot trigger away_mode"
+    "displays never take part in an emergency"
+    "contractor tokens cannot fire control_access"
 
 Usage:
     engine = PolicyEngine()
@@ -235,12 +235,12 @@ class BlockIntentPolicy(BasePolicy):
     even by EMERGENCY urgency. If an operator has explicitly prohibited
     an intent class, that prohibition is honored regardless of urgency.
 
-    Example: children cannot trigger away_mode.
+    Example: contractor tokens cannot open doors.
 
     BlockIntentPolicy(
-        intent_classes=["away_mode"],
-        actor_tags=["child"],
-        reason="Children cannot arm away mode"
+        intent_classes=["control_access"],
+        actor_tags=["contractor"],
+        reason="Contractor tokens cannot fire control_access"
     )
     """
 

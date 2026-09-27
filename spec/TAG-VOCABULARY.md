@@ -82,16 +82,16 @@ This document defines the standard vocabulary. Implementors **SHOULD** use these
 
 ---
 
-### 4. Semantic role — which scenarios the device participates in
+### 4. Semantic role — what a device is relevant to
 
-These tags determine which intent classes include the device. They should be combined with role or sensing tags, not used alone.
+These tags do not decide whether a device takes part in an intent: since protocol 0.5 (spec §10.5) the capabilities it declares do. They add relevance — an intent class that lists one ranks the devices carrying it higher. Among the universal classes (see the mapping below) only `emergency` is listed, by `ensure_safety`; `security`, `energy` and `health` describe devices for the classes a deployment registers itself.
 
-| Tag | Participates in | Notes |
+| Tag | Meaning | Listed by a universal class |
 |---|---|---|
-| `emergency` | `ensure_safety`, `alert_anomaly` | Signals semantic relevance for emergency scenarios. **Independent from `emergency_capable: true`** — the flag controls policy bypass; the tag controls scoring inclusion. A device may have one without the other. |
-| `security` | `alert_anomaly`, `away_mode` | Devices relevant to physical security |
-| `energy` | `save_energy`, `away_mode` | Devices that consume significant power |
-| `health` | `monitor_health` | Devices relevant to personal health monitoring |
+| `emergency` | Relevant to an emergency response. **Independent from `emergency_capable: true`** — the flag controls policy bypass and emergency force-inclusion; the tag only adds relevance. A device may have one without the other. | `ensure_safety` |
+| `security` | Relevant to physical security | — |
+| `energy` | Consumes significant power | — |
+| `health` | Relevant to monitoring people's health or wellbeing | — |
 
 ---
 
@@ -193,26 +193,19 @@ residential — it carries no more weight than the others.
 
 ## Intent-to-tag mapping
 
-This table shows the default resolution tags configured at hub initialization. Operators may configure different tags per intent via the hub database — this table reflects the default, not a normative constraint.
+The universal intent classes, exactly as a hub seeds them at initialization. A deployment's own classes are registered at runtime (`POST /v1/intent-classes`) and declare their own. `tests/test_tag_vocabulary.py` compares this table with the seed, so it cannot drift from what a hub does.
 
-> **Primary vs Secondary tags:** Both columns use the same scoring weight (tag overlap × 10). "Primary" indicates tags most directly associated with the intent; "Secondary" indicates tags that add relevance but are less specific. The distinction is conceptual guidance, not a difference in scoring behavior.
+| Intent class | Urgency | Location | Resolution tags | Actuators | Sensors |
+|---|---|---|---|---|---|
+| `ensure_safety` | emergency | informs | `emergency`, `alarm`, `communication`, `notification` | `alarm`, `notify`, `call`, `turn_on`, `set_brightness` | — |
+| `alert_anomaly` | alert | informs | `communication`, `notification`, `sensor` | `notify`, `call` | `motion`, `temperature`, `humidity`, `smoke` |
+| `control_access` | alert | restricts | `lock` | `lock`, `unlock` | — |
+| `report_status` | info | restricts | — | — | — |
+| `notify` | info | informs | `communication`, `notification`, `display` | `notify`, `display`, `call` | — |
 
-| Intent class | Primary tags | Secondary tags |
-|---|---|---|
-| `ensure_safety` | `emergency`, `alarm` | `light`, `lock`, `notification`, `communication` |
-| `alert_anomaly` | `emergency`, `alarm`, `security` | `notification`, `communication`, `sensor` |
-| `control_access` | `lock` | `entrance`, `door-sensor`, `camera` |
-| `monitor_health` | `health`, `sensor` | `temperature`, `humidity`, `camera`, `motion` |
-| `notify_family` | `notification`, `communication` | `display`, `speaker` |
-| `report_status` | `sensor`, `energy-meter` | `temperature`, `humidity`, `motion`, `door-sensor` |
-| `set_environment` | `thermostat`, `hvac`, `light` | `blinds`, `fan`, `temperature` |
-| `save_energy` | `energy`, `light`, `plug` | `switch`, `thermostat`, `hvac`, `appliance` |
-| `remind_chore` | `notification`, `communication` | `display`, `speaker` |
-| `bedtime_routine` | `light`, `blinds` | `thermostat`, `bedroom` |
-| `morning_routine` | `light`, `blinds` | `thermostat`, `bedroom` |
-| `away_mode` | `energy`, `security`, `lock` | `light`, `plug`, `switch`, `entrance` |
+A device takes part when it declares one of the class's actuators or sensors; the resolution tags rank it. `report_status` declares none: it reads every device that has a sensor. The Location column is the class's `location_role` (spec §10.5).
 
-> **Domain-specific intents:** The intent classes above cover universal scenarios applicable across home, hotel, commercial, and industrial deployments. Domain-specific scenarios (e.g., a children arrival notification, a specific maintenance routine, a factory shift change) should be implemented as custom intent classes configured per deployment — not added to this standard vocabulary.
+> **Domain-specific intents:** The five classes above are the only ones a hub ships with, and they apply in any deployment — a plant, a store, a clinic, a vehicle, a home. Domain-specific scenarios (e.g., a children arrival notification, a specific maintenance routine, a factory shift change) should be implemented as custom intent classes configured per deployment — not added to this standard vocabulary.
 
 ---
 
@@ -273,12 +266,40 @@ corrections are the same everywhere:
 | A tag naming the **vendor or protocol** (`wiz`, `zigbee`, `tuya`) | Remove it. How a device is reached is the adapter's concern, not the resolver's. |
 | A tag naming a **capability the device does not have** (`climate` on a bulb) | Remove it. It makes the device score on intents it cannot serve. |
 | A tag naming **one deployment's scenario** (`children_arrival`, `night_shift`) | Remove it, or register a custom intent class that declares it. A resolution tag no other deployment would write belongs to that deployment, not to the vocabulary. |
-| A device with a role but **no location tag** | Add one. Location is what makes a targeted intent targeted. |
+| A device with a role but **no location** | Set it with `PATCH /v1/devices/{id}` `{"location": "…"}` (a path, such as `plant-1/line-3`). Location is what makes a targeted intent targeted. |
 
 The reference deployment went through exactly this: bulbs carrying `wiz`,
 `smart-plug` and `climate`, and a notifier carrying a scenario tag from the
 deployment that installed it. The inventory of one deployment is not
 specification material, so it is not reproduced here.
+
+### Verifying a deployment
+
+The explain endpoint shows, for one intent, which devices would act and why the
+others would not. It executes nothing:
+
+```bash
+curl -sk "https://<hub>:47200/v1/intents/control_access/explain?location=building-b/floor-4" \
+  -H "Authorization: Bearer <token>" | python3 -m json.tool
+```
+
+Each excluded device carries a `reason` in terms of what can be changed:
+
+| Reason | What it means | What to change |
+|---|---|---|
+| declares none of the capabilities this intent needs | The manifest has no actuator or sensor the class asks for | The device's manifest (its adapter or its declarative file), if the device really can do it |
+| not at location '…' | The intent is restricted to a place the device is not in | The device's location (`PATCH /v1/devices/{id}`), if it is misplaced |
+| no tag overlap with intent resolution tags | Only for a class that declares no capabilities | Its tags, if one of them truly describes it |
+
+### Updating a device
+
+What a device *is* — its capabilities and tags — comes from the device or its
+adapter: re-register it. A re-registration keeps what it does not send (the
+address in `adapter_config`, `provenance`, `discovery_evidence`) and never changes
+the location. Where a device *is* belongs to the operator: set it with
+`PATCH /v1/devices/{id}`, which is recorded in the audit log as
+`device_relocated`. A device loaded from a declarative file takes its location
+from the file; change it there.
 
 ---
 

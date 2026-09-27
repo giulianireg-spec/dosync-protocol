@@ -2039,7 +2039,9 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
 
     async def _run_intent():
         result = await hub.execute_intent(intent, executor, progress_cb=_on_action)
-        _snap_intents = {"ensure_safety", "notify_family", "alert_anomaly"}
+        # notify_family, listed here until protocol 0.5, is not a class any hub
+        # has; the urgency test below already covers every real case.
+        _snap_intents = {"ensure_safety", "alert_anomaly"}
         if req.intent in _snap_intents or req.urgency in ("emergency", "alert"):
             try:
                 hub.db.save_emergency_snapshot(

@@ -1,5 +1,11 @@
 # DoSync — Scoring Weights Sensitivity Analysis
 
+> **Historical record.** Measured in May 2026 against the thirteen intent classes
+> the protocol had then. Since 2026-06-03 a hub ships five universal classes and
+> each deployment registers its own; since protocol 0.5 devices are selected by
+> capability and tags only rank them. The numbers below describe that earlier
+> resolver and are kept as they were measured.
+
 **Date:** May 2026  
 **Registry:** 38 real devices from production hub (Raspberry Pi 5)  
 **Scenarios:** 13 intent classes from IEEE paper Table 3  

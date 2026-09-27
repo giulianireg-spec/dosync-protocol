@@ -73,7 +73,7 @@ The following are NOT covered by compatibility commitments in v0.x. They may cha
 2. Register via `POST /v1/devices/register`. This endpoint contract will not change.
 3. Run `certify.py --tier standard` against your implementation before shipping.
 4. Ignore unknown fields in responses — forward compatibility.
-5. Do not depend on the exact scoring algorithm. Tag configuration affects resolution; consult `docs/DEPLOYMENT-TAGS-GUIDE.md`.
+5. Do not depend on the exact scoring algorithm. Declared capabilities decide which devices take part and tags rank them; consult `spec/TAG-VOCABULARY.md`.
 
 **For integration developers:**
 

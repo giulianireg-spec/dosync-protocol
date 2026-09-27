@@ -9,6 +9,37 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **The tag vocabulary describes the classes a hub actually ships with.** Since
+  2026-06-03 a hub seeds five universal intent classes and each deployment
+  registers its own; `spec/TAG-VOCABULARY.md` was never updated. Its mapping
+  table, which said it reflected "the default resolution tags configured at hub
+  initialization", listed thirteen classes -- eight a hub does not have
+  (`away_mode`, `bedtime_routine`, `monitor_health`, ...) -- and was wrong even
+  for the five real ones. Its semantic-role section still said tags decide which
+  intents include a device, which stopped being true with selection by
+  capability. This mattered beyond the spec: `adapter_drafting.py` reads the
+  file into the prompt of the model that drafts adapters. The mapping table now
+  lists exactly the five seeded classes -- tags, actuators, sensors, urgency and
+  location role -- and `tests/test_tag_vocabulary.py` compares both tables with
+  the seed. A decision from June to keep `monitor_health` as "a technical API
+  name" was taken three weeks after it stopped being one.
+- The emergency snapshot's intent set no longer names `notify_family`, a class no
+  hub has; a policy docstring's household example is now a cross-domain one.
+
+### Removed
+- **`docs/DEPLOYMENT-TAGS-GUIDE.md`.** It predated both the five-class set and
+  selection by capability, and taught what is no longer true: that a bulb tagged
+  only `light` is excluded from `save_energy` and `away_mode`, that bulbs should
+  carry `climate`, that notifiers need `children_arrival`, that re-registering
+  overwrites a manifest. Two documents on the same subject is how one of them
+  went stale. What is still true, rewritten for current behavior -- verifying a
+  deployment with `explain` and its reasons, updating a device, setting its
+  location -- is now in `spec/TAG-VOCABULARY.md`. The adapter guide, which also
+  said a device without the right tags is left out of every plan, points there.
+  `docs/SCORING-WEIGHTS-ANALYSIS.md` is kept as the record of a measurement made
+  on the thirteen-class set, with a note saying so.
+
 ### Removed
 - **The family profile.** `FamilyProfile` modelled a household -- a family
   name, morning, bedtime and away routines, a bedtime -- with one city's

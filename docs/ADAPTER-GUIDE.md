@@ -185,7 +185,7 @@ Your adapter is paired with a `CapabilityManifest` that describes the device. Th
 }
 ```
 
-**Tags are critical for resolution.** A device without the right tags will not be included in action plans for relevant intents. See `docs/DEPLOYMENT-TAGS-GUIDE.md` for the full tag vocabulary.
+**Declare capabilities truthfully.** A device takes part in an intent when it declares an actuator or sensor the intent needs; its tags rank it, and a location restricts it. See `spec/TAG-VOCABULARY.md` for the tag vocabulary and how to verify a deployment.
 
 `adapter_config` is redacted from public API responses (`GET /v1/devices`). Use it freely for IPs, ports, and API keys — it will not be exposed to clients.
 
