@@ -1,0 +1,2288 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "DoSync Hub",
+    "description": "DoSync Protocol — REST API\n\nThe hub that connects an AI to physical devices.\nProtocolo abierto · Apache 2.0 · github.com/dosync/protocol",
+    "version": "0.6.3"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "tags": [
+          "Status"
+        ],
+        "summary": "Dashboard",
+        "description": "The hub's browser view — the only entry point that is not curl.\n\nMissing it used to return `FileResponse.__new__(FileResponse)`: an\nuninitialised object that raises AttributeError deep inside the framework.\nSomeone opening the hub in a browser got a stack trace instead of an answer,\nwhich is the worst possible greeting for the one person who came here\nwithout a terminal. Now it says what happened and where to go instead.",
+        "operationId": "dashboard__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api": {
+      "get": {
+        "tags": [
+          "Status"
+        ],
+        "summary": "Root",
+        "operationId": "root_api_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/adapters/verify": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Verify Adapter Draft",
+        "description": "Try a drafted adapter's harmless requests against the real device.\n\nA draft cannot be judged by reading it. Asked to describe a 3D printer with\nno announcement to go on, a model produced a confident adapter for an\nunrelated protocol; asked again with the vendor's own announcement, it\nproduced an honest one whose endpoints were still invented. Both files look\ncorrect. Four `GET`s told the difference in under a second.\n\n`GET`, `HEAD` and `OPTIONS` only, and only the requests the draft itself\ndeclares. This never probes for a device's real API and never proposes a\nreplacement — it reports whether what was written matches what answers.\nEverything it cannot try is returned too, with the reason, because a draft\nwhose untested half is invisible is the problem this is meant to solve.\n\nAccepts `{\"yaml\": \"...\"}` or `{\"adapter\": {...}}`.",
+        "operationId": "verify_adapter_draft_v1_adapters_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Req"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/devices/{device_id}/describe": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Describe Device",
+        "description": "The text needed to declare what a registered device can do.\n\nA device the hub cannot act on is a dead end today: it is in the inventory,\nthe hub says at every start that its actions would be simulated, and nothing\noffers the next step. This assembles it — what the device announced, the\nnormative tag vocabulary, the adapter format with real examples, and where\nthe resulting file goes.\n\nIt returns TEXT, and sends nothing anywhere. Whoever holds it decides where\nit goes: an assistant they already use, a model their organisation permits,\nor an engineer. In a plant or a hospital, sending network topology to an\noutside service is frequently prohibited and often impossible, and a feature\nthat only worked by calling out would exclude exactly the deployments this\nprotocol is meant for.\n\nThe hub, therefore, still does not know that language models exist.",
+        "operationId": "describe_device_v1_devices__device_id__describe_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/devices/{device_id}": {
+      "patch": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Rename Device",
+        "description": "Change a device's display name, its location, or both.\n\nRenaming had no endpoint at all: the only way to fix a name was to\nre-register the whole manifest, which means reconstructing every capability\nby hand to change one string. A device adopted from a scan arrives called\n`wiz-a4c138`, so getting the name wrong — or simply changing your mind about\na room — was a disproportionate amount of work.\n\nOnly presentation fields. Capabilities describe what a device CAN DO and\ncome from the device or its adapter; letting an operator edit them here\nwould let the registry drift from the hardware, and the resolver would plan\nagainst a fiction.",
+        "operationId": "rename_device_v1_devices__device_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Req"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Get Device",
+        "operationId": "get_device_v1_devices__device_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Unregister Device",
+        "operationId": "unregister_device_v1_devices__device_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/devices/register": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Register Device",
+        "operationId": "register_device_v1_devices_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDeviceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/intents/{intent_class}/explain": {
+      "get": {
+        "tags": [
+          "intents"
+        ],
+        "summary": "Explain Intent",
+        "description": "Explainability endpoint — the resolver's reasoning for one intent.\n\nFor each registered device, it details:\n- Score total y desglose (tag overlap, location bonus, emergency bonus, actuator match)\n- Why it was included in or excluded from the ActionPlan\n- Which tags matched the intent's resolution tags\n\nNote: this endpoint shows the resolver's scoring. The PolicyEngine may\nmodify the plan before execution — see the audit log for what happened.\n\nMeant to be read by humans and by AI systems interpreting hub\nbehaviour alike. See DESIGN-PRINCIPLES.md.",
+        "operationId": "explain_intent_v1_intents__intent_class__explain_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intent_class",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Intent Class"
+            }
+          },
+          {
+            "name": "urgency",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "info",
+              "title": "Urgency"
+            }
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Location"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health/devices": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Get Device Health",
+        "description": "Device Health Monitor — execution success-rate statistics per device.\n\nReturns each device's success rate over the last `last_n` executions; devices\nbelow `threshold` appear in `alerts`. Use this to find devices that FAIL\nOFTEN and need attention. The decision of what to do is always the operator's.\n\n── Which health endpoint do I want? ─────────────────────────────────────────\n  * /v1/health/devices        (this one) — HISTORICAL success rate of actions.\n                               \"Has this device been failing lately?\"\n  * /v1/health/reachability   — CURRENT reachable/unreachable state, including\n                               device-initiated heartbeats. \"Is this device\n                               responding right now, and how do I know?\"\nThey answer different questions; a device can be reachable now yet have a poor\nhistorical success rate, or vice versa.",
+        "operationId": "get_device_health_v1_health_devices_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "threshold",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 0.7,
+              "title": "Threshold"
+            }
+          },
+          {
+            "name": "last_n",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Last N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health/devices/{device_id}": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Get Single Device Health",
+        "description": "Historical execution success-rate for one device (see /v1/health/devices\nfor the full note on which health endpoint answers which question; for\ncurrent reachability + heartbeat state use /v1/health/reachability).",
+        "operationId": "get_single_device_health_v1_health_devices__device_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "last_n",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Last N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health/reachability": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Get Reachability",
+        "description": "Current reachability of every device the hub has interacted with.\n\nComplements /v1/health/devices (historical success rate) with the CURRENT\nreachable/unreachable state. Two signals feed it: PASSIVE (derived from real\nactions — the last interaction) and ACTIVE PUSH (device-initiated heartbeats,\nPOST /v1/heartbeat — see the `last_heartbeat` field and the per-device\n`note`). It never asserts a device is \"powered off\" (it cannot tell an off\ndevice from a\nnetwork-unreachable one). Read-only.",
+        "operationId": "get_reachability_v1_health_reachability_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/devices": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "List Devices",
+        "description": "Every device the hub knows about, quarantined ones included.\n\nA quarantined device is reported rather than hidden. It is excluded from\nintents — the operator already believes it is gone — but hiding it is how a\ndevice gets forgotten while still occupying its id, and the operator needs\nto see it in order to decide.",
+        "operationId": "list_devices_v1_devices_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/devices/provision": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Provision Device",
+        "description": "Pre-register a device_id and generate its authentication token.\nThe token is shown ONCE — store it immediately.",
+        "operationId": "provision_device_v1_devices_provision_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/devices/verify-cert": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Verify Device Cert",
+        "description": "Verify a device's client certificate against the local CA.\n\nThe device presents its certificate PEM and the hub verifies:\n- It is a valid X.509 certificate\n- It was signed by the local DoSync CA\n- It has not expired\n- It identifies as a DoSync adapter (CN starts with 'dosync-adapter-')\n\nReturns cert_authenticated=True if all checks pass.\nThe device should include certificate_pem in /v1/devices/register\nto record the cert_authenticated status in its manifest.\n\nExample usage (device side):\n    cert_pem = open(\"certs/adapters/gpio.crt\").read()\n    r = requests.post(\"/v1/devices/verify-cert\", json={\"certificate_pem\": cert_pem})\n    if r.json()[\"cert_authenticated\"]:\n        # include certificate_pem in /v1/devices/register body",
+        "operationId": "verify_device_cert_v1_devices_verify_cert_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/devices/provisioned": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "List Provisioned Devices",
+        "description": "Lists every pre-registered device_id.",
+        "operationId": "list_provisioned_devices_v1_devices_provisioned_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/devices/{device_id}/token": {
+      "delete": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Revoke Device Token",
+        "description": "Revoke a device token — the device must be re-provisioned.",
+        "operationId": "revoke_device_token_v1_devices__device_id__token_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intent-classes": {
+      "get": {
+        "tags": [
+          "Protocol"
+        ],
+        "summary": "List all intent classes",
+        "description": "List all registered intent classes — universal and domain-specific.\nNo distinction between built-in and custom: all live in the DB.",
+        "operationId": "list_intent_classes_v1_intent_classes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Protocol"
+        ],
+        "summary": "Register a custom intent class",
+        "operationId": "register_intent_class_v1_intent_classes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomIntentClassRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/intent-classes/{name}": {
+      "delete": {
+        "tags": [
+          "Protocol"
+        ],
+        "summary": "Delete a custom intent class",
+        "operationId": "delete_intent_class_v1_intent_classes__name__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intent/async": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Execute Intent Async",
+        "operationId": "execute_intent_async_v1_intent_async_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/intent/{intent_id}": {
+      "get": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Get Intent Result",
+        "description": "Poll the result of an async intent execution.",
+        "operationId": "get_intent_result_v1_intent__intent_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Intent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/event": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Receive Event",
+        "operationId": "receive_event_v1_event_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/heartbeat/signed": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Receive Signed Heartbeat",
+        "description": "A heartbeat authenticated by signature instead of by TLS and bearer.\n\nFor hardware that cannot do TLS — an 8-bit MCU on a coin cell, where a\nhandshake costs more battery than a month of operation. Deliberately NOT\nbehind `require_auth`: the whole point is that the caller cannot present a\nbearer token over an encrypted channel. Authenticity comes from an HMAC over\nthe device's own provisioning token instead.\n\nOff unless `DOSYNC_LIGHTWEIGHT_HEARTBEAT=true`. A hub that starts accepting\nmessages over an unencrypted channel because somebody plugged in a cheap\nsensor — without the operator choosing it — is wrong even when it is safe\n(panel, Ferreyra).\n\nBody: `device_id`, `timestamp` (unix seconds), `signature`, optional\n`report`. See `dosync/lightweight.py` for the canonical string and the key\nderivation, which a firmware author needs to reproduce exactly.",
+        "operationId": "receive_signed_heartbeat_v1_heartbeat_signed_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Req"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/heartbeat": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Receive Heartbeat",
+        "description": "DEVICE-HEALTH-ACTIVE (b): a device proactively reports it is alive.\n\nComplements the hub's periodic pull-probe with device-initiated push, which\nis the only liveness signal available for devices the hub cannot poll\n(behind NAT, sleeping, inbound-blocked). Positive signal only: it marks the\ndevice reachable and stamps last_heartbeat; it never marks a device\nunreachable. Unknown devices are rejected — a heartbeat is an assertion of\nidentity and must come from a registered device.",
+        "operationId": "receive_heartbeat_v1_heartbeat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HeartbeatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/auth/mode": {
+      "get": {
+        "tags": [
+          "Security"
+        ],
+        "summary": "Auth Mode",
+        "description": "Whether a token is required, and which source decided that.",
+        "operationId": "auth_mode_v1_auth_mode_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Security"
+        ],
+        "summary": "Set Auth Mode",
+        "description": "Turn the token requirement on or off, without editing a unit file.\n\nRequiring a shell for this put a wall in front of exactly the person least\nable to climb it: someone running DoSync at home, behind a router, for whom\na token protects against nobody already inside the house. That is a\nlegitimate configuration and it should not need systemd.\n\nTurning it OFF is a security-relevant act, so it is treated as one: the\ncaller must be authenticated (when auth is on), must confirm explicitly, and\nthe change lands in the tamper-evident chain. An operator who later asks\n\"when did this hub become open, and who did it\" gets an answer.",
+        "operationId": "set_auth_mode_v1_auth_mode_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Req"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/auth/token": {
+      "post": {
+        "tags": [
+          "Security"
+        ],
+        "summary": "Set Auth Token",
+        "description": "Set a token of your choosing, from the browser.\n\nThe hub used to hand out 43 random characters and no way to replace them\nexcept a command line — so the only route into the dashboard was a string\nnobody memorises, which ends up in a note or is simply lost. Choosing one is\nhow every other self-hosted tool works.\n\nThe value is held to the same floor as the CLI path: a bearer token is\nchecked with no rate limit or lockout, so it is guessed offline at full\nspeed. Existing keys are left alone unless `replace_all` is set — revoking\nwhat other integrations are using should be deliberate.",
+        "operationId": "set_auth_token_v1_auth_token_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Req"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/keys": {
+      "get": {
+        "tags": [
+          "Security"
+        ],
+        "summary": "List Keys",
+        "operationId": "list_keys_v1_keys_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Security"
+        ],
+        "summary": "Create Key",
+        "operationId": "create_key_v1_keys_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "label",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "new_key",
+              "title": "Label"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/audit": {
+      "get": {
+        "tags": [
+          "Security"
+        ],
+        "summary": "Get Audit Log",
+        "description": "The live audit chain, newest entries last.\n\nA caller that wants the last few -- a dashboard tail, an agent showing recent\nactivity -- would otherwise receive the whole live chain (10,000 entries by\ndefault) to display ten of them. `limit` returns just those, while `count`\nstill reports the full total and `integrity` still verifies the whole chain.",
+        "operationId": "get_audit_log_v1_audit_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 1000,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return only the most recent N entries. Omit for the whole live chain. `count` is always the full total.",
+              "title": "Limit"
+            },
+            "description": "Return only the most recent N entries. Omit for the whole live chain. `count` is always the full total."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/presence": {
+      "get": {
+        "tags": [
+          "Context"
+        ],
+        "summary": "Get Presence",
+        "operationId": "get_presence_v1_presence_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Context"
+        ],
+        "summary": "Update Presence",
+        "operationId": "update_presence_v1_presence_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresenceSignalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/discovery/adopt": {
+      "post": {
+        "tags": [
+          "Discovery"
+        ],
+        "summary": "Adopt Device",
+        "description": "Register ONE discovered candidate, with a name the operator chose.\n\nScanning and adopting are deliberately separate. `POST /v1/discovery/run`\nfinds devices and registers them in one step, which is fine for a scripted\nsetup but wrong as the only path: in a protocol whose argument is\naccountability, devices appearing in the registry because they answered a\nbroadcast — approved by nobody — contradicts the premise. Twenty bulbs in a\nhouse is convenient; twenty unapproved devices in a plant is not.\n\nSo a human path exists: scan lists candidates and changes nothing, then this\nadopts the ones the operator picked. The naming matters as much as the\napproval — \"Kitchen light\" is what makes every later screen readable, and\n`wiz-a4c138` is what the device calls itself.\n\nAdoption is appended to the audit chain. \"How did this device get here\" is\nthe same class of question as \"who turned authentication off\".",
+        "operationId": "adopt_device_v1_discovery_adopt_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Req"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/discovery/run": {
+      "post": {
+        "tags": [
+          "Discovery"
+        ],
+        "summary": "Run Discovery",
+        "operationId": "run_discovery_v1_discovery_run_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/adapters": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "List Adapters",
+        "description": "Which technologies this hub can speak, and on what basis it ships them.\n\nThe `kind` matters more than it looks. A protocol that ships `wiz.py` and\n`shelly.py` without saying anything implies two things it does not mean:\nthat it privileges those brands, and that it is a smart-home product. Both\nare visible in the file tree and neither is true — DoSync is domain-agnostic\nand those two are worked examples of how an adapter is written.\n\nSo the distinction is declared rather than left to inference:\n\n  * `ecosystem` — an open standard or open project (MQTT, Matter, BLE,\n    MAVLink, the Home Assistant bridge). Belongs in a protocol.\n  * `reference` — one vendor's product, shipped as an example. Not an\n    endorsement, a partnership, or a promise to track their firmware.\n  * `infrastructure` — not a device technology (notifications).",
+        "operationId": "list_adapters_v1_adapters_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/bridges/homeassistant/import": {
+      "post": {
+        "tags": [
+          "Discovery"
+        ],
+        "summary": "Import From Home Assistant",
+        "description": "Re-import every entity from Home Assistant, now.\n\nThe bridge imports on a schedule (DOSYNC_HA_IMPORT_INTERVAL, 15 minutes by\ndefault). This is for when waiting is not useful: a device was just added,\na token was just replaced, or someone needs to know whether the bridge can\nreach HA at all without reading the journal.\n\nReturns what the cycle did — new, updated, skipped — or the error, with the\nsame shape either way, so a caller can tell \"nothing changed\" from \"could\nnot ask\".",
+        "operationId": "import_from_home_assistant_v1_bridges_homeassistant_import_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/discovery/scan": {
+      "get": {
+        "tags": [
+          "Discovery"
+        ],
+        "summary": "Scan Devices",
+        "description": "List devices reachable on any transport this hub can search.\n\nAsks every registered adapter, rather than calling one discoverer by name.\nDiscovery used to mean \"UDP broadcast\", which quietly made it an IP-only\nidea in a protocol that is supposed to have no such limit — Bluetooth\ndevices announce themselves on a radio channel, and a device behind a radio\ngateway is visible only to whatever speaks that radio. Each transport\nanswers in its own terms now.\n\nThe response says which transports were actually searched, because \"nothing\nfound\" means something different when Bluetooth was never scanned.",
+        "operationId": "scan_devices_v1_discovery_scan_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/device/action": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Device Action",
+        "description": "Execute one action on one named device, without semantic resolution.\n\nThis is a legitimate operation — an operator or an agent that already knows\nexactly which device and which action, with no goal to resolve. What it is\nNOT is a way around the protocol.\n\nUntil 2026-07-25 this endpoint called the executor directly: no policy\nevaluation, no audit entry. A device could be actuated and leave no trace in\nthe tamper-evident chain, and a deployment policy forbidding that device\ncould be sidestepped by calling here instead of firing an intent. The MCP\nserver's device-control tool uses this path, so the bypass was available to\nthe AI itself — precisely the thing the policy engine exists to prevent.\n\nDESIGN-PRINCIPLES §\"On adapter-side fallback\" rejects bypass mechanisms for\nexactly three reasons: they break the audit chain, they break the policy\nengine, and they turn actions back into commands. That ruling was written\nabout adapters acting without the hub; it applies with equal force to an\nendpoint inside the hub that skips the same two layers.\n\nSo a direct action is now a first-class protocol operation:\n\n  * it is evaluated by the policy engine under the reserved intent class\n    `direct_control`, so a deployment can constrain it exactly as it\n    constrains any intent (e.g. an exclusion policy listing\n    `intent_classes: [\"direct_control\"]`);\n  * it ALWAYS appends to the audit chain — whether it executed, was blocked,\n    or failed — recording that it arrived by the direct path, so an auditor\n    can tell operator actions from intent-driven ones;\n  * blocked actions return 403 with the deciding policy named.",
+        "operationId": "device_action_v1_device_action_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Req"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/hub/heartbeat": {
+      "get": {
+        "tags": [
+          "Hub"
+        ],
+        "summary": "Hub heartbeat for monitoring and multi-hub failover detection",
+        "description": "Lightweight health check for hub monitoring and multi-hub failover detection.\n\nReturns minimal hub state to allow standby hubs and monitoring systems to\ndetermine whether this hub is healthy and should be treated as the active hub.\n\nResponse fields:\n  hub_id:            Unique identifier for this hub instance (stable across restarts)\n  status:            \"healthy\" | \"degraded\" — degraded if audit log integrity fails\n  protocol_version:  DoSync semantic protocol version\n  api_version:       REST API version\n  timestamp:         Current UTC timestamp (ISO 8601)\n  uptime_seconds:    Seconds since hub process started\n  devices:           Number of registered devices\n  role:              \"primary\" | \"standby\" (from DOSYNC_HUB_ROLE env var)\n\nClients and standby hubs SHOULD poll this endpoint to detect primary failure.\nRecommended polling interval: 5 seconds. A hub is considered failed after\n3 consecutive missed heartbeats (15 seconds of no response).",
+        "operationId": "hub_heartbeat_v1_hub_heartbeat_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/hub/peers": {
+      "get": {
+        "tags": [
+          "Hub"
+        ],
+        "summary": "Multi-hub monitor view (Phase A)",
+        "description": "Return this hub's multi-hub coordination view.\n\nOn a primary, the monitor is inert. On a standby, returns the monitor's\ncurrent state, how many heartbeats the primary has missed, and whether\npromotion would be safe or destructive (state divergence).",
+        "operationId": "hub_peers_v1_hub_peers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/hub/promote": {
+      "post": {
+        "tags": [
+          "Hub"
+        ],
+        "summary": "Operator-assisted standby promotion (Phase A)",
+        "description": "Promote this standby to primary. Operator-assisted, never automatic.\n\nRequires the monitor to be in PRIMARY_DOWN. If promotion would be\ndestructive (the primary held more devices than this standby — no Phase B\nreplication yet), requires {\"force\": true} and returns 409 otherwise. This\nis the human-in-the-loop gate that prevents split-brain and silent device\nloss.",
+        "operationId": "hub_promote_v1_hub_promote_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": [
+          "Status"
+        ],
+        "summary": "Prometheus metrics (reference implementation feature, non-normative)",
+        "operationId": "get_metrics_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/status": {
+      "get": {
+        "tags": [
+          "Status"
+        ],
+        "summary": "Get Status",
+        "operationId": "get_status_v1_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/operations": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "List active long-running operations",
+        "description": "Active (non-terminal) long-running operations the hub is tracking. These are\nthe operations still in flight — the ones that would be reconciled after a\nrestart. Completed/failed/cancelled operations are not 'active' and are not\nlisted here (query them individually by id).",
+        "operationId": "list_operations_v1_operations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/operations/{operation_id}": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Get one operation by id",
+        "description": "Full state of a single operation by id — current state, timing, and the\ncomplete transition history (the audit trail of its lifecycle). Works for both\nactive and terminal operations until they are cleaned up.",
+        "operationId": "get_operation_v1_operations__operation_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Operation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActuatorIn": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "params_schema": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params Schema",
+            "default": {}
+          },
+          "execution_model": {
+            "type": "string",
+            "title": "Execution Model",
+            "default": "instant"
+          },
+          "supports_progress": {
+            "type": "boolean",
+            "title": "Supports Progress",
+            "default": false
+          },
+          "supports_cancel": {
+            "type": "boolean",
+            "title": "Supports Cancel",
+            "default": false
+          },
+          "emits_telemetry": {
+            "type": "boolean",
+            "title": "Emits Telemetry",
+            "default": false
+          },
+          "verify_with": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verify With"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type"
+        ],
+        "title": "ActuatorIn"
+      },
+      "CustomIntentClassRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "urgency": {
+            "type": "string",
+            "title": "Urgency",
+            "default": "info"
+          },
+          "resolution_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Resolution Tags"
+          },
+          "resolution_actuators": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Resolution Actuators",
+            "default": []
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "domain": {
+            "type": "string",
+            "title": "Domain",
+            "default": "general"
+          },
+          "composition_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composition Kind"
+          },
+          "location_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "resolution_tags"
+        ],
+        "title": "CustomIntentClassRequest"
+      },
+      "EventRequest": {
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "title": "Device Id"
+          },
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_id",
+          "event_id",
+          "severity"
+        ],
+        "title": "EventRequest"
+      },
+      "EventSpecIn": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "severity"
+        ],
+        "title": "EventSpecIn"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HeartbeatRequest": {
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "title": "Device Id"
+          },
+          "report": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Report",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_id"
+        ],
+        "title": "HeartbeatRequest"
+      },
+      "IntentRequest": {
+        "properties": {
+          "intent": {
+            "type": "string",
+            "title": "Intent"
+          },
+          "urgency": {
+            "type": "string",
+            "title": "Urgency",
+            "default": "info"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "api"
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Context",
+            "default": {}
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intent"
+        ],
+        "title": "IntentRequest"
+      },
+      "PresenceSignalRequest": {
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "title": "Device Id"
+          },
+          "signal_type": {
+            "type": "string",
+            "title": "Signal Type"
+          },
+          "present": {
+            "type": "boolean",
+            "title": "Present"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence",
+            "default": 0.7
+          },
+          "member_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_id",
+          "signal_type",
+          "present"
+        ],
+        "title": "PresenceSignalRequest"
+      },
+      "RegisterDeviceRequest": {
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "title": "Device Id"
+          },
+          "device_name": {
+            "type": "string",
+            "title": "Device Name"
+          },
+          "manufacturer": {
+            "type": "string",
+            "title": "Manufacturer"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "firmware": {
+            "type": "string",
+            "title": "Firmware"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "sensors": {
+            "items": {
+              "$ref": "#/components/schemas/SensorIn"
+            },
+            "type": "array",
+            "title": "Sensors",
+            "default": []
+          },
+          "actuators": {
+            "items": {
+              "$ref": "#/components/schemas/ActuatorIn"
+            },
+            "type": "array",
+            "title": "Actuators",
+            "default": []
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/EventSpecIn"
+            },
+            "type": "array",
+            "title": "Events",
+            "default": []
+          },
+          "emergency_capable": {
+            "type": "boolean",
+            "title": "Emergency Capable",
+            "default": false
+          },
+          "cert_tier": {
+            "type": "string",
+            "title": "Cert Tier",
+            "default": "basic"
+          },
+          "adapter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adapter"
+          },
+          "adapter_config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Adapter Config",
+            "default": {}
+          },
+          "device_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Token"
+          },
+          "certificate_pem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Pem"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_id",
+          "device_name",
+          "manufacturer",
+          "model",
+          "firmware",
+          "category",
+          "tags"
+        ],
+        "title": "RegisterDeviceRequest"
+      },
+      "SensorIn": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "poll_interval_ms": {
+            "type": "integer",
+            "title": "Poll Interval Ms",
+            "default": 30000
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "environment"
+          },
+          "range": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Range"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type"
+        ],
+        "title": "SensorIn"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

@@ -760,7 +760,7 @@ function showTokenHelp() {
     "The hub prints a token the first time it starts and stores only a hash of" +
     " it, so it cannot show you that one again. Three ways forward:\n\n" +
     "1. CHOOSE one, like a password, so you need not store 43 random characters:\n" +
-    "   dosync-manage keys create --token \"my-house-2026\" --label dashboard\n\n" +
+    "   dosync-manage keys create --token \"my-hub-2026\" --label dashboard\n\n" +
     "2. Let it generate one, for a program that will store it:\n" +
     "   dosync-manage keys create --label dashboard\n\n" +
     "3. Turn authentication off, if this hub sits on a home network behind a\n" +
@@ -1427,7 +1427,7 @@ async function fireSmoke() {
       device_id: 'smoke-living-01',
       event_id:  'smoke_detected',
       severity:  'emergency',
-      data: { smoke_ppm: 450, location: 'living room', source: 'dashboard' },
+      data: { smoke_ppm: 450, location: 'building-b/floor-3', source: 'dashboard' },
     });
     // Then fire the intent
     await fireIntent('ensure_safety', 'emergency', {

@@ -1,11 +1,26 @@
 # DoSync Protocol — Formal Grammar (BNF)
 
-**Status:** Specification supplement  
+**Status:** Historical — superseded. Not normative.  
 **Version:** 0.1  
-**Applies to:** DoSync Protocol v0.1  
+**Applies to:** DoSync Protocol v0.1 only  
 **Location:** `spec/DOSYNC-SPEC-BNF.md`
 
-This document defines the formal grammar for all DoSync protocol messages using Extended Backus-Naur Form (EBNF). It is a normative supplement to `DOSYNC-SPEC-v0.1.md` — in case of conflict, this document takes precedence for message structure.
+> **This grammar describes protocol 0.1 and is no longer maintained.** It claimed
+> precedence over the specification for message structure and drifted in every
+> section: its intent classes are the thirteen household classes of that time as
+> a closed enum, it lists `POST /v1/intent` (removed; it answers `410`), and its
+> events and status do not match the API. The protocol's structure is now defined
+> by artifacts that are checked against the reference hub on every push:
+>
+> - **Messages:** `spec/schemas/*.schema.json` (JSON Schema), which
+>   `tests/test_schemas_match_the_hub.py` validates what the hub produces against.
+> - **HTTP surface:** `spec/openapi.json`, generated from the hub by
+>   `tools/generate_openapi.py` and compared with it by `tests/test_openapi_contract.py`.
+>
+> Where this document and those artifacts differ, they govern. It is kept only
+> so that external links to it still resolve.
+
+The original text follows unchanged.
 
 ---
 

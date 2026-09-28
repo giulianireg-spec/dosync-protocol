@@ -5,7 +5,7 @@
 **Status:** Draft  
 **Authors:** DoSync Initiative  
 **License:** Apache 2.0  
-**Repository:** github.com/dosync/protocol  
+**Repository:** github.com/giulianireg-spec/dosync-protocol  
 
 ---
 
@@ -23,9 +23,9 @@ This document defines the **DoSync protocol**: the wire format, data model, and 
 
 **What this specification defines (the protocol):**
 - The JSON wire format for Intent, CapabilityManifest, ActionPlan, and IntentResult (see `spec/schemas/`)
-- The REST API surface that a conforming hub must expose
+- The REST API surface that a conforming hub must expose (see `spec/openapi.json`)
 - The behavioral requirements for each layer (capability registry, policy engine, resolver interface, audit log, security)
-- The certification model (Basic / Standard / Emergency tiers)
+- The certification model (Basic / Standard / Emergency / Conformance tiers)
 
 **What this specification does not define (implementation details):**
 - How the hub stores device state internally
@@ -258,7 +258,7 @@ A device may re-register with the hub at any time — after a firmware update, a
 
 The semantic layer is the core differentiator of DoSync. It maps high-level AI intents to concrete device actions by matching intent requirements against registered device capabilities.
 
-Formal JSON Schemas for all wire format objects are in `spec/schemas/`. The schemas are the normative definition of each object's structure. The examples below are illustrative.
+Formal JSON Schemas for all wire format objects are in `spec/schemas/`. The schemas are the normative definition of each object's structure, and `tests/test_schemas_match_the_hub.py` validates what the reference hub produces against them. The HTTP surface — every route, its parameters and the body it accepts — is `spec/openapi.json`, generated from the reference hub and compared with it by `tests/test_openapi_contract.py`. `spec/DOSYNC-SPEC-BNF.md` is historical and not normative. The examples below are illustrative.
 
 ### 6.1 Intent object
 
@@ -1126,14 +1126,16 @@ Before `v1.0`, a MINOR increment may also change what existing behavior means, a
 
 **Deprecated**
 
-- `room` as an alias of `location` (in `PATCH /v1/devices/{id}`, adoption, and declarative files): deprecated 2026-09-26, removed after 2027-03-26. A response to a request that used it carries the `Deprecation` and `Sunset` headers (§10.3); a declarative file that uses it is logged as a warning.
+- `room` as an alias of `location` (in `PATCH /v1/devices/{id}`, adoption, declarative files, and the adapters' manifest helpers): deprecated 2026-09-26, removed after 2027-03-26. A response to a request that used it carries the `Deprecation` and `Sunset` headers (§10.3); a declarative file that uses it is logged as a warning.
+
+- `members_home` in the responses of `/v1/presence`: deprecated 2026-09-28, removed after 2027-03-26. The same list is `members_present` — presence is not a household matter.
 
 **Migrating a client**
 
 - If you send `context.location` to say where something happened rather than where to act, use a class whose `location_role` is `"informs"`, or carry that value under another context key.
 - If you rely on an intent reaching every capable device, do not send `location`.
 - Expect `422` with reason `unknown_location` for a restricting location no device is at. Locations are compared exactly and are case-sensitive.
-- Send `location` instead of `room`.
+- Send `location` instead of `room`, and read `members_present` instead of `members_home`.
 
 **Migrating an implementation**
 

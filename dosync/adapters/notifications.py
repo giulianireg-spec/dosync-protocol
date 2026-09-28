@@ -9,9 +9,9 @@ Usage:
     notifier = NotificationAdapter()
     await notifier.notify_emergency(intent, context)
 
-Variables de entorno (.env):
-    TWILIO_ACCOUNT_SID   — Account SID de Twilio
-    TWILIO_AUTH_TOKEN    — Auth Token de Twilio
+Environment variables (.env):
+    TWILIO_ACCOUNT_SID   — Twilio account SID
+    TWILIO_AUTH_TOKEN    — Twilio auth token
     TWILIO_FROM          — Twilio number (+1XXXXXXXXXX)
     DOSYNC_EMERGENCY_CONTACT — destination number, E.164 format
 """
@@ -93,7 +93,7 @@ def _twilio_config() -> tuple[str, str, str, str]:
             os.environ.get("TWILIO_FROM", ""),
             os.environ.get("DOSYNC_EMERGENCY_CONTACT", ""))
 
-# Intents que disparan notificaciones
+# Intents that trigger notifications
 EMERGENCY_INTENTS = {"ensure_safety", "alert_anomaly", "notify"}
 WARNING_INTENTS   = {"report_status", "remind_chore"}
 
@@ -213,7 +213,7 @@ class NotificationAdapter(DoSyncAdapter):
             log.warning("SMS not sent — no destination number configured")
             return False
 
-        # Solo notificar para intents relevantes
+        # Notify only for relevant intents
         if intent not in EMERGENCY_INTENTS and urgency not in ("emergency", "alert"):
             return False
 
@@ -237,5 +237,5 @@ class NotificationAdapter(DoSyncAdapter):
 
     async def notify_emergency(self, intent: str, context: dict,
                                 to: str = None) -> bool:
-        """Shortcut para notificaciones de emergencia."""
+        """Shortcut for emergency notifications."""
         return await self.notify(intent, "emergency", context, to)

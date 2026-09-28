@@ -1,31 +1,31 @@
 """
 DoSync — WiZ Adapter
 ====================
-Adapter para lamparitas Philips WiZ via protocolo UDP local.
+Adapter for Philips WiZ bulbs over the local UDP protocol.
 
 Features:
 - Fully local communication — no cloud, no internet required
 - Works with any WiFi WiZ bulb
-- Soporta: encender, apagar, brillo, color RGB, temperatura de color
+- Supports: on, off, brightness, RGB colour, colour temperature
 - Optional address discovery via broadcast
 
 Installation:
     pip install pywizlight
 
-Registro de un dispositivo WiZ en DoSync:
+Registering a WiZ bulb with DoSync:
 
     from dosync.adapters.wiz import WiZAdapter, wiz_manifest
 
-    # Registrar el adapter en el executor
+    # Register the adapter with the executor
     executor = AdapterExecutor(hub)
     executor.register(WiZAdapter())
 
     # Register the bulb with the hub
     hub.register_device(wiz_manifest(
-        device_id="wiz-living-01",
+        device_id="wiz-zone1-01",
         device_name="Zone 1 lamp",
         ip="192.168.1.45",
-        tags=["light", "living-room", "climate"],
+        location="building-b/floor-3/zone-1",
     ))
 """
 
@@ -63,6 +63,7 @@ def wiz_manifest(
     ip: str,
     tags: Optional[list[str]] = None,
     room: str = "",
+    location: str = "",
 ):
     """
     Build a CapabilityManifest ready to register a WiZ bulb.
@@ -71,12 +72,13 @@ def wiz_manifest(
         device_id:   unique identifier (e.g. "wiz-zone1-01")
         device_name: display name (e.g. "Zone 1 lamp")
         ip:          bulb address on the local network (e.g. "192.168.1.45")
-        tags:        tags adicionales (se agregan a ["light", "wiz"])
-        room:        location (added as a tag when provided)
+        tags:        additional tags, added to ["light"]
+        location:    location of the device, a path such as "building-b/floor-3" (protocol 0.5)
+        room:        deprecated alias of location
     """
     from ..models import (
         ActuatorSpec, CapabilityManifest, CertTier, DeviceCategory,
-        EventSpec, SensorSpec, Urgency,
+        EventSpec, SensorSpec, Urgency, normalize_location,
     )
 
     # Tag vocabulary: only canonical role tags here. Vendor names ("wiz") and
@@ -85,8 +87,14 @@ def wiz_manifest(
     base_tags = ["light"]
     if tags:
         base_tags.extend(tags)
-    if room:
-        base_tags.append(room)
+    # `room` is the deprecated alias of `location` (protocol 0.5, spec §10.5): it
+    # used to be appended to the tags, where a place cannot be told apart from
+    # a category. Both now set the manifest's location field.
+    if room and not location:
+        import logging as _logging
+        _logging.getLogger("dosync.adapters").warning(
+            "`room=` is deprecated since protocol 0.5; pass `location=` instead")
+    location = normalize_location(location or room)
 
     # Store the address in adapter_config so the AdapterExecutor can find it
     manifest = CapabilityManifest(
@@ -123,14 +131,15 @@ def wiz_manifest(
                          {"type": "object",
                           "properties": {"kelvin": {"type": "integer", "minimum": 2200, "maximum": 6500}},
                           "required": ["kelvin"]}),
-            ActuatorSpec("set_scene",       "set_scene",       "Escena WiZ predefinida",
+            ActuatorSpec("set_scene",       "set_scene",       "Predefined WiZ scene",
                          {"type": "object",
                           "properties": {"scene_id": {"type": "integer", "minimum": 1, "maximum": 32}},
                           "required": ["scene_id"]}),
         ],
         events=[],
-        emergency_capable=True,      # puede usarse en emergencias (luces al max)
+        emergency_capable=True,      # usable in an emergency (lights at maximum)
         cert_tier=CertTier.STANDARD,
+        location=location,
     )
 
     # Attach the adapter config to the manifest directly

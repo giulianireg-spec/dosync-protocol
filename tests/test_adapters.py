@@ -51,11 +51,15 @@ def test_wiz_manifest_no_deprecated_tags():
     assert "light" in m.tags, "wiz must keep the canonical 'light' role tag"
 
 
-def test_wiz_manifest_caller_tags_and_room():
-    m = wiz_manifest("wiz-01", "Living", "192.168.1.50",
-                     tags=["emergency"], room="living-room")
+def test_wiz_manifest_caller_tags_and_location():
+    """room= used to be appended to the tags. Since protocol 0.5 a place goes in
+    the location field, and room= is a deprecated alias of location=."""
+    m = wiz_manifest("wiz-01", "Zone 1", "192.168.1.50",
+                     tags=["emergency"], location="building-b/floor-3")
     assert "emergency" in m.tags, "caller-supplied tag must be present"
-    assert "living-room" in m.tags, "room must be added as a location tag"
+    assert m.location == "building-b/floor-3" and "building-b/floor-3" not in m.tags
+    old = wiz_manifest("wiz-02", "Zone 2", "192.168.1.51", room="lab")
+    assert old.location == "lab" and "lab" not in old.tags
     assert_no_deprecated_tags(m, "wiz_manifest+caller")
 
 

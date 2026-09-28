@@ -19,12 +19,12 @@ Registering a Shelly device with DoSync:
     executor.register(ShellyAdapter())
 
     hub.register_device(shelly_manifest(
-        device_id="shelly-living-01",
-        device_name="Shelly Living Room",
+        device_id="shelly-zone1-01",
+        device_name="Zone 1 relay",
         ip="192.168.1.50",
         device_type="relay",   # relay | dimmer | plug | rgbw
-        gen=1,                 # 1 o 2
-        tags=["light", "living-room"],
+        gen=1,                 # 1 or 2
+        location="plant-1/line-3",
     ))
 """
 from __future__ import annotations
@@ -57,23 +57,25 @@ def shelly_manifest(
     tags: Optional[list[str]] = None,
     room: str = "",
     emergency_capable: bool = False,
+    location: str = "",
 ):
     """
     Build a CapabilityManifest ready to register a Shelly device.
 
     Args:
         device_id:        unique identifier (e.g. "shelly-zone1-01")
-        device_name:      nombre visible (ej: "Shelly Living Room")
+        device_name:      display name (e.g. "Zone 1 relay")
         ip:               the device's address on the local network
-        device_type:      tipo: "relay" | "dimmer" | "plug" | "rgbw"
+        device_type:      "relay" | "dimmer" | "plug" | "rgbw"
         gen:              API generation: 1 or 2
-        tags:             tags adicionales
-        room:             location (added as a tag)
-        emergency_capable: si puede actuar en emergencias
+        tags:             additional tags
+        location:         location of the device, a path such as "building-b/floor-3" (protocol 0.5)
+        room:             deprecated alias of location
+        emergency_capable: whether the device may act in an emergency
     """
     from ..models import (
         ActuatorSpec, CapabilityManifest, CertTier, DeviceCategory,
-        EventSpec, SensorSpec, Urgency,
+        EventSpec, SensorSpec, Urgency, normalize_location,
     )
 
     # Tag vocabulary: no vendor name ("shelly"), canonical "plug" not
@@ -90,17 +92,23 @@ def shelly_manifest(
     base_tags.extend(type_tags.get(device_type, []))
     if tags:
         base_tags.extend(tags)
-    if room:
-        base_tags.append(room)
+    # `room` is the deprecated alias of `location` (protocol 0.5, spec §10.5): it
+    # used to be appended to the tags, where a place cannot be told apart from
+    # a category. Both now set the manifest's location field.
+    if room and not location:
+        import logging as _logging
+        _logging.getLogger("dosync.adapters").warning(
+            "`room=` is deprecated since protocol 0.5; pass `location=` instead")
+    location = normalize_location(location or room)
 
     # Actuators by type
     actuators_map = {
-        "relay":  [("turn_on", "Encender relay"), ("turn_off", "Apagar relay")],
-        "dimmer": [("turn_on", "Encender dimmer"), ("turn_off", "Apagar dimmer"),
-                   ("set_brightness", "Ajustar brillo 0-100%")],
-        "plug":   [("turn_on", "Encender enchufe"), ("turn_off", "Apagar enchufe")],
+        "relay":  [("turn_on", "Turn the relay on"), ("turn_off", "Turn the relay off")],
+        "dimmer": [("turn_on", "Turn the dimmer on"), ("turn_off", "Turn the dimmer off"),
+                   ("set_brightness", "Brightness 0-100%")],
+        "plug":   [("turn_on", "Turn the plug on"), ("turn_off", "Turn the plug off")],
         "rgbw":   [("turn_on", "Turn on"), ("turn_off", "Turn off"),
-                   ("set_brightness", "Brillo"), ("set_color", "Color RGB")],
+                   ("set_brightness", "Brightness"), ("set_color", "RGB colour")],
     }
     actuators = [
         ActuatorSpec(id=f"{device_id}-{a[0]}", type=a[0], description=a[1])
@@ -122,6 +130,7 @@ def shelly_manifest(
         cert_tier=CertTier.BASIC,
         adapter="shelly",
         adapter_config={"ip": ip, "device_type": device_type, "gen": gen},
+        location=location,
     )
 
 
@@ -201,8 +210,8 @@ class ShellyAdapter(DoSyncAdapter):
     """
     DoSync adapter for Shelly devices.
 
-    Soporta Gen1 (API REST) y Gen2 (API RPC).
-    Sin dependencias externas — usa requests.
+    Supports Gen1 (REST API) and Gen2 (RPC API).
+    No external dependencies — uses requests.
     """
 
     @property

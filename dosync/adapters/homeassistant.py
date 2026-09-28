@@ -28,7 +28,7 @@ Usage:
     count = await bridge.import_devices()
     print(f"Imported {count} devices")
 
-    # Registrar el adapter en el executor
+    # Register the adapter with the executor
     executor.register(bridge)
 """
 
@@ -72,7 +72,7 @@ HA_DOMAIN_MAP = {
                                          "g": {"type": "integer", "minimum": 0, "maximum": 255},
                                          "b": {"type": "integer", "minimum": 0, "maximum": 255}},
                           "required": ["r", "g", "b"]}),
-            ActuatorSpec("set_effect",     "set_effect",     "Efecto Ambilight",
+            ActuatorSpec("set_effect",     "set_effect",     "Set an effect the device supports",
                          {"type": "object",
                           "properties": {"effect": {"type": "string"}},
                           "required": ["effect"]}),
@@ -106,13 +106,13 @@ HA_DOMAIN_MAP = {
     },
     "climate": {
         "category": DeviceCategory.HYBRID,
-        "tags":      ["thermostat", "climate"],
+        "tags":      ["thermostat"],   # "climate" is a deprecated tag (TAG-VOCABULARY.md)
         "actuators": [
             ActuatorSpec("set_temperature", "set_temperature", "Temperature",
                          {"type": "object",
                           "properties": {"celsius": {"type": "number"}},
                           "required": ["celsius"]}),
-            ActuatorSpec("turn_off",        "turn_off",        "Turn the climate off"),
+            ActuatorSpec("turn_off",        "turn_off",        "Turn the HVAC off"),
         ],
         "sensors": [
             # The per-sensor grain earning its keep: current_temp MEASURES THE
@@ -126,14 +126,14 @@ HA_DOMAIN_MAP = {
     },
     "cover": {
         "category": DeviceCategory.ACTUATOR,
-        "tags":      ["blinds", "climate"],
+        "tags":      ["blinds"],
         "actuators": [
             ActuatorSpec("set_position", "set_position", "Position 0-100%",
                          {"type": "object",
                           "properties": {"position": {"type": "integer", "minimum": 0, "maximum": 100}},
                           "required": ["position"]}),
-            ActuatorSpec("turn_on",  "turn_on",  "Abrir"),
-            ActuatorSpec("turn_off", "turn_off", "Cerrar"),
+            ActuatorSpec("turn_on",  "turn_on",  "Open"),
+            ActuatorSpec("turn_off", "turn_off", "Close"),
         ],
         "sensors": [SensorSpec("position", "integer", "Current position", unit="%",
                                 kind="device_state")],
@@ -141,10 +141,10 @@ HA_DOMAIN_MAP = {
     },
     "lock": {
         "category": DeviceCategory.HYBRID,
-        "tags":      ["door-lock", "access", "emergency"],
+        "tags":      ["lock", "security", "emergency"],   # vocabulary tags, as matter_manifest uses
         "actuators": [
-            ActuatorSpec("unlock", "unlock", "Desbloquear"),
-            ActuatorSpec("lock",   "lock",   "Bloquear"),
+            ActuatorSpec("unlock", "unlock", "Unlock"),
+            ActuatorSpec("lock",   "lock",   "Lock"),
         ],
         "sensors": [SensorSpec("state", "boolean", "Locked or unlocked",
                                 kind="device_state")],
@@ -178,7 +178,7 @@ HA_DOMAIN_MAP = {
         "category": DeviceCategory.HYBRID,
         "tags":      ["alarm", "emergency", "security"],
         "actuators": [
-            ActuatorSpec("arm",   "arm",   "Armar"),
+            ActuatorSpec("arm",   "arm",   "Arm"),
             ActuatorSpec("alarm", "alarm", "Trigger the alarm"),
         ],
         "sensors":   [SensorSpec("state", "string", "Alarm state",
@@ -191,7 +191,7 @@ HA_DOMAIN_MAP = {
         "actuators": [
             ActuatorSpec("turn_on",  "turn_on",  "Turn on"),
             ActuatorSpec("turn_off", "turn_off", "Turn off"),
-            ActuatorSpec("display",  "display",  "Mostrar mensaje"),
+            ActuatorSpec("display",  "display",  "Show a message"),
         ],
         "sensors":   [SensorSpec("state", "string", "State", kind="device_state")],
         "emergency_capable": False,
@@ -220,11 +220,11 @@ HA_IGNORED_DOMAINS = {
 
 
 # ── HA Service mapping ────────────────────────────────────────────────────────
-# Traduce acciones DoSync a llamadas de servicio HA
+# Translates DoSync actions into Home Assistant service calls
 
 def dosync_to_ha_service(domain: str, action: str, params: dict) -> tuple[str, str, dict]:
     """
-    Retorna (domain, service, service_data) para llamar a HA.
+    Returns (domain, service, service_data) for the call to Home Assistant.
     """
     if action == "turn_on":
         svc_data = {}
@@ -291,8 +291,8 @@ class HABridge(DoSyncAdapter):
     Bridge between DoSync and Home Assistant.
 
     Acts as:
-    1. Scanner — importa dispositivos de HA como manifests DoSync
-    2. Adapter — ejecuta acciones DoSync traducidas a servicios HA
+    1. Scanner — imports Home Assistant devices as DoSync manifests
+    2. Adapter — runs DoSync actions translated into Home Assistant services
     """
 
     def __init__(
@@ -306,9 +306,9 @@ class HABridge(DoSyncAdapter):
     ):
         """
         Args:
-            ha_url:    URL de HA (ej: http://homeassistant.local:8123)
-            ha_token:  Long-lived access token de HA
-            hub:       instancia del DoSyncHub
+            ha_url:    Home Assistant URL (e.g. http://homeassistant.local:8123)
+            ha_token:  Home Assistant long-lived access token
+            hub:       the DoSyncHub instance
             simulated: when True, use sample data instead of connecting to HA
         """
         self._url       = ha_url.rstrip("/")

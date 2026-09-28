@@ -2431,6 +2431,9 @@ async def update_presence(req: PresenceSignalRequest, auth: str = Depends(requir
         "status":       "updated",
         "occupied":     state.occupied,
         "confidence":   round(state.confidence, 3),
+        "members_present": state.members_home,
+        # Deprecated (protocol 0.5, spec §10.5): a household word for "present",
+        # kept until 2027-03-26 for clients that read it.
         "members_home": state.members_home,
         "signals_used": state.signals_used,
     }
@@ -2443,6 +2446,9 @@ def get_presence(auth: str = Depends(require_auth)):
     return {
         "occupied":     state.occupied,
         "confidence":   round(state.confidence, 3),
+        "members_present": state.members_home,
+        # Deprecated (protocol 0.5, spec §10.5): a household word for "present",
+        # kept until 2027-03-26 for clients that read it.
         "members_home": state.members_home,
         "signals_used": state.signals_used,
         "signals":      signals,

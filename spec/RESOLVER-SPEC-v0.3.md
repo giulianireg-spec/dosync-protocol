@@ -1,7 +1,7 @@
 # DoSync Resolver Interface — v0.3 Specification
 
-**Status:** Current — supersedes v0.2 (see decision trail in repo history)  
-**Date:** June 2026  
+**Status:** Current — protocol 0.5 (rev. 2026-09-28). Supersedes v0.2 and the tag-gate semantics of rev. 2026-07-11: devices are selected by capability, tags only rank them, and a location restricts where an intent acts (main spec §6, §10.5). The file keeps its name so external links hold.  
+**Date:** June 2026, revised September 2026  
 **Author:** Rodrigo Giuliani  
 **Contact:** rgiuliani@dosync.dev
 
@@ -63,6 +63,11 @@ A conforming resolver implementation MUST:
 4. Return an empty `ActionPlan` (no actions) when no devices are relevant, rather than raising an exception
 5. Be deterministic for the same input in the same environment (no random behavior)
 6. Complete within a reasonable timeout (recommended: < 500ms for non-LLM resolvers)
+7. Apply the protocol's selection rules (main spec §6, protocol 0.5): include a device only if it declares an actuator or sensor the intent class needs (every device, when the class declares neither); let tags rank, never select; when the context carries a `location` and the class's `location_role` is `"restricts"`, include only devices at that location — in an `emergency` too, emergency force-inclusion included
+
+The rules in 7 are protocol semantics, not choices of the reference resolver: a
+resolver that ignores them changes what an intent does. The conformance tier of
+the certification suite (C13–C21) checks them through the hub.
 
 A conforming resolver MUST NOT:
 
@@ -82,7 +87,7 @@ class Intent:
     intent_id:  str                  # unique identifier (auto-generated)
     urgency:    Urgency              # emergency | alert | warning | info
     context:    dict                 # arbitrary context data
-    source:     str                  # who fired this intent (mcp, api, gpio, scheduler)
+    source:     str                  # who fired this intent (api, mcp, hub, scheduler, recovery)
     timestamp:  float                # unix timestamp
 ```
 
@@ -102,13 +107,16 @@ class IntentClass(str):
 
 **Universal intent classes** (seeded at hub init, protected from deletion):
 
-| IntentClass | Urgency | Description |
-|---|---|---|
-| `ensure_safety` | `emergency` | Safety emergency — protect people and property |
-| `alert_anomaly` | `alert` | Unexpected condition detected — investigate |
-| `control_access` | `alert` | Manage physical access to a space |
-| `report_status` | `info` | Generate a status report |
-| `notify` | `info` | Push information to any target |
+| IntentClass | Urgency | Location role | Description |
+|---|---|---|---|
+| `ensure_safety` | `emergency` | `informs` | Safety emergency — protect people and property |
+| `alert_anomaly` | `alert` | `informs` | Unexpected condition detected — investigate |
+| `control_access` | `alert` | `restricts` | Manage physical access to a space |
+| `report_status` | `info` | `restricts` | Generate a status report |
+| `notify` | `info` | `informs` | Push information to any target |
+
+What each one resolves to — tags, actuators, sensors — is in `spec/TAG-VOCABULARY.md`
+("Intent-to-tag mapping"), which a test compares with the seed.
 
 **Domain-specific intent classes** are registered at runtime via the hub API:
 
@@ -117,21 +125,25 @@ POST /v1/intent-classes
 {
   "name": "prepare_meeting_room",
   "urgency": "alert",
-  "resolution_tags": ["light", "climate", "lock"],
+  "resolution_tags": ["light", "hvac", "lock"],
   "resolution_actuators": ["turn_on", "unlock", "notify"],
+  "location_role": "restricts",
   "domain": "commercial"
 }
 ```
 
 The resolver automatically discovers registered intent classes from the database — no code changes or hub restart required.
 
-**The tags in `resolution_tags` MUST come from the standard vocabulary**
-(`spec/TAG-VOCABULARY.md`) where one applies. This example previously read
-`["lighting", "climate", "access"]`; two of those three tags are not in the
-vocabulary, so a device tagged from the vocabulary — a lock tagged `lock` —
-would never have been selected by an intent written from this example. A
-resolution tag that no conforming device declares is a class that resolves to
-nothing, and nothing in the hub reports it.
+`resolution_actuators` (and `resolution_sensors`) decide which devices take part:
+a lock declaring `unlock` joins this class whatever its tags. `location_role:
+"restricts"` confines it to the room named in the intent's context.
+
+**The tags in `resolution_tags` SHOULD come from the standard vocabulary**
+(`spec/TAG-VOCABULARY.md`) where one applies. They only rank the devices that
+qualify, so a tag no device carries does not empty the class — it simply ranks
+nothing. (Before protocol 0.5 it did empty it: this example once read
+`["lighting", "climate", "access"]`, and a lock tagged `lock` was never
+selected.)
 
 ### Urgency levels
 
@@ -315,8 +327,10 @@ def _get_resolution(self, intent: Intent) -> dict:
             row = db.get_intent_class(name)
             if row:
                 return {
-                    "tags":      row["resolution_tags"],
-                    "actuators": row["resolution_actuators"],
+                    "tags":          row["resolution_tags"],
+                    "actuators":     row["resolution_actuators"],
+                    "sensors":       row.get("resolution_sensors") or [],
+                    "location_role": row.get("location_role", "restricts"),
                 }
     except Exception as e:
         log.warning("_get_resolution: DB lookup failed for '%s': %s", intent.intent, e)
@@ -336,48 +350,33 @@ Custom resolvers subclassing `BaseResolver` that previously accessed `INTENT_RES
 
 ### 1. CapabilityMatchingResolver (default)
 
-Location: `dosync/hub.py`
+Location: `dosync/resolvers.py`
 
-The default resolver. Scores every registered device against the intent using:
+The default resolver. It decides who takes part first, and ranks only those.
 
-- **Tag overlap** — devices whose tags match the intent's resolution tags score higher
-- **Location match** — devices in the same location as the intent context score higher
-- **Emergency bonus** — emergency-capable devices get a bonus score on emergency intents
-- **Actuator match** — devices that support the required actuator types score higher
+- **Participation — by capability.** A device takes part if it declares an actuator or a sensor the class needs. A class declaring neither (`report_status`) admits every device.
+- **Location — restricts, then ranks.** With a `location` in the context and `location_role: "restricts"`, a device outside it is excluded. A device is at a location when its operator-set `location` path is contained in it, by whole segment, or when it carries a legacy location tag equal to it. With either role, a device at the location scores higher.
+- **Ranking.** Among the devices that take part: tag overlap with the class's resolution tags, the location bonus above, an emergency bonus for emergency-capable devices on emergency intents, and the actuator match.
 
-Devices with score > 0 are included in the action plan.
+#### Normative semantics (rev. 2026-09-28, protocol 0.5)
 
-#### Normative semantics (rev. 2026-07-11)
+These restate main spec §6 for the resolver; where the two differ, §6 governs.
 
-1. **Specific-tag gate — all-specific resolutions only.** Resolution tags are
-   either *generic* (`light`, `climate`, `communication`, `sensor`, `appliance`,
-   `display`) or *specific* (everything else). If a resolution contains ONLY
-   specific tags, a device sharing none of them is excluded regardless of any
-   bonuses (the tags are a requirement). If the resolution MIXES generic and
-   specific tags, the generic tags define who participates and the specific
-   tags act as a ranking boost, not a gate.
-2. **Emergency full-capability fallback.** At `emergency` urgency, every
-   `emergency_capable` device participates in the response. If its
-   resolution-scoped action build yields zero actions (its actuator types do
-   not appear in the resolution), it falls back to its **full capability set**
-   — a safety device that shows up and does nothing is worse than one that
-   acts broadly. Correct tagging (see TAG-VOCABULARY.md) yields precise,
-   resolution-scoped behavior instead.
-3. **Empty resolution = read-only status query.** An intent whose resolution
-   has no tags and no actuators (e.g. `report_status`) resolves to
-   `read_sensors` actions on every device that declares sensors. Actuators
-   never fire on a status query.
+1. **Participation is decided by capability, not by tag.** A device that declares none of the class's actuators or sensors is excluded, whatever its tags — `explain` reports it as "declares none of the capabilities this intent needs". Tags never admit or exclude a device; they only add to its score. (Rev. 2026-07-11 had a *specific-tag gate*, under which tags could exclude a capable device. It is gone.)
+2. **A location restricts when the class says it does.** See the bullet above; `explain` reports an excluded device as "not at location '…'". A class with `location_role: "informs"` excludes nothing for its location. A restricting location no registered device is at is refused by the hub before the resolver runs (`422`, `unknown_location`), except in an emergency, which acts as if no location were given.
+3. **Emergency force-inclusion, within the zone.** At `emergency` urgency every `emergency_capable` device takes part even if nothing else matches — unless the intent is restricted to a location the device is not at. If its resolution-scoped action build yields zero actions, it falls back to its **full capability set**: a safety device that shows up and does nothing is worse than one that acts broadly.
+4. **Empty resolution = read-only status query.** A class with no tags, actuators or sensors (`report_status`) resolves to `read_sensors` on every device that declares sensors. Actuators never fire on a status query.
 
 The `/v1/intents/{class}/explain` endpoint MUST mirror these semantics exactly
 (including the emergency force-inclusion, reported with
 `score_breakdown.forced_emergency = true`).
 
-**Strengths:** Fast, deterministic, no external dependencies. Tag index reduces candidate evaluation by up to 97% for specific intents (v0.3).  
+**Strengths:** Fast, deterministic, no external dependencies. The tag index finds tagged devices quickly; every active device is still checked for the capabilities a class needs, so a capable device is never missed for lacking a tag. (The 97% reduction in candidates measured in v0.3 was for the tag index deciding who was considered; since protocol 0.5 it no longer does.)  
 **Limitations:** No temporal context, no learned patterns
 
 ### 2. StateAwareResolver (recommended for production)
 
-Location: `dosync/hub.py`
+Location: `dosync/resolvers.py`
 
 Extends `CapabilityMatchingResolver`. Maintains a state cache updated after each successful action execution and via a background refresh cycle (configurable interval, default 60s). Before including an action in the plan, checks if the action would have any effect given the current state:
 
@@ -550,6 +549,12 @@ The service MUST respond with HTTP 200 and a JSON body matching `spec/schemas/ac
 
 An empty `actions` array is a valid response — it means no devices are relevant to this intent.
 
+The plan MUST follow the selection rules of the contract (requirement 7): the
+`registry` in the request carries each device's capabilities and its `location`,
+and the class's resolution is available to the service as it is to a local
+resolver. A plan that includes an incapable device, or a device outside a
+restricting location, changes what the intent does.
+
 ### 5.4 Timing requirements
 
 A conforming external resolver MUST respond within **500ms** for non-LLM resolvers. For LLM-backed resolvers, the hub respects `DOSYNC_INTENT_TIMEOUT` (default: 10s for `info`/`alert`, 5s for `emergency`).
@@ -611,11 +616,18 @@ New optional fields may be added in minor versions. Implementations SHOULD ignor
 | v0.2 | Formal interface introduced — `BaseResolver`, `CapabilityMatchingResolver`, `StateAwareResolver` |
 | v0.3 | Inverted tag index — O(1) candidate selection, union/intersection strategies, emergency guarantee. Open intent classes — `INTENT_RESOLUTION_MAP` removed, all resolution data in SQLite `intent_classes` table. `Urgency.WARNING` formally defined. |
 | v0.4 (implemented) | Direct device state querying — `StateAwareResolver` background refresh cycle queries device state before scoring. Configurable interval (default 60s). Persisted to SQLite. |
+| protocol 0.5 (2026-09) | Selection by capability (tags only rank; the specific-tag gate is removed). A location restricts per the class's `location_role`, by whole-segment containment of an operator-set path, in an emergency too. Resolution data includes `resolution_sensors` and `location_role`. |
 | v1.0 (planned) | Stable interface — breaking changes require major version bump |
 
 ---
 
 ## Changelog
+
+**Rev. 2026-09-28 (protocol 0.5)**
+- Devices are selected by capability: a device takes part if it declares an actuator or sensor the class needs. The specific-tag gate of rev. 2026-07-11 is removed; tags only rank. (The reference resolver changed on 2026-09-04; this document had not.)
+- A location restricts where an intent acts when the class's `location_role` is `"restricts"`, including in an emergency and its force-inclusion. The location was a ranking bonus only.
+- Contract requirement 7: these rules bind every resolver, local or external.
+- `_get_resolution()` returns `sensors` and `location_role`; the reference resolvers live in `dosync/resolvers.py`.
 
 **v0.3 (June 2026)**
 - **BREAKING:** `INTENT_RESOLUTION_MAP` removed from `hub.py`. Resolution data now lives in SQLite `intent_classes` table. Custom resolvers must update to use `_get_resolution()` or `hub.db.get_intent_class()`.
@@ -634,6 +646,6 @@ New optional fields may be added in minor versions. Implementations SHOULD ignor
 
 ---
 
-*DoSync Protocol v0.3 — Resolver Interface Specification*  
+*DoSync Resolver Interface Specification — v0.3, rev. 2026-09-28 (protocol 0.5)*  
 *External Resolver Protocol: §5 — language-independent HTTP wire format*  
 *Apache 2.0 — github.com/giulianireg-spec/dosync-protocol*

@@ -480,7 +480,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         # altitude_m for a composition, etc.). Passed through to the hub as-is.
         ctx = dict(arguments.get("context") or {})
 
-        # Merge the home-automation convenience fields into context for backward
+        # Merge the convenience fields (message, location) into context for backward
         # compatibility, without overwriting anything the AI put in `context`.
         for k, v in (("message", message), ("location", location)):
             if v and k not in ctx:

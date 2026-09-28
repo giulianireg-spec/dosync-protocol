@@ -53,7 +53,7 @@ class DoSyncAdapter(ABC):
     Base interface for physical device adapters.
 
     Each adapter translates DoSync actions into the device's native protocol
-    del dispositivo (UDP, HTTP, GPIO, BLE, etc.).
+    (UDP, HTTP, BLE, etc.).
 
     To implement a new adapter:
 
@@ -174,7 +174,7 @@ class DoSyncAdapter(ABC):
         ...
 
 
-# ── AdapterExecutor — el ejecutor central ────────────────────────────────────
+# ── AdapterExecutor — the central executor ────────────────────────────────────
 
 class AdapterExecutor:
     """
@@ -195,9 +195,9 @@ class AdapterExecutor:
     def __init__(self, hub, fallback_to_simulated: bool = True):
         """
         Args:
-            hub: instancia de DoSyncHub
+            hub: the DoSyncHub instance
             fallback_to_simulated: if True, devices with no adapter
-                                   usan SimulatedExecutor en lugar de fallar
+                                   use SimulatedExecutor instead of failing
         """
         self._hub = hub
         self._adapters: dict[str, DoSyncAdapter] = {}
@@ -220,7 +220,7 @@ class AdapterExecutor:
 
 
     def registered_adapters(self) -> list[str]:
-        """Lista de adapters registrados."""
+        """Names of the registered adapters."""
         return list(self._adapters.keys())
 
     async def execute(self, action: DeviceAction, urgency: Urgency) -> ActionResult:

@@ -828,7 +828,12 @@ class CapabilityMatchingResolver(BaseResolver):
             "unlock":           {"duration_seconds": 300},
             "lock":             {},
             "call":             {"number": intent.context.get("emergency_number", "911"),
-                                 "message": intent.context.get("message", "Emergency at home")},
+                                 # Names the place when the intent carries one. It
+                                 # said "Emergency at home" to whoever answered --
+                                 # on a plant floor or a ward as much as in a house.
+                                 "message": intent.context.get("message") or (
+                                     f"Emergency at {intent.context['location']}"
+                                     if intent.context.get("location") else "Emergency")},
             "notify":           {"message": intent.context.get("message", ""),
                                  "urgency": intent.urgency.value},
             "alarm":            {"pattern": "emergency" if intent.urgency == Urgency.EMERGENCY

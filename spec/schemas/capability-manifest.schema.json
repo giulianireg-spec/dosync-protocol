@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://dosync.dev/spec/schemas/capability-manifest.schema.json",
   "title": "DoSync CapabilityManifest",
-  "description": "Self-declaration of a physical device's capabilities. Sent to POST /v1/devices/register when the device joins the network.",
+  "description": "Self-declaration of a physical device's capabilities. Sent to POST /v1/devices/register when the device joins the network. Protocol 0.5.",
   "type": "object",
   "required": ["device_id", "device_name", "manufacturer", "model", "firmware", "category", "tags"],
   "properties": {
@@ -64,11 +64,25 @@
     },
     "adapter": {
       "type": ["string", "null"],
-      "description": "Adapter type (e.g. wiz, homeassistant, gpio, simulated)."
+      "description": "Adapter type (e.g. wiz, homeassistant, mqtt, declarative, simulated)."
     },
     "adapter_config": {
       "type": "object",
       "description": "Internal connection parameters. Redacted from public API responses."
+    },
+    "location": {
+      "type": "string",
+      "maxLength": 256,
+      "pattern": "^[^/\\s\\u0000-\\u001f\\u007f](?:[^/\\u0000-\\u001f\\u007f]*[^/\\s\\u0000-\\u001f\\u007f])?(?:/[^/\\s\\u0000-\\u001f\\u007f](?:[^/\\u0000-\\u001f\\u007f]*[^/\\s\\u0000-\\u001f\\u007f])?)*$",
+      "description": "Where the operator placed the device (protocol 0.5, spec §10.5): a path of non-empty segments separated by '/', such as 'plant-1/line-3/cell-2'. A place contains everything below it, by whole segment. Set by the operator (PATCH /v1/devices/{id}, adoption, or a declarative file), never by the device; absent when the device is not placed."
+    },
+    "provenance": {
+      "type": "object",
+      "description": "Who said what about this device, and how (adapter, adoption, discovery). Descriptive; decides nothing."
+    },
+    "discovery_evidence": {
+      "type": "object",
+      "description": "What the device announced about itself when it was discovered, kept as received."
     }
   },
   "$defs": {
@@ -81,7 +95,9 @@
         "description":      {"type": "string", "default": ""},
         "unit":             {"type": ["string", "null"]},
         "range":            {"type": ["array", "null"], "items": {"type": "number"}},
-        "poll_interval_ms": {"type": "integer", "default": 0}
+        "poll_interval_ms": {"type": "integer", "default": 30000},
+        "kind":             {"type": "string", "enum": ["environment", "device_state"], "default": "environment",
+                             "description": "'environment': measures the world around the device. 'device_state': reports the device's own state."}
       },
       "additionalProperties": false
     },
@@ -92,7 +108,25 @@
         "id":            {"type": "string"},
         "type":          {"type": "string"},
         "description":   {"type": "string", "default": ""},
-        "params_schema": {"type": "object", "default": {}}
+        "params_schema": {"type": "object", "default": {}},
+        "execution_model":   {"type": "string", "enum": ["instant", "long_running"], "default": "instant",
+                              "description": "'instant': fire and get the result. 'long_running': the action has a lifecycle (progress, cancellation, telemetry)."},
+        "supports_progress": {"type": "boolean", "default": false},
+        "supports_cancel":   {"type": "boolean", "default": false},
+        "emits_telemetry":   {"type": "boolean", "default": false},
+        "verify_with":       {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/VerifyBinding"}], "default": null,
+                              "description": "The sensor reading that confirms the action took effect."}
+      },
+      "additionalProperties": false
+    },
+    "VerifyBinding": {
+      "type": "object",
+      "required": ["sensor_id", "expected_reading"],
+      "properties": {
+        "sensor_id":              {"type": "string"},
+        "expected_reading":       {},
+        "deadline_s":             {"type": "number", "default": 5.0},
+        "accept_cached_within_s": {"type": ["number", "null"], "default": null}
       },
       "additionalProperties": false
     },
@@ -121,12 +155,13 @@
     {
       "dosync_version": "0.1",
       "device_id": "light-zone3-01",
-      "device_name": "Living Room Light 1",
+      "device_name": "Floor 3 corridor light 1",
       "manufacturer": "Philips",
       "model": "WiZ A60 RGBW",
       "firmware": "1.0.0",
       "category": "actuator",
-      "tags": ["light", "living-room", "emergency"],
+      "tags": ["light", "emergency"],
+      "location": "building-b/floor-3/corridor",
       "capabilities": {
         "sensors": [],
         "actuators": [

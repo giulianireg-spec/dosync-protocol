@@ -4,22 +4,22 @@ DoSync — Matter Adapter
 Adapter for Matter devices, via python-matter-server or Home Assistant bridge.
 
 Matter is the Connectivity Standards Alliance IoT interoperability standard.
-Este adapter soporta dos modos:
+This adapter supports two modes:
 
-Modo 1 — via Home Assistant (recomendado para v0.2):
+Mode 1 — via Home Assistant (recommended):
     Reuses the existing HABridge: when HA has the Matter integration,
     Matter devices appear as HA entities and are controlled
     through the HABridge. No additional setup required.
 
-Modo 2 — via python-matter-server (standalone, experimental):
-    Conecta directamente a un python-matter-server corriendo localmente.
+Mode 2 — via python-matter-server (standalone, experimental):
+    Connects directly to a python-matter-server running locally.
     Requires: pip install matter-server-client
 
 Installation:
     HA mode:     no additional installation required
-    Modo standalone: pip install matter-server-client (experimental)
+    Standalone mode: pip install matter-server-client (experimental)
 
-Registro de un dispositivo Matter en DoSync:
+Registering a Matter device with DoSync:
     from dosync.adapters.matter import MatterAdapter, matter_manifest
 
     executor.register(MatterAdapter(mode="ha", ha_url="http://localhost:8123",
@@ -27,9 +27,9 @@ Registro de un dispositivo Matter en DoSync:
 
     hub.register_device(matter_manifest(
         device_id="matter-light-01",
-        device_name="Matter Bulb Living",
-        entity_id="light.matter_bulb_living",  # entity_id en HA
-        tags=["light", "living-room"],
+        device_name="Matter bulb, zone 1",
+        entity_id="light.matter_bulb_zone1",   # the entity_id in HA
+        location="building-b/floor-3/zone-1",
     ))
 """
 from __future__ import annotations
@@ -54,22 +54,24 @@ def matter_manifest(
     tags: Optional[list[str]] = None,
     room: str = "",
     emergency_capable: bool = False,
+    location: str = "",
 ):
     """
     Build a CapabilityManifest for a Matter device.
 
     Args:
         device_id:        unique identifier (e.g. "matter-light-01")
-        device_name:      nombre visible
-        entity_id:        entity_id en Home Assistant (ej: "light.matter_bulb")
-        device_type:      tipo: "light" | "switch" | "cover" | "lock" | "climate"
-        tags:             tags adicionales
-        room:             location
-        emergency_capable: si puede actuar en emergencias
+        device_name:      display name
+        entity_id:        the entity_id in Home Assistant (e.g. "light.matter_bulb")
+        device_type:      "light" | "switch" | "cover" | "lock" | "climate" (Matter/HA device types)
+        tags:             additional tags
+        location:         location of the device, a path such as "building-b/floor-3" (protocol 0.5)
+        room:             deprecated alias of location
+        emergency_capable: whether the device may act in an emergency
     """
     from ..models import (
         ActuatorSpec, CapabilityManifest, CertTier, DeviceCategory,
-        SensorSpec, Urgency,
+        SensorSpec, Urgency, normalize_location,
     )
 
     # Tag vocabulary: no vendor name ("matter"), canonical "plug" not
@@ -85,17 +87,23 @@ def matter_manifest(
     base_tags.extend(type_tags.get(device_type, ["appliance"]))
     if tags:
         base_tags.extend(tags)
-    if room:
-        base_tags.append(room)
+    # `room` is the deprecated alias of `location` (protocol 0.5, spec §10.5): it
+    # used to be appended to the tags, where a place cannot be told apart from
+    # a category. Both now set the manifest's location field.
+    if room and not location:
+        import logging as _logging
+        _logging.getLogger("dosync.adapters").warning(
+            "`room=` is deprecated since protocol 0.5; pass `location=` instead")
+    location = normalize_location(location or room)
 
     actuators_map = {
         "light":   [("turn_on", "Turn on"), ("turn_off", "Turn off"),
-                    ("set_brightness", "Brillo"), ("set_color", "Color")],
+                    ("set_brightness", "Brightness"), ("set_color", "Colour")],
         "switch":  [("turn_on", "Turn on"), ("turn_off", "Turn off")],
-        "cover":   [("open", "Abrir"), ("close", "Cerrar"),
+        "cover":   [("open", "Open"), ("close", "Close"),
                     ("set_position", "Position 0-100%")],
-        "lock":    [("lock", "Cerrar"), ("unlock", "Abrir")],
-        "climate": [("set_temperature", "Temperatura"), ("turn_on", "Turn on"),
+        "lock":    [("lock", "Lock"), ("unlock", "Unlock")],
+        "climate": [("set_temperature", "Target temperature"), ("turn_on", "Turn on"),
                     ("turn_off", "Turn off")],
     }
     actuators = [
@@ -116,6 +124,7 @@ def matter_manifest(
         events=[],
         emergency_capable=emergency_capable,
         cert_tier=CertTier.BASIC,
+        location=location,
         adapter="matter",
         adapter_config={
             "entity_id": entity_id,
@@ -128,7 +137,7 @@ def matter_manifest(
 # ── Matter via HA ─────────────────────────────────────────────────────────────
 
 class _MatterViaHA:
-    """Controla dispositivos Matter via la API REST de Home Assistant."""
+    """Controls Matter devices through the Home Assistant REST API."""
 
     def __init__(self, ha_url: str, ha_token: str):
         self.ha_url = ha_url.rstrip("/")

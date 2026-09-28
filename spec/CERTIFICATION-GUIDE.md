@@ -1,8 +1,8 @@
 # DoSync Protocol — Third-Party Certification Guide
 
-**Guide version:** 0.3 · **Protocol:** v0.1  
+**Guide version:** 0.4 · **Protocol:** 0.5  
 **Applies to:** Any implementation of the DoSync Protocol (any language, any platform)  
-**Certification tool:** `certify.py` from [giulianireg-spec/dosync-protocol](https://github.com/giulianireg-spec/dosync-protocol)
+**Certification tool:** `dosync-certify` (installed with `pip install dosync`), or `dosync/certify.py` in [giulianireg-spec/dosync-protocol](https://github.com/giulianireg-spec/dosync-protocol)
 
 ---
 
@@ -10,118 +10,124 @@
 
 DoSync uses a self-certification model. Any developer or manufacturer can certify their implementation independently using the official certification CLI. No third-party review is required to claim certification — the signed JSON report is the certificate.
 
-The certification suite has four tiers. Each tier is cumulative: Standard includes all Basic tests, Emergency includes all Standard tests, Conformance includes all Emergency tests.
+The suite checks what the protocol promises over the wire, against a running hub. It has four tiers, each cumulative: Standard includes every Basic check, Emergency every Standard check, Conformance every Emergency check.
 
-| Tier | Tests | What it validates |
+| Tier | Checks | What it validates |
 |---|---|---|
 | **Basic** | 10 | Connectivity, authentication, device registration, manifest structure |
-| **Standard** | 33 | All Basic + intent processing, event handling, error codes, privacy, async polling |
-| **Emergency** | 44 | All Standard + emergency override, audit log integrity, firmware re-registration |
-| **Conformance** | 52 | All Emergency + v0.4 protocol features: sensor-kind declarations, policy-modification provenance in the audit chain, policy fingerprinting, and archive-preserving chain integrity |
+| **Standard** | 33 (+23) | Intent processing, events, direct actions, error codes, privacy, async polling, explain, version headers |
+| **Emergency** | 44 (+11) | Emergency dispatch, the SHA-256 audit chain, firmware re-registration, heartbeat after an emergency |
+| **Conformance** | 65 (+21) | The protocol's later guarantees: sensor kind, policy provenance in the audit chain, chain archiving, adapters and discovery (0.4, C01–C12); device locations and what a location in an intent does (0.5, C13–C21) |
 
-**Conformance tier note.** The C-series tests verify the guarantees added in the 0.4 cycle over the wire against a running hub. Several are strongest when the hub runs a deployment policy that *modifies* plans (C04–C06 look for `policy_modified` chain entries with full provenance); run the tier against a hub with a real `DOSYNC_POLICIES` file, and exercise at least one intent that a policy modifies, for a complete result. C08 passes whether or not the chain has been archived — it verifies that segmentation preserves the tamper-evident guarantee when archiving *is* in use.
+A run that stops early is **incomplete**, not failed: the report says how many
+of the tier's checks it reached, and it never certifies.
+
+**Not applicable.** One check, C21, fires a real emergency. Against a hub that
+is not in certify mode it would act on physical devices, so it runs only when
+the hub reports `certify_mode`. Otherwise it is recorded as *not applicable*,
+with its reason, and the tier's expected count drops by one: it is neither
+passed — nobody checked it — nor failed. The signed report lists it.
+
+**The suite builds its own scene.** Standard registers a test device; the 0.5
+checks register probe devices (`certify-probe-…`) and probe intent classes
+(`certify_location_…`), place them with `PATCH`, and remove all of it when they
+end, whatever happens. The 0.5 checks verify through `explain`, which executes
+nothing.
 
 ---
 
 ## Before You Start
 
-Your hub must implement the following before running certification:
+Your hub must implement what each tier exercises. The endpoints below are the
+ones the suite calls.
 
-**For Basic (10 tests):**
-- `GET /v1/status` — returns `protocol_version`, `api_version`, hub metadata
-- `GET /v1/hub/heartbeat` — returns `status: "healthy"`, `role`, `hub_id`
-- `POST /v1/devices` — registers a device with a Capability Manifest
-- `GET /v1/devices` — lists all registered devices
-- `GET /v1/devices/:id` — returns device detail
-- `DELETE /v1/devices/:id` — removes a device from the registry
-- Bearer token authentication on all endpoints — invalid token returns 401
-- Duplicate registration returns 200 or 409, never 500
-- Non-existent device returns 404
+**Basic (B01–B10)**
+- `GET /v1/status` — reachable; declares `protocol_version`; carries the required fields
+- Bearer token authentication — an invalid token returns `401`
+- `POST /v1/devices/register` — registers a device from a Capability Manifest (`spec/schemas/capability-manifest.schema.json`); a duplicate registration returns 200 or 409, never 500
+- `GET /v1/devices` and `GET /v1/devices/{id}` — the registry and a device's detail; an unknown device returns `404`
 
-**For Standard (adds 22 tests):**
-- `POST /v1/intent` — accepts valid intents (all urgency levels), returns intent_id; unknown intent returns 422
-- `GET /v1/intent/:id` — async polling; result includes `source` field
-- `GET /v1/audit` — audit log accessible; each executed intent generates an audit entry
-- `POST /v1/events` — accepts sensor events; unregistered device returns 404
-- `GET /v1/health/devices` — device health summary
-- `GET /v1/health/devices/:id` — per-device health stats
-- `GET /v1/intent/explain` — scoring breakdown for an intent
-- `POST /v1/devices/:id/action` — direct device action
-- `GET /v1/devices/:id` — must NOT expose `adapter_config` in the response body (S17)
-- `GET /v1/intent-classes` — returns list of supported intent classes
-- `X-DoSync-Protocol-Version` and `X-DoSync-API-Version` response headers on all endpoints
-- Invalid urgency value returns 422
+**Standard (S01–S23)**
+- `POST /v1/intent/async` — accepts a registered intent, including `emergency` urgency, and answers with `intent_id` and `status`; an unknown intent returns `422`, an invalid urgency `422`. (`POST /v1/intent` was removed; it answers `410`.)
+- `GET /v1/intent/{id}` — polls the result (`spec/schemas/intent-result.schema.json`)
+- `POST /v1/event` — accepts a device event; an unregistered device returns `404`
+- `POST /v1/device/action` — a direct action is executed or refused by policy
+- `GET /v1/audit` — every executed intent leaves an `intent_executed` entry that carries its `source`
+- `GET /v1/health/devices` and `GET /v1/health/devices/{id}`
+- `GET /v1/intents/{class}/explain` — the scoring breakdown, the same the resolver decides with
+- `GET /v1/intent-classes` and `GET /v1/hub/heartbeat`; `/v1/status` also carries `api_version`
+- `DELETE /v1/devices/{id}` — unregisters a device, which can then register again
+- An actuator's `params_schema` is enforced as a JSON Schema
+- `X-DoSync-Protocol-Version` and `X-DoSync-API-Version` headers on every response
+- A device's detail never exposes `adapter_config`
 
-**For Emergency (adds 3 tests):**
-- Emergency urgency (`ensure_safety [emergency]`) activates all `emergency_capable` devices
-- Audit log entries SHA-256 chained — `GET /v1/audit` integrity check passes
-- Firmware re-registration detection — hub handles version change gracefully
+**Emergency (E01–E11)** — requires at least one `emergency_capable` device whose actions succeed
+- An emergency intent is accepted for immediate dispatch and recorded in the audit log
+- The audit log is a SHA-256 chain that verifies, and `/v1/status` reports `audit_integrity`
+- `intent_executed` entries carry their required fields, including `source`
+- A firmware change on re-registration is handled; the heartbeat stays healthy after an emergency
 
-> **Note:** Emergency tests require at least one `emergency_capable` device registered and returning success on actions. The Python reference hub supports a simulated executor for this purpose:
-> ```bash
-> PYTHONPATH=. DOSYNC_TOKEN=your-token DOSYNC_CERTIFY=true uvicorn server:app --host 0.0.0.0 --port 47200
-> ```
-> Third-party implementations must ensure their executor returns success for `emergency_capable` devices during Emergency tests.
+**Conformance (C01–C21)**
+- *0.4 (C01–C12):* every sensor declares a valid `kind`; `report_status` accepts an explicit `environment` scope; a plan a deployment policy modifies leaves a `policy_modified` chain entry with its provenance and a SHA-256 policy fingerprint; the live and the archived chain verify; `GET /v1/adapters` declares valid adapter kinds; `GET /v1/discovery/scan` registers nothing and reports what it searched; the inventory separates active from quarantined devices; `POST /v1/heartbeat/signed` is disabled unless enabled
+- *0.5 (C13–C21, spec §10.5):* `PATCH /v1/devices/{id}` sets a location, keeps it, and records `device_relocated`; `POST` and `DELETE /v1/intent-classes/{name}` with `location_role`; `explain` takes `?location=` and `?urgency=`; a restricting location contains what is below it by whole segment; an `informs` class excludes nothing; a restricting emergency stays in its zone, force-inclusion included; an unknown restricting location is refused (`422`, counted as `unknown_location` in `/v1/status`), except in an emergency, which reaches every capable device and is recorded; a re-registration keeps the operator's location
+
+C04–C06 need a plan that a deployment policy **modifies**, and a clean hub has
+none. Load a policy file that removes a device from an intent the suite fires.
+The reference hub's CI does it with `.github/certification/policies.json`, which
+excludes a sensor it registers for the purpose from `report_status`.
 
 ---
 
 ## Running Certification
 
-### Step 1 — Clone the certification tool
+### Step 1 — Get the tool
 
 ```bash
-git clone https://github.com/giulianireg-spec/dosync-protocol
-cd dosync-protocol
-pip install requests
+pip install dosync          # provides the dosync-certify command
 ```
+
+It uses only the Python standard library to talk to your hub, so it runs
+against an implementation in any language.
 
 ### Step 2 — Start your hub
 
 ```bash
-# Example for dosync-node
+# Your own implementation, however it starts
 DOSYNC_TOKEN=your-token node src/server.js
 
-# Example for the Python reference hub
-PYTHONPATH=. DOSYNC_TOKEN=your-token uvicorn server:app --host 0.0.0.0 --port 47200
+# The Python reference hub, in certify mode (simulated executor: no physical device acts)
+DOSYNC_CERTIFY=true DOSYNC_DEMO_TOKEN=your-token dosync-hub --port 47200
 ```
-
 
 ### Step 3 — Run the suite
 
 ```bash
-# Basic tier
-DOSYNC_TOKEN=your-token python3 certify.py --host localhost --port <your-port> --tier basic
-
-# Standard tier (recommended minimum)
-DOSYNC_TOKEN=your-token python3 certify.py --host localhost --port <your-port> --tier standard
-
-# Full suite including Emergency
-DOSYNC_TOKEN=your-token python3 certify.py --host localhost --port <your-port> --tier emergency
-
-# Save the signed report
-DOSYNC_TOKEN=your-token python3 certify.py \
-  --host localhost --port <your-port> \
-  --tier standard \
-  --output dosync-cert-standard.json
+DOSYNC_TOKEN=your-token dosync-certify --host localhost --port 47200 --tier basic
+DOSYNC_TOKEN=your-token dosync-certify --host localhost --port 47200 --tier standard
+DOSYNC_TOKEN=your-token dosync-certify --host localhost --port 47200 --tier emergency
+DOSYNC_TOKEN=your-token dosync-certify --host localhost --port 47200 --tier conformance \
+  --output dosync-cert-conformance.json
 ```
+
+The report is signed (Ed25519) unless you pass `--no-sign`; `--verify <report>`
+checks the signature of an existing one.
 
 ### Step 4 — Interpret results
 
-A passing run looks like:
+A passing run:
 
 ```
-✓ CERTIFIED — DoSync STANDARD (32/32)
+✓ CERTIFIED — DoSync STANDARD (33/33)
 ```
 
-A failing run shows the specific test that failed:
+A failing check names what it expected and what it got:
 
 ```
-✗ S07  Unknown intent rejected with 422
-  Expected: status 422
-  Got:      status 200
+✗  S07  Unknown intent rejected with 422 — status=200 (expected 422)
 ```
 
-The `--output` flag writes a signed JSON report with all test results, timestamps, and hub metadata.
+A run that stopped early is reported as `NOT RUN — … stopped after N of M checks`,
+and a check that could not run safely as `not applicable in production mode`.
 
 ---
 
@@ -131,10 +137,10 @@ There is no submission process. To claim certification publicly:
 
 1. Save the JSON report with `--output dosync-cert-<tier>-<timestamp>.json`
 2. Commit it to your repository (see [dosync-node/CONFORMANCE.md](https://github.com/giulianireg-spec/dosync-node/blob/main/CONFORMANCE.md) as a template)
-3. Add a badge to your README:
+3. Add a badge naming the tier, the checks passed and the protocol version:
 
 ```markdown
-![DoSync Standard 32/32](https://img.shields.io/badge/DoSync-Standard%2032%2F32-orange)
+![DoSync Conformance 65/65 · protocol 0.5](https://img.shields.io/badge/DoSync-Conformance%2065%2F65%20·%20protocol%200.5-orange)
 ```
 
 ---
@@ -145,23 +151,28 @@ There is no submission process. To claim certification publicly:
 
 **Standard** — recommended minimum for any deployment. Proves intents work end-to-end, events are handled, errors are returned correctly, and privacy requirements are met.
 
-**Emergency** — required for safety-critical deployments. Proves the hub can be trusted in scenarios where milliseconds and audit trails matter.
+**Emergency** — required for safety-critical deployments. Proves emergencies dispatch and that what happened is on a tamper-evident record.
+
+**Conformance** — proves the implementation keeps the protocol's current guarantees: governance that can be audited, and intents that act only where they are meant to.
 
 ---
 
 ## Partial Failures
 
-If some tests fail, the report marks the implementation as `"certified": false` but still lists which tests passed. A hub that passes 28/32 Standard tests is not Standard-certified but the report shows exactly what remains.
+If some checks fail, the report marks the implementation as `"certified": false` but still lists which passed, so it shows exactly what remains.
 
 Common failure patterns:
 
 | Failure | Likely cause |
 |---|---|
-| B02 protocol version | `/v1/status` missing `protocol_version` field |
-| S07 unknown intent 422 | Hub returns 200 or 400 instead of 422 for unknown intents |
-| S13 version headers | Missing `X-DoSync-Protocol-Version` response header |
-| S17 adapter_config | Hub exposing `adapter_config` in device detail endpoint |
-| E3 audit integrity | SHA-256 chain broken or `GET /v1/audit` not implemented |
+| B02 protocol version | `/v1/status` lacks `protocol_version` |
+| B04 invalid token | The hub accepts any token, or runs with authentication off |
+| S07 unknown intent 422 | The hub returns 200 or 400 instead of 422 for an unregistered intent |
+| S13 version headers | `X-DoSync-Protocol-Version` or `X-DoSync-API-Version` missing |
+| S17 manifest privacy | The device detail exposes `adapter_config` |
+| E04 chain integrity | The audit chain is broken, or `GET /v1/audit` is not implemented |
+| C04–C06 policy provenance | No deployment policy modifies a plan the suite fires (see above) |
+| C15, C17 location | The resolver ranks by location instead of restricting (protocol 0.4 behavior) |
 
 ---
 
@@ -172,7 +183,7 @@ If your hub runs over HTTPS, set the CA certificate path:
 ```bash
 DOSYNC_TOKEN=your-token \
 DOSYNC_CA_CERT=/path/to/ca.crt \
-python3 certify.py --host your-hub --port 47200 --tier standard
+dosync-certify --host your-hub --port 47200 --tier standard
 ```
 
 ---
@@ -181,11 +192,9 @@ python3 certify.py --host your-hub --port 47200 --tier standard
 
 | Language | Repository | Certification |
 |---|---|---|
-| Python | [giulianireg-spec/dosync-protocol](https://github.com/giulianireg-spec/dosync-protocol) | Emergency 35/35 |
-| Node.js | [giulianireg-spec/dosync-node](https://github.com/giulianireg-spec/dosync-node) | Standard 32/32 |
-
-Both repositories include their `CONFORMANCE.md` with real test results.
+| Python | [giulianireg-spec/dosync-protocol](https://github.com/giulianireg-spec/dosync-protocol) | Conformance 65/65 — every tier certified against a live hub in CI, on every push |
+| Node.js | [giulianireg-spec/dosync-node](https://github.com/giulianireg-spec/dosync-node) | Standard 33/33 against an earlier version of the suite; re-validation against the 65-check suite pending |
 
 ---
 
-*DoSync Protocol v0.1 · Apache 2.0 · github.com/giulianireg-spec/dosync-protocol*
+*DoSync Protocol 0.5 · Apache 2.0 · github.com/giulianireg-spec/dosync-protocol*

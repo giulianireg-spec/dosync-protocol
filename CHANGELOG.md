@@ -10,6 +10,56 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The protocol's contract says the same thing everywhere.** A final review
+  before 0.7.0 read what is published -- the specification PyPI links to and the
+  schemas a third party validates against -- and found four documents that
+  contradicted protocol 0.5:
+  - **The JSON schemas rejected what the reference hub produces.** The manifest
+    schema forbids unknown properties and did not know `location`, the actuator
+    execution fields, `verify_with`, the sensor `kind`, `provenance` or
+    `discovery_evidence`; the intent schema did not know `idempotency_key`
+    (protocol 0.2), so a valid request did not validate; the result schema did
+    not know the fields that declare a simulated action, nor the `pending`
+    state the endpoint returns while an intent runs. Their examples used a
+    location as a tag, `gpio`, `save_energy`, `away_mode`, and subjects like
+    "grandmother". `tests/test_schemas_match_the_hub.py` now validates what the
+    hub produces, through the API, against every schema, and checks that the
+    location pattern accepts exactly what the hub accepts.
+  - **`RESOLVER-SPEC` described protocol 0.4**: a location "scores higher" and
+    "the tags are a requirement". Its normative semantics now state the rules
+    the reference resolver applies -- verified in its code -- and bind every
+    resolver, local or external, to them (contract requirement 7).
+  - **`CERTIFICATION-GUIDE` could not be followed**: it required `POST
+    /v1/intent` (answers 410), named five endpoints by paths the suite does not
+    call, gave wrong check counts, and did not mention what the conformance tier
+    exercises. Rewritten from what `certify.py` runs; `tests/test_certification_guide.py`
+    holds the counts and requires every endpoint the suite calls to be documented.
+  - **The BNF grammar claimed precedence over the specification** while
+    describing protocol 0.1 in every section (thirteen household intent classes
+    as a closed enum, the removed endpoint). It is marked historical. The HTTP
+    surface is now `spec/openapi.json`, generated from the hub by
+    `tools/generate_openapi.py` and compared with it by
+    `tests/test_openapi_contract.py` -- on the contract, not the text, which
+    FastAPI versions render differently.
+- **What the shipped adapters tell an agent is in English, in the protocol's
+  terms.** Action descriptions in device manifests were Spanish ("Encender
+  relay", "Ajustar brillo", "Temperatura", "Abrir", "Desbloquear", "Mostrar
+  mensaje") and one named a brand of television's effect. No word detector
+  would have caught "Brillo": descriptions are now held to a closed English
+  word list. The adapters' docstrings are in English.
+- **The adapters' manifest helpers put a place in the location field.**
+  `wiz_manifest`, `shelly_manifest` and `matter_manifest` appended `room=` to
+  the tags; they take `location=` now, and `room=` is its deprecated alias.
+  The Home Assistant bridge gave thermostats and blinds the deprecated tag
+  `climate`, and locks `access` and `door-lock`, which are not vocabulary tags.
+- **An emergency call without a message says where**, not "Emergency at home":
+  "Emergency at building-b/floor-3", or "Emergency".
+
+### Deprecated
+- **`members_home`** in `/v1/presence` responses; the same list is now
+  `members_present`. Removed after 2027-03-26 (spec §10.5).
+
+### Fixed
 - **An installed hub drafts adapters with the tag vocabulary.** The drafting
   prompt reads `spec/TAG-VOCABULARY.md`, and the wheel did not carry it: every
   `pip install dosync` handed the model a prompt saying "vocabulary unavailable

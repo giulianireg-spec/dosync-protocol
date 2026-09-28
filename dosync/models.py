@@ -113,8 +113,8 @@ IntentClass.NOTIFY         = IntentClass("notify")          # Push information
 
 class ContextSignalType(str, Enum):
     """Type of inference contributed by a context provider."""
-    PRESENCE   = "presence"    # whether someone is home
-    LOCATION   = "location"    # GPS location of a household member
+    PRESENCE   = "presence"    # whether someone is present
+    LOCATION   = "location"    # GPS location of a tracked person or asset
     SLEEP      = "sleep"       # sleep state
     HEALTH     = "health"      # vital signs, physical activity
     ROUTINE    = "routine"     # daily routine pattern
@@ -486,7 +486,7 @@ class PresenceSignal:
     signal_type: ContextSignalType
     present: bool                          # True = presence detected
     confidence: float                      # 0.0-1.0
-    member_id: Optional[str] = None        # which household member this signal belongs to
+    member_id: Optional[str] = None        # which tracked person this signal belongs to
     timestamp: float = field(default_factory=time.time)
 
 @dataclass
@@ -497,7 +497,7 @@ class OccupancyState:
     """
     occupied: bool
     confidence: float                      # 0.0-1.0
-    members_home: list[str]               # IDs of household members currently detected home
+    members_home: list[str]               # IDs of tracked people currently detected present (API: members_present)
     signals_used: int                      # how many signals contributed to this state
     last_updated: float = field(default_factory=time.time)
 

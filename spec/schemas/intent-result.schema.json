@@ -2,9 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://dosync.dev/spec/schemas/intent-result.schema.json",
   "title": "DoSync IntentResult",
-  "description": "The outcome of executing an ActionPlan. Returned by GET /v1/intent/{intent_id} after async execution completes. Written to the tamper-evident audit log.",
+  "description": "The outcome of executing an ActionPlan. Returned by GET /v1/intent/{intent_id}: while execution runs, status is 'pending' and the document carries the partial progress; once it ends, the outcome. Written to the tamper-evident audit log.",
   "type": "object",
-  "required": ["intent_id", "success", "results", "status"],
+  "required": ["intent_id", "status"],
+  "if":   {"properties": {"status": {"const": "pending"}}},
+  "then": {"required": ["partial"]},
+  "else": {"required": ["success", "results"]},
   "properties": {
     "intent_id": {
       "type": "string",
@@ -16,7 +19,7 @@
     },
     "status": {
       "type": "string",
-      "enum": ["success", "partial", "partial_abort", "failed", "retry_exhausted"],
+      "enum": ["pending", "success", "partial", "partial_abort", "failed", "retry_exhausted"],
       "description": "Execution outcome summary. 'success': all actions completed. 'partial': some actions failed, rest continued (failure_policy=continue). 'partial_abort': some executed, rest cancelled (failure_policy=abort). 'failed': all actions failed or intent was blocked by a policy. 'retry_exhausted': retries exhausted on at least one action (failure_policy=retry)."
     },
     "results": {
@@ -42,6 +45,20 @@
       "default": "continue",
       "description": "The failure_policy that was active during execution."
     },
+    "intent":   {"type": "string", "description": "The intent class that was fired."},
+    "urgency":  {"type": "string", "enum": ["info", "warning", "alert", "emergency"]},
+    "partial": {
+      "type": "object",
+      "description": "While pending: the progress so far, so a pending result is never opaque.",
+      "properties": {
+        "actions_completed": {"type": "integer"},
+        "actions_planned":   {"type": ["integer", "null"]},
+        "results":           {"type": "array", "items": {"$ref": "#/$defs/ActionResult"}}
+      },
+      "additionalProperties": false
+    },
+    "actions_taken":     {"type": "integer", "description": "Actions that ran, real or simulated."},
+    "actions_simulated": {"type": "integer", "description": "Of those, how many were simulated. A simulated action is always declared as such."},
     "completed_at": {
       "type": "number",
       "description": "Unix timestamp when execution completed."
@@ -70,6 +87,16 @@
           "type": "boolean",
           "default": false,
           "description": "True if this action was cancelled by failure_policy=abort before it could execute."
+        },
+        "simulated": {
+          "type": "boolean",
+          "default": false,
+          "description": "True if no physical device acted: the action was simulated (no adapter, or certify mode). Never omitted when true."
+        },
+        "simulated_reason": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Why the action was simulated."
         },
         "retries": {
           "type": "integer",
