@@ -10,6 +10,31 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The `[mcp]` extra declares the SDK it actually runs on: `mcp>=1.27.0,<2.0`.**
+  The upper bound had been measured; the lower one never was. Measured now: with
+  1.0.0 the server does not import (`Server.__init__` rejects an argument);
+  through 1.7 it starts without the Streamable HTTP transport; and every release
+  before 1.27.0 crashes that transport at start, because the session manager is
+  built with `session_idle_timeout`, which the SDK gained in 1.27.0. Nothing
+  noticed: the tests for the transport read the source instead of running it,
+  and nothing installed the lowest versions the package allows. The server's own
+  error message told operators to install `mcp>=1.0.0`. `mcp` 1.27.0 needs
+  pydantic 2.11 and jsonschema 4.20, so the extra raises those two floors above
+  the hub's; the README says so where it explains installing the MCP server.
+
+### Added
+- **A CI job for the `[mcp]` extra's floor.** It resolves the package with the
+  extra using uv's `--resolution lowest-direct` -- the lowest version of every
+  direct dependency the declarations allow, where pip always picks the highest
+  -- and runs the whole suite on it, MCP tests included (1290 on mcp 1.27.0,
+  pydantic 2.11.0, jsonschema 4.20.0, fastapi 0.115.0).
+- **`tests/test_mcp_http_transport.py`** runs the HTTP transport's real startup,
+  everything but the socket: it fails on mcp 1.26 with the `TypeError` and
+  passes on 1.27. It also requires the four places that state the SDK range --
+  the extra, `requirements-dev.txt`, the README and the server's error message
+  -- to state the same one.
+
+### Fixed
 - **The first example the drafting model sees no longer contradicts the prompt.**
   `light-generic.yaml` opened by saying `tags` and each action's `type` are what
   make DoSync understand a device, and that "without them" no intent would ever

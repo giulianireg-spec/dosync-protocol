@@ -743,13 +743,16 @@ The server is a module rather than a command, and it needs the MCP SDK, which
 the hub does not install:
 
 ```bash
-pip install "mcp>=1.0.0,<2.0"       # or: pipx inject dosync "mcp>=1.0.0,<2.0"
+pip install "mcp>=1.27.0,<2.0"      # or: pipx inject dosync "mcp>=1.27.0,<2.0"
 python -m dosync.mcp_server
 ```
 
-The upper bound is not caution. The 2.x SDK changed how tools are registered
-and this server is written against 1.x; without the cap, a fresh install gets
-2.x and the server exits at import. It says so plainly if that happens.
+Both bounds are measured. The upper one: the 2.x SDK changed how tools are
+registered and this server is written against 1.x; without the cap, a fresh
+install gets 2.x and the server exits at import. It says so plainly if that
+happens. The lower one: the HTTP transport needs 1.27.0, and 1.27.0 in turn needs
+pydantic 2.11 and jsonschema 4.20 — so installing the MCP server raises those
+two floors above the hub's own. CI runs the whole suite on exactly those minimums.
 
 It speaks over stdin/stdout, so a successful start prints nothing and waits.
 Typing into that terminal will produce JSON parse errors — that is the protocol

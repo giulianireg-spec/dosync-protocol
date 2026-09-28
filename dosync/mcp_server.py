@@ -149,7 +149,7 @@ if not hasattr(server, "list_tools"):
         "This MCP server is written against the 1.x SDK and the installed "
         f"version is {getattr(_mcp, '__version__', 'unknown')}. The 2.x SDK "
         "changed how tools are registered, so nothing here can start.\n\n"
-        "  pipx inject --force dosync 'mcp>=1.0.0,<2.0'\n\n"
+        "  pipx inject --force dosync 'mcp>=1.27.0,<2.0'\n\n"
         "Porting to 2.x is tracked work, not a configuration problem.")
 
 
