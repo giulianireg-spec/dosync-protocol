@@ -13,7 +13,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "Rodrigo Giuliani", email = "rgiuliani@dosync.dev" }]
 keywords = [
     "iot", "ai-agents", "protocol", "semantic", "orchestration",
-    "audit", "governance", "mcp", "home-automation", "robotics",
+    "audit", "governance", "mcp", "robotics", "cyber-physical",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -24,7 +24,11 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Home Automation",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Hardware",
     "Topic :: System :: Distributed Computing",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
@@ -137,4 +141,7 @@ include = ["dosync*"]
 # in a module: it is the most reviewable artefact of that feature, and someone
 # who does not trust a model to describe their hardware wants to read what it is
 # asked before deciding. A manufacturer adapting it should not need a clone.
-dosync = ["py.typed", "dashboard.html", "examples/declarative/*", "templates/*"]
+# spec/TAG-VOCABULARY.md travels too: the drafting prompt hands the model the
+# tag vocabulary, and a wheel without it gave every `pip install dosync` a prompt
+# saying "vocabulary unavailable" -- in every release since the tool existed.
+dosync = ["py.typed", "dashboard.html", "examples/declarative/*", "templates/*", "spec/*.md"]

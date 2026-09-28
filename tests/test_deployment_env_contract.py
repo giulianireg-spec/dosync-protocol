@@ -401,7 +401,7 @@ def test_requirements_and_pyproject_agree():
     assert core, "core dependencies must be declared in pyproject.toml"
 
     def _name(spec):
-        return re.split(r"[><=!\[]", spec, 1)[0].strip().lower()
+        return re.split(r"[><=!\[]", spec, maxsplit=1)[0].strip().lower()
 
     declared = {_name(d) for d in re.findall(r'"([^"]+)"', core.group(1))}
     listed = {_name(l) for l in (REPO / "requirements.txt").read_text().splitlines()

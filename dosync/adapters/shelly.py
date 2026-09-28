@@ -5,7 +5,7 @@ Adapter for Shelly devices over local HTTP (Gen1 and Gen2).
 
 Features:
 - Fully local communication — no cloud, no internet required
-- Compatible con Shelly 1, 1PM, 2.5, Plug S, Dimmer, RGBW2, Pro series
+- Works with Shelly 1, 1PM, 2.5, Plug S, Dimmer, RGBW2, Pro series
 - Gen1: API /relay/0, /light/0 via GET requests
 - Gen2: API RPC via POST /rpc/Switch.Set, /rpc/Light.Set
 - No external dependencies — uses requests (already in requirements.txt)
@@ -13,7 +13,7 @@ Features:
 Installation:
     No additional installation required.
 
-Registro de un dispositivo Shelly en DoSync:
+Registering a Shelly device with DoSync:
     from dosync.adapters.shelly import ShellyAdapter, shelly_manifest
 
     executor.register(ShellyAdapter())
@@ -128,7 +128,7 @@ def shelly_manifest(
 # ── Shelly HTTP client ────────────────────────────────────────────────────────
 
 class _ShellyGen1:
-    """Cliente HTTP para Shelly Gen1 (API REST simple)."""
+    """HTTP client for Shelly Gen1 (simple REST API)."""
 
     def __init__(self, ip: str):
         self.base = f"http://{ip}"
@@ -163,7 +163,7 @@ class _ShellyGen1:
 
 
 class _ShellyGen2:
-    """Cliente HTTP para Shelly Gen2 (API RPC JSON)."""
+    """HTTP client for Shelly Gen2 (JSON RPC API)."""
 
     def __init__(self, ip: str):
         self.base = f"http://{ip}/rpc"

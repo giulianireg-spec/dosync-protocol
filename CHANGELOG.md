@@ -10,6 +10,34 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **An installed hub drafts adapters with the tag vocabulary.** The drafting
+  prompt reads `spec/TAG-VOCABULARY.md`, and the wheel did not carry it: every
+  `pip install dosync` handed the model a prompt saying "vocabulary unavailable
+  -- use conservative, generic tags", in every release since the tool existed,
+  while a checkout -- the only thing ever tested -- had the file. The package
+  now carries `dosync/spec/TAG-VOCABULARY.md`, read first; a test keeps it
+  identical to the spec.
+- **The package declares the Python versions it is tested on: 3.10 to 3.14.**
+  It declared 3.10-3.12 while CI ran only 3.11, and left out the 3.13 and 3.14
+  it was developed on. Measured before changing either: the whole suite passes
+  on all five. A test used `re.split`'s `maxsplit` positionally, which 3.13
+  deprecates: the 18 warnings every 3.13+ run printed.
+- **What PyPI shows is not a house.** The keyword `home-automation` is gone and
+  `Topic :: Home Automation` is no longer the only domain classifier (AI and
+  hardware join it). The README's "How it works" diagram, the package's
+  description on PyPI, explained the protocol with "an emergency at home" and
+  "SMS to family"; it is now a fire in a building -- what `ensure_safety` does
+  anywhere. The Shelly adapter's docstrings are in English.
+
+### Added
+- **A CI job that installs the wheel as a stranger would**: it builds the wheel,
+  installs it into an empty environment, runs it from outside the repository,
+  checks the data files and that the drafting prompt carries the vocabulary,
+  and starts the hub from the installed `dosync-hub` command. A checkout cannot
+  show what a wheel leaves out.
+- **The test job runs on Python 3.10, 3.11, 3.12, 3.13 and 3.14.**
+
+### Fixed
 - **The `[mcp]` extra declares the SDK it actually runs on: `mcp>=1.27.0,<2.0`.**
   The upper bound had been measured; the lower one never was. Measured now: with
   1.0.0 the server does not import (`Server.__init__` rejects an argument);

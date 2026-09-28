@@ -147,15 +147,14 @@ DoSync earns its place in specific situations — and honestly gets in the way i
 ## How it works
 
 ```
-User / AI says:  "there is an emergency at home"
+User / AI says:  "there is a fire in building B"
                           │
                        DoSync Hub
                           │
           ┌───────────────┼───────────────┐
           ▼               ▼               ▼
-   💡 All lights      📱 SMS sent     🚨 Alarm
-   at maximum       to family        activated
-   (10 WiZ bulbs)   immediately
+   💡 Every light     📱 On-call staff  🚨 Alarm
+   at maximum         notified          activated
           │               │               │
           └───────────────┴───────────────┘
                           │

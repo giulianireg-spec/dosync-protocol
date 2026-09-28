@@ -61,3 +61,12 @@ def test_the_semantic_role_table_names_only_classes_that_list_the_tag():
         listed = _codes(row[-1])
         actual = {n for n, c in seed.items() if tag in c["resolution_tags"]}
         assert listed == actual, f"`{tag}` says it is listed by {sorted(listed)}; the seed says {sorted(actual)}"
+
+
+def test_the_package_carries_the_same_vocabulary_as_the_spec():
+    """The drafting prompt reads the package's copy -- the one a `pip install`
+    has. The spec is edited in spec/; a copy that drifted would teach a model
+    yesterday's vocabulary."""
+    package_copy = VOCAB.parent.parent / "dosync" / "spec" / "TAG-VOCABULARY.md"
+    assert package_copy.read_bytes() == VOCAB.read_bytes(), \
+        "dosync/spec/TAG-VOCABULARY.md differs from spec/TAG-VOCABULARY.md: copy it"

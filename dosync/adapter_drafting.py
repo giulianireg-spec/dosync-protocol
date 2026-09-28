@@ -79,8 +79,13 @@ def _tag_vocabulary(repo_root: Path) -> str:
     the universal intent resolves on `lock`. A model left to guess would
     reproduce that on every device it describes.
     """
-    for candidate in (repo_root / "spec" / "TAG-VOCABULARY.md",
-                      Path(__file__).parent.parent / "spec" / "TAG-VOCABULARY.md"):
+    # The package's own copy first: it is what a `pip install` has. Until 0.7.0
+    # the wheel carried no copy, both paths below were missing in every
+    # installed hub, and the prompt told the model the vocabulary was
+    # unavailable. tests/test_tag_vocabulary.py keeps the copy identical to
+    # spec/TAG-VOCABULARY.md.
+    for candidate in (Path(__file__).parent / "spec" / "TAG-VOCABULARY.md",
+                      repo_root / "spec" / "TAG-VOCABULARY.md"):
         if not candidate.exists():
             continue
         text = candidate.read_text(encoding="utf-8")
