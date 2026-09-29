@@ -3,7 +3,7 @@
   "info": {
     "title": "DoSync Hub",
     "description": "DoSync Protocol — REST API\n\nThe hub that connects an AI to physical devices.\nProtocolo abierto · Apache 2.0 · github.com/dosync/protocol",
-    "version": "0.6.3"
+    "version": "0.7.0"
   },
   "paths": {
     "/": {

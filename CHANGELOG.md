@@ -1,13 +1,45 @@
 # Changelog
 
 All notable changes to DoSync are recorded here. The protocol version and the
-hub version move independently: `protocol/0.4` is the wire contract, `0.4.x` is
-this implementation of it.
+hub version move independently: `dosync/0.5` is the wire contract (what changed
+from one protocol version to the next is in spec §10), and the package version
+is this implementation of it.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.7.0] — 2026-09-28
+
+0.7.0 carries protocol 0.5, the first protocol version that changes behavior
+rather than only adding it. **Before upgrading a client that sends
+`context.location`, read spec §10.5.** A location now restricts where an intent
+acts, unless the intent's class declares `location_role: "informs"`; a location
+no device is at is refused outside an emergency; and devices are selected by the
+capabilities they declare, with tags only ranking them. Devices gain an
+operator-set, hierarchical `location` -- by `PATCH`, at adoption, in a
+declarative file, or through an adapter's manifest helper -- and `room` is
+deprecated. The family profile is gone: the protocol models devices, intents,
+places and policies, not households.
+
+Most of the rest came from checking what the project claimed against what it
+did, and finding, again and again, claims nobody had ever run. The certification
+suite had never been executed -- run for the first time, a basic certification
+could not certify at all. 149 tests could not fail. The wheel shipped without the
+tag vocabulary its adapter-drafting tool hands a model. The `[mcp]` extra declared
+an SDK floor the server could not start on, and the package declared Python
+versions no CI ran. The protocol's own contract -- the JSON schemas, the resolver
+specification, the certification guide, the grammar -- contradicted the protocol
+it described. Each of those is now checked on every push: every certification
+tier against a live hub, the wheel installed as a stranger would, the lowest
+dependency versions with and without `[mcp]`, Python 3.10 to 3.14, and the
+schemas and the HTTP surface (`spec/openapi.json`) against what the hub produces.
+
+Underneath, `hub.py` was taken apart into eleven modules. One of those
+extractions had left composite intents without their policy engine; they are
+governed again. And the WiZ adapter no longer leaks a socket for every bulb that
+does not answer.
 
 ### Fixed
 - **The protocol's contract says the same thing everywhere.** A final review
