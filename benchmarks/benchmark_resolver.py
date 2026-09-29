@@ -1,4 +1,10 @@
 """
+SUPERSEDED — DO NOT QUOTE ITS NUMBERS. This script measures a May 2026 COPY of
+the resolver, with its own types and thirteen intent classes that no longer
+exist. The latency of the resolver a hub actually runs is measured by
+tools/resolver_latency.py. Kept only as a record of how the first figures were
+produced.
+
 DoSync Resolver Benchmark — con registry real de producción
 38 devices mirroring the reference deployment (Raspberry Pi 5, Python 3.11).
 Identifiers are generic: a benchmark fixture describes a topology, not an address.

@@ -10,6 +10,29 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The location rule is measured.** Every ground truth had an empty context,
+  and the recall benchmark could not register a class that restricts by location,
+  so protocol 0.5's central rule had never been evaluated. The benchmark now
+  passes a corpus class's `location_role` and `target_sensors` through, and
+  `benchmarks/fixtures/prod_ground_truth_location.json` adds the reference
+  deployment operator's own location-scoped scenarios over its anonymized
+  registry: its production class `light_on_presence` in four rooms, an
+  `informs` emergency, and a restricted class with nothing in the room.
+- **`tools/resolver_latency.py`** times the live resolver over registries of 10
+  to 1,000 devices, recording the platform. `benchmarks/benchmark_resolver.py`,
+  which measures a May copy of the resolver, is marked superseded.
+- **`tools/capability_ablation.py`**: capability-only selection, with no ranking,
+  no location restriction and no emergency rules -- the difference from the live
+  resolver measures what those two rules contribute.
+- **Participation by capability is a guarantee, not an assumption.** The resolver
+  realises "declares the capability" as a positive term of the score, and drops
+  zero-score devices: a sensitivity run found that with the actuator weight at
+  zero, capable devices sharing no tag with the class are left out. No operator
+  can change the weights, but tuning them could break the protocol's central
+  rule unnoticed; `tests/test_capability_decides_participation.py` holds both
+  weights positive and checks the behaviour they protect.
+
 ## [0.7.0] — 2026-09-28
 
 0.7.0 carries protocol 0.5, the first protocol version that changes behavior

@@ -204,6 +204,11 @@ def _register_domain_intents(hub, truth: dict) -> set:
             urgency=spec.get("urgency", "info"),
             resolution_tags=spec.get("target_tags", []),
             resolution_actuators=spec.get("target_actuators", []),
+            # A corpus class may declare what the protocol lets any class declare
+            # since 0.5; without these, no corpus could contain a class that
+            # restricts by location, and the rule went unmeasured.
+            resolution_sensors=spec.get("target_sensors") or None,
+            location_role=spec.get("location_role"),
             description=spec.get("description", f"corpus intent {name}"),
             domain=spec.get("domain", "corpus"))
         registered.add(name)

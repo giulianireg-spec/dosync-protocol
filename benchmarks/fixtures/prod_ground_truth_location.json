@@ -1,0 +1,105 @@
+{
+  "_README": [
+    "Location-scoped scenarios over the reference deployment's anonymized registry",
+    "(prod_registry_anonymized.json, July 2026 snapshot). Every other ground truth",
+    "has an empty context, so the protocol 0.5 rule that a location restricts where",
+    "an intent acts was never measured. The scenarios are the deployment operator's:",
+    "light_on_presence is the class that deployment runs in production, and the",
+    "places are the ones its operator gave its devices -- in this snapshot, as",
+    "location tags, which protocol 0.5 still honours by exact match. The protocol",
+    "imposes no vocabulary for places. What is measured is the rule, not the",
+    "placement. In this deployment the operator and the protocol's author are the",
+    "same person."
+  ],
+  "intent_classes": {
+    "light_on_presence": {
+      "urgency": "info",
+      "target_tags": [
+        "light"
+      ],
+      "target_actuators": [
+        "turn_on"
+      ],
+      "location_role": "restricts",
+      "domain": "deployment",
+      "description": "Turn on the lights where presence was detected"
+    }
+  },
+  "cases": [
+    {
+      "intent": "light_on_presence",
+      "urgency": "info",
+      "context": {
+        "location": "kitchen"
+      },
+      "expected": [
+        "light-zone1-01",
+        "light-zone1-02"
+      ]
+    },
+    {
+      "intent": "light_on_presence",
+      "urgency": "info",
+      "context": {
+        "location": "bedroom"
+      },
+      "expected": [
+        "light-zone5-01",
+        "light-zone6-01"
+      ]
+    },
+    {
+      "intent": "light_on_presence",
+      "urgency": "info",
+      "context": {
+        "location": "living-room"
+      },
+      "expected": [
+        "light-zone3-01",
+        "light-zone3-02",
+        "light-zone4-01",
+        "light-zone4-02"
+      ]
+    },
+    {
+      "intent": "light_on_presence",
+      "urgency": "info",
+      "context": {
+        "location": "dining-room"
+      },
+      "expected": [
+        "light-zone2-01",
+        "light-zone2-02"
+      ]
+    },
+    {
+      "intent": "ensure_safety",
+      "urgency": "emergency",
+      "context": {
+        "location": "kitchen"
+      },
+      "expected": [
+        "alarm-01",
+        "light-zone1-01",
+        "light-zone1-02",
+        "light-zone2-01",
+        "light-zone2-02",
+        "light-zone3-01",
+        "light-zone3-02",
+        "light-zone4-01",
+        "light-zone4-02",
+        "light-zone5-01",
+        "light-zone6-01",
+        "notifier-01"
+      ]
+    },
+    {
+      "intent": "control_access",
+      "urgency": "alert",
+      "context": {
+        "location": "kitchen"
+      },
+      "expected": []
+    }
+  ]
+}
