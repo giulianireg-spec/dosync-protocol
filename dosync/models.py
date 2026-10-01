@@ -200,6 +200,46 @@ class ContextSignal:
 LOCATION_MAX_LENGTH = 256
 
 
+#: Pairs of actuator types that undo each other. An emergency action list may
+#: not contain both: that is exactly what the full-capability fallback did.
+OPPOSITE_ACTIONS = (frozenset({"lock", "unlock"}), frozenset({"turn_on", "turn_off"}),
+                    frozenset({"open", "close"}), frozenset({"start", "stop"}),
+                    frozenset({"arm", "disarm"}))
+
+
+def normalize_emergency_actions(raw, actuator_types) -> list:
+    """Validate what a device does in an emergency (protocol 0.5, spec §6).
+
+    Accepts action names or {"action", "params"} objects. Each action must be
+    one the device declares, none may repeat, and no two may undo each other.
+    Raises ValueError with the reason; returns [{"action", "params"}, ...].
+    """
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValueError("emergency_actions must be a list")
+    out, seen = [], set()
+    for item in raw:
+        entry = {"action": item, "params": {}} if isinstance(item, str) else dict(item or {})
+        action = entry.get("action")
+        if not isinstance(action, str) or not action:
+            raise ValueError(f"each emergency action needs an 'action' name: {item!r}")
+        if action not in actuator_types:
+            raise ValueError(f"'{action}' is not an action this device declares "
+                             f"(it declares {sorted(actuator_types)})")
+        if action in seen:
+            raise ValueError(f"'{action}' is listed twice")
+        params = entry.get("params") or {}
+        if not isinstance(params, dict):
+            raise ValueError(f"params of '{action}' must be an object")
+        seen.add(action)
+        out.append({"action": action, "params": params})
+    for pair in OPPOSITE_ACTIONS:
+        if pair <= seen:
+            raise ValueError(f"emergency actions {sorted(pair)} undo each other; keep one")
+    return out
+
+
 def normalize_location(value) -> str:
     """Validate an operator-given location path and return it normalized.
 
@@ -315,6 +355,16 @@ class CapabilityManifest:
     #: It is where the device was ASSIGNED; the live position of something that
     #: moves is telemetry, not this.
     location: str                          = ""
+    #: What this device does when an emergency includes it and the intent's
+    #: class asks for none of its actions: a subset of its own actuators, with
+    #: optional params -- [{"action": "unlock"}] for an evacuation door,
+    #: [{"action": "stop"}] for a conveyor. Until protocol 0.5 rev. 2026-09-30
+    #: such a device executed EVERY actuator it declared, so a lock received
+    #: lock and unlock at once. What a device must do in an emergency depends on
+    #: the deployment, so a value the operator set takes precedence over the
+    #: device's own (provenance["emergency_actions_set_by"] == "operator").
+    #: Empty: the device takes part without acting, and the plan says so.
+    emergency_actions: list                = field(default_factory=list)
 
     def to_dict(self) -> dict:
         d = {
@@ -363,6 +413,8 @@ class CapabilityManifest:
             d["provenance"] = self.provenance
         if self.location:
             d["location"] = self.location
+        if self.emergency_actions:
+            d["emergency_actions"] = [dict(a) for a in self.emergency_actions]
         return d
 
     def carry_over_from(self, existing: "CapabilityManifest") -> None:
@@ -377,6 +429,11 @@ class CapabilityManifest:
         Descriptive data only: nothing here decides whether an action may run.
         """
         self.location = existing.location
+        if (existing.provenance or {}).get("emergency_actions_set_by") == "operator":
+            # The operator decided what this device does in an emergency; a
+            # device re-registering does not get to change that.
+            self.emergency_actions = [dict(a) for a in existing.emergency_actions]
+            self.provenance = {**(self.provenance or {}), "emergency_actions_set_by": "operator"}
         if (not self.adapter_config and existing.adapter_config
                 and (self.adapter or None) == (existing.adapter or None)):
             self.adapter_config = dict(existing.adapter_config)
@@ -455,6 +512,7 @@ class CapabilityManifest:
             discovery_evidence=dict(d.get("discovery_evidence") or {}),
             provenance=dict(d.get("provenance") or {}),
             location=d.get("location", ""),
+            emergency_actions=[dict(a) for a in (d.get("emergency_actions") or [])],
         )
 
     def to_public_dict(self) -> dict:
@@ -652,6 +710,10 @@ class ActionPlan:
     created_at: float                 = field(default_factory=time.time)
     failure_policy: "FailurePolicy"   = field(default=None)
     max_retries: int                  = 1
+    #: Emergency-capable devices an emergency included that had no action of the
+    #: class and declared no emergency_actions: they take part without acting,
+    #: and the record says so rather than hiding them.
+    included_without_action: list     = field(default_factory=list)
     # failure_policy=None → usa CONTINUE (backward compatible)
 
 @dataclass

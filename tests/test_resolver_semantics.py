@@ -57,16 +57,20 @@ def test_mixed_resolution_does_not_gate_generic_matches():
 
 # ── F2b ──────────────────────────────────────────────────────────────────────
 
-def test_emergency_capable_with_unmatched_actuators_acts_full_set():
-    # Light whose actuator types are NOT in ensure_safety's actuator list at all
+def test_emergency_capable_with_unmatched_actuators_does_only_what_it_declared():
+    """Until 2026-09-30 such a device fell back to its FULL capability set (F2b),
+    and a lock received lock and unlock at once. It now does its declared
+    emergency_actions; declaring none, it takes part without acting."""
     lamp = _dev("lamp-1", ["light", "emergency"], act_types=["set_color"], emergency=True)
     hub = _hub(lamp)
     intent = Intent(intent_id="t", intent=IntentClass("ensure_safety"),
                     urgency=Urgency.EMERGENCY, context={})
     plan = hub.resolver.resolve(intent)
-    acts = [a for a in plan.actions if a.device_id == "lamp-1"]
-    assert acts, "emergency_capable device produced zero actions in an emergency (F2b violated)"
-    assert acts[0].action == "set_color"
+    assert not [a for a in plan.actions if a.device_id == "lamp-1"]
+    assert plan.included_without_action == ["lamp-1"]
+    lamp.emergency_actions = [{"action": "set_color", "params": {}}]
+    plan = hub.resolver.resolve(intent)
+    assert [a.action for a in plan.actions if a.device_id == "lamp-1"] == ["set_color"]
 
 
 def test_no_full_set_fallback_outside_emergency():

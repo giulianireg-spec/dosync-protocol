@@ -76,6 +76,19 @@
       "pattern": "^[^/\\s\\u0000-\\u001f\\u007f](?:[^/\\u0000-\\u001f\\u007f]*[^/\\s\\u0000-\\u001f\\u007f])?(?:/[^/\\s\\u0000-\\u001f\\u007f](?:[^/\\u0000-\\u001f\\u007f]*[^/\\s\\u0000-\\u001f\\u007f])?)*$",
       "description": "Where the operator placed the device (protocol 0.5, spec §10.5): a path of non-empty segments separated by '/', such as 'plant-1/line-3/cell-2'. A place contains everything below it, by whole segment. Set by the operator (PATCH /v1/devices/{id}, adoption, or a declarative file), never by the device; absent when the device is not placed."
     },
+    "emergency_actions": {
+      "type": "array",
+      "description": "What the device does when an emergency includes it and the intent's class asks for none of its actions (protocol 0.5, spec §6): a subset of its own actuators, none repeated, none undoing another. A value the operator set takes precedence over the device's. Absent or empty: the device takes part without acting.",
+      "items": {
+        "type": "object",
+        "required": ["action"],
+        "properties": {
+          "action": {"type": "string"},
+          "params": {"type": "object", "default": {}}
+        },
+        "additionalProperties": false
+      }
+    },
     "provenance": {
       "type": "object",
       "description": "Who said what about this device, and how (adapter, adoption, discovery). Descriptive; decides nothing."

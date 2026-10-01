@@ -9,7 +9,7 @@ Tiers:
   basic     (10 tests) — connectivity, authentication, device manifest
   standard  (33 tests) — protocol conformance, events, health, version headers, manifest privacy, intent lifecycle
   emergency (44 tests) — everything in standard + emergency override, policy engine, audit log integrity, firmware re-registration
-  conformance (65 tests) — everything in emergency + protocol features through 0.5: sensor kind, policy provenance,
+  conformance (66 tests) — everything in emergency + protocol features through 0.5: sensor kind, policy provenance,
                            chain archiving, adapters, discovery, and where a device is and what a location in an intent does
 
 Two testing modes:
@@ -261,7 +261,7 @@ class CertReport:
         # basic said 12 while the tier runs B01-B10: a basic certification was
         # always "incomplete" and could never certify. Nothing noticed because
         # nothing ran the suite; CI now certifies every tier on its own.
-        "basic": 10, "standard": 33, "emergency": 44, "conformance": 65,
+        "basic": 10, "standard": 33, "emergency": 44, "conformance": 66,
     }
 
     def finalize(self):
@@ -922,7 +922,7 @@ def run_emergency(base: str, report: CertReport):
     ))
 
 
-# ── TIER CONFORMANCE — protocol features through 0.5 (cumulative: 65) ─────────
+# ── TIER CONFORMANCE — protocol features through 0.5 (cumulative: 66) ─────────
 # Everything shipped in the 0.4 cycle (SENSOR-KIND, AUDIT-PROVENANCE,
 # EMERGENCY-UNSAT-ESCALATION, AUDIT-ARCHIVE) had unit tests but no CONFORMANCE
 # coverage — nothing proved, over the wire against a running hub, that the
@@ -1088,7 +1088,7 @@ def run_conformance(base: str, report: CertReport):
     run_conformance_05(base, report)
 
 
-# C13-C21 cover protocol 0.5 (spec §10.5): where a device is, and what a
+# C13-C22 cover protocol 0.5 (spec §10.5): where a device is, and what a
 # location in an intent's context does. The suite builds its own scene -- two
 # probe devices and two probe intent classes, prefixed certify- -- and removes it
 # whatever happens. It verifies through explain(), which executes nothing,
@@ -1097,6 +1097,7 @@ def run_conformance(base: str, report: CertReport):
 _PROBE_ACTION = "certify_probe"
 _PROBE_IN = "certify-probe-cell-2"      # placed at certify-site/line-3/cell-2
 _PROBE_OUT = "certify-probe-line-30"    # placed at certify-site/line-30/cell-1
+_PROBE_LOCK = "certify-probe-lock"      # emergency-capable, lock and unlock (C22)
 _CLASS_RESTRICTS = "certify_location_restricts"
 _CLASS_INFORMS = "certify_location_informs"
 
@@ -1216,8 +1217,31 @@ def run_conformance_05(base: str, report: CertReport):
                       "as CI does, to check it")
             report.not_applicable.append((name, reason))
             warn(f"{name} — not applicable in production mode: {reason}")
+        # C22. In an emergency, an emergency-capable device the class asks
+        # nothing of does what it declared -- never every capability (a lock
+        # used to receive lock AND unlock at once). Checked through explain and
+        # PATCH: nothing is fired.
+        lock = _probe_device(_PROBE_LOCK)
+        lock.update({"emergency_capable": True, "tags": ["certify-probe"],
+                     "actuators": [{"id": "lock", "type": "lock", "description": "Lock"},
+                                   {"id": "unlock", "type": "unlock", "description": "Unlock"}]})
+        request("POST", f"{base}/v1/devices/register", lock)
+
+        def _lock_entry():
+            st, body = request("GET", f"{base}/v1/intents/ensure_safety/explain?urgency=emergency")
+            return next((d for d in body.get("included", []) if d.get("device_id") == _PROBE_LOCK), {}) if st == 200 else {}
+        before = _lock_entry()
+        c_st, _ = request("PATCH", f"{base}/v1/devices/{_PROBE_LOCK}", {"emergency_actions": ["lock", "unlock"]})
+        request("PATCH", f"{base}/v1/devices/{_PROBE_LOCK}", {"emergency_actions": ["unlock"]})
+        after = _lock_entry()
+        report.add(TestResult(
+            "C22  An emergency-capable device does only its declared emergency actions",
+            before.get("included_without_action") is True and c_st == 422
+            and after.get("emergency_actions") == ["unlock"],
+            f"undeclared: {'no action' if before.get('included_without_action') else before}; "
+            f"lock+unlock → HTTP {c_st}; declared: {after.get('emergency_actions')}"))
     finally:
-        for did in (_PROBE_IN, _PROBE_OUT):
+        for did in (_PROBE_IN, _PROBE_OUT, _PROBE_LOCK):
             request("DELETE", f"{base}/v1/devices/{did}")
         for name in (_CLASS_RESTRICTS, _CLASS_INFORMS):
             request("DELETE", f"{base}/v1/intent-classes/{name}")
@@ -1245,7 +1269,7 @@ Tier test counts:
   basic      10 tests  — connectivity, auth, registration, manifest
   standard   33 tests  — + intents, events, health, explainability, version headers, intent lifecycle
   emergency  44 tests  — + emergency override, audit log integrity, firmware re-registration
-  conformance 65 tests — + protocol features through 0.5: sensor-kind, policy provenance, chain archiving,
+  conformance 66 tests — + protocol features through 0.5: sensor-kind, policy provenance, chain archiving,
                          device locations and location-restricted intents
         """,
     )

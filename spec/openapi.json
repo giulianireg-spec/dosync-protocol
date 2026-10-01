@@ -2122,6 +2122,18 @@
             "title": "Emergency Capable",
             "default": false
           },
+          "emergency_actions": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emergency Actions"
+          },
           "cert_tier": {
             "type": "string",
             "title": "Cert Tier",

@@ -106,7 +106,12 @@ def test_emergency_forces_inclusion_in_both():
                        {"tags": ["security", "lock"], "actuators": ["lock"]},
                        urgency=Urgency.EMERGENCY)
     in_plan, in_explain, exp = _agree(r, intent)
-    assert in_plan is True, "resolve must force-include emergency_capable devices"
+    # An emergency-capable device takes part either through its declared
+    # emergency_actions or, declaring none, without acting -- never dropped.
+    plan = r.resolve(intent)
+    assert (any(a.device_id == "dev-x" for a in plan.actions)
+            or "dev-x" in plan.included_without_action), \
+        "resolve must force-include emergency_capable devices"
     assert in_explain is True, "explain must mirror the emergency force-inclusion"
     entry = next(d for d in exp["included"] if d["device_id"] == "dev-x")
     assert entry["score_breakdown"].get("forced_emergency") is True

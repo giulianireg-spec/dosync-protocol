@@ -103,7 +103,7 @@ def build_manifest(data: dict, source: str = "<declarative>"):
     """
     from .models import (
         ActuatorSpec, CapabilityManifest, CertTier, DeviceCategory, SensorSpec,
-        normalize_location,
+        normalize_emergency_actions, normalize_location,
     )
 
     device = data.get("device")
@@ -139,6 +139,14 @@ def build_manifest(data: dict, source: str = "<declarative>"):
             f"{source}: device declares location '{raw_location}' and room "
             f"'{raw_room}'. They are the same field; keep one.")
     raw = raw_location if raw_location is not None else raw_room
+    # What the device does in an emergency, declared by the file's author -- the
+    # operator (protocol 0.5, spec §6). Validated against the file's own actions.
+    try:
+        emergency_actions = normalize_emergency_actions(
+            device.get("emergency_actions"),
+            {str(a.get("type", n)) for n, a in (data.get("actions") or {}).items()})
+    except ValueError as e:
+        raise DeclarativeError(f"{source}: device.emergency_actions: {e}")
     if raw_location is None and raw_room is not None:
         # A file cannot receive the Deprecation header an API call gets, so the
         # deprecation (protocol 0.5, spec §10.5) is said where its author reads.
@@ -244,7 +252,7 @@ def build_manifest(data: dict, source: str = "<declarative>"):
                     source, type(raw_provenance).__name__)
 
     return CapabilityManifest(
-        provenance=provenance,
+        provenance={**provenance, **({"emergency_actions_set_by": "operator"} if emergency_actions else {})},
         device_id=device_id,
         device_name=name,
         manufacturer=str(device.get("manufacturer", "declarative")),
@@ -268,8 +276,10 @@ def build_manifest(data: dict, source: str = "<declarative>"):
             "actions": actions,
             "sensors": data.get("sensors") or {},
             **({"location_from_file": source} if location else {}),
+            **({"emergency_actions_from_file": source} if emergency_actions else {}),
         },
         location=location,
+        emergency_actions=emergency_actions,
     )
 
 

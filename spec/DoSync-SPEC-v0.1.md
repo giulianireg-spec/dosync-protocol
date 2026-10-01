@@ -838,6 +838,7 @@ log, not evidence.
 | `device_unregistered` | A device was removed from the registry |
 | `device_renamed` | A device's display name changed; capabilities untouched |
 | `device_relocated` | An operator moved a device to another location (`previous_location`, `location`); it decides which location-restricted intents can act on it |
+| `emergency_actions_changed` | The operator set or changed what a device does in an emergency (protocol 0.5, §6) |
 | `emergency_location_not_found` | An emergency named a location no device is at; never refused, it acted on every capable device instead |
 | `device_adopted` | A scanned candidate was approved and named by an operator |
 | `devices_auto_adopted` | Devices registered by an unattended scan (`approved_by_operator: false`) |
@@ -1110,10 +1111,12 @@ Before `v1.0`, a MINOR increment may also change what existing behavior means, a
 1. **Devices are selected by capability.** A device takes part when it declares an actuator or sensor the intent needs; its tag overlap only ranks it. Under `0.4` a device was selected on tag match. This change was made on 2026-09-04 without a version increment; it is recorded here.
 2. **A location restricts.** When `context.location` is present and the intent class declares `location_role: "restricts"` (the default), only devices at that location act — in an `emergency` too, including the force-inclusion of emergency-capable devices. Under `0.4` a location only added to a device's score and every capable device acted. A class whose location only says where something happened declares `"informs"`; among the universal classes, `alert_anomaly`, `notify` and `ensure_safety` do.
 3. **An unknown location is refused, except in an emergency.** A restricting location that no registered device is at is refused (`422`, counted as `unknown_location`). An `emergency` is never refused for its location: it acts as if no location were given, and the hub records `emergency_location_not_found`.
+4. **An emergency-capable device does what it declared, never everything.** At `emergency` urgency, a device with `emergency_capable` that has no action the class needs performs its `emergency_actions` — a subset of its own actuators, none repeated and none undoing another — and nothing else. Declaring none, it takes part without acting, and the plan, `explain` and the audit log report it (`included_without_action`). Until protocol 0.5 rev. 2026-09-30 such a device fell back to its full capability set: an emergency-capable lock received `lock` and `unlock` at once. What a device must do in an emergency depends on the deployment, so a value the operator sets takes precedence over the device's own.
 
 **Additions**
 
 - Intent classes: `location_role` (`"restricts"` | `"informs"`), accepted and listed by `/v1/intent-classes`.
+- Capability manifest: `emergency_actions` (set by the device, or — taking precedence — by the operator with `PATCH /v1/devices/{id}` or in a declarative file; recorded as `emergency_actions_changed`).
 - Capability manifest: `location`, a path set by the operator (`PATCH /v1/devices/{id}`, adoption, or a declarative file) and never changed by a device re-registering itself. A place contains everything below it, by whole segment.
 - `PATCH /v1/devices/{id}`: takes `location`; `device_name` is no longer required; `409` when the device's declarative file declares its location.
 - Registration accepts the actuator fields `execution_model`, `supports_progress`, `supports_cancel`, `emits_telemetry`, `verify_with`, and the sensor field `range`. A re-registration keeps what it did not send: `adapter_config` (unless the adapter changed), `provenance`, `discovery_evidence`.
@@ -1136,6 +1139,7 @@ Before `v1.0`, a MINOR increment may also change what existing behavior means, a
 - If you rely on an intent reaching every capable device, do not send `location`.
 - Expect `422` with reason `unknown_location` for a restricting location no device is at. Locations are compared exactly and are case-sensitive.
 - Send `location` instead of `room`, and read `members_present` instead of `members_home`.
+- An emergency-capable device that relied on firing every capability in an emergency now does nothing until its `emergency_actions` are declared: declare what it must do (for example `unlock` for an evacuation door, `stop` for a conveyor).
 
 **Migrating an implementation**
 

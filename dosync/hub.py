@@ -791,6 +791,8 @@ class DoSyncHub:
             "urgency":          intent.urgency.value,
             "source":           getattr(intent, "source", "api"),
             "actions":          len(plan.actions),
+            **({"included_without_action": list(plan.included_without_action)}
+               if getattr(plan, "included_without_action", None) else {}),
             # The chain answers "what did this system do". An action that never
             # left the hub is part of that answer and used not to be: entries
             # written before 2026-08-13 do not distinguish execution from

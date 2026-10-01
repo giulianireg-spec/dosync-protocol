@@ -750,6 +750,7 @@ class CapabilityMatchingResolver(BaseResolver):
                     },
                     "emergency_capable": device.emergency_capable,
                     "included": True,
+                    **self._emergency_fallback_report(device, intent, bd),
                 })
 
         # Sort included devices by descending relevance score
@@ -790,6 +791,20 @@ class CapabilityMatchingResolver(BaseResolver):
                     pa.get("tag") in device.tags):
                 return pa.get("params", {})
         return None
+
+    @staticmethod
+    def _emergency_fallback_report(device, intent, bd) -> dict:
+        """What explain() says about an emergency-capable device whose class
+        asks for none of its actions: what it will do, or that it will not act."""
+        if not (intent.urgency == Urgency.EMERGENCY and device.emergency_capable
+                and not bd.matched_actuators):
+            return {}
+        declared = [e["action"] for e in (device.emergency_actions or [])]
+        if declared:
+            return {"emergency_actions": declared}
+        return {"included_without_action": True,
+                "reason": "emergency-capable, none of its actions is one the class needs, "
+                          "and it declares no emergency_actions: it takes part without acting"}
 
     def _build_actions_for_device(
         self,
@@ -971,22 +986,26 @@ class CapabilityMatchingResolver(BaseResolver):
                     scored.append((50.0, device))
                     forced_ids.add(device.device_id)
 
-        # Build actions. F2b (2026-07-11 panel decision): at EMERGENCY urgency,
-        # an emergency_capable device whose resolution-scoped build yields ZERO
-        # actions falls back to its FULL capability set — a safety device that
-        # shows up and does nothing is worse than one that acts broadly. This
-        # covers both force-included devices and tag/bonus-scored devices whose
-        # actuator types simply don't appear in the resolution list. Tag and
-        # type devices correctly (TAG-VOCABULARY.md) for precise, resolution-
-        # scoped behavior instead. NOTE: the fallback builds every actuator the
-        # device declares — a deliberately blunt instrument for emergencies.
+        # Build actions. At EMERGENCY urgency, an emergency_capable device whose
+        # resolution-scoped build yields no action does what it DECLARED it does
+        # in an emergency (emergency_actions), and nothing else. Until protocol
+        # 0.5 rev. 2026-09-30 it fell back to its full capability set (F2b, a
+        # 2026-07-11 decision): an emergency-capable lock received lock AND
+        # unlock, a line shutdown turned an extractor ON. What a device should do
+        # in an emergency is not deducible from what it can do; it is declared,
+        # by the device or -- taking precedence -- by the operator. A device
+        # that declares nothing takes part without acting, and is reported.
         all_actions: list[DeviceAction] = []
+        included_without_action: list[str] = []
         for score, device in scored:
             actions = self._build_actions_for_device(device, intent, resolution)
             if (not actions and intent.urgency == Urgency.EMERGENCY
                     and device.emergency_capable):
-                actions = self._build_actions_for_device(
-                    device, intent, {**resolution, "actuators": []})
+                actions = [DeviceAction(device_id=device.device_id, action=e["action"],
+                                        params=dict(e.get("params") or {}))
+                           for e in (device.emergency_actions or [])]
+                if not actions:
+                    included_without_action.append(device.device_id)
             for a in actions:
                 a.relevance_score = score
             all_actions.extend(actions)
@@ -997,6 +1016,7 @@ class CapabilityMatchingResolver(BaseResolver):
         )
 
         return ActionPlan(
+            included_without_action=included_without_action,
             intent_id=intent.intent_id,
             actions=all_actions,
             urgency=intent.urgency,

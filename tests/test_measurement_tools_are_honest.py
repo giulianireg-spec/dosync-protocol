@@ -58,9 +58,16 @@ CORPORA = {
     "clinical":   (REPO / "benchmarks/corpus/clinical_registry.json",
                    REPO / "benchmarks/corpus/clinical_ground_truth.json",
                    0.83),
+    # Updated 30 September, with the change that moved it: 1.00 -> 0.93. An
+    # emergency-capable device whose actions the class does not ask for no
+    # longer executes its full capability set; it does its declared
+    # emergency_actions, and this corpus declares none. Three devices it expects
+    # in ensure_safety (two lights, a lock) now take part without acting. The
+    # 1.00 was earned by firing every actuator -- a lock received lock and
+    # unlock at once.
     "recall":     (REPO / "benchmarks/fixtures/recall_registry.json",
                    REPO / "benchmarks/fixtures/recall_ground_truth.json",
-                   1.00),
+                   0.93),
 }
 
 

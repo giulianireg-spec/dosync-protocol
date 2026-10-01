@@ -40,6 +40,7 @@ def _full_manifest(device_id):
         "device_id": device_id, "device_name": "Schema probe", "manufacturer": "t",
         "model": "t", "firmware": "1", "category": "actuator", "tags": ["machinery"],
         "emergency_capable": True,
+        "emergency_actions": [{"action": "stop", "params": {}}],
         "actuators": [
             {"id": "stop", "type": "stop", "description": "Stop the line"},
             {"id": "move", "type": "move_to", "execution_model": "long_running",

@@ -10,6 +10,30 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **An emergency-capable device does, in an emergency, what was declared --
+  never everything.** When an emergency included an `emergency_capable` device
+  whose actions matched none the intent's class needs, the resolver fell back to
+  the device's FULL capability set (a 2026-07-11 decision, "F2b"): an
+  emergency-capable lock received `lock` and `unlock` at once, and a line
+  shutdown turned an extractor on. Found while describing the rule for the paper.
+  The manifest gains `emergency_actions` -- a subset of the device's own
+  actuators, none repeated, none undoing another (`lock`+`unlock`,
+  `turn_on`+`turn_off`, ... are refused). The device may declare it at
+  registration; the operator's value, set with `PATCH /v1/devices/{id}` or in a
+  declarative file, takes precedence and survives re-registration, and every
+  change is audited as `emergency_actions_changed`. A device declaring none takes
+  part without acting, and the plan, `explain` and the audit log say so
+  (`included_without_action`). Spec §6 and §10.5, the resolver specification,
+  the manifest schema and the OpenAPI surface describe it; conformance check C22
+  certifies it (66 checks).
+- Measured, without touching the data: the reference deployment's real registry
+  is unaffected (no device relied on the fallback). On the synthetic industrial
+  registry, recall falls from 1.00 to 0.87 and precision rises from 0.79 to 0.87:
+  the lock and the press no longer act in `ensure_safety`, and the extractor no
+  longer starts in a line shutdown. The emergency rules' apparent contribution on
+  that corpus came entirely from firing everything.
+
 ### Added
 - **The location rule is measured.** Every ground truth had an empty context,
   and the recall benchmark could not register a class that restricts by location,

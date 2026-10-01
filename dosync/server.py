@@ -594,6 +594,10 @@ class RegisterDeviceRequest(BaseModel):
     actuators: list[ActuatorIn] = []
     events: list[EventSpecIn] = []
     emergency_capable: bool = False
+    #: What the device does when an emergency includes it and asks for none of
+    #: its actions (protocol 0.5, spec §6). A value the operator set with PATCH
+    #: takes precedence and survives this device re-registering.
+    emergency_actions: Optional[list] = None
     cert_tier: str = "basic"
     adapter:         Optional[str] = None  # which adapter drives this device (e.g. "mavlink", "wiz")
     adapter_config:  dict = {}             # adapter-specific config (e.g. {"connection": "udp:127.0.0.1:14550"})
@@ -1232,9 +1236,10 @@ async def rename_device(device_id: str, req: dict, response: Response,
     # read by nothing -- the one thing this endpoint was for, per its docstring.
     has_name = "device_name" in req
     has_location = "location" in req or "room" in req
-    if not has_name and not has_location:
+    has_emergency = "emergency_actions" in req
+    if not has_name and not has_location and not has_emergency:
         raise HTTPException(status_code=422,
-                            detail="Send device_name, location, or both")
+                            detail="Send device_name, location, emergency_actions, or any of them")
 
     new_name = device.device_name
     if has_name:
@@ -1258,9 +1263,30 @@ async def rename_device(device_id: str, req: dict, response: Response,
         except ValueError as e:
             raise HTTPException(status_code=422, detail=f"Invalid location: {e}")
 
+    previous_emergency = [dict(a) for a in (device.emergency_actions or [])]
+    new_emergency = previous_emergency
+    if has_emergency and (device.adapter_config or {}).get("emergency_actions_from_file"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"This device's emergency_actions are declared in its file "
+                   f"'{device.adapter_config['emergency_actions_from_file']}', which is "
+                   "re-applied on every start. Change them there.")
+    if has_emergency:
+        from dosync.models import normalize_emergency_actions
+        try:
+            new_emergency = normalize_emergency_actions(
+                req.get("emergency_actions") or [], {a.type for a in device.actuators})
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=f"Invalid emergency_actions: {e}")
+
     previous, previous_location = device.device_name, device.location
     device.device_name = new_name
     device.location = new_location
+    if has_emergency:
+        # The operator's word on what this device does in an emergency takes
+        # precedence over the device's, and a re-registration keeps it.
+        device.emergency_actions = new_emergency
+        device.provenance = {**(device.provenance or {}), "emergency_actions_set_by": "operator"}
 
     # Persisted the same way registration does, or the change survives only
     # until the next restart — a rename that silently un-renames itself would be
@@ -1282,8 +1308,17 @@ async def rename_device(device_id: str, req: dict, response: Response,
             "previous_location": previous_location,
             "location": new_location,
         })
+    if has_emergency and new_emergency != previous_emergency:
+        # What a device does in an emergency is a safety decision: on the record.
+        hub.audit_log.append({
+            "type": "emergency_actions_changed",
+            "device_id": device_id,
+            "previous": [a["action"] for a in previous_emergency],
+            "emergency_actions": [a["action"] for a in new_emergency],
+        })
     return {"device_id": device_id, "device_name": new_name, "previous": previous,
-            "location": new_location, "previous_location": previous_location}
+            "location": new_location, "previous_location": previous_location,
+            "emergency_actions": [a["action"] for a in (device.emergency_actions or [])]}
 
 
 @app.post("/v1/devices/register", tags=["Devices"])
@@ -1361,6 +1396,13 @@ def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth
             adapter=req.adapter,
             adapter_config=dict(req.adapter_config or {}),
         )
+        if req.emergency_actions:
+            from dosync.models import normalize_emergency_actions
+            try:
+                manifest.emergency_actions = normalize_emergency_actions(
+                    req.emergency_actions, {a.type for a in manifest.actuators})
+            except ValueError as e:
+                raise HTTPException(status_code=422, detail=f"Invalid emergency_actions: {e}")
         # A re-registration never erases what it did not send (the address,
         # provenance, discovery evidence) and never touches the operator's
         # location: see CapabilityManifest.carry_over_from.
