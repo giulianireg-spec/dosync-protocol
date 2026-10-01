@@ -10,6 +10,23 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **DoSync devices as W3C WoT Thing Descriptions.**
+  `tools/export_thing_descriptions.py` exports each manifest as a TD 1.1
+  instance: the descriptive half maps to TD terms, and what governance needs
+  that TD does not define -- the capability type an action or sensor realises,
+  the operator-set location, emergency participation and emergency actions, a
+  sensor's kind -- travels in a `dosync:` extension vocabulary declared in the
+  JSON-LD context. Forms address the hub, so an action invoked through a TD goes
+  through `POST /v1/device/action`, its policies and its audit log. Every TD is
+  validated against the official TD 1.1 JSON Schema (vendored in `tools/vendor/`
+  under the W3C Software and Document License). On the committed corpora: 39 of
+  39 devices export to valid TDs, keep every governance field when rebuilt from
+  the TD alone, and resolve the 16 evaluation scenarios to identical plans. The
+  field check caught what the plan check could not -- an empty params schema
+  exported as a placeholder -- and a test device carries the fields the corpora
+  lack (their places are written as tags).
+
 ### Fixed
 - **An emergency-capable device does, in an emergency, what was declared --
   never everything.** When an emergency included an `emergency_capable` device
