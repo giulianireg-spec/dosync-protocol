@@ -11,6 +11,21 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **The `dosync:` vocabulary is published** at its namespace,
+  https://dosync.dev/ns/governance# -- `ns/governance.html`, one anchored
+  definition per term, and `ns/governance.jsonld`, the JSON-LD context. The
+  exported Thing Descriptions declared the namespace, but it resolved to
+  nothing; a test now requires every term the exporter emits to be defined in
+  both.
+
+### Fixed
+- The published API description said "Protocolo abierto" and pointed at a
+  repository that does not exist (github.com/dosync/protocol); `explain`'s
+  description had a line in Spanish; and the `PATCH /v1/devices/{id}`
+  description did not mention emergency actions. `spec/openapi.json` is
+  regenerated.
+
+### Added
 - **DoSync devices as W3C WoT Thing Descriptions.**
   `tools/export_thing_descriptions.py` exports each manifest as a TD 1.1
   instance: the descriptive half maps to TD terms, and what governance needs

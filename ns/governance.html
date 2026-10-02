@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DoSync governance vocabulary for WoT Thing Descriptions</title>
+<link rel="alternate" type="application/ld+json" href="/ns/governance.jsonld">
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #1a1a1a; }
+  code { background: #f3f3f3; padding: 0 .25rem; border-radius: 3px; }
+  section { border-top: 1px solid #ddd; padding-top: .5rem; }
+  .meta { color: #555; font-size: .9rem; }
+</style>
+</head>
+<body>
+  <h1>DoSync governance vocabulary</h1>
+  <p>Namespace: <code>https://dosync.dev/ns/governance#</code> (prefix <code>dosync:</code>). JSON-LD context:
+     <a href="/ns/governance.jsonld"><code>/ns/governance.jsonld</code></a>.</p>
+  <p>These terms extend a W3C Web of Things (WoT) Thing Description 1.1 with what a DoSync hub needs to
+     <em>govern</em> an AI agent's intent over a device: which capability each affordance realises, where
+     the operator placed the device, and how it takes part in emergencies. They describe the device's
+     participation in a deployment's goals, not the device itself, and they change nothing in the TD
+     information model. DoSync exports its devices as TD 1.1 Things using them
+     (<code>tools/export_thing_descriptions.py</code> in
+     <a href="https://github.com/giulianireg-spec/dosync-protocol">the DoSync repository</a>).</p>
+  <p>Status: draft, version 0.1 (protocol 0.5). Terms may change before protocol 1.0.</p>
+  <section id="capability">
+    <h2><code>dosync:capability</code> — Capability type</h2>
+    <p>The capability an action or a read-only property realises, from the DoSync capability vocabulary (spec/CAPABILITY-TYPES.md): for an action, e.g. turn_on, unlock, stop; for a property, e.g. temperature, smoke. A DoSync hub admits a device to an intent when the device realises a capability the intent's class needs.</p>
+    <p class="meta">Used on: td:ActionAffordance, td:PropertyAffordance · Value: xsd:string · IRI: <code>https://dosync.dev/ns/governance#capability</code></p>
+  </section>
+  <section id="category">
+    <h2><code>dosync:category</code> — Device category</h2>
+    <p>The device's broad category in DoSync: sensor, actuator, hybrid or gateway.</p>
+    <p class="meta">Used on: td:Thing · Value: xsd:string · IRI: <code>https://dosync.dev/ns/governance#category</code></p>
+  </section>
+  <section id="tags">
+    <h2><code>dosync:tags</code> — Tags</h2>
+    <p>Open-vocabulary role tags (spec/TAG-VOCABULARY.md). They rank devices that already take part in an intent; they never admit or exclude one.</p>
+    <p class="meta">Used on: td:Thing · Value: array of xsd:string · IRI: <code>https://dosync.dev/ns/governance#tags</code></p>
+  </section>
+  <section id="location">
+    <h2><code>dosync:location</code> — Assigned location</h2>
+    <p>The place the operator of the deployment assigned to the device, as a path of segments in the deployment's own vocabulary (e.g. plant-1/line-3). A place contains everything below it by whole segment. When an intent names a place and its class restricts by location, only devices at or below that place take part. Set by the operator, never by the device.</p>
+    <p class="meta">Used on: td:Thing · Value: xsd:string · IRI: <code>https://dosync.dev/ns/governance#location</code></p>
+  </section>
+  <section id="emergencyCapable">
+    <h2><code>dosync:emergencyCapable</code> — Emergency capable</h2>
+    <p>Whether the device takes part in emergency intents even when none of its actions is one the class needs — never outside a place a restricting emergency names.</p>
+    <p class="meta">Used on: td:Thing · Value: xsd:boolean · IRI: <code>https://dosync.dev/ns/governance#emergencyCapable</code></p>
+  </section>
+  <section id="emergencyActions">
+    <h2><code>dosync:emergencyActions</code> — Emergency actions</h2>
+    <p>What the device does when an emergency includes it and the class asks for none of its actions: a subset of its own actions, each {"action": name, "params": object}, none repeated and none undoing another. A value set by the operator takes precedence over the device's. Empty or absent: the device takes part without acting, and the hub records that.</p>
+    <p class="meta">Used on: td:Thing · Value: array of objects · IRI: <code>https://dosync.dev/ns/governance#emergencyActions</code></p>
+  </section>
+  <section id="sensorKind">
+    <h2><code>dosync:sensorKind</code> — Sensor kind</h2>
+    <p>Whether a read-only property measures the device's surroundings (environment) or the device's own state (device_state). A status query scoped to the environment reads only the former.</p>
+    <p class="meta">Used on: td:PropertyAffordance · Value: "environment" | "device_state" · IRI: <code>https://dosync.dev/ns/governance#sensorKind</code></p>
+  </section>
+  <section id="severity">
+    <h2><code>dosync:severity</code> — Event severity</h2>
+    <p>The severity a device attaches to an event: info, warning, alert or emergency.</p>
+    <p class="meta">Used on: td:EventAffordance · Value: xsd:string · IRI: <code>https://dosync.dev/ns/governance#severity</code></p>
+  </section>
+</body>
+</html>

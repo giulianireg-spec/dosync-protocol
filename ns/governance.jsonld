@@ -1,0 +1,30 @@
+{
+  "@context": {
+    "dosync": "https://dosync.dev/ns/governance#",
+    "dosync:capability": {
+      "@id": "https://dosync.dev/ns/governance#capability"
+    },
+    "dosync:category": {
+      "@id": "https://dosync.dev/ns/governance#category"
+    },
+    "dosync:tags": {
+      "@id": "https://dosync.dev/ns/governance#tags",
+      "@container": "@set"
+    },
+    "dosync:location": {
+      "@id": "https://dosync.dev/ns/governance#location"
+    },
+    "dosync:emergencyCapable": {
+      "@id": "https://dosync.dev/ns/governance#emergencyCapable"
+    },
+    "dosync:emergencyActions": {
+      "@id": "https://dosync.dev/ns/governance#emergencyActions"
+    },
+    "dosync:sensorKind": {
+      "@id": "https://dosync.dev/ns/governance#sensorKind"
+    },
+    "dosync:severity": {
+      "@id": "https://dosync.dev/ns/governance#severity"
+    }
+  }
+}

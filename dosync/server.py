@@ -1002,7 +1002,7 @@ app = FastAPI(
     description=(
         "DoSync Protocol — REST API\n\n"
         "The hub that connects an AI to physical devices.\n"
-        "Protocolo abierto · Apache 2.0 · github.com/dosync/protocol"
+        "Open protocol · Apache 2.0 · github.com/giulianireg-spec/dosync-protocol"
     ),
     version=__version__,
     lifespan=lifespan,
@@ -1212,7 +1212,7 @@ def _flag_room_alias(req: dict, response: Response) -> None:
 @app.patch("/v1/devices/{device_id}", tags=["Devices"])
 async def rename_device(device_id: str, req: dict, response: Response,
                         auth: str = Depends(require_auth)):
-    """Change a device's display name, its location, or both.
+    """Change a device's display name, its location, its emergency actions, or any of them.
 
     Renaming had no endpoint at all: the only way to fix a name was to
     re-register the whole manifest, which means reconstructing every capability
@@ -1447,7 +1447,7 @@ async def explain_intent(
     Explainability endpoint — the resolver's reasoning for one intent.
 
     For each registered device, it details:
-    - Score total y desglose (tag overlap, location bonus, emergency bonus, actuator match)
+    - The total score and its breakdown (tag overlap, location bonus, emergency bonus, actuator match)
     - Why it was included in or excluded from the ActionPlan
     - Which tags matched the intent's resolution tags
 

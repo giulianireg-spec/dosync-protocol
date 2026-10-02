@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "DoSync Hub",
-    "description": "DoSync Protocol — REST API\n\nThe hub that connects an AI to physical devices.\nProtocolo abierto · Apache 2.0 · github.com/dosync/protocol",
+    "description": "DoSync Protocol — REST API\n\nThe hub that connects an AI to physical devices.\nOpen protocol · Apache 2.0 · github.com/giulianireg-spec/dosync-protocol",
     "version": "0.7.0"
   },
   "paths": {
@@ -146,7 +146,7 @@
           "Devices"
         ],
         "summary": "Rename Device",
-        "description": "Change a device's display name, its location, or both.\n\nRenaming had no endpoint at all: the only way to fix a name was to\nre-register the whole manifest, which means reconstructing every capability\nby hand to change one string. A device adopted from a scan arrives called\n`wiz-a4c138`, so getting the name wrong — or simply changing your mind about\na room — was a disproportionate amount of work.\n\nOnly presentation fields. Capabilities describe what a device CAN DO and\ncome from the device or its adapter; letting an operator edit them here\nwould let the registry drift from the hardware, and the resolver would plan\nagainst a fiction.",
+        "description": "Change a device's display name, its location, its emergency actions, or any of them.\n\nRenaming had no endpoint at all: the only way to fix a name was to\nre-register the whole manifest, which means reconstructing every capability\nby hand to change one string. A device adopted from a scan arrives called\n`wiz-a4c138`, so getting the name wrong — or simply changing your mind about\na room — was a disproportionate amount of work.\n\nOnly presentation fields. Capabilities describe what a device CAN DO and\ncome from the device or its adapter; letting an operator edit them here\nwould let the registry drift from the hardware, and the resolver would plan\nagainst a fiction.",
         "operationId": "rename_device_v1_devices__device_id__patch",
         "security": [
           {
@@ -334,7 +334,7 @@
           "intents"
         ],
         "summary": "Explain Intent",
-        "description": "Explainability endpoint — the resolver's reasoning for one intent.\n\nFor each registered device, it details:\n- Score total y desglose (tag overlap, location bonus, emergency bonus, actuator match)\n- Why it was included in or excluded from the ActionPlan\n- Which tags matched the intent's resolution tags\n\nNote: this endpoint shows the resolver's scoring. The PolicyEngine may\nmodify the plan before execution — see the audit log for what happened.\n\nMeant to be read by humans and by AI systems interpreting hub\nbehaviour alike. See DESIGN-PRINCIPLES.md.",
+        "description": "Explainability endpoint — the resolver's reasoning for one intent.\n\nFor each registered device, it details:\n- The total score and its breakdown (tag overlap, location bonus, emergency bonus, actuator match)\n- Why it was included in or excluded from the ActionPlan\n- Which tags matched the intent's resolution tags\n\nNote: this endpoint shows the resolver's scoring. The PolicyEngine may\nmodify the plan before execution — see the audit log for what happened.\n\nMeant to be read by humans and by AI systems interpreting hub\nbehaviour alike. See DESIGN-PRINCIPLES.md.",
         "operationId": "explain_intent_v1_intents__intent_class__explain_get",
         "security": [
           {
