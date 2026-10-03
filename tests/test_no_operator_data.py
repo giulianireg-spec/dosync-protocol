@@ -72,6 +72,9 @@ ALLOWED: dict[str, str] = {
         "history is not rewritten; entries describe defects using their own terms",
     "docs/TECH-DEBT-BACKLOG.md":
         "a dated record of findings; rewriting what an entry observed would falsify it",
+    "benchmarks/agent_eval/PROTOCOL-v1.es.md":
+        "the first agent comparison's pre-registered protocol, fixed in Spanish before its run; "
+        "translating it now would replace the record with text written afterwards",
 }
 
 
