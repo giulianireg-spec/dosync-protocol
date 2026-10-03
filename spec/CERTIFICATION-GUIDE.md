@@ -17,7 +17,7 @@ The suite checks what the protocol promises over the wire, against a running hub
 | **Basic** | 10 | Connectivity, authentication, device registration, manifest structure |
 | **Standard** | 33 (+23) | Intent processing, events, direct actions, error codes, privacy, async polling, explain, version headers |
 | **Emergency** | 44 (+11) | Emergency dispatch, the SHA-256 audit chain, firmware re-registration, heartbeat after an emergency |
-| **Conformance** | 68 (+24) | The protocol's later guarantees: sensor kind, policy provenance in the audit chain, chain archiving, adapters and discovery (0.4, C01–C12); device locations and what a location in an intent does (0.5, C13–C24) |
+| **Conformance** | 69 (+25) | The protocol's later guarantees: sensor kind, policy provenance in the audit chain, chain archiving, adapters and discovery (0.4, C01–C12); device locations and what a location in an intent does (0.5, C13–C25) |
 
 A run that stops early is **incomplete**, not failed: the report says how many
 of the tier's checks it reached, and it never certifies.
@@ -67,9 +67,9 @@ ones the suite calls.
 - `intent_executed` entries carry their required fields, including `source`
 - A firmware change on re-registration is handled; the heartbeat stays healthy after an emergency
 
-**Conformance (C01–C24)**
+**Conformance (C01–C25)**
 - *0.4 (C01–C12):* every sensor declares a valid `kind`; `report_status` accepts an explicit `environment` scope; a plan a deployment policy modifies leaves a `policy_modified` chain entry with its provenance and a SHA-256 policy fingerprint; the live and the archived chain verify; `GET /v1/adapters` declares valid adapter kinds; `GET /v1/discovery/scan` registers nothing and reports what it searched; the inventory separates active from quarantined devices; `POST /v1/heartbeat/signed` is disabled unless enabled
-- *0.5 (C13–C24, spec §10.5):* `PATCH /v1/devices/{id}` sets a location, keeps it, and records `device_relocated`; `POST` and `DELETE /v1/intent-classes/{name}` with `location_role`; `explain` takes `?location=` and `?urgency=`; a restricting location contains what is below it by whole segment; an `informs` class excludes nothing; a restricting emergency stays in its zone, force-inclusion included; an unknown restricting location is refused (`422`, counted as `unknown_location` in `/v1/status`), except in an emergency, which reaches every capable device and is recorded; a re-registration keeps the operator's location; and an emergency-capable device the class asks nothing of performs only its declared `emergency_actions` (contradictory ones are refused with `422`); an intent whose class asks for opposite actions without saying which is refused (`422`, `ambiguous_actions`), as is one naming an action outside its class (`invalid_actions`); and in an emergency a device's declared emergency actions come first
+- *0.5 (C13–C25, spec §10.5):* `PATCH /v1/devices/{id}` sets a location, keeps it, and records `device_relocated`; `POST` and `DELETE /v1/intent-classes/{name}` with `location_role`; `explain` takes `?location=` and `?urgency=`; a restricting location contains what is below it by whole segment; an `informs` class excludes nothing; a restricting emergency stays in its zone, force-inclusion included; an unknown restricting location is refused (`422`, counted as `unknown_location` in `/v1/status`), except in an emergency, which reaches every capable device and is recorded; a re-registration keeps the operator's location; and an emergency-capable device the class asks nothing of performs only its declared `emergency_actions` (contradictory ones are refused with `422`); an intent whose class asks for opposite actions without saying which is refused (`422`, `ambiguous_actions`), as is one naming an action outside its class (`invalid_actions`); in an emergency a device's declared emergency actions come first; and proposed actions (`context.proposed_actions`) are validated, every refused one reported with its reason and none run
 
 C04–C06 need a plan that a deployment policy **modifies**, and a clean hub has
 none. Load a policy file that removes a device from an intent the suite fires.
@@ -140,7 +140,7 @@ There is no submission process. To claim certification publicly:
 3. Add a badge naming the tier, the checks passed and the protocol version:
 
 ```markdown
-![DoSync Conformance 68/68 · protocol 0.5](https://img.shields.io/badge/DoSync-Conformance%2065%2F65%20·%20protocol%200.5-orange)
+![DoSync Conformance 69/69 · protocol 0.5](https://img.shields.io/badge/DoSync-Conformance%2065%2F65%20·%20protocol%200.5-orange)
 ```
 
 ---
@@ -192,8 +192,8 @@ dosync-certify --host your-hub --port 47200 --tier standard
 
 | Language | Repository | Certification |
 |---|---|---|
-| Python | [giulianireg-spec/dosync-protocol](https://github.com/giulianireg-spec/dosync-protocol) | Conformance 68/68 — every tier certified against a live hub in CI, on every push |
-| Node.js | [giulianireg-spec/dosync-node](https://github.com/giulianireg-spec/dosync-node) | Standard 33/33 against an earlier version of the suite; re-validation against the 68-check suite pending |
+| Python | [giulianireg-spec/dosync-protocol](https://github.com/giulianireg-spec/dosync-protocol) | Conformance 69/69 — every tier certified against a live hub in CI, on every push |
+| Node.js | [giulianireg-spec/dosync-node](https://github.com/giulianireg-spec/dosync-node) | Standard 33/33 against an earlier version of the suite; re-validation against the 69-check suite pending |
 
 ---
 

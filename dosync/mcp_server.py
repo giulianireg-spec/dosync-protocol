@@ -234,6 +234,18 @@ async def list_tools() -> list[types.Tool]:
                         "type": "string",
                         "description": "Message to include in notifications",
                     },
+                    "proposed_actions": {
+                        "type": "array",
+                        "items": {"type": "object", "properties": {
+                            "device_id": {"type": "string"}, "action": {"type": "string"},
+                            "params": {"type": "object"}}, "required": ["device_id", "action"]},
+                        "description": (
+                            "Optional, governed direct mode: the device actions you choose. "
+                            "The hub runs only those that pass its rules -- the device "
+                            "declares the action, the intent's class allows it, the device is "
+                            "in a restricting place, no opposite actions, declared emergency "
+                            "actions in an emergency -- and reports each refusal with its reason."),
+                    },
                     "action_types": {
                         "type": "array", "items": {"type": "string"},
                         "description": (
@@ -490,6 +502,8 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
         # Merge the convenience fields (message, location) into context for backward
         # compatibility, without overwriting anything the AI put in `context`.
+        if arguments.get("proposed_actions") and "proposed_actions" not in ctx:
+            ctx["proposed_actions"] = list(arguments["proposed_actions"])
         if arguments.get("action_types") and "action_types" not in ctx:
             ctx["action_types"] = list(arguments["action_types"])
         for k, v in (("message", message), ("location", location)):

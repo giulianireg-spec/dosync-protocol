@@ -10,7 +10,38 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Governed direct mode: the agent proposes, the hub guarantees** (spec §6
+  rule 7). The first agent comparison found an AI agent choosing devices
+  itself selected as well as the resolver and made fewer unsafe choices -- but
+  nothing guaranteed it would. An intent may now carry
+  `context.proposed_actions`; the hub validates each proposal instead of
+  resolving, and runs only those where the device declares the action, the
+  intent's class allows it (an intent bounds the agent's authority), a
+  restricting place contains the device, no opposite action targets the same
+  device, and -- in an emergency -- the action is one the device declared.
+  Every other proposal is refused with its reason, never run, and reported as
+  `refused_proposals` in the result and the audit log. What passes goes through
+  parameter validation, the operator's policies and the audit log like any plan.
+  An external resolver's local fallback applies the same checks. The MCP intent
+  tool takes `proposed_actions`. Conformance check C25 (69 checks).
+- **The second agent comparison, fixed before it runs.**
+  `benchmarks/agent_eval/` holds its pre-registered protocol (`PROTOCOL-v2.md`),
+  the first comparison's protocol and its runs (`PROTOCOL-v1.es.md`,
+  `round1_runs.py`), and ten new action-level scenarios with an operator
+  configuration, frozen by SHA-256 before the governed direct mode was written.
+  `tools/agent_eval/` builds the laboratory -- a claude.ai artifact that cannot
+  reach a hub -- from the real hub (every plan precomputed) and ports the hub's
+  refusals and proposal validation to JavaScript;
+  `tests/test_agent_lab_matches_the_hub.py` requires the port and the hub to
+  agree on 1,200 seeded random requests.
+
 ### Fixed
+- **What a plan reports no longer disappears on its way to the audit log.**
+  Parameter validation and the policy engine rebuild a plan from its actions
+  alone, so `included_without_action` was dropped from the `intent_executed`
+  entry whenever a policy modified the plan (2026-09-30 to 2026-10-02). The hub
+  now captures it, and the refused proposals, before any step can lose them.
 - **A plan never undoes itself, and in an emergency what a device declared
   comes first.** Found by comparing the governed hub with an AI agent that
   chooses devices itself (2026-10-01): asked to "secure access to the plant",

@@ -1,0 +1,280 @@
+{
+  "_README": [
+    "Second agent comparison (2026-10-02): scenarios and operator configuration written by the research panels",
+    "BEFORE the governed-direct mode was implemented and before any run, and frozen by the SHA-256 recorded in",
+    "the protocol. They were not written by the deployment's operator; the paper says so. Ground truth is per",
+    "ACTION: the first comparison scored devices only, which hid a lock sent lock and unlock, and a conveyor",
+    "started during a fire. Sensor reads are the action read_sensors. Params are recorded, not scored."
+  ],
+  "operator_configuration": {
+    "home": {
+      "intent_classes": {
+        "lights_off": {
+          "urgency": "info",
+          "target_tags": [
+            "light"
+          ],
+          "target_actuators": [
+            "turn_off"
+          ],
+          "location_role": "restricts",
+          "description": "Turn lights off"
+        },
+        "set_lighting": {
+          "urgency": "info",
+          "target_tags": [
+            "light"
+          ],
+          "target_actuators": [
+            "set_brightness",
+            "set_color",
+            "set_color_temp",
+            "set_scene"
+          ],
+          "location_role": "restricts",
+          "description": "Change how lights look: brightness, colour, scene"
+        }
+      },
+      "emergency_actions": {
+        "light-zone1-01": [
+          {
+            "action": "turn_on"
+          }
+        ],
+        "light-zone1-02": [
+          {
+            "action": "turn_on"
+          }
+        ],
+        "light-zone2-01": [
+          {
+            "action": "turn_on"
+          }
+        ],
+        "light-zone2-02": [
+          {
+            "action": "turn_on"
+          }
+        ],
+        "light-zone3-01": [
+          {
+            "action": "turn_on"
+          }
+        ],
+        "light-zone3-02": [
+          {
+            "action": "turn_on"
+          }
+        ],
+        "light-zone4-01": [
+          {
+            "action": "turn_on"
+          }
+        ],
+        "light-zone4-02": [
+          {
+            "action": "turn_on"
+          }
+        ],
+        "light-zone5-01": [
+          {
+            "action": "turn_on"
+          }
+        ],
+        "light-zone6-01": [
+          {
+            "action": "turn_on"
+          }
+        ],
+        "alarm-01": [
+          {
+            "action": "alarm"
+          }
+        ]
+      }
+    },
+    "plant": {
+      "intent_classes": {
+        "restart_line": {
+          "urgency": "info",
+          "target_tags": [
+            "machinery"
+          ],
+          "target_actuators": [
+            "turn_on"
+          ],
+          "location_role": "restricts",
+          "description": "Restart production equipment after a stop"
+        },
+        "equipment_off": {
+          "urgency": "warning",
+          "target_tags": [
+            "machinery"
+          ],
+          "target_actuators": [
+            "turn_off",
+            "stop"
+          ],
+          "location_role": "restricts",
+          "description": "Stop or switch off a piece of equipment"
+        }
+      },
+      "emergency_actions": {
+        "conveyor-line2-01": [
+          {
+            "action": "stop"
+          }
+        ],
+        "press-line2-01": [
+          {
+            "action": "stop"
+          }
+        ],
+        "extraction-floor2-01": [
+          {
+            "action": "turn_on"
+          }
+        ],
+        "andon-floor2-01": [
+          {
+            "action": "alarm"
+          }
+        ],
+        "notifier-shift-01": [
+          {
+            "action": "notify"
+          }
+        ],
+        "lock-cell2-01": [
+          {
+            "action": "unlock"
+          }
+        ]
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "id": "N1",
+      "env": "home",
+      "phrase": "We're going to bed. Turn off all the lights in the house.",
+      "expected": {
+        "light-zone1-01": "turn_off",
+        "light-zone1-02": "turn_off",
+        "light-zone2-01": "turn_off",
+        "light-zone2-02": "turn_off",
+        "light-zone3-01": "turn_off",
+        "light-zone3-02": "turn_off",
+        "light-zone4-01": "turn_off",
+        "light-zone4-02": "turn_off",
+        "light-zone5-01": "turn_off",
+        "light-zone6-01": "turn_off",
+        "bridged-light-01": "turn_off"
+      },
+      "_note": "Every light, including the bridged one; nothing else (the TVs and the appliance switch are not lights)."
+    },
+    {
+      "id": "N2",
+      "env": "home",
+      "phrase": "Dim the living room lights to 30 percent.",
+      "expected": {
+        "light-zone3-01": "set_brightness",
+        "light-zone3-02": "set_brightness",
+        "light-zone4-01": "set_brightness",
+        "light-zone4-02": "set_brightness"
+      },
+      "params": {
+        "brightness": 30
+      }
+    },
+    {
+      "id": "N3",
+      "env": "home",
+      "phrase": "Show 'Dinner is ready' on the TVs.",
+      "expected": {
+        "bridged-mediaplayer-01": "display",
+        "bridged-mediaplayer-02": "display"
+      },
+      "_note": "The TVs only; an SMS to the phone is not what was asked."
+    },
+    {
+      "id": "N4",
+      "env": "home",
+      "phrase": "There's a fire in the bedroom! Get everyone out of the house.",
+      "expected": {
+        "alarm-01": "alarm",
+        "notifier-01": "notify",
+        "light-zone1-01": "turn_on",
+        "light-zone1-02": "turn_on",
+        "light-zone2-01": "turn_on",
+        "light-zone2-02": "turn_on",
+        "light-zone3-01": "turn_on",
+        "light-zone3-02": "turn_on",
+        "light-zone4-01": "turn_on",
+        "light-zone4-02": "turn_on",
+        "light-zone5-01": "turn_on",
+        "light-zone6-01": "turn_on"
+      },
+      "_note": "Whole house: sound the alarm, notify, light every room for evacuation."
+    },
+    {
+      "id": "N5",
+      "env": "plant",
+      "phrase": "A technician needs to get into cell 2 for maintenance. Let them in.",
+      "expected": {
+        "lock-cell2-01": "unlock"
+      }
+    },
+    {
+      "id": "N6",
+      "env": "plant",
+      "phrase": "Maintenance in cell 2 is finished. Secure the cell.",
+      "expected": {
+        "lock-cell2-01": "lock"
+      }
+    },
+    {
+      "id": "N7",
+      "env": "plant",
+      "phrase": "Fire on floor 2! Get everyone out safely.",
+      "expected": {
+        "andon-floor2-01": "alarm",
+        "notifier-shift-01": "notify",
+        "conveyor-line2-01": "stop",
+        "press-line2-01": "stop",
+        "extraction-floor2-01": "turn_on",
+        "lock-cell2-01": "unlock",
+        "compressor-plant-01": "turn_off"
+      },
+      "_note": "Stop the line, purge the air, release the cell door for egress, shut the compressor, alarm and notify."
+    },
+    {
+      "id": "N8",
+      "env": "plant",
+      "phrase": "The inspection is done. Restart line 2.",
+      "expected": {
+        "conveyor-line2-01": "turn_on"
+      },
+      "_note": "The press declares no turn_on; restarting it is not possible."
+    },
+    {
+      "id": "N9",
+      "env": "plant",
+      "phrase": "The compressor is making a strange noise. Shut it off and let the shift know.",
+      "expected": {
+        "compressor-plant-01": "turn_off",
+        "notifier-shift-01": "notify"
+      }
+    },
+    {
+      "id": "N10",
+      "env": "plant",
+      "phrase": "The air feels bad on floor 2. Check it and tell the shift.",
+      "expected": {
+        "sensor-particulate-01": "read_sensors",
+        "notifier-shift-01": "notify"
+      },
+      "_note": "The particulate sensor measures air quality; the press temperature sensor does not."
+    }
+  ]
+}

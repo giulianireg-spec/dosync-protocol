@@ -533,7 +533,29 @@ class DoSyncHub:
                 intent, executor, composition_kind)
 
         _t0 = time.perf_counter()
-        plan = self.resolver.resolve(intent)
+        if (intent.context or {}).get("proposed_actions"):
+            # Governed direct mode: validate what the agent proposed instead of
+            # resolving (spec §6 rule 7). An external resolver's local fallback
+            # applies the same guarantees.
+            _validate = (getattr(self.resolver, "validate_proposals", None)
+                         or getattr(getattr(self.resolver, "_fallback", None), "validate_proposals", None))
+            if _validate is None:
+                from .models import ActionPlan as _APlan
+                plan = _APlan(intent_id=intent.intent_id, actions=[], urgency=intent.urgency,
+                              refused_proposals=[{"device_id": p.get("device_id"), "action": p.get("action"),
+                                                  "reason": "resolver_cannot_validate"}
+                                                 for p in intent.context["proposed_actions"]])
+            else:
+                plan = _validate(intent)
+        else:
+            plan = self.resolver.resolve(intent)
+        # Parameter validation and the policy engine rebuild the plan from its
+        # actions alone; what the plan says about devices that took part without
+        # acting, and about refused proposals, is captured here so no later step
+        # can drop it. (included_without_action was lost from the audit entry
+        # whenever a policy modified the plan, from 2026-09-30 to 2026-10-02.)
+        _plan_idle = list(getattr(plan, "included_without_action", None) or [])
+        _plan_refused = list(getattr(plan, "refused_proposals", None) or [])
         if _M is not None:
             _M.intent_resolution_seconds.observe(time.perf_counter() - _t0)
 
@@ -781,6 +803,7 @@ class DoSyncHub:
                 {"device_id": a.device_id, "action": a.action, "reason": err}
                 for a, err in rejected_actions
             ],
+            refused_proposals=_plan_refused,
             operations=started_operations,
         )
         # Audit log
@@ -791,8 +814,8 @@ class DoSyncHub:
             "urgency":          intent.urgency.value,
             "source":           getattr(intent, "source", "api"),
             "actions":          len(plan.actions),
-            **({"included_without_action": list(plan.included_without_action)}
-               if getattr(plan, "included_without_action", None) else {}),
+            **({"included_without_action": _plan_idle} if _plan_idle else {}),
+            **({"refused_proposals": _plan_refused} if _plan_refused else {}),
             # The chain answers "what did this system do". An action that never
             # left the hub is part of that answer and used not to be: entries
             # written before 2026-08-13 do not distinguish execution from

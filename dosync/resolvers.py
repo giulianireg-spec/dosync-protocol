@@ -792,6 +792,81 @@ class CapabilityMatchingResolver(BaseResolver):
                 return pa.get("params", {})
         return None
 
+    #: Why the hub refuses a proposed action (governed direct mode, spec §6 rule 7).
+    PROPOSAL_REFUSALS = ("unknown_device", "not_declared", "outside_class", "outside_place",
+                         "not_its_emergency_action", "opposite_actions")
+
+    def validate_proposals(self, intent: Intent) -> ActionPlan:
+        """Governed direct mode: the agent chose the devices and actions; the hub
+        decides which of them may run (protocol 0.5 rev. 2026-10-02, spec §6
+        rule 7).
+
+        The first agent comparison (2026-10-01) found an agent choosing devices
+        itself selected as well as this resolver and made fewer unsafe choices,
+        but nothing guaranteed it would. Here each proposal is checked against
+        what the protocol guarantees, and refused with its reason if it fails:
+        the device must exist and declare the action; the action must be one the
+        intent's class allows (an intent bounds the agent's authority -- no
+        unlocking inside a `notify`); a restricting place must contain the
+        device; in an emergency a device that declared its emergency actions may
+        only do those; and no device receives two opposite actions. What passes
+        goes on through parameter validation, the operator's policies, execution
+        and the audit log, exactly like a resolved plan.
+        """
+        ctx = intent.context or {}
+        proposals = ctx.get("proposed_actions") or []
+        resolution = self._get_resolution(intent)
+        class_actions = set(resolution.get("actuators") or [])
+        reads_allowed = bool(resolution.get("sensors")) or not class_actions
+        location = ctx.get("location")
+        restrict_to = None
+        if (isinstance(location, str) and location
+                and resolution.get("location_role", "restricts") == "restricts"
+                and any(self._at_location(d, location) for d in self.registry.active())):
+            restrict_to = location
+        emergency = intent.urgency == Urgency.EMERGENCY
+        refused, accepted, seen = [], {}, set()
+        for p in proposals:
+            device_id, action = p.get("device_id"), p.get("action")
+            if (device_id, action) in seen:
+                continue
+            seen.add((device_id, action))
+            device = self.registry.get(device_id) if isinstance(device_id, str) else None
+            reason = None
+            if device is None:
+                reason = "unknown_device"
+            elif action == "read_sensors":
+                if not device.sensors:
+                    reason = "not_declared"
+                elif not reads_allowed:
+                    reason = "outside_class"
+            elif action not in {a.type for a in device.actuators}:
+                reason = "not_declared"
+            elif action not in class_actions:
+                reason = "outside_class"
+            if reason is None and restrict_to and not self._at_location(device, restrict_to):
+                reason = "outside_place"
+            if (reason is None and emergency and device.emergency_capable and device.emergency_actions
+                    and action not in {e["action"] for e in device.emergency_actions}):
+                reason = "not_its_emergency_action"
+            if reason:
+                refused.append({"device_id": device_id, "action": action, "reason": reason})
+            else:
+                accepted.setdefault(device_id, []).append((action, dict(p.get("params") or {})))
+        actions: list[DeviceAction] = []
+        for device_id, acts in accepted.items():
+            clash = {t for pair in opposite_pairs(a for a, _ in acts) for t in pair}
+            for action, params in acts:
+                if action in clash:
+                    refused.append({"device_id": device_id, "action": action, "reason": "opposite_actions"})
+                else:
+                    actions.append(DeviceAction(device_id=device_id, action=action, params=params,
+                                                relevance_score=1.0))
+        log.info("Proposals for '%s': %d accepted, %d refused",
+                 intent.intent.value, len(actions), len(refused))
+        return ActionPlan(intent_id=intent.intent_id, actions=actions, urgency=intent.urgency,
+                          refused_proposals=refused)
+
     @staticmethod
     def _emergency_fallback_report(device, intent, bd) -> dict:
         """What explain() says about an emergency-capable device whose class

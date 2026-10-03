@@ -1,0 +1,18 @@
+{
+ "R1": "Fire alarm! There's a fire in the house. Do what's needed to keep everyone safe.",
+ "R2": "Something unusual is happening at home while we're away. Check it and alert us.",
+ "R3": "Make sure the house is locked.",
+ "R4": "Give me a status report of the house.",
+ "R5": "Send me a test notification that says \"test\".",
+ "L1": "Someone just walked into the kitchen. Turn on the lights in there.",
+ "L2": "Someone just walked into the bedroom. Turn on the lights in there.",
+ "L3": "Someone just walked into the living room. Turn on the lights in there.",
+ "L4": "Someone just walked into the dining room. Turn on the lights in there.",
+ "L5": "There's smoke coming out of the kitchen! It's an emergency.",
+ "L6": "Lock the kitchen door.",
+ "I1": "Emergency on the production line: shut it down immediately.",
+ "I2": "There's a fire in the plant. Do what's needed to keep people safe.",
+ "I3": "Something looks wrong on the plant floor. Check it and alert the shift.",
+ "I4": "Give me a status report of the plant.",
+ "I5": "Secure access to the plant."
+}

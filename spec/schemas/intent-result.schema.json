@@ -22,6 +22,21 @@
       "enum": ["pending", "success", "partial", "partial_abort", "failed", "retry_exhausted"],
       "description": "Execution outcome summary. 'success': all actions completed. 'partial': some actions failed, rest continued (failure_policy=continue). 'partial_abort': some executed, rest cancelled (failure_policy=abort). 'failed': all actions failed or intent was blocked by a policy. 'retry_exhausted': retries exhausted on at least one action (failure_policy=retry)."
     },
+    "refused_proposals": {
+      "type": "array",
+      "description": "Governed direct mode (spec §6 rule 7): the actions the agent proposed that the hub refused, never executed.",
+      "items": {
+        "type": "object",
+        "required": ["device_id", "action", "reason"],
+        "properties": {
+          "device_id": {"type": ["string", "null"]},
+          "action": {"type": ["string", "null"]},
+          "reason": {"enum": ["unknown_device", "not_declared", "outside_class", "outside_place",
+                              "not_its_emergency_action", "opposite_actions", "resolver_cannot_validate"]}
+        },
+        "additionalProperties": false
+      }
+    },
     "results": {
       "type": "array",
       "description": "Per-device execution outcomes.",

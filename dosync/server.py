@@ -1943,7 +1943,7 @@ async def execute_intent_legacy(req: IntentRequest, auth: str = Depends(require_
 _URGENCY_LABELS = frozenset(u.value for u in Urgency)
 _REJECTION_REASONS = ("invalid_name", "not_registered", "invalid_urgency",
                       "unknown_location", "idempotency_conflict",
-                      "invalid_actions", "ambiguous_actions")
+                      "invalid_actions", "ambiguous_actions", "invalid_proposals")
 
 
 def _count_rejection(reason: str, intent_class: str, urgency: str) -> None:
@@ -2035,9 +2035,23 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
                 status_code=422,
                 detail=f"context.action_types must be a non-empty subset of the actions "
                        f"'{req.intent}' asks for: {sorted(_class_actions)}")
+    # Governed direct mode: the agent proposes the actions itself (spec §6
+    # rule 7). Each one names its direction, so the class's ambiguity does not
+    # apply; the hub checks every proposal instead.
+    _proposals = (req.context or {}).get("proposed_actions")
+    if _proposals is not None:
+        if (not isinstance(_proposals, list) or not _proposals or len(_proposals) > 200
+                or not all(isinstance(p, dict) and isinstance(p.get("device_id"), str)
+                           and isinstance(p.get("action"), str)
+                           and isinstance(p.get("params", {}), dict) for p in _proposals)):
+            _count_rejection("invalid_proposals", req.intent, req.urgency)
+            raise HTTPException(
+                status_code=422,
+                detail="context.proposed_actions must be a non-empty list (at most 200) of "
+                       "{device_id, action, params?} objects")
     _effective = set(_wanted) if _wanted else set(_class_actions)
     _pairs = _opposite_pairs(_effective)
-    if _pairs and urgency != Urgency.EMERGENCY:
+    if _pairs and urgency != Urgency.EMERGENCY and _proposals is None:
         _count_rejection("ambiguous_actions", req.intent, req.urgency)
         raise HTTPException(
             status_code=422,
@@ -2136,6 +2150,8 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
                 # say so is the same omission as a success flag that does not.
                 "actions_simulated": sum(1 for r in result.results if r.simulated),
                 "failed_devices": result.failed_devices,
+                **({"refused_proposals": list(result.refused_proposals)}
+                   if getattr(result, "refused_proposals", None) else {}),
                 "results": [
                     {"device_id": r.device_id, "action": r.action, "success": r.success,
                      "response": r.response, "error": r.error,

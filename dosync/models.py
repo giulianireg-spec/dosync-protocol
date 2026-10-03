@@ -720,6 +720,10 @@ class ActionPlan:
     #: class and declared no emergency_actions: they take part without acting,
     #: and the record says so rather than hiding them.
     included_without_action: list     = field(default_factory=list)
+    #: Governed direct mode (spec §6, rule 7): the actions an agent proposed
+    #: that the hub refused, each {device_id, action, reason}. A refused
+    #: proposal is never executed and never silently dropped.
+    refused_proposals: list           = field(default_factory=list)
     # failure_policy=None → usa CONTINUE (backward compatible)
 
 @dataclass
@@ -777,6 +781,7 @@ class IntentResult:
     failure_policy_applied: str       = "continue"
     status: str                       = "success"
     rejected_actions: list            = field(default_factory=list)
+    refused_proposals: list           = field(default_factory=list)
     # Long-running operations started by this intent (execution_model). Each entry:
     # {operation_id, device_id, state}. EMPTY for intents that only triggered instant
     # actions → a client that predates operations sees an identical IntentResult.

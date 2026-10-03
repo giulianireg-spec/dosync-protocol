@@ -9,7 +9,7 @@ Tiers:
   basic     (10 tests) — connectivity, authentication, device manifest
   standard  (33 tests) — protocol conformance, events, health, version headers, manifest privacy, intent lifecycle
   emergency (44 tests) — everything in standard + emergency override, policy engine, audit log integrity, firmware re-registration
-  conformance (68 tests) — everything in emergency + protocol features through 0.5: sensor kind, policy provenance,
+  conformance (69 tests) — everything in emergency + protocol features through 0.5: sensor kind, policy provenance,
                            chain archiving, adapters, discovery, and where a device is and what a location in an intent does
 
 Two testing modes:
@@ -261,7 +261,7 @@ class CertReport:
         # basic said 12 while the tier runs B01-B10: a basic certification was
         # always "incomplete" and could never certify. Nothing noticed because
         # nothing ran the suite; CI now certifies every tier on its own.
-        "basic": 10, "standard": 33, "emergency": 44, "conformance": 68,
+        "basic": 10, "standard": 33, "emergency": 44, "conformance": 69,
     }
 
     def finalize(self):
@@ -925,7 +925,7 @@ def run_emergency(base: str, report: CertReport):
     ))
 
 
-# ── TIER CONFORMANCE — protocol features through 0.5 (cumulative: 68) ─────────
+# ── TIER CONFORMANCE — protocol features through 0.5 (cumulative: 69) ─────────
 # Everything shipped in the 0.4 cycle (SENSOR-KIND, AUDIT-PROVENANCE,
 # EMERGENCY-UNSAT-ESCALATION, AUDIT-ARCHIVE) had unit tests but no CONFORMANCE
 # coverage — nothing proved, over the wire against a running hub, that the
@@ -1091,7 +1091,7 @@ def run_conformance(base: str, report: CertReport):
     run_conformance_05(base, report)
 
 
-# C13-C24 cover protocol 0.5 (spec §10.5): where a device is, and what a
+# C13-C25 cover protocol 0.5 (spec §10.5): where a device is, and what a
 # location in an intent's context does. The suite builds its own scene -- two
 # probe devices and two probe intent classes, prefixed certify- -- and removes it
 # whatever happens. It verifies through explain(), which executes nothing,
@@ -1272,6 +1272,33 @@ def run_conformance_05(base: str, report: CertReport):
             "C24  In an emergency a device's declared actions come first",
             entry.get("emergency_actions") == ["stop"],
             f"explain reports {entry.get('emergency_actions') or entry or 'nothing'}"))
+        # C25. Governed direct mode: the hub validates what an agent proposes.
+        # Every proposal here is invalid, so nothing runs -- an opposite pair, an
+        # undeclared action and an unknown device in one intent, an action
+        # outside the class in another -- and each refusal carries its reason.
+        def _refusals(body):
+            st, fired = request("POST", f"{base}/v1/intent/async", body)
+            if st != 200 or not fired.get("intent_id"):
+                return None, f"HTTP {st}"
+            time.sleep(2)
+            _, res = request("GET", f"{base}/v1/intent/{fired['intent_id']}")
+            return res, {(r.get("device_id"), r.get("action")): r.get("reason")
+                         for r in res.get("refused_proposals") or []}
+        r1, got1 = _refusals({"intent": "control_access", "urgency": "alert", "context": {"proposed_actions": [
+            {"device_id": _PROBE_LOCK, "action": "lock"}, {"device_id": _PROBE_LOCK, "action": "unlock"},
+            {"device_id": _PROBE_LOCK, "action": "certify-fly"},
+            {"device_id": "certify-no-such-device", "action": "lock"}]}})
+        r2, got2 = _refusals({"intent": "notify", "urgency": "info", "context": {"proposed_actions": [
+            {"device_id": _PROBE_LOCK, "action": "unlock"}]}})
+        want1 = {(_PROBE_LOCK, "lock"): "opposite_actions", (_PROBE_LOCK, "unlock"): "opposite_actions",
+                 (_PROBE_LOCK, "certify-fly"): "not_declared",
+                 ("certify-no-such-device", "lock"): "unknown_device"}
+        nothing_ran = all(isinstance(r, dict) and not (r.get("results") or []) for r in (r1, r2))
+        report.add(TestResult(
+            "C25  Proposed actions are validated; refused ones never run",
+            got1 == want1 and got2 == {(_PROBE_LOCK, "unlock"): "outside_class"} and nothing_ran,
+            f"refusals {sorted(set((got1 or {}).values()) | set((got2 or {}).values())) if isinstance(got1, dict) else got1}; "
+            f"actions run: {0 if nothing_ran else 'some'}"))
     finally:
         for did in (_PROBE_IN, _PROBE_OUT, _PROBE_LOCK, _PROBE_CONVEYOR):
             request("DELETE", f"{base}/v1/devices/{did}")
@@ -1301,7 +1328,7 @@ Tier test counts:
   basic      10 tests  — connectivity, auth, registration, manifest
   standard   33 tests  — + intents, events, health, explainability, version headers, intent lifecycle
   emergency  44 tests  — + emergency override, audit log integrity, firmware re-registration
-  conformance 68 tests — + protocol features through 0.5: sensor-kind, policy provenance, chain archiving,
+  conformance 69 tests — + protocol features through 0.5: sensor-kind, policy provenance, chain archiving,
                          device locations and location-restricted intents
         """,
     )
