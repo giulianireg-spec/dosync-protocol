@@ -33,7 +33,7 @@ if TYPE_CHECKING:  # annotations only; importing these at runtime is circular
     from .registry import CapabilityRegistry
 from dataclasses import dataclass, field
 
-from .models import (ActionPlan, ActuatorSpec, CapabilityManifest, DeviceAction,
+from .models import (ActionPlan, ActuatorSpec, CapabilityManifest, DeviceAction, opposite_pairs,
                      Intent, Urgency, device_at_location)
 
 # Imported at call time inside the methods that need them: hub.py imports this
@@ -796,12 +796,16 @@ class CapabilityMatchingResolver(BaseResolver):
     def _emergency_fallback_report(device, intent, bd) -> dict:
         """What explain() says about an emergency-capable device whose class
         asks for none of its actions: what it will do, or that it will not act."""
-        if not (intent.urgency == Urgency.EMERGENCY and device.emergency_capable
-                and not bd.matched_actuators):
+        if not (intent.urgency == Urgency.EMERGENCY and device.emergency_capable):
             return {}
         declared = [e["action"] for e in (device.emergency_actions or [])]
         if declared:
+            # Declared emergency actions take precedence over the class's.
             return {"emergency_actions": declared}
+        if bd.matched_actuators:
+            return {"warning": "emergency-capable but declares no emergency_actions: in this "
+                               "emergency it performs the class's actions "
+                               f"{sorted(bd.matched_actuators)} -- declare what it must do"}
         return {"included_without_action": True,
                 "reason": "emergency-capable, none of its actions is one the class needs, "
                           "and it declares no emergency_actions: it takes part without acting"}
@@ -876,9 +880,17 @@ class CapabilityMatchingResolver(BaseResolver):
                 name = str(intent.intent)
                 row = db.get_intent_class(name)
                 if row:
+                    actuators = list(row["resolution_actuators"] or [])
+                    # An intent may narrow its class's actions (context.action_types) to the ones it
+                    # means (protocol 0.5, spec §6): `control_access` asks for
+                    # lock and unlock; "secure the plant" means lock. The hub
+                    # refuses a narrowing outside the class before this runs.
+                    wanted = (intent.context or {}).get("action_types")
+                    if isinstance(wanted, list) and wanted:
+                        actuators = [a for a in actuators if a in set(wanted)]
                     return {
                         "tags":      row["resolution_tags"],
-                        "actuators": row["resolution_actuators"],
+                        "actuators": actuators,
                         "location_role": row.get("location_role", "restricts"),
                         # Which sensor types answer this intent. Empty for four
                         # of the five universals: only `alert_anomaly` is served
@@ -999,13 +1011,28 @@ class CapabilityMatchingResolver(BaseResolver):
         included_without_action: list[str] = []
         for score, device in scored:
             actions = self._build_actions_for_device(device, intent, resolution)
-            if (not actions and intent.urgency == Urgency.EMERGENCY
-                    and device.emergency_capable):
+            if (intent.urgency == Urgency.EMERGENCY and device.emergency_capable
+                    and device.emergency_actions):
+                # What the device was declared to do in an emergency takes
+                # precedence over what the class asks: an ensure_safety that asks
+                # for turn_on (for the lights) started a conveyor during a fire.
                 actions = [DeviceAction(device_id=device.device_id, action=e["action"],
                                         params=dict(e.get("params") or {}))
-                           for e in (device.emergency_actions or [])]
-                if not actions:
-                    included_without_action.append(device.device_id)
+                           for e in device.emergency_actions]
+            else:
+                # A plan never sends a device two actions that undo each other:
+                # control_access asks for lock and unlock, and a lock declaring
+                # both received both. The hub refuses such an intent unless it
+                # says which it means (or it is an emergency); this is the
+                # guarantee for every other path into the resolver.
+                clash = {t for pair in opposite_pairs(a.action for a in actions) for t in pair}
+                if clash:
+                    actions = [a for a in actions if a.action not in clash]
+            if not actions and device.emergency_capable and intent.urgency == Urgency.EMERGENCY:
+                included_without_action.append(device.device_id)
+            elif not actions and score > 0 and device.device_id not in included_without_action \
+                    and any(a.type in set(resolution.get("actuators") or []) for a in device.actuators):
+                included_without_action.append(device.device_id)
             for a in actions:
                 a.relevance_score = score
             all_actions.extend(actions)

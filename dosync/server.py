@@ -1942,7 +1942,8 @@ async def execute_intent_legacy(req: IntentRequest, auth: str = Depends(require_
 # "warning", so every rejected intent that asked for it was labelled "_invalid".
 _URGENCY_LABELS = frozenset(u.value for u in Urgency)
 _REJECTION_REASONS = ("invalid_name", "not_registered", "invalid_urgency",
-                      "unknown_location", "idempotency_conflict")
+                      "unknown_location", "idempotency_conflict",
+                      "invalid_actions", "ambiguous_actions")
 
 
 def _count_rejection(reason: str, intent_class: str, urgency: str) -> None:
@@ -2014,6 +2015,36 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
                                "acts only where context.location says, and no registered "
                                "device is there. Check the spelling, or omit location "
                                "to act on every capable device.")
+
+    # An intent may narrow its class's actions (context.action_types), and must when
+    # the class asks for actions that undo each other: control_access asks for
+    # lock and unlock, and "secure the plant" sent a lock both. Outside an
+    # emergency such an intent is refused, saying which it must choose; in an
+    # emergency the resolver never sends both (declared emergency actions, or
+    # none). Protocol 0.5, spec §6.
+    from dosync.models import opposite_pairs as _opposite_pairs
+    _cls_row = hub.db.get_intent_class(req.intent) or {}
+    _class_actions = list(_cls_row.get("resolution_actuators") or [])
+    _wanted = (req.context or {}).get("action_types")
+    if _wanted is not None:
+        if (not isinstance(_wanted, list) or not _wanted
+                or not all(isinstance(a, str) for a in _wanted)
+                or not set(_wanted) <= set(_class_actions)):
+            _count_rejection("invalid_actions", req.intent, req.urgency)
+            raise HTTPException(
+                status_code=422,
+                detail=f"context.action_types must be a non-empty subset of the actions "
+                       f"'{req.intent}' asks for: {sorted(_class_actions)}")
+    _effective = set(_wanted) if _wanted else set(_class_actions)
+    _pairs = _opposite_pairs(_effective)
+    if _pairs and urgency != Urgency.EMERGENCY:
+        _count_rejection("ambiguous_actions", req.intent, req.urgency)
+        raise HTTPException(
+            status_code=422,
+            detail=f"'{req.intent}' asks for actions that undo each other: "
+                   + ", ".join(f"{a}/{b}" for a, b in _pairs)
+                   + ". Say which you mean with context.action_types, e.g. "
+                   f"{{\"action_types\": [\"{_pairs[0][0]}\"]}}.")
 
     # ── Idempotency check (protocol v0.2, opt-in) ─────────────────────────
     # If the client supplied an idempotency key, deduplicate against prior

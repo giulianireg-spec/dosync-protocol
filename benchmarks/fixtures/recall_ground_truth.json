@@ -1,5 +1,5 @@
 {
-  "_comment": "Expected devices per universal intent for the fixture registry. wiz-mistagged-01 IS expected for ensure_safety (it is physically an emergency-capable light) \u2014 the benchmark must report it as a miss caused by its tags.",
+  "_comment": "Expected devices per universal intent for the fixture registry. wiz-mistagged-01 IS expected for ensure_safety (it is physically an emergency-capable light) — the benchmark must report it as a miss caused by its tags.",
   "cases": [
     {
       "intent": "ensure_safety",
@@ -29,10 +29,15 @@
     {
       "intent": "control_access",
       "urgency": "alert",
-      "context": {},
+      "context": {
+        "action_types": [
+          "lock"
+        ]
+      },
       "expected": [
         "lock-front-01"
-      ]
+      ],
+      "_note_direction": "Protocol 0.5 rev. 2026-10-02: control_access asks for lock and unlock, so an intent must say which (context.action_types). This ground truth is per device: the lock acts either way, so the direction chosen here cannot change any result. 'lock' is used."
     },
     {
       "intent": "report_status",
@@ -42,7 +47,7 @@
         "pir-hall-01",
         "dht-living-01"
       ],
-      "_note": "F4a: read-only status query \u2014 the plan reads sensors; actuators never fire"
+      "_note": "F4a: read-only status query — the plan reads sensors; actuators never fire"
     },
     {
       "intent": "notify",

@@ -50,10 +50,15 @@
     {
       "intent": "control_access",
       "urgency": "alert",
-      "context": {},
+      "context": {
+        "action_types": [
+          "lock"
+        ]
+      },
       "expected": [
         "lock-or3-door"
-      ]
+      ],
+      "_note_direction": "Protocol 0.5 rev. 2026-10-02: control_access asks for lock and unlock, so an intent must say which (context.action_types). This ground truth is per device: the lock acts either way, so the direction chosen here cannot change any result. 'lock' is used."
     }
   ],
   "intent_classes": {

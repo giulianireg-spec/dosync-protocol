@@ -51,11 +51,17 @@ def test_tag_matched_device_resolves_without_emergency():
                    ActuatorSpec(id="u", type="unlock", description="")],
         emergency_capable=False, cert_tier="standard",
     ))
+    # control_access asks for lock AND unlock; since 2026-10-02 an intent says
+    # which it means, and a plan never sends a device both.
     intent = Intent(intent_id="t", intent=IntentClass("control_access"),
-                    urgency=Urgency.ALERT, context={})
+                    urgency=Urgency.ALERT, context={"action_types": ["lock"]})
     plan = hub.resolver.resolve(intent)
-    assert any(a.device_id == "lock-1" for a in plan.actions), (
+    assert [a.action for a in plan.actions if a.device_id == "lock-1"] == ["lock"], (
         "lock did not resolve for control_access — resolution wiring broken")
+    unnarrowed = hub.resolver.resolve(Intent(intent_id="u", intent=IntentClass("control_access"),
+                                             urgency=Urgency.ALERT, context={}))
+    assert not [a for a in unnarrowed.actions if a.device_id == "lock-1"], \
+        "a lock received lock and unlock at once"
 
 
 def test_external_resolver_and_its_fallback_are_wired():

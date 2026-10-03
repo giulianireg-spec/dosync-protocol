@@ -9,7 +9,7 @@ Tiers:
   basic     (10 tests) — connectivity, authentication, device manifest
   standard  (33 tests) — protocol conformance, events, health, version headers, manifest privacy, intent lifecycle
   emergency (44 tests) — everything in standard + emergency override, policy engine, audit log integrity, firmware re-registration
-  conformance (66 tests) — everything in emergency + protocol features through 0.5: sensor kind, policy provenance,
+  conformance (68 tests) — everything in emergency + protocol features through 0.5: sensor kind, policy provenance,
                            chain archiving, adapters, discovery, and where a device is and what a location in an intent does
 
 Two testing modes:
@@ -261,7 +261,7 @@ class CertReport:
         # basic said 12 while the tier runs B01-B10: a basic certification was
         # always "incomplete" and could never certify. Nothing noticed because
         # nothing ran the suite; CI now certifies every tier on its own.
-        "basic": 10, "standard": 33, "emergency": 44, "conformance": 66,
+        "basic": 10, "standard": 33, "emergency": 44, "conformance": 68,
     }
 
     def finalize(self):
@@ -512,7 +512,10 @@ def run_standard(base: str, report: CertReport):
     status4, body4 = fire_intent_conformance(base, {
         "intent":  "control_access",
         "urgency": "alert",
-        "context": {"trigger": "certification_test"},
+        # control_access asks for lock and unlock; an intent says which it means
+        # (protocol 0.5 rev. 2026-10-02). Before this, S4 asked a hub's locks
+        # for both at once.
+        "context": {"trigger": "certification_test", "action_types": ["lock"]},
     })
     report.add(TestResult(
         "S04  Hub accepts alert urgency (control_access [alert])",
@@ -922,7 +925,7 @@ def run_emergency(base: str, report: CertReport):
     ))
 
 
-# ── TIER CONFORMANCE — protocol features through 0.5 (cumulative: 66) ─────────
+# ── TIER CONFORMANCE — protocol features through 0.5 (cumulative: 68) ─────────
 # Everything shipped in the 0.4 cycle (SENSOR-KIND, AUDIT-PROVENANCE,
 # EMERGENCY-UNSAT-ESCALATION, AUDIT-ARCHIVE) had unit tests but no CONFORMANCE
 # coverage — nothing proved, over the wire against a running hub, that the
@@ -1088,7 +1091,7 @@ def run_conformance(base: str, report: CertReport):
     run_conformance_05(base, report)
 
 
-# C13-C22 cover protocol 0.5 (spec §10.5): where a device is, and what a
+# C13-C24 cover protocol 0.5 (spec §10.5): where a device is, and what a
 # location in an intent's context does. The suite builds its own scene -- two
 # probe devices and two probe intent classes, prefixed certify- -- and removes it
 # whatever happens. It verifies through explain(), which executes nothing,
@@ -1098,6 +1101,7 @@ _PROBE_ACTION = "certify_probe"
 _PROBE_IN = "certify-probe-cell-2"      # placed at certify-site/line-3/cell-2
 _PROBE_OUT = "certify-probe-line-30"    # placed at certify-site/line-30/cell-1
 _PROBE_LOCK = "certify-probe-lock"      # emergency-capable, lock and unlock (C22)
+_PROBE_CONVEYOR = "certify-probe-conveyor"  # emergency-capable, declares stop (C24)
 _CLASS_RESTRICTS = "certify_location_restricts"
 _CLASS_INFORMS = "certify_location_informs"
 
@@ -1240,8 +1244,36 @@ def run_conformance_05(base: str, report: CertReport):
             and after.get("emergency_actions") == ["unlock"],
             f"undeclared: {'no action' if before.get('included_without_action') else before}; "
             f"lock+unlock → HTTP {c_st}; declared: {after.get('emergency_actions')}"))
+        # C23. An intent whose class asks for opposite actions must say which it
+        # means; outside an emergency the hub refuses it before executing
+        # anything. Nothing is fired: both requests are refused.
+        a_st, a_body = request("POST", f"{base}/v1/intent/async",
+                               {"intent": "control_access", "urgency": "alert", "context": {}})
+        i_st, _ = request("POST", f"{base}/v1/intent/async",
+                          {"intent": "control_access", "urgency": "alert",
+                           "context": {"action_types": ["certify-no-such-action"]}})
+        report.add(TestResult(
+            "C23  An intent asking for opposite actions must say which (422)",
+            a_st == 422 and "action_types" in str(a_body) and i_st == 422,
+            f"ambiguous → HTTP {a_st}; outside the class → HTTP {i_st}"))
+
+        # C24. In an emergency, what a device declared comes first: a conveyor
+        # declared to stop is not turned on by a class that asks for turn_on.
+        conveyor = _probe_device(_PROBE_CONVEYOR)
+        conveyor.update({"emergency_capable": True, "tags": ["certify-probe"],
+                         "emergency_actions": [{"action": "stop"}],
+                         "actuators": [{"id": "turn_on", "type": "turn_on", "description": "Start"},
+                                       {"id": "stop", "type": "stop", "description": "Stop"}]})
+        request("POST", f"{base}/v1/devices/register", conveyor)
+        st, body = request("GET", f"{base}/v1/intents/ensure_safety/explain?urgency=emergency")
+        entry = next((d for d in (body.get("included", []) if st == 200 else [])
+                      if d.get("device_id") == _PROBE_CONVEYOR), {})
+        report.add(TestResult(
+            "C24  In an emergency a device's declared actions come first",
+            entry.get("emergency_actions") == ["stop"],
+            f"explain reports {entry.get('emergency_actions') or entry or 'nothing'}"))
     finally:
-        for did in (_PROBE_IN, _PROBE_OUT, _PROBE_LOCK):
+        for did in (_PROBE_IN, _PROBE_OUT, _PROBE_LOCK, _PROBE_CONVEYOR):
             request("DELETE", f"{base}/v1/devices/{did}")
         for name in (_CLASS_RESTRICTS, _CLASS_INFORMS):
             request("DELETE", f"{base}/v1/intent-classes/{name}")
@@ -1269,7 +1301,7 @@ Tier test counts:
   basic      10 tests  — connectivity, auth, registration, manifest
   standard   33 tests  — + intents, events, health, explainability, version headers, intent lifecycle
   emergency  44 tests  — + emergency override, audit log integrity, firmware re-registration
-  conformance 66 tests — + protocol features through 0.5: sensor-kind, policy provenance, chain archiving,
+  conformance 68 tests — + protocol features through 0.5: sensor-kind, policy provenance, chain archiving,
                          device locations and location-restricted intents
         """,
     )

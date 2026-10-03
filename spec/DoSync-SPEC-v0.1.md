@@ -1112,10 +1112,13 @@ Before `v1.0`, a MINOR increment may also change what existing behavior means, a
 2. **A location restricts.** When `context.location` is present and the intent class declares `location_role: "restricts"` (the default), only devices at that location act — in an `emergency` too, including the force-inclusion of emergency-capable devices. Under `0.4` a location only added to a device's score and every capable device acted. A class whose location only says where something happened declares `"informs"`; among the universal classes, `alert_anomaly`, `notify` and `ensure_safety` do.
 3. **An unknown location is refused, except in an emergency.** A restricting location that no registered device is at is refused (`422`, counted as `unknown_location`). An `emergency` is never refused for its location: it acts as if no location were given, and the hub records `emergency_location_not_found`.
 4. **An emergency-capable device does what it declared, never everything.** At `emergency` urgency, a device with `emergency_capable` that has no action the class needs performs its `emergency_actions` — a subset of its own actuators, none repeated and none undoing another — and nothing else. Declaring none, it takes part without acting, and the plan, `explain` and the audit log report it (`included_without_action`). Until protocol 0.5 rev. 2026-09-30 such a device fell back to its full capability set: an emergency-capable lock received `lock` and `unlock` at once. What a device must do in an emergency depends on the deployment, so a value the operator sets takes precedence over the device's own.
+5. **In an emergency, what a device declared comes first.** An emergency-capable device that declares `emergency_actions` performs exactly those in an emergency, even when the class asks for other actions it also declares: an `ensure_safety` that asks for `turn_on` (meant for lights) started a conveyor during a fire (rev. 2026-10-02). A device that declares none performs the class's actions, and `explain` warns about it.
+6. **A plan never undoes itself.** No plan sends one device two actions that undo each other (`lock`/`unlock`, `turn_on`/`turn_off`, `open`/`close`, `start`/`stop`, `arm`/`disarm`). An intent may narrow its class to the actions it means with `context.action_types` (a non-empty subset of the class's actions; otherwise `422`, `invalid_actions`), and must when the class asks for both actions of such a pair: `control_access` asks for `lock` and `unlock`. Outside an emergency, such an intent is refused (`422`, `ambiguous_actions`, naming the pair); in an emergency it is never refused, and a device left with both does its declared emergency actions or none (rev. 2026-10-02).
 
 **Additions**
 
 - Intent classes: `location_role` (`"restricts"` | `"informs"`), accepted and listed by `/v1/intent-classes`.
+- Intent context: `action_types`, narrowing the class's actions (rule 6 above). Refusal reasons `invalid_actions` and `ambiguous_actions` in `/v1/status`.
 - Capability manifest: `emergency_actions` (set by the device, or — taking precedence — by the operator with `PATCH /v1/devices/{id}` or in a declarative file; recorded as `emergency_actions_changed`).
 - Capability manifest: `location`, a path set by the operator (`PATCH /v1/devices/{id}`, adoption, or a declarative file) and never changed by a device re-registering itself. A place contains everything below it, by whole segment.
 - `PATCH /v1/devices/{id}`: takes `location`; `device_name` is no longer required; `409` when the device's declarative file declares its location.
@@ -1140,6 +1143,7 @@ Before `v1.0`, a MINOR increment may also change what existing behavior means, a
 - Expect `422` with reason `unknown_location` for a restricting location no device is at. Locations are compared exactly and are case-sensitive.
 - Send `location` instead of `room`, and read `members_present` instead of `members_home`.
 - An emergency-capable device that relied on firing every capability in an emergency now does nothing until its `emergency_actions` are declared: declare what it must do (for example `unlock` for an evacuation door, `stop` for a conveyor).
+- An intent of a class that asks for opposite actions (`control_access`) must say which it means — `"context": {"action_types": ["lock"]}` — or it is refused outside an emergency.
 
 **Migrating an implementation**
 

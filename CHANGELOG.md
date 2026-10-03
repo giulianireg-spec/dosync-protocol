@@ -10,6 +10,36 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **A plan never undoes itself, and in an emergency what a device declared
+  comes first.** Found by comparing the governed hub with an AI agent that
+  chooses devices itself (2026-10-01): asked to "secure access to the plant",
+  the hub's `control_access` plan sent the cell door `lock` and `unlock` at
+  once and unlocked a press; asked to keep people safe in a plant fire, its
+  `ensure_safety` plan turned a conveyor on, because the class asks for
+  `turn_on` (meant for lights). The agent did neither. Device-level metrics
+  could not see either defect: the right devices acted, with the wrong actions.
+  - No plan sends a device two opposite actions (`lock`/`unlock`,
+    `turn_on`/`turn_off`, `open`/`close`, `start`/`stop`, `arm`/`disarm`). An
+    intent narrows its class with `context.action_types`, and must when the
+    class asks for both actions of a pair; outside an emergency the hub refuses
+    it with `422 ambiguous_actions`, naming the pair and the fix (an action
+    outside the class is `422 invalid_actions`). In an emergency it is never
+    refused, and a device left with both does its declared emergency actions or
+    none. The MCP intent tool takes `action_types`.
+  - At emergency urgency, an emergency-capable device that declares
+    `emergency_actions` performs exactly those, even when the class asks for
+    other actions it declares. One that declares none still performs the class's
+    actions, and `explain` now warns about it.
+  - Spec §6 rules 5 and 6, §10.5 (with migration), the resolver specification;
+    conformance checks C23 and C24 (68 checks). S04 now says which action its
+    `control_access` means -- it asked a hub's locks for both.
+  - The evaluation corpora's `control_access` scenarios state a direction. Their
+    ground truth is per device, so the lock acts either way and the choice cannot
+    change a result; the synthetic industrial F1 rises from 0.85 to 0.92 because
+    the press is no longer unlocked. `tools/resolver_baselines.py` passed every
+    scenario an empty context, hiding its place and now its direction.
+
 ### Added
 - **The `dosync:` vocabulary is published** at its namespace,
   https://dosync.dev/ns/governance# -- `ns/governance.html`, one anchored

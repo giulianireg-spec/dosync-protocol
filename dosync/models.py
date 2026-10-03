@@ -207,6 +207,12 @@ OPPOSITE_ACTIONS = (frozenset({"lock", "unlock"}), frozenset({"turn_on", "turn_o
                     frozenset({"arm", "disarm"}))
 
 
+def opposite_pairs(action_types) -> list:
+    """The pairs of OPPOSITE_ACTIONS that are both present in `action_types`."""
+    present = set(action_types)
+    return [tuple(sorted(p)) for p in OPPOSITE_ACTIONS if p <= present]
+
+
 def normalize_emergency_actions(raw, actuator_types) -> list:
     """Validate what a device does in an emergency (protocol 0.5, spec §6).
 

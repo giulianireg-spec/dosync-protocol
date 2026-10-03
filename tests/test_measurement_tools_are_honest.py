@@ -52,9 +52,13 @@ CORPORA = {
     # Most of the gain is not the scoring gate — it is candidate selection. The
     # gate alone moved these to 0.66 and 0.65, because a tag index upstream had
     # already decided who would be scored at all.
+    # Updated 2 October, with the change that moved it: 0.85 -> 0.92. An intent
+    # must now say which of control_access's opposite actions it means; with
+    # action_types ["lock"] the plan locks the cell door and no longer unlocks
+    # the press, which it did alongside a lock+unlock on the door.
     "industrial": (REPO / "benchmarks/corpus/industrial_registry.json",
                    REPO / "benchmarks/corpus/industrial_ground_truth.json",
-                   0.85),
+                   0.92),
     "clinical":   (REPO / "benchmarks/corpus/clinical_registry.json",
                    REPO / "benchmarks/corpus/clinical_ground_truth.json",
                    0.83),

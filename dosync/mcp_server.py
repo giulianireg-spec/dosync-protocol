@@ -234,6 +234,14 @@ async def list_tools() -> list[types.Tool]:
                         "type": "string",
                         "description": "Message to include in notifications",
                     },
+                    "action_types": {
+                        "type": "array", "items": {"type": "string"},
+                        "description": (
+                            "Optional: the subset of the class's actions you mean. "
+                            "Required when the class asks for actions that undo each "
+                            "other (e.g. lock and unlock): the hub refuses the intent "
+                            "until you say which."),
+                    },
                     "location": {
                         "type": "string",
                         "description": (
@@ -482,6 +490,8 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
         # Merge the convenience fields (message, location) into context for backward
         # compatibility, without overwriting anything the AI put in `context`.
+        if arguments.get("action_types") and "action_types" not in ctx:
+            ctx["action_types"] = list(arguments["action_types"])
         for k, v in (("message", message), ("location", location)):
             if v and k not in ctx:
                 ctx[k] = v

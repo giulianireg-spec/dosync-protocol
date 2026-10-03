@@ -139,7 +139,10 @@ def resolve_llm(hub, intent_name: str, urgency: str) -> set[str]:
 def _evaluate(chooser, hub, cases) -> tuple[float, float, float]:
     ps, rs, fs = [], [], []
     for case in cases:
-        selected = chooser(hub, case["intent"], case.get("urgency", "info"))
+        # The scenario's context (a place, the actions it means) is part of the
+        # intent. It was passed as {} to every regime, which went unnoticed while
+        # no corpus carried one.
+        selected = chooser(hub, case["intent"], case.get("urgency", "info"), case.get("context") or {})
         expected = set(case["expected"])
         tp = len(selected & expected)
         p = tp / len(selected) if selected else (1.0 if not expected else 0.0)
@@ -150,12 +153,12 @@ def _evaluate(chooser, hub, cases) -> tuple[float, float, float]:
     return sum(ps) / n, sum(rs) / n, sum(fs) / n
 
 
-def _dosync(hub, intent_name: str, urgency: str) -> set[str]:
+def _dosync(hub, intent_name: str, urgency: str, context: dict | None = None) -> set[str]:
     plan = hub.resolver.resolve(Intent(
         intent_id=f"bl-{intent_name}",
         intent=IntentClass(intent_name),
         urgency=Urgency(urgency),
-        context={},
+        context=dict(context or {}),
     ))
     return {a.device_id for a in plan.actions}
 
