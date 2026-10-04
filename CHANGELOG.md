@@ -35,8 +35,9 @@ and the hub governs identically from them. Certification grows to 69 checks.
   second agent comparison and fixed afterwards, **not re-measured**: asked for a
   status report in the governed direct mode, the agent sent
   `proposed_actions: []`, which the hub refused as malformed, so every sensor
-  read it meant was lost (scenarios R2, R4, I4 and N10). It was the only recall
-  loss in that mode the hub caused. An empty list now leaves the intent to be
+  read it meant was lost (scenarios R4, I4 and N10; it also sent one in I3, which
+  needed none -- corrected 2026-10-03: this entry first listed R2, where the agent
+  simply proposed no reads). It was the only recall loss in that mode the hub caused. An empty list now leaves the intent to be
   resolved as usual -- including the ambiguity rule, which applies again. The
   laboratory's port of the hub changes with it, and the parity test holds them
   equal.
