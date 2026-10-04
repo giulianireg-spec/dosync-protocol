@@ -81,11 +81,16 @@ def test_spec_section_exists():
         "spec §6.4.1 is missing — the resolution contract is unspecified again"
 
 
-def test_spec_lists_all_five_universals():
+def test_spec_lists_every_universal_the_hub_seeds(tmp_path):
+    """Compared with the seed, not with a number: five became six on
+    2026-10-05 (operate_device), and a literal would have to be found and
+    changed every time."""
     contract = _parse_spec_contract()
-    assert set(contract) == {"ensure_safety", "alert_anomaly", "control_access",
-                             "report_status", "notify"}, \
-        f"§6.4.1 does not list exactly the five universals: {sorted(contract)}"
+    seeded = set(_seeded_contract(tmp_path))
+    assert {"ensure_safety", "alert_anomaly", "control_access", "report_status",
+             "notify", "operate_device"} <= seeded
+    assert set(contract) == seeded, \
+        f"§6.4.1 lists {sorted(contract)}, a hub seeds {sorted(seeded)}"
 
 
 def test_spec_matches_implementation(tmp_path):

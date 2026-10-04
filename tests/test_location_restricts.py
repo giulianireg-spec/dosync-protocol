@@ -125,7 +125,7 @@ def test_the_universal_classes_declare_their_location_role():
     roles = {c["name"]: c["location_role"] for c in db.list_intent_classes()}
     assert roles == {"ensure_safety": "informs", "alert_anomaly": "informs",
                      "control_access": "restricts", "report_status": "restricts",
-                     "notify": "informs"}
+                     "notify": "informs", "operate_device": "restricts"}
 
 
 def test_the_api_takes_validates_and_keeps_location_role():

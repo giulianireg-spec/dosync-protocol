@@ -677,7 +677,8 @@ def run_standard(base: str, report: CertReport):
 
     # S16. Intent classes endpoint lists the five universal intents
     s16_status, s16_body = request("GET", f"{base}/v1/intent-classes")
-    UNIVERSAL = {"ensure_safety", "alert_anomaly", "control_access", "report_status", "notify"}
+    UNIVERSAL = {"ensure_safety", "alert_anomaly", "control_access", "report_status", "notify",
+                 "operate_device"}
     if s16_status == 200:
         registered = {ic["name"] for ic in s16_body.get("intent_classes", [])}
         missing = UNIVERSAL - registered

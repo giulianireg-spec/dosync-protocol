@@ -319,7 +319,7 @@ Only `emergency` triggers the emergency override path — bypassing policy const
 
 ### 6.4 Universal intent classes
 
-Five intent classes are defined at the protocol level and seeded into every DoSync hub at initialization. They are valid in any physical environment regardless of domain:
+Six intent classes are defined at the protocol level and seeded into every DoSync hub at initialization. They are valid in any physical environment regardless of domain:
 
 | Intent class | Urgency | Description |
 |---|---|---|
@@ -328,6 +328,7 @@ Five intent classes are defined at the protocol level and seeded into every DoSy
 | `control_access` | `alert` | Manage physical access to a space |
 | `report_status` | `info` | Generate a status report of the environment |
 | `notify` | `info` | Push information to any target |
+| `operate_device` | `info` | Operate named devices directly — any action they declare; propose the actions |
 
 #### 6.4.1 Resolution contract (normative)
 
@@ -345,6 +346,7 @@ allow.
 | `control_access` | `lock` | `lock`, `unlock` |
 | `report_status` | *(none)* | *(none)* |
 | `notify` | `communication`, `notification`, `display` | `notify`, `display`, `call` |
+| `operate_device` | *(none)* | `*` — any action the device declares; acts only on proposed actions (§6 rules 7–8) |
 
 Two properties of this table are normative and easy to miss:
 
@@ -1129,12 +1131,13 @@ Before `v1.0`, a MINOR increment may also change what existing behavior means, a
 5. **In an emergency, what a device declared comes first.** An emergency-capable device that declares `emergency_actions` performs exactly those in an emergency, even when the class asks for other actions it also declares: an `ensure_safety` that asks for `turn_on` (meant for lights) started a conveyor during a fire (rev. 2026-10-02). A device that declares none performs the class's actions, and `explain` warns about it.
 6. **A plan never undoes itself.** No plan sends one device two actions that undo each other (`lock`/`unlock`, `turn_on`/`turn_off`, `open`/`close`, `start`/`stop`, `arm`/`disarm`). An intent may narrow its class to the actions it means with `context.action_types` (a non-empty subset of the class's actions; otherwise `422`, `invalid_actions`), and must when the class asks for both actions of such a pair: `control_access` asks for `lock` and `unlock`. Outside an emergency, such an intent is refused (`422`, `ambiguous_actions`, naming the pair); in an emergency it is never refused, and a device left with both does its declared emergency actions or none (rev. 2026-10-02).
 7. **Governed direct mode: the agent proposes, the hub guarantees.** An intent may carry `context.proposed_actions`, a list of `{device_id, action, params?}` the agent chose itself. The hub then validates instead of resolving: each proposal runs only if the device exists and declares the action (`read_sensors` for a device with sensors), the intent's class allows the action (an intent bounds what the agent may do: no `unlock` inside a `notify`; a class that asks for sensors, or for no actuators, allows `read_sensors`), the device is at a place the class restricts to, it is not paired with an opposite action on the same device, and — in an emergency — it is one of the device's declared emergency actions when it declared any. Every other proposal is refused with its reason (`unknown_device`, `not_declared`, `outside_class`, `outside_place`, `opposite_actions`, `not_its_emergency_action`), never executed, and reported in the result and the audit log as `refused_proposals`. What passes goes on through parameter validation, the operator's policies, execution and the audit log exactly like a resolved plan. Since proposals name their direction, the ambiguity rule (6) does not refuse them. A malformed list is `422`, `invalid_proposals`; an empty list means no proposals, and the hub resolves the intent as usual (rev. 2026-10-03).
-8. **Direct control is not an agent's path.** The guarantees above bind intents. Direct control of one device (§ on the direct action endpoint) carries no intent class and no place, so a hub opens it only as its operator sets it — closed by default, or only for an operator credential never given to an agent, or open for development — and reports the setting in its status. When open, a device still performs only actions it declares, and in an emergency only its declared emergency actions. An agent that wants to choose devices fires an intent with proposed actions (rule 7) (rev. 2026-10-05).
+8. **Direct control is not an agent's path.** The guarantees above bind intents. Direct control of one device (§ on the direct action endpoint) carries no intent class and no place, so a hub opens it only as its operator sets it — closed by default, or only for an operator credential never given to an agent, or open for development — and reports the setting in its status. When open, a device still performs only actions it declares, and in an emergency only its declared emergency actions. An agent that wants to choose devices fires an intent with proposed actions (rule 7); to operate a named device it fires the universal class `operate_device`, which grants any action the device declares, acts only on the actions proposed (`422 proposals_required` otherwise), and keeps every guarantee but class authority — which an operator narrows or blocks by policy (rev. 2026-10-05).
 
 **Additions**
 
 - Intent classes: `location_role` (`"restricts"` | `"informs"`), accepted and listed by `/v1/intent-classes`.
-- Direct control (rule 8 above) is closed by default: a client that called `POST /v1/device/action` must fire an intent with `proposed_actions`, or its operator must open the path (`operator` with an operator credential, or `on` for development). `/v1/status` gains `direct_control`; audit event `direct_action_refused`.
+- Universal class `operate_device` (sixth; reconciled into existing hubs at start-up). Refusal reason `proposals_required`.
+- Direct control (rule 8 above) is closed by default: a client that called `POST /v1/device/action` fires `operate_device` with `proposed_actions` instead, or its operator opens the path (`operator` with an operator credential, or `on` for development). `/v1/status` gains `direct_control`; audit event `direct_action_refused`.
 - Intent context: `proposed_actions` — governed direct mode (rule 7 above); the result and the `intent_executed` audit entry gain `refused_proposals`. Refusal reason `invalid_proposals`.
 - Intent context: `action_types`, narrowing the class's actions (rule 6 above). Refusal reasons `invalid_actions` and `ambiguous_actions` in `/v1/status`.
 - Capability manifest: `emergency_actions` (set by the device, or — taking precedence — by the operator with `PATCH /v1/devices/{id}` or in a declarative file; recorded as `emergency_actions_changed`).

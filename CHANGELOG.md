@@ -23,9 +23,19 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   credential never given to an agent) or `on` (development); `/v1/status`
   reports it. When open, a device still performs only actions it declares (`422
   not_declared`, which the path never checked) and, in an emergency, only its
-  declared emergency actions. The MCP per-device tool is offered only with
-  `DOSYNC_MCP_DIRECT_CONTROL=1`. Conformance check C26 (70 checks).
-  **Migration:** a client of the direct path fires an intent with
+  declared emergency actions. Conformance check C26 (70 checks).
+- **Agents keep direct control, governed: the universal class `operate_device`.**
+  Closing the raw path left an agent unable to "turn off the hall light" unless
+  the operator had registered a class granting `turn_off`. The sixth universal
+  class grants any action a device declares and acts only on the actions the
+  agent proposes (`422 proposals_required` without them), so every guarantee
+  but class authority holds -- declared actions, place, no opposite actions,
+  declared emergency actions first, policies, audit -- and an operator narrows
+  or blocks it by policy. The MCP tool `dosync_control_device` stays, offered by
+  default, and now fires `operate_device` instead of the raw path, reporting each
+  refusal with its reason. Existing hubs gain the class at start-up. The README's
+  "What an agent can do" shows the defaults and how to change them.
+  **Migration:** a client of `POST /v1/device/action` fires `operate_device` with
   `proposed_actions`, or its operator opens the path.
 
 ## [0.8.0] — 2026-10-03

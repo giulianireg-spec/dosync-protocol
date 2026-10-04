@@ -182,17 +182,9 @@ async def _intent_property_schema() -> dict:
             "description": base_desc + " (hub not queried — the hub will validate)"}
 
 
-def _direct_control_tool_enabled() -> bool:
-    """Rule 8: direct control is not an agent's path. The per-device tool is
-    offered only when the operator opts in; the hub refuses it anyway unless
-    its own DOSYNC_DIRECT_CONTROL allows it."""
-    return os.environ.get("DOSYNC_MCP_DIRECT_CONTROL", "").strip().lower() in ("1", "true", "yes")
-
-
 @server.list_tools()
 async def list_tools() -> list[types.Tool]:
-    return [t for t in await _all_tools()
-            if t.name != "dosync_control_device" or _direct_control_tool_enabled()]
+    return await _all_tools()
 
 
 async def _all_tools() -> list[types.Tool]:
@@ -449,7 +441,10 @@ async def _all_tools() -> list[types.Tool]:
         types.Tool(
             name="dosync_control_device",
             description=(
-                "Act directly on one named device. Use this when the request "
+                "Act on one named device (or all_lights) -- governed by the hub: it "
+                "runs only if the device declares the action and the deployment's "
+                "rules allow it, and every refusal says why. "
+                "Use this when the request "
                 "names the device or the action, rather than a goal — for a "
                 "goal, fire an intent instead and let the hub resolve it. "
                 "Which actions a device accepts comes from its own capability "
@@ -856,67 +851,61 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         return [types.TextContent(type="text", text="\n".join(lines))]
 
     # ── dosync_control_device ─────────────────────────────────────────────────
-    elif name == "dosync_control_device" and not _direct_control_tool_enabled():
-        return [types.TextContent(type="text", text=(
-            "Direct device control is not offered to agents on this hub. Fire an "
-            "intent instead -- with proposed_actions to choose the devices yourself."))]
-
+    # Governed, not direct (spec §6 rules 7-8): the tool fires the universal
+    # class operate_device with the action proposed, so the hub checks it like
+    # any proposal -- declared action, place, no opposite actions, declared
+    # emergency actions, operator policies, audit. Before 2026-10-05 it called
+    # POST /v1/device/action, which passed none of the guarantees.
     elif name == "dosync_control_device":
         device_id = arguments.get("device_id")
         action    = arguments.get("action")
-        params    = {}
-        if "brightness" in arguments: params["brightness"] = arguments["brightness"]
-        if "r" in arguments:          params["r"] = arguments["r"]
-        if "g" in arguments:          params["g"] = arguments["g"]
-        if "b" in arguments:          params["b"] = arguments["b"]
-        if "kelvin" in arguments:     params["kelvin"] = arguments["kelvin"]
-        if "effect" in arguments:     params["effect"] = arguments["effect"]
+        params    = {k: arguments[k] for k in ("brightness", "r", "g", "b", "kelvin", "effect")
+                     if k in arguments}
+        if not device_id or not action:
+            return [types.TextContent(type="text", text="device_id and action are required.")]
 
-        # all_lights: get all light devices and control them
+        targets = [device_id]
         if device_id == "all_lights":
             devices_result = await hub_request("GET", "/v1/devices")
             if "error" in devices_result:
                 return [types.TextContent(type="text",
                         text=f"Error listing devices: {devices_result['error']}")]
-
-            light_devices = [
-                d["device_id"] for d in devices_result.get("devices", [])
-                # Selected on the role tag only. This used to read
-                # ["light", "wiz"] — a vendor tag, the antipattern
-                # TAG-VOCABULARY documents. Measured on the reference
-                # deployment: identical selection either way, because no device
-                # entered through the vendor tag alone.
-                if "light" in d.get("tags", [])
-            ]
-
-            if not light_devices:
+            # Selected on the role tag only (TAG-VOCABULARY: no vendor tags).
+            targets = [d["device_id"] for d in devices_result.get("devices", [])
+                       if "light" in d.get("tags", [])]
+            if not targets:
                 return [types.TextContent(type="text",
                         text="No devices tagged 'light' are registered.")]
 
-            results = []
-            for did in light_devices:
-                body = {"device_id": did, "action": action, "params": params}
-                r = await hub_request("POST", "/v1/device/action", body)
-                icon = "✓" if r.get("success") and not r.get("error") else "✗"
-                results.append(f"  {icon} {did}")
-
-            icon_on = "✅" if action == "turn_on" else "🌑"
-            text  = f"{icon_on} {action} on {len(light_devices)} devices:\n"
-            text += "\n".join(results)
-            return [types.TextContent(type="text", text=text)]
-
-        # Single device
-        body   = {"device_id": device_id, "action": action, "params": params}
-        result = await hub_request("POST", "/v1/device/action", body)
-
-        if result.get("error"):
-            text = f"❌ Error: {result['error']}"
-        elif result.get("success"):
-            text = f"✅ {device_id}: {action} executed"
-        else:
-            text = f"⚠️ {device_id}: {action} failed"
-
-        return [types.TextContent(type="text", text=text)]
+        body = {"intent": "operate_device", "urgency": "info",
+                "context": {"source": "mcp_control_device",
+                            "proposed_actions": [{"device_id": t, "action": action, "params": params}
+                                                 for t in targets]}}
+        import time as _mcp_time
+        fired = await hub_request("POST", "/v1/intent/async", body)
+        if "error" in fired or not fired.get("intent_id"):
+            return [types.TextContent(type="text",
+                    text=f"❌ The hub refused it: {fired.get('detail') or fired.get('error')}")]
+        deadline = _mcp_time.monotonic() + MCP_DEFAULT_TIMEOUT
+        result = None
+        while _mcp_time.monotonic() < deadline:
+            await asyncio.sleep(POLL_INTERVAL)
+            poll = await hub_request("GET", f"/v1/intent/{fired['intent_id']}")
+            if "error" in poll:
+                break
+            if poll.get("status") != "pending":
+                result = poll
+                break
+        if result is None:
+            return [types.TextContent(type="text",
+                    text=f"⏳ Still running; check intent {fired['intent_id']}.")]
+        done = [r for r in result.get("results", []) if r.get("success")]
+        failed = [r for r in result.get("results", []) if not r.get("success")]
+        refused = result.get("refused_proposals") or []
+        lines = [f"✅ {r.get('device_id')}: {r.get('action', action)}" for r in done]
+        lines += [f"⚠️ {r.get('device_id')}: {action} failed" for r in failed]
+        lines += [f"⛔ {r['device_id']}: {r['action']} refused by the hub ({r['reason']})" for r in refused]
+        return [types.TextContent(type="text", text="\n".join(lines) or "Nothing ran.")]
 
     else:
         return [types.TextContent(

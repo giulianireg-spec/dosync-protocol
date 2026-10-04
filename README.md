@@ -886,6 +886,44 @@ the other end.
 
 ---
 
+### What an agent can do — and how to change it
+
+Out of the box, an agent connected through MCP can do three things:
+
+- **Pursue a goal** — `dosync_fire_intent` with a class (`ensure_safety`,
+  `notify`, … or one your deployment registers) and let the hub choose the
+  devices.
+- **Choose the devices itself** — the same tool with `proposed_actions`; the
+  hub runs only the proposals that pass its rules.
+- **Operate a named device** — `dosync_control_device`: *"turn off the hall
+  light"*, *"stop line 2"*, *"fly the drone to these coordinates"*. It fires the
+  universal class `operate_device`, which grants any action the device declares,
+  so nothing has to be configured first.
+
+All three are checked by the hub before anything moves. The device must declare
+the action; a place the agent names confines it; no device receives two
+opposite actions (`lock`/`unlock`, `turn_on`/`turn_off`, …); in an emergency, a
+device that declared its emergency actions does only those; your policies
+apply; and every action — and every refusal, with its reason — is in the audit
+log.
+
+What is **not** narrowed by default is *authority*: `operate_device` grants any
+action a device declares. You decide how much of that an agent gets:
+
+| You want | Do this |
+|---|---|
+| Agents to act only through goals you defined | Block the class in your policy file: `{"type": "block_intent", "intent_classes": ["operate_device"], "reason": "Agents act through our goals"}` |
+| Agents to keep their hands off some devices | `{"type": "device_exclusion", "intent_classes": ["operate_device"], "excluded_device_ids": ["front-door-lock"]}` |
+| Your own scripts to call one device with no intent around it | `DOSYNC_DIRECT_CONTROL=operator` and `DOSYNC_OPERATOR_TOKEN=<secret>`; send it as `X-DoSync-Operator-Token`. **Never give this token to an agent.** |
+| The raw path open, for development | `DOSYNC_DIRECT_CONTROL=on` — the hub says so in `/v1/status` |
+
+(Policy files are JSON with `"version": 1` and a `"policies"` list, loaded from
+`DOSYNC_POLICIES`.)
+
+The raw HTTP path, `POST /v1/device/action`, is **closed by default**. It names
+a device and an action with no intent around it, so the hub's guarantees cannot
+apply to it; it exists for an operator, not an agent.
+
 ## What's built today
 
 | Component | Status |

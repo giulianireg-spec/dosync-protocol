@@ -203,6 +203,7 @@ The universal intent classes, exactly as a hub seeds them at initialization. A d
 | `control_access` | alert | restricts | `lock` | `lock`, `unlock` | — |
 | `report_status` | info | restricts | — | — | — |
 | `notify` | info | informs | `communication`, `notification`, `display` | `notify`, `display`, `call` | — |
+| `operate_device` | info | restricts | — | `*` (any action the device declares; only the proposed ones) | — |
 
 A device takes part when it declares one of the class's actuators or sensors; the resolution tags rank it. `report_status` declares none: it reads every device that has a sensor. The Location column is the class's `location_role` (spec §10.5).
 

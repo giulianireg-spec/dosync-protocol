@@ -817,7 +817,13 @@ class CapabilityMatchingResolver(BaseResolver):
         proposals = ctx.get("proposed_actions") or []
         resolution = self._get_resolution(intent)
         class_actions = set(resolution.get("actuators") or [])
-        reads_allowed = bool(resolution.get("sensors")) or not class_actions
+        # "*" (operate_device): any action the device declares, unless the
+        # intent narrows it with action_types.
+        any_declared = "*" in class_actions
+        wanted = ctx.get("action_types")
+        if any_declared and isinstance(wanted, list) and wanted and "*" not in wanted:
+            class_actions, any_declared = set(wanted), False
+        reads_allowed = any_declared or bool(resolution.get("sensors")) or not class_actions
         location = ctx.get("location")
         restrict_to = None
         if (isinstance(location, str) and location
@@ -842,7 +848,7 @@ class CapabilityMatchingResolver(BaseResolver):
                     reason = "outside_class"
             elif action not in {a.type for a in device.actuators}:
                 reason = "not_declared"
-            elif action not in class_actions:
+            elif not any_declared and action not in class_actions:
                 reason = "outside_class"
             if reason is None and restrict_to and not self._at_location(device, restrict_to):
                 reason = "outside_place"
@@ -961,7 +967,7 @@ class CapabilityMatchingResolver(BaseResolver):
                     # lock and unlock; "secure the plant" means lock. The hub
                     # refuses a narrowing outside the class before this runs.
                     wanted = (intent.context or {}).get("action_types")
-                    if isinstance(wanted, list) and wanted:
+                    if isinstance(wanted, list) and wanted and "*" not in actuators:
                         actuators = [a for a in actuators if a in set(wanted)]
                     return {
                         "tags":      row["resolution_tags"],

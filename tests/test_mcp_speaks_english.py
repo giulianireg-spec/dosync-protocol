@@ -28,7 +28,7 @@ ALLOWED_LABELS = {
     "Cancelled by FailurePolicy", "Could not adopt", "Could not read devices",
     "Critical actions executed", "DB", "Device", "Devices",
     "Emergencies at an unknown location since start", "Error",
-    "Error listing devices", "Event", "Event received by the hub", "Integrity",
+    "Error listing devices", "Event", "The hub refused it", "Event received by the hub", "Integrity",
     "Intent ID", "Intents refused since start", "Not searched", "Occupancy",
     "Protocol", "Scan failed", "Searched", "Severity",
     "Still pending / unreachable", "Tags", "Total", "Unknown tool", "WS clients",

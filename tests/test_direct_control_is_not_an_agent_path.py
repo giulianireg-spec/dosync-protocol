@@ -79,24 +79,3 @@ def test_an_unknown_mode_is_closed(client, monkeypatch):
     monkeypatch.setenv("DOSYNC_DIRECT_CONTROL", "sometimes")
     c, _ = client
     assert _act(c).status_code == 403
-
-
-def test_the_mcp_tool_is_not_offered_unless_the_operator_opts_in(monkeypatch):
-    pytest.importorskip("mcp")
-    import asyncio
-    import dosync.mcp_server as m
-
-    async def names():
-        return {t.name for t in await m.list_tools()}
-    monkeypatch.delenv("DOSYNC_MCP_DIRECT_CONTROL", raising=False)
-    monkeypatch.setattr(m, "_all_tools", _fake_tools)
-    assert "dosync_control_device" not in asyncio.run(names())
-    monkeypatch.setenv("DOSYNC_MCP_DIRECT_CONTROL", "1")
-    assert "dosync_control_device" in asyncio.run(names())
-
-
-async def _fake_tools():
-    import mcp.types as types
-    schema = {"type": "object", "properties": {}}
-    return [types.Tool(name=n, description=n, inputSchema=schema)
-            for n in ("dosync_fire_intent", "dosync_control_device")]

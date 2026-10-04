@@ -42,7 +42,7 @@ function precheck(env, cls, urgency, ctx){
     return {reason:"unknown_location"};
   const wanted = ctx.action_types;
   if (wanted !== undefined && wanted !== null){
-    if (!Array.isArray(wanted) || !wanted.length || !wanted.every(a=>typeof a==="string") || !wanted.every(a=>c.actuators.includes(a)))
+    if (!Array.isArray(wanted) || !wanted.length || !wanted.every(a=>typeof a==="string") || !(c.actuators.includes("*") || wanted.every(a=>c.actuators.includes(a))))
       return {reason:"invalid_actions"};
   }
   if (Array.isArray(ctx.proposed_actions) && !ctx.proposed_actions.length) delete ctx.proposed_actions;  // empty = none: the hub resolves
@@ -53,7 +53,8 @@ function precheck(env, cls, urgency, ctx){
                         (p.params===undefined || (p.params && typeof p.params==="object" && !Array.isArray(p.params)))))
       return {reason:"invalid_proposals"};
   }
-  const effective = (wanted && wanted.length) ? wanted : c.actuators;
+  if (c.actuators.includes("*") && (props === undefined || props === null)) return {reason:"proposals_required"};
+  const effective = (wanted && wanted.length) ? wanted : c.actuators.filter(a=>a!=="*");
   if (oppositePairs(effective).length && urgency !== "emergency" && (props === undefined || props === null))
     return {reason:"ambiguous_actions"};
   return null;
@@ -71,9 +72,11 @@ function resolvedPlan(env, cls, urgency, ctx){
 // Governed direct mode: resolvers.py validate_proposals.
 function validateProposals(env, cls, urgency, ctx){
   const c = classOf(env, cls), devices = Object.fromEntries(envOf(env).devices.map(d=>[d.device_id,d]));
-  let classActions = c.actuators;
-  if (Array.isArray(ctx.action_types) && ctx.action_types.length) classActions = classActions.filter(a=>ctx.action_types.includes(a));
-  const classSet = new Set(classActions), readsAllowed = c.sensors.length > 0 || classSet.size === 0;
+  let classActions = c.actuators, anyDeclared = c.actuators.includes("*");
+  const wantedT = ctx.action_types;
+  if (anyDeclared && Array.isArray(wantedT) && wantedT.length && !wantedT.includes("*")) { classActions = wantedT; anyDeclared = false; }
+  else if (!anyDeclared && Array.isArray(wantedT) && wantedT.length) classActions = classActions.filter(a=>wantedT.includes(a));
+  const classSet = new Set(classActions), readsAllowed = anyDeclared || c.sensors.length > 0 || classSet.size === 0;
   const loc = ctx.location;
   const restrictTo = (typeof loc==="string" && loc && c.location_role==="restricts" && anyAt(env, loc)) ? loc : null;
   const emergency = urgency === "emergency";
@@ -86,7 +89,7 @@ function validateProposals(env, cls, urgency, ctx){
     if (!d) reason = "unknown_device";
     else if (action === "read_sensors"){ if (!d.sensors.length) reason = "not_declared"; else if (!readsAllowed) reason = "outside_class"; }
     else if (!d.actions.includes(action)) reason = "not_declared";
-    else if (!classSet.has(action)) reason = "outside_class";
+    else if (!anyDeclared && !classSet.has(action)) reason = "outside_class";
     if (!reason && restrictTo && !atPlace(d, restrictTo)) reason = "outside_place";
     if (!reason && emergency && d.emergency_capable && d.emergency_actions.length && !d.emergency_actions.includes(action)) reason = "not_its_emergency_action";
     if (reason) refused.push({device_id:id, action, reason});

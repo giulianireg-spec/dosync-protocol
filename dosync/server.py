@@ -1964,7 +1964,8 @@ async def execute_intent_legacy(req: IntentRequest, auth: str = Depends(require_
 _URGENCY_LABELS = frozenset(u.value for u in Urgency)
 _REJECTION_REASONS = ("invalid_name", "not_registered", "invalid_urgency",
                       "unknown_location", "idempotency_conflict",
-                      "invalid_actions", "ambiguous_actions", "invalid_proposals")
+                      "invalid_actions", "ambiguous_actions", "invalid_proposals",
+                      "proposals_required")
 
 
 def _count_rejection(reason: str, intent_class: str, urgency: str) -> None:
@@ -2047,10 +2048,11 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
     _cls_row = hub.db.get_intent_class(req.intent) or {}
     _class_actions = list(_cls_row.get("resolution_actuators") or [])
     _wanted = (req.context or {}).get("action_types")
+    _any_declared = "*" in _class_actions
     if _wanted is not None:
         if (not isinstance(_wanted, list) or not _wanted
                 or not all(isinstance(a, str) for a in _wanted)
-                or not set(_wanted) <= set(_class_actions)):
+                or not (_any_declared or set(_wanted) <= set(_class_actions))):
             _count_rejection("invalid_actions", req.intent, req.urgency)
             raise HTTPException(
                 status_code=422,
@@ -2078,7 +2080,16 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
                 status_code=422,
                 detail="context.proposed_actions must be a list (at most 200) of "
                        "{device_id, action, params?} objects; an empty list means none")
-    _effective = set(_wanted) if _wanted else set(_class_actions)
+    if _any_declared and _proposals is None:
+        # operate_device grants any declared action, so it acts only on what the
+        # agent names: there is nothing to resolve.
+        _count_rejection("proposals_required", req.intent, req.urgency)
+        raise HTTPException(
+            status_code=422,
+            detail=f"'{req.intent}' acts only on the actions you propose: put the device "
+                   "and action in context.proposed_actions, e.g. "
+                   '[{"device_id": "lamp-hall", "action": "turn_off"}]')
+    _effective = set(_wanted) if _wanted else ({a for a in _class_actions if a != "*"})
     _pairs = _opposite_pairs(_effective)
     if _pairs and urgency != Urgency.EMERGENCY and _proposals is None:
         _count_rejection("ambiguous_actions", req.intent, req.urgency)
