@@ -10,6 +10,26 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-10-03
+
+0.8.0 changes what the hub is for. Two comparisons with an AI agent that
+chooses devices itself (2026-10-01 and 2026-10-02, pre-registered, in
+`benchmarks/agent_eval/`) found the agent selected as well as the resolver --
+and that the resolver's own plans had sent a lock `lock` and `unlock` at once
+and started a conveyor during a fire. So the hub now also lets the agent
+choose: in the **governed direct mode** the agent proposes the actions and the
+hub guarantees them -- the device declares the action, the intent's class
+allows it, the device is in a place the class restricts to, no device gets
+opposite actions, and in an emergency only declared emergency actions run --
+refusing the rest with a reason. In the second comparison that mode let no
+action through that it should not have.
+
+The two defects are fixed for every plan: no plan undoes itself (an intent
+says which of a class's opposite actions it means, or is refused), and in an
+emergency what a device declared comes first. Devices also export to valid
+W3C WoT Thing Description 1.1 Things, with a published `dosync:` vocabulary,
+and the hub governs identically from them. Certification grows to 69 checks.
+
 ### Fixed
 - **An empty list of proposed actions means "no proposals".** Found by the
   second agent comparison and fixed afterwards, **not re-measured**: asked for a
