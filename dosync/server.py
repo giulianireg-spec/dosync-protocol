@@ -11,7 +11,7 @@ from typing import Any, Optional
 import json
 import os
 import re
-from fastapi import (Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket,
+from fastapi import (Depends, FastAPI, Header, HTTPException, Query, Request, Response, WebSocket,
                      WebSocketDisconnect)
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                PlainTextResponse)
@@ -46,6 +46,27 @@ _certify_mode = os.environ.get("DOSYNC_CERTIFY", "").lower() in ("1", "true", "y
 #   {"type": "device_exclusion", "intent_classes": ["direct_control"], ...}
 # Reserved: it is the hub that issues it, never a caller.
 DIRECT_CONTROL_INTENT_CLASS = "direct_control"
+
+# Rule 8 (spec §6): direct control is not an agent's path. The intent guarantees
+# bind intents; POST /v1/device/action names one device and one action, with no
+# class to bound its authority and no place to confine it. Agents and operators
+# hold the same hub credential, so the path is opened by a separate operator
+# credential, or not at all. Found by the third review of the IIWOT paper: the
+# bound the governed direct mode gives had a side door open by default.
+DIRECT_CONTROL_MODES = ("off", "operator", "on")
+
+
+def direct_control_mode() -> str:
+    """off (default): refused. operator: only with DOSYNC_OPERATOR_TOKEN.
+    on: open with the hub credential, for development."""
+    mode = os.environ.get("DOSYNC_DIRECT_CONTROL", "off").strip().lower()
+    return mode if mode in DIRECT_CONTROL_MODES else "off"
+
+
+def _operator_credential_ok(given) -> bool:
+    import hmac
+    expected = os.environ.get("DOSYNC_OPERATOR_TOKEN", "")
+    return bool(expected) and isinstance(given, str) and hmac.compare_digest(given, expected)
 
 
 def _resolve_db_path() -> str:
@@ -2982,6 +3003,7 @@ async def scan_devices(auth: str = Depends(require_auth)):
 async def device_action(
     req: dict,
     auth: str = Depends(require_auth),
+    x_dosync_operator_token: str | None = Header(default=None),
 ):
     """Execute one action on one named device, without semantic resolution.
 
@@ -3024,10 +3046,32 @@ async def device_action(
         raise HTTPException(status_code=422,
             detail="device_id and action are required")
 
+    def _refuse(status: int, reason: str, detail: str):
+        hub.audit_log.append({"type": "direct_action_refused", "device_id": device_id,
+                              "action": action, "reason": reason,
+                              "direct_control": direct_control_mode(),
+                              "source": "direct_action_endpoint"})
+        raise HTTPException(status_code=status, detail=f"{reason}: {detail}")
+
+    _mode = direct_control_mode()
+    if _mode == "off":
+        _refuse(403, "direct_control_disabled",
+                "direct control is disabled on this hub. Fire an intent instead -- "
+                "with context.proposed_actions to choose the devices yourself.")
+    if _mode == "operator" and not _operator_credential_ok(x_dosync_operator_token):
+        _refuse(403, "operator_credential_required",
+                "direct control on this hub needs the operator credential "
+                "(X-DoSync-Operator-Token). Agents fire intents.")
+
     device = hub.registry.get(device_id)
     if not device:
         raise HTTPException(status_code=404,
             detail=f"Device '{device_id}' not found")
+
+    # The guarantees that need no intent class hold on this path too: a device
+    # performs only actions it declares (rule 1) ...
+    if action not in {a.type for a in device.actuators}:
+        _refuse(422, "not_declared", f"'{device_id}' does not declare '{action}'")
 
     # Urgency is accepted but defaults to INFO: a direct action carries no goal
     # from which urgency could be inferred, and INFO is the safest assumption —
@@ -3037,6 +3081,13 @@ async def device_action(
     except ValueError:
         raise HTTPException(status_code=422,
             detail=f"Invalid urgency '{req.get('urgency')}'")
+
+    # ... and in an emergency, one that declared its emergency actions does only
+    # those (rule 5).
+    if (urgency == Urgency.EMERGENCY and device.emergency_capable and device.emergency_actions
+            and action not in {e["action"] for e in device.emergency_actions}):
+        _refuse(403, "not_its_emergency_action",
+                f"in an emergency '{device_id}' does only its declared emergency actions")
 
     dev_action = DeviceAction(device_id=device_id, action=action, params=params)
 
@@ -3342,6 +3393,7 @@ def get_status():
         # hub a sensor script fired an unregistered intent 1,837 times and the
         # hub counted it only in /metrics, where nobody looked.
         "intents_rejected": _rejections_by_reason(),
+        "direct_control": direct_control_mode(),
         "emergency_location_fallbacks": int(sum(
             M.emergency_location_fallbacks_total.samples().values())),
         # The hub cannot see whether checkpoints are EXPORTED — that happens

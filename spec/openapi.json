@@ -1517,17 +1517,40 @@
         "summary": "Device Action",
         "description": "Execute one action on one named device, without semantic resolution.\n\nThis is a legitimate operation — an operator or an agent that already knows\nexactly which device and which action, with no goal to resolve. What it is\nNOT is a way around the protocol.\n\nUntil 2026-07-25 this endpoint called the executor directly: no policy\nevaluation, no audit entry. A device could be actuated and leave no trace in\nthe tamper-evident chain, and a deployment policy forbidding that device\ncould be sidestepped by calling here instead of firing an intent. The MCP\nserver's device-control tool uses this path, so the bypass was available to\nthe AI itself — precisely the thing the policy engine exists to prevent.\n\nDESIGN-PRINCIPLES §\"On adapter-side fallback\" rejects bypass mechanisms for\nexactly three reasons: they break the audit chain, they break the policy\nengine, and they turn actions back into commands. That ruling was written\nabout adapters acting without the hub; it applies with equal force to an\nendpoint inside the hub that skips the same two layers.\n\nSo a direct action is now a first-class protocol operation:\n\n  * it is evaluated by the policy engine under the reserved intent class\n    `direct_control`, so a deployment can constrain it exactly as it\n    constrains any intent (e.g. an exclusion policy listing\n    `intent_classes: [\"direct_control\"]`);\n  * it ALWAYS appends to the audit chain — whether it executed, was blocked,\n    or failed — recording that it arrived by the direct path, so an auditor\n    can tell operator actions from intent-driven ones;\n  * blocked actions return 403 with the deciding policy named.",
         "operationId": "device_action_v1_device_action_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-dosync-operator-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dosync-Operator-Token"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "additionalProperties": true,
                 "type": "object",
+                "additionalProperties": true,
                 "title": "Req"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -1548,12 +1571,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/v1/hub/heartbeat": {

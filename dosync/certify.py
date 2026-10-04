@@ -9,7 +9,7 @@ Tiers:
   basic     (10 tests) — connectivity, authentication, device manifest
   standard  (33 tests) — protocol conformance, events, health, version headers, manifest privacy, intent lifecycle
   emergency (44 tests) — everything in standard + emergency override, policy engine, audit log integrity, firmware re-registration
-  conformance (69 tests) — everything in emergency + protocol features through 0.5: sensor kind, policy provenance,
+  conformance (70 tests) — everything in emergency + protocol features through 0.5: sensor kind, policy provenance,
                            chain archiving, adapters, discovery, and where a device is and what a location in an intent does
 
 Two testing modes:
@@ -261,7 +261,7 @@ class CertReport:
         # basic said 12 while the tier runs B01-B10: a basic certification was
         # always "incomplete" and could never certify. Nothing noticed because
         # nothing ran the suite; CI now certifies every tier on its own.
-        "basic": 10, "standard": 33, "emergency": 44, "conformance": 69,
+        "basic": 10, "standard": 33, "emergency": 44, "conformance": 70,
     }
 
     def finalize(self):
@@ -619,10 +619,10 @@ def run_standard(base: str, report: CertReport):
     # device, and the test had been written before a 403 was possible.
     _policy_refused = status == 403
     report.add(TestResult(
-        "S12  Direct device action is executed or refused by policy — never unguarded",
+        "S12  Direct device action is executed or refused (rule 8 or policy) — never unguarded",
         status in (200, 403, 404, 422),
         f"status={status}" + (
-            " — refused by deployment policy, which is conforming behaviour"
+            " — refused by rule 8 or by deployment policy, which is conforming behaviour"
             if _policy_refused else
             " (404/422 acceptable when the adapter is not configured)"),
     ))
@@ -925,7 +925,7 @@ def run_emergency(base: str, report: CertReport):
     ))
 
 
-# ── TIER CONFORMANCE — protocol features through 0.5 (cumulative: 69) ─────────
+# ── TIER CONFORMANCE — protocol features through 0.5 (cumulative: 70) ─────────
 # Everything shipped in the 0.4 cycle (SENSOR-KIND, AUDIT-PROVENANCE,
 # EMERGENCY-UNSAT-ESCALATION, AUDIT-ARCHIVE) had unit tests but no CONFORMANCE
 # coverage — nothing proved, over the wire against a running hub, that the
@@ -1091,7 +1091,7 @@ def run_conformance(base: str, report: CertReport):
     run_conformance_05(base, report)
 
 
-# C13-C25 cover protocol 0.5 (spec §10.5): where a device is, and what a
+# C13-C26 cover protocol 0.5 (spec §10.5): where a device is, and what a
 # location in an intent's context does. The suite builds its own scene -- two
 # probe devices and two probe intent classes, prefixed certify- -- and removes it
 # whatever happens. It verifies through explain(), which executes nothing,
@@ -1299,6 +1299,23 @@ def run_conformance_05(base: str, report: CertReport):
             got1 == want1 and got2 == {(_PROBE_LOCK, "unlock"): "outside_class"} and nothing_ran,
             f"refusals {sorted(set((got1 or {}).values()) | set((got2 or {}).values())) if isinstance(got1, dict) else got1}; "
             f"actions run: {0 if nothing_ran else 'some'}"))
+        # C26. Rule 8: direct control is not an agent's path. The hub reports its
+        # mode; closed or operator-only, an action without the operator
+        # credential is refused; declared open, an undeclared action is still
+        # refused. Nothing runs in any mode.
+        st, sbody = request("GET", f"{base}/v1/status")
+        mode = sbody.get("direct_control") if st == 200 else None
+        if mode == "on":
+            d_st, d_body = request("POST", f"{base}/v1/device/action",
+                                   {"device_id": _PROBE_LOCK, "action": "certify-fly", "urgency": "info"})
+            ok26, note = d_st == 422, f"declared open; an undeclared action → HTTP {d_st}"
+        else:
+            d_st, d_body = request("POST", f"{base}/v1/device/action",
+                                   {"device_id": _PROBE_LOCK, "action": "unlock", "urgency": "info"})
+            ok26 = (mode in ("off", "operator") and d_st == 403
+                    and any(k in str(d_body) for k in ("direct_control_disabled", "operator_credential_required")))
+            note = f"mode {mode!r}; without the operator credential → HTTP {d_st}"
+        report.add(TestResult("C26  Direct control is not open to an agent's credential (rule 8)", ok26, note))
     finally:
         for did in (_PROBE_IN, _PROBE_OUT, _PROBE_LOCK, _PROBE_CONVEYOR):
             request("DELETE", f"{base}/v1/devices/{did}")
@@ -1328,7 +1345,7 @@ Tier test counts:
   basic      10 tests  — connectivity, auth, registration, manifest
   standard   33 tests  — + intents, events, health, explainability, version headers, intent lifecycle
   emergency  44 tests  — + emergency override, audit log integrity, firmware re-registration
-  conformance 69 tests — + protocol features through 0.5: sensor-kind, policy provenance, chain archiving,
+  conformance 70 tests — + protocol features through 0.5: sensor-kind, policy provenance, chain archiving,
                          device locations and location-restricted intents
         """,
     )

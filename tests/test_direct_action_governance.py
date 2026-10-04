@@ -27,6 +27,16 @@ from dosync.models import (ActuatorSpec, CapabilityManifest, CertTier,
                            DeviceCategory)
 
 
+@pytest.fixture(autouse=True)
+def _direct_control_open(monkeypatch):
+    """These tests exercise the direct path itself, which rule 8 closes by
+    default (DOSYNC_DIRECT_CONTROL=off); here it is opened, as a development
+    hub would. tests/test_direct_control_is_not_an_agent_path.py covers the
+    default."""
+    monkeypatch.setenv("DOSYNC_DIRECT_CONTROL", "on")
+
+
+
 def _register(srv, device_id, action="unlock"):
     srv.hub.registry.register(CapabilityManifest(
         device_id=device_id, device_name=device_id, manufacturer="t", model="t",
@@ -203,7 +213,7 @@ def test_conformance_accepts_a_policy_refusal():
     from dosync import certify
 
     src = inspect.getsource(certify)
-    marker = "S12  Direct device action is executed or refused by policy"
+    marker = "S12  Direct device action is executed or refused (rule 8 or policy)"
     assert marker in src, "S12 must name refusal as an acceptable outcome"
 
     block = src[src.find(marker) - 800:src.find(marker) + 400]

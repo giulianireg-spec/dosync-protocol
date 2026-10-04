@@ -10,6 +10,24 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Direct control is no longer an agent's path (spec §6 rule 8).** Found by
+  the third review of the IIWOT paper: the intent guarantees bind intents, but
+  `POST /v1/device/action` -- offered to agents as a second MCP tool, and the
+  target of every action in an exported Thing Description -- passed only the
+  operator's policies and the audit log, and agents and operators held the same
+  credential. So the bound the governed direct mode gives had a side door open
+  by default. Now `DOSYNC_DIRECT_CONTROL` is `off` by default (refused, `403
+  direct_control_disabled`, audited as `direct_action_refused`), `operator`
+  (only with `X-DoSync-Operator-Token` matching `DOSYNC_OPERATOR_TOKEN`, a
+  credential never given to an agent) or `on` (development); `/v1/status`
+  reports it. When open, a device still performs only actions it declares (`422
+  not_declared`, which the path never checked) and, in an emergency, only its
+  declared emergency actions. The MCP per-device tool is offered only with
+  `DOSYNC_MCP_DIRECT_CONTROL=1`. Conformance check C26 (70 checks).
+  **Migration:** a client of the direct path fires an intent with
+  `proposed_actions`, or its operator opens the path.
+
 ## [0.8.0] — 2026-10-03
 
 0.8.0 changes what the hub is for. Two comparisons with an AI agent that

@@ -1,3 +1,4 @@
+import pytest
 """A direct action is recorded like any other action.
 
 _TimedExecutor is more than a timer: it records every action in device health
@@ -19,6 +20,16 @@ from fastapi.testclient import TestClient
 from dosync.adapters import DoSyncAdapter
 from dosync.models import (ActionResult, ActuatorSpec, CapabilityManifest, CertTier,
                            DeviceCategory)
+
+
+@pytest.fixture(autouse=True)
+def _direct_control_open(monkeypatch):
+    """These tests exercise the direct path itself, which rule 8 closes by
+    default (DOSYNC_DIRECT_CONTROL=off); here it is opened, as a development
+    hub would. tests/test_direct_control_is_not_an_agent_path.py covers the
+    default."""
+    monkeypatch.setenv("DOSYNC_DIRECT_CONTROL", "on")
+
 
 
 class _Answering(DoSyncAdapter):

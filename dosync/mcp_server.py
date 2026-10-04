@@ -182,8 +182,20 @@ async def _intent_property_schema() -> dict:
             "description": base_desc + " (hub not queried — the hub will validate)"}
 
 
+def _direct_control_tool_enabled() -> bool:
+    """Rule 8: direct control is not an agent's path. The per-device tool is
+    offered only when the operator opts in; the hub refuses it anyway unless
+    its own DOSYNC_DIRECT_CONTROL allows it."""
+    return os.environ.get("DOSYNC_MCP_DIRECT_CONTROL", "").strip().lower() in ("1", "true", "yes")
+
+
 @server.list_tools()
 async def list_tools() -> list[types.Tool]:
+    return [t for t in await _all_tools()
+            if t.name != "dosync_control_device" or _direct_control_tool_enabled()]
+
+
+async def _all_tools() -> list[types.Tool]:
     """Declare the tools available to the LLM."""
     # Read the available intent classes from the hub — the single source of truth.
     # The hub declares them in /v1/intent-classes; the MCP reflects that rather than
@@ -844,6 +856,11 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         return [types.TextContent(type="text", text="\n".join(lines))]
 
     # ── dosync_control_device ─────────────────────────────────────────────────
+    elif name == "dosync_control_device" and not _direct_control_tool_enabled():
+        return [types.TextContent(type="text", text=(
+            "Direct device control is not offered to agents on this hub. Fire an "
+            "intent instead -- with proposed_actions to choose the devices yourself."))]
+
     elif name == "dosync_control_device":
         device_id = arguments.get("device_id")
         action    = arguments.get("action")
