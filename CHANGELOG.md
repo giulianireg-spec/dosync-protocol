@@ -10,6 +10,17 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **An empty list of proposed actions means "no proposals".** Found by the
+  second agent comparison and fixed afterwards, **not re-measured**: asked for a
+  status report in the governed direct mode, the agent sent
+  `proposed_actions: []`, which the hub refused as malformed, so every sensor
+  read it meant was lost (scenarios R2, R4, I4 and N10). It was the only recall
+  loss in that mode the hub caused. An empty list now leaves the intent to be
+  resolved as usual -- including the ambiguity rule, which applies again. The
+  laboratory's port of the hub changes with it, and the parity test holds them
+  equal.
+
 ### Added
 - **Governed direct mode: the agent proposes, the hub guarantees** (spec §6
   rule 7). The first agent comparison found an AI agent choosing devices

@@ -102,11 +102,26 @@ def test_through_the_api_proposals_are_governed_recorded_and_reported():
 def test_a_malformed_proposal_list_is_refused():
     import dosync.server as srv
     c = TestClient(srv.app)
-    for bad in ([], "door:lock", [{"device_id": "x"}], [{"device_id": "x", "action": "y", "params": 3}]):
+    for bad in ("door:lock", [{"device_id": "x"}], [{"device_id": "x", "action": "y", "params": 3}]):
         r = c.post("/v1/intent/async", json={"intent": "notify", "urgency": "info",
                                              "context": {"proposed_actions": bad}})
         assert r.status_code == 422, bad
-    assert c.get("/v1/status").json()["intents_rejected"].get("invalid_proposals", 0) >= 4
+    assert c.get("/v1/status").json()["intents_rejected"].get("invalid_proposals", 0) >= 3
+
+
+def test_an_empty_proposal_list_means_the_hub_resolves():
+    """The second agent comparison: asked for a status report in this mode, the
+    agent sent proposed_actions [] and the hub refused it as malformed, losing
+    every sensor read. An empty list now means "no proposals"."""
+    import dosync.server as srv
+    c = TestClient(srv.app)
+    r = c.post("/v1/intent/async", json={"intent": "report_status", "urgency": "info",
+                                         "context": {"proposed_actions": []}})
+    assert r.status_code == 200, r.text
+    amb = c.post("/v1/intent/async", json={"intent": "control_access", "urgency": "alert",
+                                           "context": {"proposed_actions": []}})
+    assert amb.status_code == 422 and "action_types" in amb.json()["detail"], \
+        "with no proposals, the ambiguity rule applies again"
 
 
 def test_what_a_plan_reports_survives_a_policy_that_rebuilds_it():

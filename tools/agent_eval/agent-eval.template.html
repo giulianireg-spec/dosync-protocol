@@ -45,9 +45,10 @@ function precheck(env, cls, urgency, ctx){
     if (!Array.isArray(wanted) || !wanted.length || !wanted.every(a=>typeof a==="string") || !wanted.every(a=>c.actuators.includes(a)))
       return {reason:"invalid_actions"};
   }
+  if (Array.isArray(ctx.proposed_actions) && !ctx.proposed_actions.length) delete ctx.proposed_actions;  // empty = none: the hub resolves
   const props = ctx.proposed_actions;
   if (props !== undefined && props !== null){
-    if (!Array.isArray(props) || !props.length || props.length > 200 ||
+    if (!Array.isArray(props) || props.length > 200 ||
         !props.every(p=>p && typeof p==="object" && !Array.isArray(p) && typeof p.device_id==="string" && typeof p.action==="string" &&
                         (p.params===undefined || (p.params && typeof p.params==="object" && !Array.isArray(p.params)))))
       return {reason:"invalid_proposals"};

@@ -2039,16 +2039,24 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
     # rule 7). Each one names its direction, so the class's ambiguity does not
     # apply; the hub checks every proposal instead.
     _proposals = (req.context or {}).get("proposed_actions")
+    if isinstance(_proposals, list) and not _proposals:
+        # An empty list means the agent proposes nothing: the hub resolves the
+        # intent as usual. Refusing it as malformed (2026-10-02) cost the
+        # second agent comparison every sensor read an agent asked for through
+        # report_status with an empty list -- the governed direct mode's only
+        # recall loss the hub caused. Found by that comparison; not re-measured.
+        req.context.pop("proposed_actions", None)
+        _proposals = None
     if _proposals is not None:
-        if (not isinstance(_proposals, list) or not _proposals or len(_proposals) > 200
+        if (not isinstance(_proposals, list) or len(_proposals) > 200
                 or not all(isinstance(p, dict) and isinstance(p.get("device_id"), str)
                            and isinstance(p.get("action"), str)
                            and isinstance(p.get("params", {}), dict) for p in _proposals)):
             _count_rejection("invalid_proposals", req.intent, req.urgency)
             raise HTTPException(
                 status_code=422,
-                detail="context.proposed_actions must be a non-empty list (at most 200) of "
-                       "{device_id, action, params?} objects")
+                detail="context.proposed_actions must be a list (at most 200) of "
+                       "{device_id, action, params?} objects; an empty list means none")
     _effective = set(_wanted) if _wanted else set(_class_actions)
     _pairs = _opposite_pairs(_effective)
     if _pairs and urgency != Urgency.EMERGENCY and _proposals is None:
