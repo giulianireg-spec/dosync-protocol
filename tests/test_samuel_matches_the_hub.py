@@ -1,6 +1,6 @@
-"""The governance specification says what the reference hub does.
+"""SAMUEL, the governance specification, says what the reference hub does.
 
-spec/GOVERNANCE-SPEC.md was extracted from the protocol on 2026-10-05 so that a
+spec/SAMUEL-SPEC-v0.1.md was extracted from the protocol on 2026-10-05 so that a
 hub can be governed whatever describes its devices. A document nobody checks
 drifts -- the JSON Schemas once rejected what the hub produced -- so this binds
 it to the implementation: every refusal the hub can return, every universal class
@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-DOC = (REPO / "spec" / "GOVERNANCE-SPEC.md").read_text(encoding="utf-8")
+DOC = (REPO / "spec" / "SAMUEL-SPEC-v0.1.md").read_text(encoding="utf-8")
 
 
 def _codes(section_title: str) -> set[str]:

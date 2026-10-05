@@ -467,7 +467,7 @@ A compliant implementation MAY configure stricter per-deployment limits. It MUST
 
 These rules decide what runs, whoever chose it: the hub resolving an intent, an
 agent proposing actions, or an operator acting on one device. They are stated
-here once; the governance specification (`spec/GOVERNANCE-SPEC.md`) restates them
+here once; SAMUEL, the governance specification (`spec/SAMUEL-SPEC-v0.1.md`), restates them
 as guarantees, independent of how devices are described, and points back to this
 list. They were added to the protocol in 0.5 (§10.5).
 

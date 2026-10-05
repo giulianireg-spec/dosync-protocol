@@ -1,9 +1,18 @@
-# DoSync Governance Specification
+# SAMUEL — Standard for Agent Mediation Under Enforceable Limits
 
-**Version 0.1 — 2026-10-05. Status: draft, extracted from DoSync protocol 0.5.**
+*What an AI agent may do to physical devices, within limits the operator sets and
+the hub enforces.*
+
+**Version 0.1 — 2026-10-05. Status: draft, extracted from DoSync protocol 0.5.
+DoSync is its reference implementation.**
+
+The limits in the name are the agent's: the bounds of what it is allowed to do —
+which actions, on which devices, in which places, in an emergency — not
+quantities. (Rate limits exist among the operator's policies, §4 G7, but they are
+not what the name refers to.)
 
 This document specifies how a hub governs what an AI agent does to physical
-devices, independently of how those devices are described. A hub conforms to it
+devices, independently of how those devices are described. A hub conforms to SAMUEL
 whether its devices come from DoSync Capability Manifests, W3C WoT Thing
 Descriptions or any other format, provided that format is mapped to the model in
 §2.
@@ -11,7 +20,7 @@ Descriptions or any other format, provided that format is mapped to the model in
 It does not repeat the protocol: each guarantee below states what holds and
 names the rule of the DoSync specification (`DoSync-SPEC-v0.1.md`, §6.8) that
 defines it in full. Where the two could seem to disagree, the protocol rule is
-normative. `tests/test_governance_spec_matches_the_hub.py` checks that every
+normative. `tests/test_samuel_matches_the_hub.py` checks that every
 refusal the reference hub can return, every universal class it seeds and every
 certification check named here is in this document.
 
@@ -165,7 +174,7 @@ grants it, and G1 and G3–G8 hold.
 
 ## 8. Conformance
 
-A hub conforms to this specification if it passes these checks of the DoSync
+A hub conforms to SAMUEL if it passes these checks of the DoSync
 certification suite (`dosync-certify`, spec/CERTIFICATION-GUIDE.md):
 
 | Guarantee | Checks |
