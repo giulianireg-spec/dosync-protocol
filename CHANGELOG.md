@@ -10,6 +10,23 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Things described by W3C WoT Thing Descriptions, governed** (spec §5.9).
+  `POST /v1/things` registers a TD as a device; `dosync/wot_import.py` maps its
+  actions and writable properties to action types in layers -- `dosync:`
+  vocabulary, a known semantic `@type`, an exact verb in the name, writable
+  property, or the affordance's own name -- and reports how each was mapped;
+  the `wot` adapter executes HTTP(S) forms, expanding RFC 6570 URI templates. A
+  third-party TD never sets a place or emergency actions: the operator does. A
+  survey of the W3C plugfest repository shaped it -- only 5% of 1,054 actions
+  carry a semantic `@type` -- and it imports all 701 distinct TDs there
+  (`tools/wot_import_report.py`). Two of Eclipse Thingweb node-wot's own example
+  Things, served over HTTP, were governed end to end
+  (`tools/wot_nodewot_e2e.py`): what the hub allowed ran on the real Thing; an
+  undeclared action, a place the class is confined from and a blocking policy
+  never reached it. A device DoSync exports comes back from its TD with
+  everything governance reads (39 of 39), resolving the same plans.
+
 ### Fixed
 - **Direct control is no longer an agent's path (spec §6 rule 8).** Found by
   the third review of the IIWOT paper: the intent guarantees bind intents, but

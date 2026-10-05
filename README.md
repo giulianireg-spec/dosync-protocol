@@ -920,6 +920,11 @@ action a device declares. You decide how much of that an agent gets:
 (Policy files are JSON with `"version": 1` and a `"policies"` list, loaded from
 `DOSYNC_POLICIES`.)
 
+Devices described by a **W3C WoT Thing Description** join the same way: `POST
+/v1/things` with the TD (and, as the operator, the place it is in). The hub maps
+its actions, reports how it mapped each one, and governs it like any other
+device — see spec §5.9.
+
 The raw HTTP path, `POST /v1/device/action`, is **closed by default**. It names
 a device and an action with no intent around it, so the hub's guarantees cannot
 apply to it; it exists for an operator, not an agent.

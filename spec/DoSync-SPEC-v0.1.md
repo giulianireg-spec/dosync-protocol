@@ -254,6 +254,32 @@ A device may re-register with the hub at any time — after a firmware update, a
 
 ---
 
+### 5.9 Devices described by W3C WoT Thing Descriptions
+
+A hub may register a device from a W3C WoT Thing Description (TD 1.0 or 1.1).
+The reference hub does so at `POST /v1/things`, with the TD as body or as
+`{"td": <TD>, "location": "<place>", "emergency_actions": [...]}`.
+
+- **Actions and writable properties become declared actions.** Each is mapped to
+  an action type in layers, and the mapping is reported per affordance: the
+  `dosync:capability` of a TD DoSync exported; a known semantic `@type`
+  (`iot:TurnOn`, `saref:ToggleCommand`, …); an exact verb in the name (`turnOn`,
+  `openValve` → `open`, `stopPump` → `stop`); a writable property `p` → `set_p`;
+  otherwise the affordance keeps its own name, in snake_case. Two affordances of
+  one Thing that would map to the same type both keep their own names. A mapped
+  type matters to rule 6 (`openValve`/`closeValve` become an opposite pair); an
+  action with its own name is governed all the same through `operate_device`.
+- **Readable numeric and boolean properties become sensors.**
+- **A Thing's place and emergency actions are the operator's, never a
+  third-party TD's** (§5): they are set on import, or later. A TD DoSync exported
+  carries them in the `dosync:` vocabulary, and they are restored from it, as are
+  the device id and tags; such a device comes back with everything governance
+  reads.
+- The reference hub executes HTTP(S) forms (POST to invoke, PUT to write, GET to
+  read; RFC 6570 URI templates for `uriVariables` expanded from the action's
+  params). A Thing offering only other bindings is registered and governed, and
+  its actions are refused at execution with that reason.
+
 ## 6. Layer 4 — Semantic Layer
 
 The semantic layer is the core differentiator of DoSync. It maps high-level AI intents to concrete device actions by matching intent requirements against registered device capabilities.
@@ -1137,6 +1163,7 @@ Before `v1.0`, a MINOR increment may also change what existing behavior means, a
 
 - Intent classes: `location_role` (`"restricts"` | `"informs"`), accepted and listed by `/v1/intent-classes`.
 - Universal class `operate_device` (sixth; reconciled into existing hubs at start-up). Refusal reason `proposals_required`.
+- Devices from W3C WoT Thing Descriptions (§5.9): `POST /v1/things`.
 - Direct control (rule 8 above) is closed by default: a client that called `POST /v1/device/action` fires `operate_device` with `proposed_actions` instead, or its operator opens the path (`operator` with an operator credential, or `on` for development). `/v1/status` gains `direct_control`; audit event `direct_action_refused`.
 - Intent context: `proposed_actions` — governed direct mode (rule 7 above); the result and the `intent_executed` audit entry gain `refused_proposals`. Refusal reason `invalid_proposals`.
 - Intent context: `action_types`, narrowing the class's actions (rule 6 above). Refusal reasons `invalid_actions` and `ambiguous_actions` in `/v1/status`.

@@ -284,6 +284,53 @@
         }
       }
     },
+    "/v1/things": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Import Thing",
+        "description": "Register a W3C WoT Thing Description as a governed device.\n\nThe body is a TD, or {\"td\": <TD>, \"location\": \"<place>\", \"emergency_actions\":\n[...]}: a Thing's place and emergency actions are the operator's (spec §2),\nnever taken from a third-party TD. The response says how each affordance was\nmapped to a DoSync action type and whether it can run over HTTP.",
+        "operationId": "import_thing_v1_things_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Req"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/v1/devices/register": {
       "post": {
         "tags": [

@@ -834,6 +834,12 @@ async def lifespan(app: FastAPI):
     # Registered at startup so a device someone described this morning is
     # reachable this afternoon without anyone writing Python or waiting for a
     # release of DoSync.
+    # Imported WoT Things (POST /v1/things) execute through their TD's HTTP forms.
+    if isinstance(_adapter_executor, AdapterExecutor) and \
+            "wot" not in _adapter_executor.registered_adapters():
+        from dosync.adapters.wot import WotHttpAdapter
+        _adapter_executor.register(WotHttpAdapter(hub=hub))
+
     try:
         from dosync.adapters.declarative import DeclarativeAdapter
         from dosync.declarative import load_directory
@@ -1340,6 +1346,40 @@ async def rename_device(device_id: str, req: dict, response: Response,
     return {"device_id": device_id, "device_name": new_name, "previous": previous,
             "location": new_location, "previous_location": previous_location,
             "emergency_actions": [a["action"] for a in (device.emergency_actions or [])]}
+
+
+@app.post("/v1/things", tags=["Devices"])
+def import_thing(req: dict, auth: str = Depends(require_auth)):
+    """Register a W3C WoT Thing Description as a governed device.
+
+    The body is a TD, or {"td": <TD>, "location": "<place>", "emergency_actions":
+    [...]}: a Thing's place and emergency actions are the operator's (spec §2),
+    never taken from a third-party TD. The response says how each affordance was
+    mapped to a DoSync action type and whether it can run over HTTP.
+    """
+    from dosync.models import normalize_location
+    from dosync.wot_import import import_td
+    td = req.get("td") if isinstance(req.get("td"), dict) else req
+    try:
+        manifest, report = import_td(td)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"not an importable Thing Description: {e}")
+    if req.get("location"):
+        try:
+            manifest.location = normalize_location(str(req["location"]))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=f"invalid location: {e}")
+    declared = {a.type for a in manifest.actuators}
+    wanted = req.get("emergency_actions")
+    if wanted is not None:
+        if not isinstance(wanted, list) or not all(isinstance(a, str) and a in declared for a in wanted):
+            raise HTTPException(status_code=422,
+                                detail=f"emergency_actions must be actions the Thing declares: {sorted(declared)}")
+        manifest.emergency_capable = bool(wanted)
+        manifest.emergency_actions = [{"action": a, "params": {}} for a in wanted]
+    hub.register_device(manifest)
+    return {"registered": True, "device_id": manifest.device_id, "location": manifest.location,
+            "emergency_actions": [e["action"] for e in manifest.emergency_actions], **report}
 
 
 @app.post("/v1/devices/register", tags=["Devices"])
