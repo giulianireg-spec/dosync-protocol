@@ -269,7 +269,7 @@ class DoSyncDB:
             ("report_status",  "info",      [],                                                   [],                          [],                                    "Generate a status report of the environment",        "universal", 1, "restricts"),
             ("notify",         "info",      ["communication","notification","display"],            ["notify","display","call"],  [],                                    "Push information to any target",                    "universal", 1, "informs"),
             # Operating a named device directly: any action the device declares
-            # ("*"), and only the actions the agent proposes (spec §6 rule 7).
+            # ("*"), and only the actions the agent proposes (spec §6.8 rule 7).
             # Every guarantee but class authority still holds; an operator who
             # wants that bound narrows or blocks this class by policy.
             ("operate_device", "info",      [],                                                   ["*"],                       [],                                    "Operate named devices directly -- any action they declare; propose the actions", "universal", 1, "restricts"),

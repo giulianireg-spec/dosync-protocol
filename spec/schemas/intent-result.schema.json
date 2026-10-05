@@ -24,7 +24,7 @@
     },
     "refused_proposals": {
       "type": "array",
-      "description": "Governed direct mode (spec §6 rule 7): the actions the agent proposed that the hub refused, never executed.",
+      "description": "Governed direct mode (spec §6.8 rule 7): the actions the agent proposed that the hub refused, never executed.",
       "items": {
         "type": "object",
         "required": ["device_id", "action", "reason"],

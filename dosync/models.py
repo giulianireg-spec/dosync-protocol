@@ -720,7 +720,7 @@ class ActionPlan:
     #: class and declared no emergency_actions: they take part without acting,
     #: and the record says so rather than hiding them.
     included_without_action: list     = field(default_factory=list)
-    #: Governed direct mode (spec §6, rule 7): the actions an agent proposed
+    #: Governed direct mode (spec §6.8 rule 7): the actions an agent proposed
     #: that the hub refused, each {device_id, action, reason}. A refused
     #: proposal is never executed and never silently dropped.
     refused_proposals: list           = field(default_factory=list)

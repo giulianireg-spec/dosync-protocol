@@ -132,7 +132,7 @@ def test_an_imported_thing_is_governed_end_to_end(counter_thing):
     m.location = "lab/bench"
     hub.register_device(m)
     # A known second place: a place no device is at is unknown, and the hub
-    # refuses it before proposals are validated (spec §6 rule 3).
+    # refuses it before proposals are validated (spec §6.8 rule 3).
     other, _ = import_td({"title": "Kettle", "id": "urn:x:kettle", "actions": {"boil": {"forms": [{"href": "http://127.0.0.1:9/boil"}]}}})
     other.location = "lab/kitchen"
     hub.register_device(other)

@@ -851,7 +851,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         return [types.TextContent(type="text", text="\n".join(lines))]
 
     # ── dosync_control_device ─────────────────────────────────────────────────
-    # Governed, not direct (spec §6 rules 7-8): the tool fires the universal
+    # Governed, not direct (spec §6.8 rules 7-8): the tool fires the universal
     # class operate_device with the action proposed, so the hub checks it like
     # any proposal -- declared action, place, no opposite actions, declared
     # emergency actions, operator policies, audit. Before 2026-10-05 it called

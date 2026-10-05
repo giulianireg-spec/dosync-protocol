@@ -535,7 +535,7 @@ class DoSyncHub:
         _t0 = time.perf_counter()
         if (intent.context or {}).get("proposed_actions"):
             # Governed direct mode: validate what the agent proposed instead of
-            # resolving (spec §6 rule 7). An external resolver's local fallback
+            # resolving (spec §6.8 rule 7). An external resolver's local fallback
             # applies the same guarantees.
             _validate = (getattr(self.resolver, "validate_proposals", None)
                          or getattr(getattr(self.resolver, "_fallback", None), "validate_proposals", None))

@@ -2,7 +2,7 @@
 
 The agent comparison of 2026-10-01 found an AI agent choosing devices itself
 selected as well as the resolver and made fewer unsafe choices -- but nothing
-guaranteed it would. In this mode (spec §6 rule 7) the agent sends
+guaranteed it would. In this mode (spec §6.8 rule 7) the agent sends
 `context.proposed_actions`; the hub checks each against the protocol's
 guarantees and refuses, with a reason, any that fails. The rest goes through
 parameter validation, the operator's policies, execution and the audit log.

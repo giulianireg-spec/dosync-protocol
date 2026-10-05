@@ -10,6 +10,20 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **The governance rules live in the specification's body, §6.8.** They had been
+  written as a numbered list inside §10.5, "Changes in 0.5", while code comments,
+  this file and the README cited them as "§6 rule N" -- a section where they were
+  not. Found when spec/GOVERNANCE-SPEC.md was tied to the implementation by a
+  test. References now say §6.8; the 0.8.0 entry below keeps its words, and its
+  "§6 rules 5 and 6" mean §6.8's.
+- **The governance specification, spec/GOVERNANCE-SPEC.md**, extracted from the
+  protocol so a hub can be governed whatever describes its devices: the model
+  governance needs, three paths to a device, eight guarantees each tied to a
+  §6.8 rule, every refusal reason, the audit log, mappings from DoSync manifests
+  and WoT Thing Descriptions, and which certification checks show conformance.
+  `tests/test_governance_spec_matches_the_hub.py` holds it to the hub.
+
 ### Added
 - **Things described by W3C WoT Thing Descriptions, governed** (spec §5.9).
   `POST /v1/things` registers a TD as a device; `dosync/wot_import.py` maps its
@@ -28,7 +42,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   everything governance reads (39 of 39), resolving the same plans.
 
 ### Fixed
-- **Direct control is no longer an agent's path (spec §6 rule 8).** Found by
+- **Direct control is no longer an agent's path (spec §6.8 rule 8).** Found by
   the third review of the IIWOT paper: the intent guarantees bind intents, but
   `POST /v1/device/action` -- offered to agents as a second MCP tool, and the
   target of every action in an exported Thing Description -- passed only the

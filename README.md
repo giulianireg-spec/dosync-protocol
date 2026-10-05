@@ -1028,6 +1028,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, including the C
 ## Specification
 
 - [spec/DoSync-SPEC-v0.1.md](spec/DoSync-SPEC-v0.1.md) — full protocol specification
+- [spec/GOVERNANCE-SPEC.md](spec/GOVERNANCE-SPEC.md) — the governance specification: eight guarantees on what an agent's actions can do, independent of how devices are described (DoSync manifests, WoT Thing Descriptions), every refusal reason, and the certification checks that show conformance
 - [spec/RESOLVER-SPEC-v0.3.md](spec/RESOLVER-SPEC-v0.3.md) — resolver interface + external resolver protocol
 - [DESIGN-PRINCIPLES.md](DESIGN-PRINCIPLES.md) — architectural decisions and rationale
 - [COMPATIBILITY.md](docs/COMPATIBILITY.md) — backward compatibility guarantees

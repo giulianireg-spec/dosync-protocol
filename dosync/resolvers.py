@@ -792,7 +792,7 @@ class CapabilityMatchingResolver(BaseResolver):
                 return pa.get("params", {})
         return None
 
-    #: Why the hub refuses a proposed action (governed direct mode, spec §6 rule 7).
+    #: Why the hub refuses a proposed action (governed direct mode, spec §6.8 rule 7).
     PROPOSAL_REFUSALS = ("unknown_device", "not_declared", "outside_class", "outside_place",
                          "not_its_emergency_action", "opposite_actions")
 
