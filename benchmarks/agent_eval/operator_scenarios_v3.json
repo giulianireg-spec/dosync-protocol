@@ -1,0 +1,604 @@
+{
+ "_README": [
+  "Third comparison (2026-10-05): the operator's scenarios. Drafted by the research team on the deployment's",
+  "22 real devices, then reviewed and approved by the deployment's operator WITHOUT CHANGES before any run. The",
+  "approved document (in Spanish, with the deployment's real device ids) is kept by the operator; its SHA-256 is",
+  "recorded here. Phrases were run in their English translation; device ids are anonymized as in",
+  "benchmarks/fixtures/prod_registry_2026_10_anonymized.json. Each scenario has REQUIRED actions and ACCEPTABLE",
+  "ones (not asked for, but the operator would not mind); any other action counts as an error. '*' means any device."
+ ],
+ "approved_document_sha256": "0f73e46c7b0837b2d91d8bf9f2281d9ad5a09c47e21762a70dd6c7e21d3bf091",
+ "registry": "benchmarks/fixtures/prod_registry_2026_10_anonymized.json",
+ "classes": "benchmarks/fixtures/prod_classes_2026_10.json",
+ "scenarios": [
+  {
+   "id": "O1",
+   "phrase": "Turn off all the lights in the house, we're going to bed.",
+   "required": [
+    {
+     "device_id": "light-kitchen-01",
+     "action": "turn_off"
+    },
+    {
+     "device_id": "light-kitchen-02",
+     "action": "turn_off"
+    },
+    {
+     "device_id": "light-dining-01",
+     "action": "turn_off"
+    },
+    {
+     "device_id": "light-dining-02",
+     "action": "turn_off"
+    },
+    {
+     "device_id": "light-living-a-01",
+     "action": "turn_off"
+    },
+    {
+     "device_id": "light-living-a-02",
+     "action": "turn_off"
+    },
+    {
+     "device_id": "light-living-b-01",
+     "action": "turn_off"
+    },
+    {
+     "device_id": "light-living-b-02",
+     "action": "turn_off"
+    },
+    {
+     "device_id": "light-main-bedroom",
+     "action": "turn_off"
+    },
+    {
+     "device_id": "light-kids-bedroom",
+     "action": "turn_off"
+    },
+    {
+     "device_id": "light-unassigned-01",
+     "action": "turn_off"
+    }
+   ],
+   "acceptable": [
+    {
+     "device_id": "tv-1-backlight",
+     "action": "turn_off"
+    },
+    {
+     "device_id": "tv-1",
+     "action": "turn_off"
+    },
+    {
+     "device_id": "tv-2",
+     "action": "turn_off"
+    },
+    {
+     "device_id": "tv-1-screen",
+     "action": "turn_off"
+    }
+   ]
+  },
+  {
+   "id": "O2",
+   "phrase": "Turn on the kitchen lights.",
+   "required": [
+    {
+     "device_id": "light-kitchen-01",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-kitchen-02",
+     "action": "turn_on"
+    }
+   ],
+   "acceptable": [
+    {
+     "device_id": "light-kitchen-01",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-kitchen-02",
+     "action": "set_brightness"
+    }
+   ]
+  },
+  {
+   "id": "O3",
+   "phrase": "Dim the living room lights to 20 percent.",
+   "required": [
+    {
+     "device_id": "light-living-a-01",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-living-a-02",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-living-b-01",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-living-b-02",
+     "action": "set_brightness"
+    }
+   ],
+   "acceptable": [
+    {
+     "device_id": "light-living-a-01",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-living-a-02",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-living-b-01",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-living-b-02",
+     "action": "turn_on"
+    }
+   ]
+  },
+  {
+   "id": "O4",
+   "phrase": "Set the dining room lights to a warm tone for dinner.",
+   "required": [
+    {
+     "device_id": "light-dining-01",
+     "action": "set_color_temp"
+    },
+    {
+     "device_id": "light-dining-02",
+     "action": "set_color_temp"
+    }
+   ],
+   "acceptable": [
+    {
+     "device_id": "light-dining-01",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-dining-01",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-dining-01",
+     "action": "set_scene"
+    },
+    {
+     "device_id": "light-dining-01",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-dining-02",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-dining-02",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-dining-02",
+     "action": "set_scene"
+    },
+    {
+     "device_id": "light-dining-02",
+     "action": "set_color"
+    }
+   ]
+  },
+  {
+   "id": "O5",
+   "phrase": "Smoke is coming out of the kitchen and something is burning, it's an emergency!",
+   "required": [
+    {
+     "device_id": "alarm-01",
+     "action": "alarm"
+    },
+    {
+     "device_id": "notifier-01",
+     "action": "notify"
+    },
+    {
+     "device_id": "tv-1",
+     "action": "display"
+    },
+    {
+     "device_id": "tv-2",
+     "action": "display"
+    },
+    {
+     "device_id": "light-kitchen-01",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-kitchen-02",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-dining-01",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-dining-02",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-living-a-01",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-living-a-02",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-living-b-01",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-living-b-02",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-main-bedroom",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-kids-bedroom",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-unassigned-01",
+     "action": "turn_on"
+    }
+   ],
+   "acceptable": [
+    {
+     "device_id": "light-kitchen-01",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-kitchen-01",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-kitchen-02",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-kitchen-02",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-dining-01",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-dining-01",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-dining-02",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-dining-02",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-living-a-01",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-living-a-01",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-living-a-02",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-living-a-02",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-living-b-01",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-living-b-01",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-living-b-02",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-living-b-02",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-main-bedroom",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-main-bedroom",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-kids-bedroom",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-kids-bedroom",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-unassigned-01",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-unassigned-01",
+     "action": "set_color"
+    }
+   ]
+  },
+  {
+   "id": "O6",
+   "phrase": "There's a fire in the kids' room, get everyone out of the house.",
+   "required": [
+    {
+     "device_id": "alarm-01",
+     "action": "alarm"
+    },
+    {
+     "device_id": "notifier-01",
+     "action": "notify"
+    },
+    {
+     "device_id": "tv-1",
+     "action": "display"
+    },
+    {
+     "device_id": "tv-2",
+     "action": "display"
+    },
+    {
+     "device_id": "light-kitchen-01",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-kitchen-02",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-dining-01",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-dining-02",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-living-a-01",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-living-a-02",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-living-b-01",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-living-b-02",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-main-bedroom",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-kids-bedroom",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "light-unassigned-01",
+     "action": "turn_on"
+    }
+   ],
+   "acceptable": [
+    {
+     "device_id": "light-kitchen-01",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-kitchen-01",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-kitchen-02",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-kitchen-02",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-dining-01",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-dining-01",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-dining-02",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-dining-02",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-living-a-01",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-living-a-01",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-living-a-02",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-living-a-02",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-living-b-01",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-living-b-01",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-living-b-02",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-living-b-02",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-main-bedroom",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-main-bedroom",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-kids-bedroom",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-kids-bedroom",
+     "action": "set_color"
+    },
+    {
+     "device_id": "light-unassigned-01",
+     "action": "set_brightness"
+    },
+    {
+     "device_id": "light-unassigned-01",
+     "action": "set_color"
+    }
+   ]
+  },
+  {
+   "id": "O7",
+   "phrase": "What's the temperature and humidity at home?",
+   "required": [
+    {
+     "device_id": "sensor-climate-01",
+     "action": "read_sensors"
+    }
+   ],
+   "acceptable": [
+    {
+     "device_id": "*",
+     "action": "read_sensors"
+    }
+   ]
+  },
+  {
+   "id": "O8",
+   "phrase": "Check whether anyone is moving around at home and text me.",
+   "required": [
+    {
+     "device_id": "sensor-motion-01",
+     "action": "read_sensors"
+    },
+    {
+     "device_id": "notifier-01",
+     "action": "notify"
+    }
+   ],
+   "acceptable": []
+  },
+  {
+   "id": "O9",
+   "phrase": "Send the family a message: I'll be late for dinner.",
+   "required": [
+    {
+     "device_id": "notifier-01",
+     "action": "notify"
+    }
+   ],
+   "acceptable": []
+  },
+  {
+   "id": "O10",
+   "phrase": "Put 'dinner is ready' on the TVs.",
+   "required": [
+    {
+     "device_id": "tv-1",
+     "action": "display"
+    },
+    {
+     "device_id": "tv-2",
+     "action": "display"
+    }
+   ],
+   "acceptable": [
+    {
+     "device_id": "tv-1",
+     "action": "turn_on"
+    },
+    {
+     "device_id": "tv-2",
+     "action": "turn_on"
+    }
+   ]
+  },
+  {
+   "id": "O11",
+   "phrase": "Lock the front door.",
+   "required": [],
+   "acceptable": [
+    {
+     "device_id": "notifier-01",
+     "action": "notify"
+    }
+   ]
+  },
+  {
+   "id": "O12",
+   "phrase": "Turn off TV 1 and its ambient backlight.",
+   "required": [
+    {
+     "device_id": "tv-1",
+     "action": "turn_off"
+    },
+    {
+     "device_id": "tv-1-backlight",
+     "action": "turn_off"
+    }
+   ],
+   "acceptable": [
+    {
+     "device_id": "tv-1-screen",
+     "action": "turn_off"
+    }
+   ]
+  }
+ ]
+}

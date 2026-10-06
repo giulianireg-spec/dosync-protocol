@@ -1,0 +1,215 @@
+{
+ "_provenance": "The reference deployment's 12 registered intent classes, exported 2026-10-05, kept as they are -- including four left from other domains' tests (prepare_operating_room, line_shutdown, line_emergency_stop, inspect_area): an agent in that home sees them.",
+ "intent_classes": [
+  {
+   "name": "prepare_operating_room",
+   "urgency": "alert",
+   "resolution_tags": [
+    "medical",
+    "lighting",
+    "access"
+   ],
+   "resolution_actuators": [
+    "turn_on",
+    "unlock",
+    "notify"
+   ],
+   "resolution_sensors": [],
+   "description": "Prepare OR for procedure",
+   "domain": "healthcare",
+   "location_role": "restricts",
+   "composition_kind": null
+  },
+  {
+   "name": "line_shutdown",
+   "urgency": "emergency",
+   "resolution_tags": [
+    "industrial",
+    "safety",
+    "alarm"
+   ],
+   "resolution_actuators": [
+    "stop",
+    "notify",
+    "alarm"
+   ],
+   "resolution_sensors": [],
+   "description": "Emergency line shutdown",
+   "domain": "industrial",
+   "location_role": "restricts",
+   "composition_kind": null
+  },
+  {
+   "name": "ensure_safety",
+   "urgency": "emergency",
+   "resolution_tags": [
+    "emergency",
+    "alarm",
+    "communication",
+    "notification"
+   ],
+   "resolution_actuators": [
+    "alarm",
+    "notify",
+    "call",
+    "turn_on",
+    "set_brightness"
+   ],
+   "resolution_sensors": [],
+   "description": "Safety emergency — protect people and property",
+   "domain": "universal",
+   "location_role": "informs",
+   "composition_kind": null
+  },
+  {
+   "name": "alert_anomaly",
+   "urgency": "alert",
+   "resolution_tags": [
+    "communication",
+    "notification",
+    "sensor"
+   ],
+   "resolution_actuators": [
+    "notify",
+    "call"
+   ],
+   "resolution_sensors": [
+    "motion",
+    "temperature",
+    "humidity",
+    "smoke"
+   ],
+   "description": "Unexpected condition detected — investigate",
+   "domain": "universal",
+   "location_role": "informs",
+   "composition_kind": null
+  },
+  {
+   "name": "control_access",
+   "urgency": "alert",
+   "resolution_tags": [
+    "lock"
+   ],
+   "resolution_actuators": [
+    "lock",
+    "unlock"
+   ],
+   "resolution_sensors": [],
+   "description": "Manage physical access to a space",
+   "domain": "universal",
+   "location_role": "restricts",
+   "composition_kind": null
+  },
+  {
+   "name": "report_status",
+   "urgency": "info",
+   "resolution_tags": [],
+   "resolution_actuators": [],
+   "resolution_sensors": [],
+   "description": "Generate a status report of the environment",
+   "domain": "universal",
+   "location_role": "restricts",
+   "composition_kind": null
+  },
+  {
+   "name": "notify",
+   "urgency": "info",
+   "resolution_tags": [
+    "communication",
+    "notification",
+    "display"
+   ],
+   "resolution_actuators": [
+    "notify",
+    "display",
+    "call"
+   ],
+   "resolution_sensors": [],
+   "description": "Push information to any target",
+   "domain": "universal",
+   "location_role": "informs",
+   "composition_kind": null
+  },
+  {
+   "name": "line_emergency_stop",
+   "urgency": "emergency",
+   "resolution_tags": [
+    "industrial",
+    "safety"
+   ],
+   "resolution_actuators": [],
+   "resolution_sensors": [],
+   "description": "Emergency stop",
+   "domain": "industrial",
+   "location_role": "restricts",
+   "composition_kind": null
+  },
+  {
+   "name": "save_energy",
+   "urgency": "info",
+   "resolution_tags": [
+    "light",
+    "plug",
+    "switch",
+    "thermostat",
+    "energy"
+   ],
+   "resolution_actuators": [
+    "turn_off",
+    "set_brightness"
+   ],
+   "resolution_sensors": [],
+   "description": "Reduce power consumption",
+   "domain": "residential",
+   "location_role": "restricts",
+   "composition_kind": null
+  },
+  {
+   "name": "inspect_area",
+   "urgency": "info",
+   "resolution_tags": [
+    "aerial",
+    "drone",
+    "robotics"
+   ],
+   "resolution_actuators": [
+    "take_off",
+    "go_to",
+    "return_home"
+   ],
+   "resolution_sensors": [],
+   "description": "Inspect the perimeter of an area with an aerial vehicle — composes a take_off, an ordered sequence of go_to waypoints around the center, and a return_home, driven as a supervised closed loop.",
+   "domain": "robotics",
+   "location_role": "restricts",
+   "composition_kind": "perimeter"
+  },
+  {
+   "name": "light_on_presence",
+   "urgency": "info",
+   "resolution_tags": [
+    "light"
+   ],
+   "resolution_actuators": [
+    "turn_on"
+   ],
+   "resolution_sensors": [],
+   "description": "Turn on the lights where presence was detected",
+   "domain": "general",
+   "location_role": "restricts",
+   "composition_kind": null
+  },
+  {
+   "name": "operate_device",
+   "urgency": "info",
+   "resolution_tags": [],
+   "resolution_actuators": [
+    "*"
+   ],
+   "resolution_sensors": [],
+   "description": "Operate named devices directly -- any action they declare; propose the actions",
+   "domain": "universal",
+   "location_role": "restricts",
+   "composition_kind": null
+  }
+ ]
+}

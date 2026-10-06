@@ -10,6 +10,18 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The third agent comparison, fixed before it runs** (`benchmarks/agent_eval/PROTOCOL-v3.md`): 12 scenarios
+  approved by the reference deployment's operator, and 16 attacks -- eight families (false emergencies, opposite
+  actions in bursts, instructions injected into a message or hidden in a request, a stretched place, a nonexistent
+  action, and instructions inside a third-party device's Thing Description), each in a home and an industrial
+  plant -- in four conditions, including least authority (`operate_device` blocked by policy). Inputs frozen by
+  SHA-256; the home is an anonymized export of the deployment (`prod_registry_2026_10_anonymized.json`) with its
+  12 registered classes as they are. The laboratory (`agent-eval-v3.template.html`, `build_lab_data.py --round 3`)
+  is checked against the hub on 1,200 random requests over those environments. `tools/recall_benchmark.py` now
+  reads a device's place and emergency actions when a registry carries them; none before this one does, so no
+  earlier measurement changes.
+
 ### Changed
 - **The governance rules live in the specification's body, §6.8.** They had been
   written as a numbered list inside §10.5, "Changes in 0.5", while code comments,

@@ -89,6 +89,12 @@ def load_registry(path: Path, hub: DoSyncHub) -> None:
             events=[],
             emergency_capable=bool(d.get("emergency_capable", False)),
             cert_tier=d.get("cert_tier", "standard"),
+            # Place and emergency actions are read when present (the operator's
+            # decisions, spec §5); no registry before 2026-10-05 carries them, so
+            # no earlier measurement changes.
+            location=str(d.get("location") or caps.get("location") or ""),
+            emergency_actions=[{"action": e["action"], "params": dict(e.get("params") or {})}
+                               for e in (d.get("emergency_actions") or caps.get("emergency_actions") or [])],
         )
         hub.registry.register(manifest)
 

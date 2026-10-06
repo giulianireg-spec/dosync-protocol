@@ -1,0 +1,1970 @@
+{
+ "count": 22,
+ "devices": [
+  {
+   "dosync_version": "0.1",
+   "device_id": "light-kids-bedroom",
+   "device_name": "Kids' bedroom light",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "actuator",
+   "tags": [
+    "light",
+    "emergency",
+    "energy",
+    "bedroom"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "brightness",
+      "type": "integer",
+      "description": "Current brightness",
+      "unit": "%",
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     },
+     {
+      "id": "state",
+      "type": "boolean",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     }
+    ],
+    "actuators": [
+     {
+      "id": "turn_on",
+      "type": "turn_on",
+      "description": "Turn on",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "turn_off",
+      "type": "turn_off",
+      "description": "Turn off",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_brightness",
+      "type": "set_brightness",
+      "description": "Set brightness",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color",
+      "type": "set_color",
+      "description": "Set colour",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color_temp",
+      "type": "set_color_temp",
+      "description": "Set colour temperature",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_scene",
+      "type": "set_scene",
+      "description": "Set scene",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": true,
+   "cert_tier": "standard",
+   "adapter": "wiz",
+   "emergency_actions": [
+    {
+     "action": "turn_on",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "light-living-b-01",
+   "device_name": "Living room B light 1",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "actuator",
+   "tags": [
+    "light",
+    "emergency",
+    "energy",
+    "living-room"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "brightness",
+      "type": "integer",
+      "description": "Current brightness",
+      "unit": "%",
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     },
+     {
+      "id": "state",
+      "type": "boolean",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     }
+    ],
+    "actuators": [
+     {
+      "id": "turn_on",
+      "type": "turn_on",
+      "description": "Turn on",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "turn_off",
+      "type": "turn_off",
+      "description": "Turn off",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_brightness",
+      "type": "set_brightness",
+      "description": "Set brightness",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color",
+      "type": "set_color",
+      "description": "Set colour",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color_temp",
+      "type": "set_color_temp",
+      "description": "Set colour temperature",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_scene",
+      "type": "set_scene",
+      "description": "Set scene",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": true,
+   "cert_tier": "standard",
+   "adapter": "wiz",
+   "emergency_actions": [
+    {
+     "action": "turn_on",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "light-living-b-02",
+   "device_name": "Living room B light 2",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "actuator",
+   "tags": [
+    "light",
+    "emergency",
+    "energy",
+    "living-room"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "brightness",
+      "type": "integer",
+      "description": "Current brightness",
+      "unit": "%",
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     },
+     {
+      "id": "state",
+      "type": "boolean",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     }
+    ],
+    "actuators": [
+     {
+      "id": "turn_on",
+      "type": "turn_on",
+      "description": "Turn on",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "turn_off",
+      "type": "turn_off",
+      "description": "Turn off",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_brightness",
+      "type": "set_brightness",
+      "description": "Set brightness",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color",
+      "type": "set_color",
+      "description": "Set colour",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color_temp",
+      "type": "set_color_temp",
+      "description": "Set colour temperature",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_scene",
+      "type": "set_scene",
+      "description": "Set scene",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": true,
+   "cert_tier": "standard",
+   "adapter": "wiz",
+   "emergency_actions": [
+    {
+     "action": "turn_on",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "light-dining-01",
+   "device_name": "Dining room light 1",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "actuator",
+   "tags": [
+    "light",
+    "emergency",
+    "energy",
+    "dining-room"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "brightness",
+      "type": "integer",
+      "description": "Current brightness",
+      "unit": "%",
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     },
+     {
+      "id": "state",
+      "type": "boolean",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     }
+    ],
+    "actuators": [
+     {
+      "id": "turn_on",
+      "type": "turn_on",
+      "description": "Turn on",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "turn_off",
+      "type": "turn_off",
+      "description": "Turn off",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_brightness",
+      "type": "set_brightness",
+      "description": "Set brightness",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color",
+      "type": "set_color",
+      "description": "Set colour",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color_temp",
+      "type": "set_color_temp",
+      "description": "Set colour temperature",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_scene",
+      "type": "set_scene",
+      "description": "Set scene",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": true,
+   "cert_tier": "standard",
+   "adapter": "wiz",
+   "emergency_actions": [
+    {
+     "action": "turn_on",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "light-kitchen-01",
+   "device_name": "Kitchen light 1",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "actuator",
+   "tags": [
+    "light",
+    "emergency",
+    "energy",
+    "kitchen"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "brightness",
+      "type": "integer",
+      "description": "Current brightness",
+      "unit": "%",
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     },
+     {
+      "id": "state",
+      "type": "boolean",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     }
+    ],
+    "actuators": [
+     {
+      "id": "turn_on",
+      "type": "turn_on",
+      "description": "Turn on",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "turn_off",
+      "type": "turn_off",
+      "description": "Turn off",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_brightness",
+      "type": "set_brightness",
+      "description": "Set brightness",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color",
+      "type": "set_color",
+      "description": "Set colour",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color_temp",
+      "type": "set_color_temp",
+      "description": "Set colour temperature",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_scene",
+      "type": "set_scene",
+      "description": "Set scene",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": true,
+   "cert_tier": "standard",
+   "adapter": "wiz",
+   "emergency_actions": [
+    {
+     "action": "turn_on",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "light-main-bedroom",
+   "device_name": "Main bedroom light",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "actuator",
+   "tags": [
+    "light",
+    "emergency",
+    "energy",
+    "bedroom"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "brightness",
+      "type": "integer",
+      "description": "Current brightness",
+      "unit": "%",
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     },
+     {
+      "id": "state",
+      "type": "boolean",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     }
+    ],
+    "actuators": [
+     {
+      "id": "turn_on",
+      "type": "turn_on",
+      "description": "Turn on",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "turn_off",
+      "type": "turn_off",
+      "description": "Turn off",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_brightness",
+      "type": "set_brightness",
+      "description": "Set brightness",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color",
+      "type": "set_color",
+      "description": "Set colour",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color_temp",
+      "type": "set_color_temp",
+      "description": "Set colour temperature",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_scene",
+      "type": "set_scene",
+      "description": "Set scene",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": true,
+   "cert_tier": "standard",
+   "adapter": "wiz",
+   "location": "main-bedroom",
+   "emergency_actions": [
+    {
+     "action": "turn_on",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "light-dining-02",
+   "device_name": "Dining room light 2",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "actuator",
+   "tags": [
+    "light",
+    "emergency",
+    "energy",
+    "dining-room"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "brightness",
+      "type": "integer",
+      "description": "Current brightness",
+      "unit": "%",
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     },
+     {
+      "id": "state",
+      "type": "boolean",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     }
+    ],
+    "actuators": [
+     {
+      "id": "turn_on",
+      "type": "turn_on",
+      "description": "Turn on",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "turn_off",
+      "type": "turn_off",
+      "description": "Turn off",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_brightness",
+      "type": "set_brightness",
+      "description": "Set brightness",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color",
+      "type": "set_color",
+      "description": "Set colour",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color_temp",
+      "type": "set_color_temp",
+      "description": "Set colour temperature",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_scene",
+      "type": "set_scene",
+      "description": "Set scene",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": true,
+   "cert_tier": "standard",
+   "adapter": "wiz",
+   "emergency_actions": [
+    {
+     "action": "turn_on",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "light-living-a-01",
+   "device_name": "Living room A light 1",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "actuator",
+   "tags": [
+    "light",
+    "emergency",
+    "energy",
+    "living-room"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "brightness",
+      "type": "integer",
+      "description": "Current brightness",
+      "unit": "%",
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     },
+     {
+      "id": "state",
+      "type": "boolean",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     }
+    ],
+    "actuators": [
+     {
+      "id": "turn_on",
+      "type": "turn_on",
+      "description": "Turn on",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "turn_off",
+      "type": "turn_off",
+      "description": "Turn off",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_brightness",
+      "type": "set_brightness",
+      "description": "Set brightness",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color",
+      "type": "set_color",
+      "description": "Set colour",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color_temp",
+      "type": "set_color_temp",
+      "description": "Set colour temperature",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_scene",
+      "type": "set_scene",
+      "description": "Set scene",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": true,
+   "cert_tier": "standard",
+   "adapter": "wiz",
+   "emergency_actions": [
+    {
+     "action": "turn_on",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "light-living-a-02",
+   "device_name": "Living room A light 2",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "actuator",
+   "tags": [
+    "light",
+    "emergency",
+    "energy",
+    "living-room"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "brightness",
+      "type": "integer",
+      "description": "Current brightness",
+      "unit": "%",
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     },
+     {
+      "id": "state",
+      "type": "boolean",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     }
+    ],
+    "actuators": [
+     {
+      "id": "turn_on",
+      "type": "turn_on",
+      "description": "Turn on",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "turn_off",
+      "type": "turn_off",
+      "description": "Turn off",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_brightness",
+      "type": "set_brightness",
+      "description": "Set brightness",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color",
+      "type": "set_color",
+      "description": "Set colour",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color_temp",
+      "type": "set_color_temp",
+      "description": "Set colour temperature",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_scene",
+      "type": "set_scene",
+      "description": "Set scene",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": true,
+   "cert_tier": "standard",
+   "adapter": "wiz",
+   "emergency_actions": [
+    {
+     "action": "turn_on",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "light-kitchen-02",
+   "device_name": "Kitchen light 2",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "actuator",
+   "tags": [
+    "light",
+    "emergency",
+    "energy",
+    "kitchen"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "brightness",
+      "type": "integer",
+      "description": "Current brightness",
+      "unit": "%",
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     },
+     {
+      "id": "state",
+      "type": "boolean",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     }
+    ],
+    "actuators": [
+     {
+      "id": "turn_on",
+      "type": "turn_on",
+      "description": "Turn on",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "turn_off",
+      "type": "turn_off",
+      "description": "Turn off",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_brightness",
+      "type": "set_brightness",
+      "description": "Set brightness",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color",
+      "type": "set_color",
+      "description": "Set colour",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color_temp",
+      "type": "set_color_temp",
+      "description": "Set colour temperature",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_scene",
+      "type": "set_scene",
+      "description": "Set scene",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": true,
+   "cert_tier": "standard",
+   "adapter": "wiz",
+   "emergency_actions": [
+    {
+     "action": "turn_on",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "tv-1-backlight",
+   "device_name": "TV 1 ambient backlight",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "hybrid",
+   "tags": [
+    "light"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "state",
+      "type": "boolean",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     },
+     {
+      "id": "brightness",
+      "type": "integer",
+      "description": "Current brightness",
+      "unit": "%",
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     }
+    ],
+    "actuators": [
+     {
+      "id": "turn_on",
+      "type": "turn_on",
+      "description": "Turn on",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "turn_off",
+      "type": "turn_off",
+      "description": "Turn off",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_brightness",
+      "type": "set_brightness",
+      "description": "Set brightness",
+      "params_schema": {
+       "type": "object",
+       "properties": {
+        "brightness": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 100
+        }
+       },
+       "required": [
+        "brightness"
+       ]
+      },
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color",
+      "type": "set_color",
+      "description": "Set colour",
+      "params_schema": {
+       "type": "object",
+       "properties": {
+        "r": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 255
+        },
+        "g": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 255
+        },
+        "b": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 255
+        }
+       },
+       "required": [
+        "r",
+        "g",
+        "b"
+       ]
+      },
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_effect",
+      "type": "set_effect",
+      "description": "Set effect",
+      "params_schema": {
+       "type": "object",
+       "properties": {
+        "effect": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "effect"
+       ]
+      },
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color_temp",
+      "type": "set_color_temp",
+      "description": "Set colour temperature",
+      "params_schema": {
+       "type": "object",
+       "properties": {
+        "kelvin": {
+         "type": "integer",
+         "minimum": 2200,
+         "maximum": 6500
+        }
+       },
+       "required": [
+        "kelvin"
+       ]
+      },
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": false,
+   "cert_tier": "standard",
+   "adapter": "homeassistant"
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "tv-1",
+   "device_name": "TV 1",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "hybrid",
+   "tags": [
+    "communication",
+    "display"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "state",
+      "type": "string",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     }
+    ],
+    "actuators": [
+     {
+      "id": "turn_on",
+      "type": "turn_on",
+      "description": "Turn on",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "turn_off",
+      "type": "turn_off",
+      "description": "Turn off",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "display",
+      "type": "display",
+      "description": "Show a message",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": true,
+   "cert_tier": "standard",
+   "adapter": "homeassistant",
+   "emergency_actions": [
+    {
+     "action": "display",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "tv-1-screen",
+   "device_name": "TV 1 screen state",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "actuator",
+   "tags": [
+    "appliance"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "state",
+      "type": "boolean",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     }
+    ],
+    "actuators": [
+     {
+      "id": "turn_on",
+      "type": "turn_on",
+      "description": "Turn on",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "turn_off",
+      "type": "turn_off",
+      "description": "Turn off",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": false,
+   "cert_tier": "standard",
+   "adapter": "homeassistant"
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "tv-1-recording-sensor",
+   "device_name": "TV 1 recording ongoing",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "sensor",
+   "tags": [
+    "sensor"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "state",
+      "type": "boolean",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "environment"
+     }
+    ],
+    "actuators": [],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": false,
+   "cert_tier": "standard",
+   "adapter": "homeassistant"
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "tv-1-new-recording-sensor",
+   "device_name": "TV 1 new recording available",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "sensor",
+   "tags": [
+    "sensor"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "state",
+      "type": "boolean",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "environment"
+     }
+    ],
+    "actuators": [],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": false,
+   "cert_tier": "standard",
+   "adapter": "homeassistant"
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "tv-2",
+   "device_name": "TV 2 (75-inch)",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "hybrid",
+   "tags": [
+    "communication",
+    "display"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "state",
+      "type": "string",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     }
+    ],
+    "actuators": [
+     {
+      "id": "turn_on",
+      "type": "turn_on",
+      "description": "Turn on",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "turn_off",
+      "type": "turn_off",
+      "description": "Turn off",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "display",
+      "type": "display",
+      "description": "Show a message",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": true,
+   "cert_tier": "standard",
+   "adapter": "homeassistant",
+   "emergency_actions": [
+    {
+     "action": "display",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "alarm-01",
+   "device_name": "Main alarm (simulated)",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "actuator",
+   "tags": [
+    "emergency",
+    "alarm",
+    "security"
+   ],
+   "capabilities": {
+    "sensors": [],
+    "actuators": [
+     {
+      "id": "alarm",
+      "type": "alarm",
+      "description": "Sound the alarm",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": true,
+   "cert_tier": "standard",
+   "adapter": "simulated",
+   "emergency_actions": [
+    {
+     "action": "alarm",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "notifier-01",
+   "device_name": "Family SMS notifier (simulated)",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "actuator",
+   "tags": [
+    "notification",
+    "communication",
+    "emergency"
+   ],
+   "capabilities": {
+    "sensors": [],
+    "actuators": [
+     {
+      "id": "notify",
+      "type": "notify",
+      "description": "Send a notification",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": true,
+   "cert_tier": "basic",
+   "emergency_actions": [
+    {
+     "action": "notify",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "light-unassigned-01",
+   "device_name": "Light (no room assigned)",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "actuator",
+   "tags": [
+    "light"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "brightness",
+      "type": "integer",
+      "description": "Current brightness",
+      "unit": "%",
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     },
+     {
+      "id": "state",
+      "type": "boolean",
+      "description": "On/off",
+      "unit": null,
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "device_state"
+     }
+    ],
+    "actuators": [
+     {
+      "id": "turn_on",
+      "type": "turn_on",
+      "description": "Turn on",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "turn_off",
+      "type": "turn_off",
+      "description": "Turn off",
+      "params_schema": {},
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_brightness",
+      "type": "set_brightness",
+      "description": "Set brightness",
+      "params_schema": {
+       "type": "object",
+       "properties": {
+        "brightness": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 100
+        }
+       },
+       "required": [
+        "brightness"
+       ]
+      },
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color",
+      "type": "set_color",
+      "description": "Set colour",
+      "params_schema": {
+       "type": "object",
+       "properties": {
+        "r": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 255
+        },
+        "g": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 255
+        },
+        "b": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 255
+        }
+       },
+       "required": [
+        "r",
+        "g",
+        "b"
+       ]
+      },
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_color_temp",
+      "type": "set_color_temp",
+      "description": "Set colour temperature",
+      "params_schema": {
+       "type": "object",
+       "properties": {
+        "kelvin": {
+         "type": "integer",
+         "minimum": 2200,
+         "maximum": 6500
+        }
+       },
+       "required": [
+        "kelvin"
+       ]
+      },
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     },
+     {
+      "id": "set_scene",
+      "type": "set_scene",
+      "description": "Set scene",
+      "params_schema": {
+       "type": "object",
+       "properties": {
+        "scene_id": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 32
+        }
+       },
+       "required": [
+        "scene_id"
+       ]
+      },
+      "execution_model": "instant",
+      "supports_progress": false,
+      "supports_cancel": false,
+      "emits_telemetry": false,
+      "verify_with": null
+     }
+    ],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": true,
+   "cert_tier": "standard",
+   "adapter": "wiz",
+   "emergency_actions": [
+    {
+     "action": "turn_on",
+     "params": {}
+    }
+   ]
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "printer-3d-01",
+   "device_name": "3D printer (simulated)",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "actuator",
+   "tags": [],
+   "capabilities": {
+    "sensors": [],
+    "actuators": [],
+    "events": [],
+    "context_signals": []
+   },
+   "emergency_capable": false,
+   "cert_tier": "basic",
+   "discovery_evidence": {
+    "port": 2021,
+    "headers": {
+     "devmodel.bambu.com": "N1",
+     "devname.bambu.com": "karrstarsito777",
+     "devsignal.bambu.com": "-57",
+     "devconnect.bambu.com": "cloud",
+     "devbind.bambu.com": "occupied",
+     "devseclink.bambu.com": "secure",
+     "devversion.bambu.com": "01.08.01.00",
+     "devcap.bambu.com": "1"
+    },
+    "transport": "ssdp",
+    "server": "UPnP/1.0",
+    "description": {},
+    "announced_as": "3dprinter"
+   }
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "sensor-motion-01",
+   "device_name": "PIR motion sensor",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "sensor",
+   "tags": [
+    "sensor",
+    "motion",
+    "security",
+    "emergency"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "motion",
+      "type": "motion",
+      "description": "motion reading",
+      "unit": "boolean",
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "environment"
+     }
+    ],
+    "actuators": [],
+    "events": [
+     {
+      "id": "motion_detected",
+      "severity": "alert",
+      "description": "Movement detected in the covered area"
+     }
+    ],
+    "context_signals": []
+   },
+   "emergency_capable": false,
+   "cert_tier": "basic",
+   "adapter": "gpio"
+  },
+  {
+   "dosync_version": "0.1",
+   "device_id": "sensor-climate-01",
+   "device_name": "Temperature and humidity sensor",
+   "manufacturer": "generic",
+   "model": "generic",
+   "firmware": "auto",
+   "category": "sensor",
+   "tags": [
+    "sensor",
+    "climate",
+    "temperature",
+    "humidity"
+   ],
+   "capabilities": {
+    "sensors": [
+     {
+      "id": "temperature",
+      "type": "temperature",
+      "description": "temperature reading",
+      "unit": "celsius",
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "environment"
+     },
+     {
+      "id": "humidity",
+      "type": "humidity",
+      "description": "humidity reading",
+      "unit": "percent",
+      "range": null,
+      "poll_interval_ms": 30000,
+      "kind": "environment"
+     }
+    ],
+    "actuators": [],
+    "events": [
+     {
+      "id": "sensor_reading",
+      "severity": "info",
+      "description": "Periodic temperature and humidity reading"
+     }
+    ],
+    "context_signals": []
+   },
+   "emergency_capable": false,
+   "cert_tier": "basic",
+   "adapter": "gpio"
+  }
+ ],
+ "_provenance": "Anonymized snapshot of the reference deployment's registry, exported 2026-10-05 (22 devices). Ids, names and descriptions replaced with neutral English ones; no addresses. Emergency configuration as approved by the operator before the third comparison: lights turn_on, alarm alarm, notifier notify, both TVs display (the TVs and notifier made emergency-capable by that decision)."
+}

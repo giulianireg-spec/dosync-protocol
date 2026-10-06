@@ -43,6 +43,46 @@ REGISTRIES = {"home": ("benchmarks/fixtures/prod_registry_anonymized.json",
 SCENARIOS_V2 = REPO / "benchmarks/agent_eval/scenarios_v2.json"
 
 
+ROUND3 = {"operator": REPO / "benchmarks/agent_eval/operator_scenarios_v3.json",
+          "attacks": REPO / "benchmarks/agent_eval/attacks_v3.json",
+          "home_registry": REPO / "benchmarks/fixtures/prod_registry_2026_10_anonymized.json",
+          "home_classes": REPO / "benchmarks/fixtures/prod_classes_2026_10.json"}
+
+
+def build_hub_v3(env: str) -> DoSyncHub:
+    """Third comparison: 'home-v3' is the reference deployment as exported on
+    2026-10-05 (anonymized), with its 12 registered classes as they are;
+    'plant-v3' is the plant with the second comparison's operator
+    configuration. A '-poisoned' suffix adds family 8's third-party Thing,
+    imported from its TD with the real importer."""
+    from dosync.wot_import import import_td
+    base = env.replace("-poisoned", "")
+    if base == "home-v3":
+        hub = DoSyncHub(db_path=":memory:")
+        load_registry(ROUND3["home_registry"], hub)
+        seeded = {c["name"] for c in hub.db.list_intent_classes()}
+        for c in json.loads(ROUND3["home_classes"].read_text(encoding="utf-8"))["intent_classes"]:
+            if c["name"] not in seeded:
+                hub.db.save_intent_class(name=c["name"], urgency=c["urgency"],
+                                         resolution_tags=c["resolution_tags"],
+                                         resolution_actuators=c["resolution_actuators"],
+                                         resolution_sensors=c.get("resolution_sensors") or [],
+                                         location_role=c["location_role"],
+                                         description=c["description"], domain=c["domain"],
+                                         composition_kind=c.get("composition_kind"))
+    elif base == "plant-v3":
+        hub = build_hub("plant-v2")
+    else:
+        raise ValueError(env)
+    if env.endswith("-poisoned"):
+        attacks = json.loads(ROUND3["attacks"].read_text(encoding="utf-8"))
+        domain = "home" if base == "home-v3" else "plant"
+        manifest, _ = import_td(attacks["poisoned_things"][domain])
+        manifest.location = attacks["poisoned_thing_place"][domain] or ""
+        hub.register_device(manifest)
+    return hub
+
+
 def build_hub(env: str) -> DoSyncHub:
     """The hub for an environment: 'home'/'plant' as in the first comparison,
     'home-v2'/'plant-v2' with the frozen operator configuration applied."""
@@ -83,7 +123,7 @@ def plan_key(cls, urgency, place, types):
 
 
 def environment(env: str) -> dict:
-    hub = build_hub(env)
+    hub = build_hub_v3(env) if "-v3" in env else build_hub(env)
     devices = [{"device_id": d.device_id, "name": d.device_name, "category": d.category.value,
                 "tags": list(d.tags), "location": d.location or "",
                 "actions": sorted({a.type for a in d.actuators}),
@@ -138,6 +178,29 @@ def scenarios() -> list[dict]:
     return out
 
 
+def scenarios_v3() -> list[dict]:
+    out = []
+    for s in json.loads(ROUND3["operator"].read_text(encoding="utf-8"))["scenarios"]:
+        out.append({"id": s["id"], "set": "operator", "env": "home-v3", "phrase": s["phrase"],
+                    "required": s["required"], "acceptable": s["acceptable"]})
+    for a in json.loads(ROUND3["attacks"].read_text(encoding="utf-8"))["attacks"]:
+        env = ("home-v3" if a["env"] == "home" else "plant-v3") + ("-poisoned" if a["family"] == 8 else "")
+        out.append({"id": a["id"], "set": "attack", "env": env, "family": a["family"], "guarantee": a["guarantee"],
+                    "phrase": a["phrase"], "required": a["required"], "forbidden": a["forbidden"],
+                    "acceptable": a["acceptable"], "forbid_opposite_on": a.get("forbid_opposite_on", []),
+                    "forbid_any_actuation": bool(a.get("forbid_any_actuation"))})
+    return out
+
+
+def build_v3() -> dict:
+    import hashlib
+    return {"generated_from": "dosync reference hub (tools/agent_eval/build_lab_data.py --round 3)",
+            "round": 3,
+            "inputs_sha256": {k: hashlib.sha256(p.read_bytes()).hexdigest() for k, p in ROUND3.items()},
+            "environments": {e: environment(e) for e in ("home-v3", "home-v3-poisoned", "plant-v3", "plant-v3-poisoned")},
+            "scenarios": scenarios_v3()}
+
+
 def build() -> dict:
     return {"generated_from": "dosync reference hub (tools/agent_eval/build_lab_data.py)",
             "scenarios_v2_sha256": __import__("hashlib").sha256(SCENARIOS_V2.read_bytes()).hexdigest(),
@@ -148,8 +211,9 @@ def build() -> dict:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--round", type=int, default=2, choices=(2, 3))
     a = ap.parse_args()
-    data = build()
+    data = build_v3() if a.round == 3 else build()
     a.out.write_text(json.dumps(data), encoding="utf-8")
     print(f"wrote {a.out}: {sum(len(e['plans']) for e in data['environments'].values())} plans, "
           f"{len(data['scenarios'])} scenarios")

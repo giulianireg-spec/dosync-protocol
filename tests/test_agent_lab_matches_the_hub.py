@@ -20,6 +20,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 TEMPLATE = REPO / "tools" / "agent_eval" / "agent-eval.template.html"
+TEMPLATE_V3 = REPO / "tools" / "agent_eval" / "agent-eval-v3.template.html"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="Node.js not installed")
 
 
@@ -58,16 +59,17 @@ def _cases(data, rng):
     return out
 
 
-def _hub_answers(cases):
+def _hub_answers(cases, builder=None):
     from fastapi.testclient import TestClient
     import dosync.server as srv
     from dosync.models import Intent, IntentClass, Urgency
     from tools.agent_eval.build_lab_data import build_hub
+    builder = builder or build_hub
     answers, original = [], srv.hub
     try:
         with TestClient(srv.app) as client:
             for env in dict.fromkeys(c["env"] for c in cases):
-                srv.hub = build_hub(env)
+                srv.hub = builder(env)
                 for case in (c for c in cases if c["env"] == env):
                     before = client.get("/v1/status").json()["intents_rejected"]
                     r = client.post("/v1/intent/async", json={"intent": case["cls"], "urgency": case["urgency"],
@@ -92,8 +94,8 @@ def _hub_answers(cases):
     return answers
 
 
-def _port_answers(data, cases, tmp_path):
-    js = TEMPLATE.read_text(encoding="utf-8")
+def _port_answers(data, cases, tmp_path, template=TEMPLATE):
+    js = template.read_text(encoding="utf-8")
     port = js[js.index("// ==== HUB PORT (begin)"):js.index("// ==== HUB PORT (end)")]
     (tmp_path / "data.json").write_text(json.dumps(data), encoding="utf-8")
     (tmp_path / "cases.json").write_text(json.dumps(cases), encoding="utf-8")
@@ -127,4 +129,22 @@ def test_the_laboratory_port_agrees_with_the_hub(tmp_path):
               "invalid_proposals", "ambiguous_actions")}
     assert all(kinds.values()), f"the random cases must exercise every refusal: {kinds}"
     assert sum(1 for h in hub if h.get("refused")) > 50, "too few proposal refusals exercised"
+    assert not diffs, f"{len(diffs)} of {len(cases)} disagree; first: {diffs[0]}"
+
+
+def test_the_third_round_laboratory_agrees_with_the_hub(tmp_path):
+    """The same check on the third comparison's environments: the reference
+    deployment with its 12 classes as registered (the wildcard of operate_device,
+    classes left from other domains), the plant, and both with family 8's
+    third-party Thing imported from its TD."""
+    from tools.agent_eval.build_lab_data import build_hub_v3, build_v3
+    data = build_v3()
+    cases = _cases(data, random.Random(20261005))
+    hub, port = _hub_answers(cases, builder=build_hub_v3), _port_answers(data, cases, tmp_path, TEMPLATE_V3)
+
+    def norm(a):
+        return {k: sorted(map(tuple, v)) if isinstance(v, list) else v for k, v in a.items()}
+    diffs = [(c, h, p) for c, h, p in zip(cases, hub, port) if norm(h) != norm(p)]
+    assert any(c["cls"] == "operate_device" for c in cases), "operate_device must be exercised"
+    assert sum(1 for h in hub if h.get("reason") == "proposals_required") > 5
     assert not diffs, f"{len(diffs)} of {len(cases)} disagree; first: {diffs[0]}"
