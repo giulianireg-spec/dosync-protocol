@@ -16,6 +16,12 @@ operator's hardware, and the first anonymization kept two brands. Device names b
 ("Turn off TV 1 and its ambient backlight", for the operator's approved "turn off the [brand] TV and the [brand]
 backlight"); nothing else changed. The hashes above are the amended files'; the superseded ones began `f37f668d137afede` (scenarios) and `be34e03e2757887d` (registry).
 
+**Amendment 2 (2026-10-05, after the smoke test, before any counted run).** In the governed condition the
+agent's intent tool takes no proposals, yet it was offered `operate_device`, which acts only on proposals: in the
+smoke test the agent spent four attempts on it before choosing another class. A class that grants `*` is no
+longer offered in the governed condition; the governed-direct conditions keep it (under least authority, choosing
+it and being blocked is part of what is measured). Nothing else changed.
+
 ## Why a third comparison
 
 The second comparison measured selection: the governed direct mode reached F1 0.96 and let no action through
