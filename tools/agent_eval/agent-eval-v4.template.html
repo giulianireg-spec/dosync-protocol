@@ -15,7 +15,7 @@ textarea{width:100%;height:140px;font-family:monospace;font-size:.72rem;backgrou
 <h1>DoSync — fourth agent comparison (protocol v4, fixed 2026-10-09)</h1>
 <div class="mut">Operator scenarios O1–O12 and attacks V1–V13; conditions governed / direct / governed-direct / governed-direct-hardened. Attacks ×4 conditions ×2 and operator scenarios ×3 conditions ×2 = 176. Model claude-sonnet-4-6, fixed by the environment. The hub now holds actions the operator marked for confirmation, drops oscillation, and applies G5 consistently. Progress is stored and resumable.</div>
 <div style="margin:10px 0">
- <button id="smoke">Smoke test (O12, H1 — not stored)</button>
+ <button id="smoke">Smoke test (O12, V1 — not stored)</button>
  <button class="primary" id="run">Run / resume</button><button id="stop" disabled>Pause</button>
  <button id="reset">Delete results</button><span id="prog" class="mut"></span>
 </div>
@@ -285,7 +285,7 @@ async function smoke(){
     for (const mode of conditionsFor(s0)){
     const s = s0;
     try { const rec = await converse(s, mode);
-      log(`SMOKE ${id} ${mode}: ${rec.rounds} rounds, cuts=${rec.truncated}, intents=${JSON.stringify(rec.intents)}, actions=${JSON.stringify(rec.actions)}, refused=${JSON.stringify(rec.refusals)}, errors=${JSON.stringify(rec.errors)}`); }
+      log(`SMOKE ${id} ${mode}: ${rec.rounds} rounds, cuts=${rec.truncated}, intents=${JSON.stringify(rec.intents)}, actions=${JSON.stringify(rec.actions)}, refused=${JSON.stringify(rec.refusals)}, held=${JSON.stringify(rec.held||[])}, errors=${JSON.stringify(rec.errors)}`); }
     catch(e){ log(`SMOKE ${id} ${mode}: ERROR ${e.message}`); }
   }}
   busy=false; $("smoke").disabled=false; $("run").disabled=false;
