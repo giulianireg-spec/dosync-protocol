@@ -2232,6 +2232,11 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
                 "failed_devices": result.failed_devices,
                 **({"refused_proposals": list(result.refused_proposals)}
                    if getattr(result, "refused_proposals", None) else {}),
+                # Actions withheld for human confirmation (G9). Present only when a
+                # require_confirmation policy held something; a human releases them
+                # with POST /v1/intents/{id}/confirm (operator credential).
+                **({"held_for_confirmation": list(result.held_for_confirmation)}
+                   if getattr(result, "held_for_confirmation", None) else {}),
                 "results": [
                     {"device_id": r.device_id, "action": r.action, "success": r.success,
                      "response": r.response, "error": r.error,
@@ -2303,6 +2308,74 @@ async def get_intent_result(intent_id: str, auth: str = Depends(require_auth)):
                     "results":           completed,
                 }}
     return {"intent_id": intent_id, "status": entry["status"], **entry["result"]}
+
+
+def _require_operator(x_dosync_operator_token: str | None):
+    """Confirmation is a human decision: it needs the operator credential, the one
+    the agent never holds and the MCP server never exposes (G9, spec §6.8 rule 9).
+    Unlike direct control, it is not gated by DOSYNC_DIRECT_CONTROL — an operator
+    may always release or refuse what a policy held."""
+    if not _operator_credential_ok(x_dosync_operator_token):
+        raise HTTPException(
+            status_code=403,
+            detail="operator_credential_required: confirming or denying a held action "
+                   "needs the operator credential (X-DoSync-Operator-Token). If no "
+                   "DOSYNC_OPERATOR_TOKEN is set, no confirmation can be released — set "
+                   "one before configuring a require_confirmation policy. Agents fire intents.")
+
+
+@app.post("/v1/intents/{intent_id}/confirm", tags=["AI"],
+          summary="Release actions an intent held for human confirmation (G9)")
+async def confirm_intent_endpoint(
+    intent_id: str,
+    auth: str = Depends(require_auth),
+    x_dosync_operator_token: str | None = Header(default=None),
+):
+    """Execute the actions a require_confirmation policy withheld from this intent.
+
+    Operator credential only. Returns 404 if nothing is held for this intent (it
+    was never held, already confirmed/denied, or expired), 200 with status
+    `confirmed` or `expired` otherwise.
+    """
+    _require_operator(x_dosync_operator_token)
+    result = await hub.confirm_intent(intent_id, executor, operator="operator")
+    if result["status"] == "not_found":
+        raise HTTPException(status_code=404,
+                            detail=f"No actions are held for confirmation on intent '{intent_id}'.")
+    return result
+
+
+@app.post("/v1/intents/{intent_id}/deny", tags=["AI"],
+          summary="Deny (drop) actions an intent held for human confirmation (G9)")
+async def deny_intent_endpoint(
+    intent_id: str,
+    auth: str = Depends(require_auth),
+    x_dosync_operator_token: str | None = Header(default=None),
+):
+    """Drop the actions a require_confirmation policy withheld from this intent.
+
+    Operator credential only. The held actions never run; the decision is
+    recorded in the audit chain.
+    """
+    _require_operator(x_dosync_operator_token)
+    result = hub.deny_intent(intent_id, operator="operator")
+    if result["status"] == "not_found":
+        raise HTTPException(status_code=404,
+                            detail=f"No actions are held for confirmation on intent '{intent_id}'.")
+    return result
+
+
+@app.get("/v1/intents/{intent_id}/pending", tags=["AI"],
+         summary="The actions an intent is holding for human confirmation (G9)")
+async def pending_confirmation_endpoint(intent_id: str, auth: str = Depends(require_auth)):
+    """What, if anything, this intent is holding for a human. Readable with the
+    hub credential (knowing something is held is not acting on it). 404 when
+    nothing is held."""
+    pend = hub.pending_confirmation(intent_id)
+    if pend is None:
+        raise HTTPException(status_code=404,
+                            detail=f"No actions are held for confirmation on intent '{intent_id}'.")
+    return pend
 
 
 @app.post("/v1/event", tags=["Devices"])

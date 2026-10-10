@@ -85,6 +85,14 @@ settings exist for deployments whose needs differ from that, not as a checklist.
 | `DOSYNC_RESOLVER_URL` | _unset_ |
 | `DOSYNC_RESOLVER_CA_CERT` | _unset_ |
 
+## Governance (§6.8 rules 9, 10)
+
+| Setting | Default |
+|---|---|
+| `DOSYNC_OSCILLATION_WINDOW` | `60` |
+| `DOSYNC_OSCILLATION_MAX_REVERSALS` | `1` |
+| `DOSYNC_CONFIRMATION_TIMEOUT` | `300` |
+
 ## Other
 
 | Setting | Default |

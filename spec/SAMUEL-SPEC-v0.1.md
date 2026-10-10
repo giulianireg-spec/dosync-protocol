@@ -101,11 +101,12 @@ audit log.
 | **G1** | **Declared.** A device performs only actions it declares. | §6.8 rules 1, 7, 8 |
 | **G2** | **Authorized.** An action runs only if the intent's class grants it; `operate_device` grants any declared action, and an operator narrows or blocks it by policy. | §6.8 rule 7 |
 | **G3** | **Placed.** When the class restricts, only devices at or below the named place act; an unknown restricting place is refused outside an emergency. | §6.8 rules 2, 3 |
-| **G4** | **Consistent.** No plan sends one device two opposite actions (`lock`/`unlock`, `turn_on`/`turn_off`, `open`/`close`, `start`/`stop`, `arm`/`disarm`); an intent whose class grants both of a pair must say which it means, or is refused outside an emergency. | §6.8 rule 6 |
-| **G5** | **Declared first in emergencies.** At emergency urgency, an emergency-capable device that has emergency actions performs exactly those. | §6.8 rules 4, 5 |
+| **G4** | **Consistent.** No plan sends one device two opposite actions (`lock`/`unlock`, `turn_on`/`turn_off`, `open`/`close`, `start`/`stop`, `arm`/`disarm`); an intent whose class grants both of a pair must say which it means, or is refused outside an emergency. And no device oscillates: it is not reversed across a pair more than once within a window, across separate intents (declared emergency actions exempt). | §6.8 rules 6, 10 |
+| **G5** | **Declared first in emergencies.** At emergency urgency, an emergency-capable device that has emergency actions performs exactly those — on both the resolution and the governed-direct paths alike. | §6.8 rules 4, 5 |
 | **G6** | **Accountable.** A refused intent, proposal or direct action is never executed and never silently dropped: it is returned with its reason and recorded in the audit log. | §6.8 rule 7; §7.8 |
 | **G7** | **Policed.** Before anything runs, the operator's policies evaluate the plan and MAY deny it or remove devices from it, recording the plan before and after. | §7 |
 | **G8** | **No side door.** Direct control is closed by default, or open only to an operator credential that is never given to an agent; when open, G1 and G5 still hold. The hub reports which. | §6.8 rule 8 |
+| **G9** | **Confirmed.** What the operator marks consequential does not run on an agent's say-so: the hub withholds only those actions, runs the rest, and releases a held action only to a human with the operator credential (the agent never holds it, the MCP server never exposes it); a hold expires if unreleased. An emergency does not bypass this wholesale — a device's declared emergency actions flow unless the operator marked them `even_in_emergency`. This is the guarantee that bounds a misled or injected agent: SAMUEL does not detect the injection; it confines the damage to what the operator did not mark. | §6.8 rule 9 |
 
 ## 5. Refusals
 
@@ -137,6 +138,16 @@ can count.
 | `not_its_emergency_action` | In an emergency, the device has emergency actions and this is not one |
 | `opposite_actions` | The same device was proposed both actions of an opposite pair |
 
+Two more reasons appear in `refused_proposals` but are not proposal-validation
+refusals — they are applied by the hub to any plan, resolved or proposed:
+
+- `oscillation` — the action would reverse the device across an opposite pair
+  once too often within the window (G4, rule 10).
+
+An action an operator marked for confirmation (G9) is not refused: it is **held**.
+It is reported in the result and the audit log as `held_for_confirmation` (not a
+refusal), and a human releases or denies it with the operator credential — see §6.
+
 ### 5.3 A direct action (HTTP 403 or 422)
 
 | Reason | When |
@@ -152,8 +163,10 @@ Every decision is appended to a log chained as `h_n = SHA256(e_n ‖ h_{n-1})`, 
 that removing or altering an entry breaks every hash after it. The log MUST record
 executed intents with any refused proposals and any devices that took part
 without acting; blocked intents with the deciding policy; plans a policy modified,
-before and after; and direct actions executed, blocked or refused. Event types are
-listed in the protocol's §7.8.
+before and after; actions held for confirmation and their release, denial or
+expiry (G9); actions dropped to stop a device oscillating (G4, rule 10); and
+direct actions executed, blocked or refused. Event types are listed in the
+protocol's §7.8.
 
 ## 7. From a device description to the model
 
@@ -170,7 +183,7 @@ A format conforms by defining how its descriptions map to §2.
   `https://dosync.dev/ns/governance`.
 
 An action that keeps its own name is governed like any other: `operate_device`
-grants it, and G1 and G3–G8 hold.
+grants it, and G1 and G3–G9 hold.
 
 ## 8. Conformance
 
@@ -182,11 +195,12 @@ certification suite (`dosync-certify`, spec/CERTIFICATION-GUIDE.md):
 | G1 Declared | C25, C26 |
 | G2 Authorized | C25 |
 | G3 Placed | C15, C16, C17, C18, C19, C21 |
-| G4 Consistent | C23, C25 |
+| G4 Consistent | C23, C25, C27 |
 | G5 Declared first | C22, C24 |
 | G6 Accountable | C21, C25 |
 | G7 Policed | C04, C05, C06 |
 | G8 No side door | C26 |
+| G9 Confirmed | C28 |
 
 and keeps the audit log verifiable (C07, C08).
 

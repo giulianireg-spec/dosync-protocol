@@ -328,14 +328,14 @@ Every intent carries an urgency level that controls execution behavior across th
 
 | Level | Value | Behavior |
 |---|---|---|
-| `emergency` | `"emergency"` | Bypasses every policy that declares `bypass_on_emergency` (time windows, confirmation, rate limits); `BlockIntentPolicy`, and a `DeviceExclusionPolicy` declared not to bypass, still hold. Executes immediately without confirmation. Emergency-capable devices are included even without a matching capability — within the intent's location when its class restricts. All actions logged as critical with SHA-256 chain. |
+| `emergency` | `"emergency"` | Bypasses every policy that declares `bypass_on_emergency` (time windows, rate limits); `BlockIntentPolicy`, and a `DeviceExclusionPolicy` declared not to bypass, still hold. **Confirmation is not bypassed wholesale** (rule 9, since 2026-10-09): a device's declared emergency actions flow without a human, but any other action an operator marked consequential is still held — unless the marking policy set `even_in_emergency`. Emergency-capable devices are included even without a matching capability — within the intent's location when its class restricts. All actions logged as critical with SHA-256 chain. |
 | `alert` | `"alert"` | High priority. Confirmation policies may apply depending on hub configuration. Devices with `emergency_capable: true` score higher. |
 | `warning` | `"warning"` | Elevated priority. A condition that warrants attention but does not require immediate action. All policies apply. Used for anomalies that are notable but not urgent (e.g. high temperature, unusual sensor reading). |
 | `info` | `"info"` | Normal priority. All policies apply. Default for routine operations, status updates, and scheduled events. |
 
 **The urgency hierarchy:** `emergency > alert > warning > info`
 
-Only `emergency` triggers the emergency override path — bypassing policy constraints and confirmation requirements. The other three levels are subject to full policy evaluation.
+Only `emergency` triggers the emergency override path — bypassing the policies that declare `bypass_on_emergency`. It does **not** bypass human confirmation wholesale: a device's declared emergency actions flow, but an action an operator marked consequential is still held unless the policy set `even_in_emergency` (rule 9, §6.8). The other three levels are subject to full policy evaluation.
 
 **Usage guidance:**
 - Use `emergency` only for genuine safety threats where milliseconds matter and bypassing policies is acceptable
@@ -407,8 +407,10 @@ These five are protected — they cannot be deleted or overridden. Any additiona
 When `urgency = "emergency"` and `emergency_override = true` on a device:
 
 ```
-1. Skip normal permission checks
-2. Execute immediately (no confirmation required)
+1. Skip normal permission checks (the policies that declare bypass_on_emergency)
+2. Execute immediately — EXCEPT actions an operator marked consequential (rule 9),
+   which are still held for a human; a device's declared emergency actions flow
+   unless that policy set even_in_emergency
 3. Log all actions with tamper-evident timestamp
 4. Notify all registered contacts simultaneously
 5. Allow external communication (call emergency services)
@@ -420,7 +422,9 @@ When `urgency = "emergency"` and `emergency_override = true` on a device:
 
 The Policy Engine evaluates every intent before execution, regardless of origin. Policies are evaluated in priority order (lowest number first). The first `BLOCK` or `CONFIRM` result stops evaluation. `MODIFY` results are accumulated — multiple `MODIFY` policies can apply to the same intent.
 
-Emergency intents (`urgency = "emergency"`) bypass policy evaluation by default. Each policy declares whether it participates in this bypass via a `bypass_on_emergency` flag (default: `true`). Policies that represent absolute operator constraints set `bypass_on_emergency = false` and are evaluated even for emergency intents. The built-in `BlockIntentPolicy` uses this mechanism: an operator-blocked intent class cannot be executed regardless of urgency. All other built-in policies (`NeverAfterHoursPolicy`, `RequireConfirmationPolicy`, etc.) default to `bypass_on_emergency = true` and are bypassed on emergency urgency.
+Emergency intents (`urgency = "emergency"`) bypass policy evaluation by default. Each policy declares whether it participates in this bypass via a `bypass_on_emergency` flag (default: `true`). Policies that represent absolute operator constraints set `bypass_on_emergency = false` and are evaluated even for emergency intents. The built-in `BlockIntentPolicy` uses this mechanism: an operator-blocked intent class cannot be executed regardless of urgency. Other built-in policies (`NeverAfterHoursPolicy`, etc.) default to `bypass_on_emergency = true` and are bypassed on emergency urgency.
+
+`RequireConfirmationPolicy` is the exception, since 2026-10-09: it is **not** a whole-plan engine decision and is **not** bypassed wholesale by an emergency. It is enforced by the hub as a per-action **hold** (rule 9, §6.8, G9): the hub withholds only the marked actions and runs the rest, and a human releases or denies them with the operator credential. In an emergency a device's declared emergency actions flow without confirmation, unless the policy set `even_in_emergency`. The policy abstains at the engine level (`evaluate` returns `None`); the `CONFIRM` decision remains for custom policies that want the engine's whole-plan semantics.
 
 ```
 PolicyEngine.evaluate(intent, action_plan) → PolicyResult
@@ -437,7 +441,7 @@ Built-in policies (all configurable):
 | `ConflictResolutionPolicy` | 1 | Blocks lower-priority intents when a higher-priority intent is active. |
 | `ContextualWeightingPolicy` | 2 | Adjusts device scoring based on time-of-day and context signals. |
 | `NeverAfterHoursPolicy` | 10 | Blocks specific actuator types outside defined time windows. |
-| `RequireConfirmationPolicy` | 20 | Requires explicit confirmation before executing specified actuators. |
+| `RequireConfirmationPolicy` | 20 | Marks actuator types (optionally on named devices) that need a human. The hub holds only those actions and runs the rest; a held action is released or denied with the operator credential (rule 9, §6.8). Not bypassed wholesale by an emergency. |
 
 ### 6.7 Intent frequency limits
 
@@ -479,6 +483,8 @@ list. They were added to the protocol in 0.5 (§10.5).
 6. **A plan never undoes itself.** No plan sends one device two actions that undo each other (`lock`/`unlock`, `turn_on`/`turn_off`, `open`/`close`, `start`/`stop`, `arm`/`disarm`). An intent may narrow its class to the actions it means with `context.action_types` (a non-empty subset of the class's actions; otherwise `422`, `invalid_actions`), and must when the class asks for both actions of such a pair: `control_access` asks for `lock` and `unlock`. Outside an emergency, such an intent is refused (`422`, `ambiguous_actions`, naming the pair); in an emergency it is never refused, and a device left with both does its declared emergency actions or none (rev. 2026-10-02).
 7. **Governed direct mode: the agent proposes, the hub guarantees.** An intent may carry `context.proposed_actions`, a list of `{device_id, action, params?}` the agent chose itself. The hub then validates instead of resolving: each proposal runs only if the device exists and declares the action (`read_sensors` for a device with sensors), the intent's class allows the action (an intent bounds what the agent may do: no `unlock` inside a `notify`; a class that asks for sensors, or for no actuators, allows `read_sensors`), the device is at a place the class restricts to, it is not paired with an opposite action on the same device, and — in an emergency — it is one of the device's declared emergency actions when it declared any. Every other proposal is refused with its reason (`unknown_device`, `not_declared`, `outside_class`, `outside_place`, `opposite_actions`, `not_its_emergency_action`), never executed, and reported in the result and the audit log as `refused_proposals`. What passes goes on through parameter validation, the operator's policies, execution and the audit log exactly like a resolved plan. Since proposals name their direction, the ambiguity rule (6) does not refuse them. A malformed list is `422`, `invalid_proposals`; an empty list means no proposals, and the hub resolves the intent as usual (rev. 2026-10-03).
 8. **Direct control is not an agent's path.** The guarantees above bind intents. Direct control of one device (§ on the direct action endpoint) carries no intent class and no place, so a hub opens it only as its operator sets it — closed by default, or only for an operator credential never given to an agent, or open for development — and reports the setting in its status. When open, a device still performs only actions it declares, and in an emergency only its declared emergency actions. An agent that wants to choose devices fires an intent with proposed actions (rule 7); to operate a named device it fires the universal class `operate_device`, which grants any action the device declares, acts only on the actions proposed (`422 proposals_required` otherwise), and keeps every guarantee but class authority — which an operator narrows or blocks by policy (rev. 2026-10-05).
+9. **What an operator marks consequential waits for a human.** An operator may mark actuator types — optionally on named devices — that MUST NOT run without a person (`RequireConfirmationPolicy`: `actuator_types`, optional `device_ids`, optional `even_in_emergency`, §6.6). When a plan contains a marked action the hub withholds **only that action** and executes the rest, holds it keyed by `intent_id`, and reports it in the result and the audit log (`actions_held_for_confirmation`, and `held_for_confirmation` on the result). A held action runs only when a human confirms it, and is dropped when a human denies it, in both cases with the **operator credential** (`POST /v1/intents/{id}/confirm` | `/deny`, §7.3.2) — a credential an agent never holds and the MCP server never exposes; an unreleased hold expires after `DOSYNC_CONFIRMATION_TIMEOUT` (default 300 s). Confirmation (`confirmation_confirmed`), denial (`confirmation_denied`) and expiry (`confirmation_expired`) are each recorded. An emergency does **not** bypass this hold wholesale: a device's declared emergency actions (rule 5) still flow without confirmation, so evacuation and life safety are never blocked, **unless** the marking policy set `even_in_emergency` — for an action a system other than the agent is responsible for in an emergency. This is what bounds a misled or injected agent: the hub cannot tell a legitimate intent from an injected one, but what the operator marked consequential does not happen on an agent's say-so alone. Added 2026-10-09; nothing is held in a deployment that marks nothing, which is the default (rev. 2026-10-09).
+10. **No device oscillates.** Rule 6 forbids a single plan from undoing itself; this forbids a device from being reverted across an opposite pair again and again across *separate* intents. Within a rolling window (`DOSYNC_OSCILLATION_WINDOW`, default 60 s; `0` disables) a device may be reversed across a given opposite pair at most `DOSYNC_OSCILLATION_MAX_REVERSALS` times (default 1): one correction is legitimate, a third reversal is dropped with the reason `oscillation`, reported in `refused_proposals` and the audit log (`actions_dropped_oscillation`), and never executed (device state is unchanged). A device's declared emergency actions (rule 5) are exempt. The guard holds on both the resolution and the governed-direct paths. It answers the flashing-light / toggling-lock attack the third agent comparison found, which spreads one reversal per intent across many intents where rule 6 cannot see it (added 2026-10-09).
 
 ---
 
@@ -628,6 +634,37 @@ still governed:
 An endpoint that skipped policy and audit would be a "mode without the
 protocol", which §"On adapter-side fallback" of DESIGN-PRINCIPLES rejects for
 the protocol as a whole.
+
+### 7.3.2 Confirming an action held for a human
+
+When a `RequireConfirmationPolicy` (§6.6) marks an action, the hub withholds it
+and runs the rest of the plan (rule 9, §6.8). The intent's result and the audit
+log report the held actions (`held_for_confirmation`); the held plan waits, keyed
+by the intent's id, for a human:
+
+```
+POST /v1/intents/{intent_id}/confirm      → runs the held actions
+POST /v1/intents/{intent_id}/deny         → drops the held actions
+GET  /v1/intents/{intent_id}/pending      → what is held (read-only)
+```
+
+- **Confirm and deny need the operator credential**, the same one direct control
+  uses (the `X-DoSync-Operator-Token` header matching `DOSYNC_OPERATOR_TOKEN` in
+  the reference hub); without it both return `403 operator_credential_required`.
+  The agent's hub credential cannot release a held action, and the MCP server
+  exposes no tool to confirm — an injected intent can get an action *held* but
+  never *released*. If no operator credential is configured, nothing can be
+  released: a deployment that marks actions for confirmation MUST set one.
+- **Reading what is held** needs only the hub credential: knowing an action waits
+  is not acting on it.
+- `confirm` returns `confirmed` with the per-action results, or `expired` if the
+  hold aged out (`DOSYNC_CONFIRMATION_TIMEOUT`, default 300 s), or `404` if
+  nothing is held for that intent (never held, already released, or already
+  denied). `deny` returns `denied` or `404`.
+- Each outcome is audited: `actions_held_for_confirmation` when the hold is
+  placed, then `confirmation_confirmed`, `confirmation_denied`, or
+  `confirmation_expired`. A confirmed release carries the operator marker, so an
+  auditor can tell a human-released action from an agent-driven one.
 
 ### 7.4 Device heartbeat (device → Hub)
 
@@ -912,7 +949,12 @@ log, not evidence.
 | Type | Meaning |
 |---|---|
 | `intent_executed` | An intent was resolved to a plan and dispatched |
-| `intent_pending_confirmation` | An intent requires operator confirmation before dispatch |
+| `intent_pending_confirmation` | A custom policy returned the engine's whole-plan `CONFIRM` (legacy) |
+| `actions_held_for_confirmation` | One or more actions were withheld for a human (rule 9), listing each held `{device_id, action, reason}` |
+| `confirmation_confirmed` | A held action was released by an operator, with the operator marker and how long it was held |
+| `confirmation_denied` | A held action was dropped by an operator |
+| `confirmation_expired` | A held action aged out unreleased (`DOSYNC_CONFIRMATION_TIMEOUT`) |
+| `actions_dropped_oscillation` | One or more actions were dropped to stop a device oscillating across an opposite pair (rule 10) |
 | `emergency_unsatisfiable` | An emergency intent resolved to no capable device |
 | `phase_executed` | One phase of a multi-phase intent completed |
 | `direct_action_executed` | A single action on a named device, bypassing resolution but not policy |

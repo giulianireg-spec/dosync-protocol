@@ -93,3 +93,51 @@ def test_explain_warns_when_an_emergency_device_declares_nothing():
                                          urgency=Urgency.EMERGENCY, context={}))
     entry = next(d for d in report["included"] if d["device_id"] == "conveyor")
     assert "declare what it must do" in entry.get("warning", "")
+
+
+# ── G5 is consistent between the two paths (P2, fixed 2026-10-09) ──────────────
+# The third agent comparison (M6) found G5 applied differently depending on the
+# path: in resolution a device's declared emergency action ran; in the
+# governed-direct (proposal) path the SAME action was refused as outside_class
+# when the intent's class did not grant it. A display declared as a device's
+# emergency action is the canonical case: ensure_safety does not grant `display`.
+
+def _propose(hub, cls, urgency, proposals, **ctx):
+    ctx["proposed_actions"] = proposals
+    return hub.resolver.validate_proposals(
+        Intent(intent=IntentClass(cls), urgency=urgency, context=ctx))
+
+
+def test_emergency_declared_action_is_authorized_on_the_proposal_path():
+    # display is NOT granted by ensure_safety, but the TV declared it as its
+    # emergency action — so at emergency urgency the proposal must be accepted,
+    # exactly as resolution would run it.
+    tv = _dev("tv", ["display", "turn_on"], emergency=True,
+              emergency_actions=[{"action": "display", "params": {}}])
+    plan = _propose(_hub(tv), "ensure_safety", Urgency.EMERGENCY,
+                    [{"device_id": "tv", "action": "display"}])
+    assert [(a.device_id, a.action) for a in plan.actions] == [("tv", "display")], \
+        "a declared emergency action was refused on the proposal path (G5 inconsistency)"
+    assert not plan.refused_proposals
+
+
+def test_emergency_non_declared_action_is_refused_on_the_proposal_path():
+    # turn_on is neither granted by ensure_safety nor the TV's declared emergency
+    # action → refused as not_its_emergency_action (not silently allowed).
+    tv = _dev("tv", ["display", "turn_on"], emergency=True,
+              emergency_actions=[{"action": "display", "params": {}}])
+    plan = _propose(_hub(tv), "ensure_safety", Urgency.EMERGENCY,
+                    [{"device_id": "tv", "action": "turn_on"}])
+    assert not plan.actions
+    assert plan.refused_proposals[0]["reason"] == "not_its_emergency_action"
+
+
+def test_non_emergency_proposal_authority_is_unchanged():
+    # Outside an emergency the class still bounds the proposal: an action the
+    # class does not grant is refused as outside_class.
+    tv = _dev("tv", ["display", "turn_on"], emergency=True,
+              emergency_actions=[{"action": "display", "params": {}}])
+    plan = _propose(_hub(tv), "ensure_safety", Urgency.ALERT,
+                    [{"device_id": "tv", "action": "display"}])
+    assert not plan.actions
+    assert plan.refused_proposals[0]["reason"] == "outside_class"

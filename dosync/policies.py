@@ -6,16 +6,24 @@ Evaluates policies before intent execution.
 A policy is a rule that can:
 - ALLOW   — intent executes normally
 - BLOCK   — intent is rejected with a reason
-- CONFIRM — intent requires explicit confirmation before executing
+- CONFIRM — the engine signals a whole-plan confirmation (legacy; see note)
 - MODIFY  — intent parameters are adjusted before execution
 
 Policies are evaluated in priority order. First matching policy wins.
 
 Example policies:
     "never unlock doors after midnight"
-    "critical actions require confirmation"
+    "unlocking the cell needs a human, even in an emergency"
     "displays never take part in an emergency"
     "contractor tokens cannot fire control_access"
+
+Confirmation is special (G9, spec §6.8 rule 9). RequireConfirmationPolicy does
+NOT return a CONFIRM decision: a whole-plan CONFIRM cannot hold one action and
+run the rest. Instead it marks actuator types (optionally per device) that the
+hub WITHHOLDS per action, running the rest of the plan and leaving the held
+actions for a human to confirm or deny with the operator credential. The CONFIRM
+decision remains in the enum for custom policies that want the engine's
+whole-plan semantics.
 
 Usage:
     engine = PolicyEngine()
@@ -25,8 +33,6 @@ Usage:
     result = engine.evaluate(intent, action_plan)
     if result.decision == PolicyDecision.BLOCK:
         # reject the intent
-    elif result.decision == PolicyDecision.CONFIRM:
-        # wait for confirmation before executing
 """
 from __future__ import annotations
 import logging
@@ -188,18 +194,44 @@ class NeverAfterHoursPolicy(BasePolicy):
 
 class RequireConfirmationPolicy(BasePolicy):
     """
-    Requires explicit confirmation for specific actuator types.
-
-    Example: always confirm before locking/unlocking doors.
+    Marks actuator types (optionally on named devices) as needing a human before
+    they run. G9, spec §6.8 rule 9.
 
     RequireConfirmationPolicy(
         actuator_types=["lock", "unlock", "alarm"],
+        device_ids=["cell-door-7"],        # optional: only these devices
+        even_in_emergency=False,           # optional: see below
         reason="Critical action requires confirmation"
     )
+
+    How the hold works (DoSyncHub._split_plan_by_confirmation enforces it, on both
+    the resolution and governed-direct paths):
+
+    - Only the MARKED actions are withheld; the rest of the plan runs now. This
+      replaces the pre-2026-10-09 behaviour, where a confirmation requirement
+      stopped the WHOLE intent and there was no way to confirm — a block by
+      another name.
+    - A withheld action is confirmed or denied out of band with the operator
+      credential (POST /v1/intents/{id}/confirm or /deny). The agent never holds
+      that credential and the MCP server offers no way to confirm: an injected
+      intent can get an action HELD but never released.
+    - An emergency no longer bypasses confirmation wholesale. A device's DECLARED
+      emergency action still flows without confirmation (evacuation and life
+      safety are never blocked), UNLESS this policy sets ``even_in_emergency``
+      — for actions a system other than the agent is responsible for in an
+      emergency (e.g. unlocking a cell, where life-safety egress is guaranteed by
+      a separate system, not an agent).
+
+    This policy ABSTAINS at the engine level (``evaluate`` returns None): the
+    whole-plan CONFIRM/BLOCK decision cannot express a per-action hold, so the hub
+    reads this policy's configuration directly via ``matches`` / ``even_in_emergency``.
     """
 
-    def __init__(self, actuator_types: list[str], reason: str = ""):
+    def __init__(self, actuator_types: list[str], device_ids: list[str] | None = None,
+                 even_in_emergency: bool = False, reason: str = ""):
         self._actuator_types = set(actuator_types)
+        self._device_ids = set(device_ids) if device_ids else None  # None = any device
+        self._even_in_emergency = bool(even_in_emergency)
         self._reason = reason or f"Confirmation required for: {actuator_types}"
 
     @property
@@ -210,21 +242,28 @@ class RequireConfirmationPolicy(BasePolicy):
     def priority(self) -> int:
         return 20
 
+    @property
+    def even_in_emergency(self) -> bool:
+        """When True, this policy holds its actions even in an emergency — even a
+        device's declared emergency action. Default False: declared emergency
+        actions flow during an emergency."""
+        return self._even_in_emergency
+
+    @property
+    def reason(self) -> str:
+        return self._reason
+
+    def matches(self, device_id: str, action: str) -> bool:
+        """Whether this policy marks (device_id, action) as needing confirmation,
+        before any emergency exemption is considered."""
+        return action in self._actuator_types and (
+            self._device_ids is None or device_id in self._device_ids)
+
     def evaluate(self, intent: "Intent", plan: "ActionPlan") -> PolicyResult | None:
-        from .models import Urgency
-        # Emergency bypasses confirmation
-        if intent.urgency == Urgency.EMERGENCY:
-            return None
-
-        relevant = [a for a in plan.actions if a.action in self._actuator_types]
-        if not relevant:
-            return None
-
-        devices = [a.device_id for a in relevant]
-        return PolicyResult.confirm(
-            self.name,
-            f"{self._reason} — affects: {', '.join(devices)}"
-        )
+        # Confirmation is enforced by the hub as a per-action HOLD (G9), not by the
+        # engine's whole-plan CONFIRM decision. Abstain here; the hub reads this
+        # policy via matches()/even_in_emergency(). See the class docstring.
+        return None
 
 
 class BlockIntentPolicy(BasePolicy):

@@ -86,12 +86,18 @@ function validateProposals(env, cls, urgency, ctx){
     if (seen.has(key)) continue; seen.add(key);
     const d = (typeof id === "string") ? devices[id] : undefined;
     let reason = null;
+    // Rule 5 on both paths (G5, fixed 2026-10-09): in an emergency a device that
+    // declared its emergency actions is authorized for exactly those, not the
+    // class's grants, so the class check is skipped for it and the declared-
+    // emergency check below decides.
+    const emergencyDeclared = emergency && d && d.emergency_capable && d.emergency_actions.length;
     if (!d) reason = "unknown_device";
     else if (action === "read_sensors"){ if (!d.sensors.length) reason = "not_declared"; else if (!readsAllowed) reason = "outside_class"; }
     else if (!d.actions.includes(action)) reason = "not_declared";
+    else if (emergencyDeclared){ /* authorization decided below */ }
     else if (!anyDeclared && !classSet.has(action)) reason = "outside_class";
     if (!reason && restrictTo && !atPlace(d, restrictTo)) reason = "outside_place";
-    if (!reason && emergency && d.emergency_capable && d.emergency_actions.length && !d.emergency_actions.includes(action)) reason = "not_its_emergency_action";
+    if (!reason && emergencyDeclared && !d.emergency_actions.includes(action)) reason = "not_its_emergency_action";
     if (reason) refused.push({device_id:id, action, reason});
     else { if (!accepted.has(id)) accepted.set(id, []); accepted.get(id).push(action); }
   }

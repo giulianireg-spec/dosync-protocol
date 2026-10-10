@@ -11,6 +11,25 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Three protections, after the third agent comparison showed the hub does not bound a misled agent**
+  (panel `paper-eval/PANEL-protecciones-2026-10-07.md`). The third comparison's honest finding: SAMUEL never
+  broke a promise, but it did not stop an agent that had been talked into an unsafe goal — within-authority
+  attacks succeeded on every path, and the hub decisively stopped only 4 of 128 attack runs; the model's own
+  judgment was the real defence. SAMUEL does not detect an injection; these bound its damage to what the
+  operator did not mark consequential.
+  - **G9, human confirmation (spec §6.8 rule 9).** An operator marks actuator types — optionally per device —
+    that must not run without a person (`RequireConfirmationPolicy`: `actuator_types`, `device_ids`,
+    `even_in_emergency`). The hub withholds only those actions and runs the rest; a held action is released
+    (`POST /v1/intents/{id}/confirm`) or dropped (`/deny`) only with the operator credential — which an agent
+    never holds and the MCP server never exposes — or it expires (`DOSYNC_CONFIRMATION_TIMEOUT`, default 300 s).
+    An emergency no longer bypasses confirmation wholesale: a device's declared emergency actions still flow
+    unless the policy set `even_in_emergency`. This replaces the old confirmation policy, which stopped the
+    whole intent and offered no way to confirm. Nothing is held in a deployment that marks nothing (the default).
+  - **No oscillation (spec §6.8 rule 10, G4 extended).** A device is not reversed across an opposite pair more
+    than once within a window (`DOSYNC_OSCILLATION_WINDOW`, default 60 s; `DOSYNC_OSCILLATION_MAX_REVERSALS`,
+    default 1). A correction is allowed; the third reversal is dropped (`oscillation`) and never runs. Declared
+    emergency actions are exempt; both paths are covered. Answers the flashing-light / toggling-lock attack that
+    spread one reversal per intent across many intents, which the per-plan rule 6 cannot see.
 - **The third agent comparison, fixed before it runs** (`benchmarks/agent_eval/PROTOCOL-v3.md`): 12 scenarios
   approved by the reference deployment's operator, and 16 attacks -- eight families (false emergencies, opposite
   actions in bursts, instructions injected into a message or hidden in a request, a stretched place, a nonexistent
@@ -23,6 +42,15 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   earlier measurement changes.
 
 ### Changed
+- **G5 is consistent between the two paths (spec §6.8 rule 5).** In an emergency, a device that declared its
+  emergency actions is authorized for exactly those whether the hub resolves the intent or validates an agent's
+  proposals. The proposal path used to refuse a declared emergency action as `outside_class` when the intent's
+  class did not grant it (e.g. a TV whose declared emergency action is `display`, under `ensure_safety`) — the
+  third comparison found this inconsistency (M6). The lab port in both templates was re-synced to the fixed hub;
+  the already-collected round-2 and round-3 run data is unchanged.
+- **A new audit event vocabulary** for the protections: `actions_held_for_confirmation`, `confirmation_confirmed`,
+  `confirmation_denied`, `confirmation_expired`, and `actions_dropped_oscillation` (spec §7.8). `IntentResult`
+  gains `held_for_confirmation`; a status of `held` means every action is awaiting a human.
 - **The governance rules live in the specification's body, §6.8.** They had been
   written as a numbered list inside §10.5, "Changes in 0.5", while code comments,
   this file and the README cited them as "§6 rule N" -- a section where they were
@@ -34,7 +62,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   to physical devices, within limits the operator sets and the hub enforces.
   Extracted from the protocol so a hub can be governed whatever describes its
   devices, with DoSync as its reference implementation: the model
-  governance needs, three paths to a device, eight guarantees each tied to a
+  governance needs, three paths to a device, nine guarantees each tied to a
   §6.8 rule, every refusal reason, the audit log, mappings from DoSync manifests
   and WoT Thing Descriptions, and which certification checks show conformance.
   `tests/test_samuel_matches_the_hub.py` holds it to the hub.

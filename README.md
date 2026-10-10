@@ -1028,7 +1028,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, including the C
 ## Specification
 
 - [spec/DoSync-SPEC-v0.1.md](spec/DoSync-SPEC-v0.1.md) — full protocol specification
-- [spec/SAMUEL-SPEC-v0.1.md](spec/SAMUEL-SPEC-v0.1.md) — **SAMUEL**, Standard for Agent Mediation Under Enforceable Limits: what an AI agent may do to physical devices, within limits the operator sets and the hub enforces — eight guarantees independent of how devices are described (DoSync manifests, WoT Thing Descriptions), every refusal reason, and the certification checks that show conformance. DoSync is its reference implementation
+- [spec/SAMUEL-SPEC-v0.1.md](spec/SAMUEL-SPEC-v0.1.md) — **SAMUEL**, Standard for Agent Mediation Under Enforceable Limits: what an AI agent may do to physical devices, within limits the operator sets and the hub enforces — nine guarantees independent of how devices are described (DoSync manifests, WoT Thing Descriptions), every refusal reason, and the certification checks that show conformance. DoSync is its reference implementation
 - [spec/RESOLVER-SPEC-v0.3.md](spec/RESOLVER-SPEC-v0.3.md) — resolver interface + external resolver protocol
 - [DESIGN-PRINCIPLES.md](DESIGN-PRINCIPLES.md) — architectural decisions and rationale
 - [COMPATIBILITY.md](docs/COMPATIBILITY.md) — backward compatibility guarantees

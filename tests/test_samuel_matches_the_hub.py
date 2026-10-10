@@ -53,8 +53,8 @@ def test_every_certification_check_named_exists():
 def test_every_protocol_rule_named_exists():
     spec = (REPO / "spec" / "DoSync-SPEC-v0.1.md").read_text(encoding="utf-8")
     rules_section = spec.split("### 6.8 Governance rules", 1)[1].split("\n## 7.", 1)[0]
-    rules = set(re.findall(r"\n([1-8])\. \*\*", rules_section))
-    named = {n for cell in re.findall(r"§6\.8 rules? ([\d, ]+)", DOC) for n in re.findall(r"\d", cell)}
+    rules = set(re.findall(r"\n(\d+)\. \*\*", rules_section))
+    named = {n for cell in re.findall(r"§6\.8 rules? ([\d, ]+)", DOC) for n in re.findall(r"\d+", cell)}
     assert named and named <= rules, sorted(named - rules)
     for section in ("5.9", "7.8"):
         assert f"### {section}" in spec or f"## {section}" in spec, section

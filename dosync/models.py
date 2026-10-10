@@ -788,6 +788,13 @@ class IntentResult:
     # The presence of entries signals "these actions started and are still running;
     # track them by operation_id". (Querying/cancelling them is a separate API step.)
     operations: list                  = field(default_factory=list)
+    # Actions withheld from execution because an operator confirmation policy
+    # marks them as needing a human (spec §6.8 rule 9, G9). Each entry:
+    # {device_id, action, reason}. EMPTY unless a require_confirmation policy
+    # matched — a deployment with none configured sees an identical IntentResult.
+    # The held actions did NOT run; a human confirms or denies them out of band
+    # (POST /v1/intents/{id}/confirm or /deny, operator credential only).
+    held_for_confirmation: list       = field(default_factory=list)
     # "success"        — all actions completed successfully
     # "partial"        — some actions failed or were rejected, rest continued
     # "partial_abort"  — some actions executed, rest aborted by ABORT policy
@@ -797,6 +804,8 @@ class IntentResult:
     # "accepted"       — the intent started one or more long-running operations that
     #   are still in progress (execution_model). Not success (not done) nor failed
     #   (not failed) — accepted and running. Only appears when `operations` is non-empty.
+    # "held"           — every action was withheld for human confirmation (G9); nothing
+    #   ran and nothing failed. Only appears when `held_for_confirmation` is non-empty.
     # rejected_actions: actions dropped because their params violated the
     #   actuator's JSON Schema — distinct from failed_devices (device didn't
     #   respond). Each entry: {device_id, action, reason}.

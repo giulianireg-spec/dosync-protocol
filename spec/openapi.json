@@ -971,6 +971,176 @@
         }
       }
     },
+    "/v1/intents/{intent_id}/confirm": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Release actions an intent held for human confirmation (G9)",
+        "description": "Execute the actions a require_confirmation policy withheld from this intent.\n\nOperator credential only. Returns 404 if nothing is held for this intent (it\nwas never held, already confirmed/denied, or expired), 200 with status\n`confirmed` or `expired` otherwise.",
+        "operationId": "confirm_intent_endpoint_v1_intents__intent_id__confirm_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Intent Id"
+            }
+          },
+          {
+            "name": "x-dosync-operator-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dosync-Operator-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intents/{intent_id}/deny": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Deny (drop) actions an intent held for human confirmation (G9)",
+        "description": "Drop the actions a require_confirmation policy withheld from this intent.\n\nOperator credential only. The held actions never run; the decision is\nrecorded in the audit chain.",
+        "operationId": "deny_intent_endpoint_v1_intents__intent_id__deny_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Intent Id"
+            }
+          },
+          {
+            "name": "x-dosync-operator-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dosync-Operator-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intents/{intent_id}/pending": {
+      "get": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "The actions an intent is holding for human confirmation (G9)",
+        "description": "What, if anything, this intent is holding for a human. Readable with the\nhub credential (knowing something is held is not acting on it). 404 when\nnothing is held.",
+        "operationId": "pending_confirmation_endpoint_v1_intents__intent_id__pending_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Intent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/event": {
       "post": {
         "tags": [

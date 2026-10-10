@@ -106,32 +106,32 @@ def test_never_after_hours_emergency_bypasses():
 
 # ── RequireConfirmationPolicy ─────────────────────────────────────────────────
 
-def test_require_confirmation_fires_on_matching_actuator():
+def test_require_confirmation_marks_matching_actuator():
+    # G9 (spec §6.8 rule 9): confirmation is a per-action HOLD the hub enforces,
+    # not a whole-plan engine decision — so the policy abstains at the engine
+    # level and exposes which (device, action) it marks via matches().
     policy = RequireConfirmationPolicy(["alarm"])
     intent = make_intent("alert_anomaly")
     plan = make_plan([("alarm-1", "alarm")])
 
-    result = policy.evaluate(intent, plan)
-    assert result is not None
-    assert result.decision == PolicyDecision.CONFIRM, "alarm action must require confirmation"
+    assert policy.evaluate(intent, plan) is None, "confirmation abstains at the engine level"
+    assert policy.matches("alarm-1", "alarm"), "alarm action must be marked for confirmation"
 
 
-def test_require_confirmation_abstains_without_match():
+def test_require_confirmation_does_not_mark_without_match():
     policy = RequireConfirmationPolicy(["alarm"])
-    intent = make_intent("set_environment")
-    plan = make_plan([("light-1", "turn_on")])
-
-    result = policy.evaluate(intent, plan)
-    assert result is None, "no matching actuator → abstain"
+    assert not policy.matches("light-1", "turn_on"), "unmarked action → not held"
 
 
-def test_require_confirmation_emergency_bypasses():
-    policy = RequireConfirmationPolicy(["alarm"])
-    intent = make_intent("ensure_safety", urgency=Urgency.EMERGENCY)
-    plan = make_plan([("alarm-1", "alarm")], urgency=Urgency.EMERGENCY)
+def test_require_confirmation_scoped_by_device_ids():
+    policy = RequireConfirmationPolicy(["turn_off"], device_ids=["plantroom"])
+    assert policy.matches("plantroom", "turn_off"), "device in device_ids is marked"
+    assert not policy.matches("desk", "turn_off"), "device not in device_ids is not marked"
 
-    result = policy.evaluate(intent, plan)
-    assert result is None, "emergency must bypass confirmation requirement"
+
+def test_require_confirmation_even_in_emergency_flag():
+    assert RequireConfirmationPolicy(["unlock"]).even_in_emergency is False
+    assert RequireConfirmationPolicy(["unlock"], even_in_emergency=True).even_in_emergency is True
 
 
 # ── BlockIntentPolicy ─────────────────────────────────────────────────────────
@@ -223,8 +223,11 @@ def test_engine_first_block_wins():
         "BlockIntentPolicy (priority 5) must win over confirmation (priority 20)"
 
 
-def test_engine_emergency_bypasses_bypassable_policies():
-    """Emergency bypasses RequireConfirmation but NOT BlockIntent."""
+def test_engine_require_confirmation_abstains_at_engine_level():
+    """Confirmation is enforced by the hub as a per-action hold (G9), not by the
+    engine, so RequireConfirmationPolicy abstains here and the engine returns
+    ALLOW. (The hold itself — and the emergency carve-out — is tested in
+    test_confirmation_hold.py.)"""
     engine = PolicyEngine()
     engine.add(RequireConfirmationPolicy(["alarm"]))
     intent = make_intent("ensure_safety", urgency=Urgency.EMERGENCY)
@@ -232,7 +235,7 @@ def test_engine_emergency_bypasses_bypassable_policies():
 
     result = engine.evaluate(intent, plan)
     assert result.decision == PolicyDecision.ALLOW, \
-        "emergency must bypass confirmation policy"
+        "confirmation does not decide at the engine level"
 
 
 def test_engine_emergency_does_not_bypass_absolute_block():

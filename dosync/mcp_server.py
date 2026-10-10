@@ -625,6 +625,19 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
                 status_val = resp.get("status","ok") if isinstance(resp, dict) else "ok"
                 text += f"  ✓ [{r['device_id']}] {r['action']} → {status_val}\n"
 
+        # G9: some actions were withheld because the operator marked them as needing
+        # a person. Report this plainly — but offer no way to release them. Confirming
+        # is an operator action with a credential this agent does not hold; there is
+        # deliberately no MCP tool for it.
+        held = result.get("held_for_confirmation") or []
+        if held:
+            text += (f"\n{len(held)} action(s) are held for a person to confirm. "
+                     f"They did not run.\n")
+            for h in held[:8]:
+                text += f"  ⏸ [{h.get('device_id')}] {h.get('action')} — {h.get('reason','needs confirmation')}\n"
+            text += ("A human must confirm or deny these with the operator credential. "
+                     "You cannot release them from here.\n")
+
         return [types.TextContent(type="text", text=text)]
     elif name == "dosync_list_devices":
         filter_tag     = arguments.get("filter_tag", "")

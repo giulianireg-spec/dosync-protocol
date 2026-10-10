@@ -261,7 +261,7 @@ class CertReport:
         # basic said 12 while the tier runs B01-B10: a basic certification was
         # always "incomplete" and could never certify. Nothing noticed because
         # nothing ran the suite; CI now certifies every tier on its own.
-        "basic": 10, "standard": 33, "emergency": 44, "conformance": 70,
+        "basic": 10, "standard": 33, "emergency": 44, "conformance": 72,
     }
 
     def finalize(self):
@@ -1103,6 +1103,7 @@ _PROBE_IN = "certify-probe-cell-2"      # placed at certify-site/line-3/cell-2
 _PROBE_OUT = "certify-probe-line-30"    # placed at certify-site/line-30/cell-1
 _PROBE_LOCK = "certify-probe-lock"      # emergency-capable, lock and unlock (C22)
 _PROBE_CONVEYOR = "certify-probe-conveyor"  # emergency-capable, declares stop (C24)
+_PROBE_PLUG = "certify-probe-plug"      # turn_on/turn_off, for the oscillation guard (C27)
 _CLASS_RESTRICTS = "certify_location_restricts"
 _CLASS_INFORMS = "certify_location_informs"
 
@@ -1317,8 +1318,57 @@ def run_conformance_05(base: str, report: CertReport):
                     and any(k in str(d_body) for k in ("direct_control_disabled", "operator_credential_required")))
             note = f"mode {mode!r}; without the operator credential → HTTP {d_st}"
         report.add(TestResult("C26  Direct control is not open to an agent's credential (rule 8)", ok26, note))
+
+        # C27. No oscillation (rule 10, G4 extended): a device does not reverse
+        # across an opposite pair more than once within the window. Firing
+        # turn_on, turn_off, turn_on on one plug across three intents, the third
+        # must be dropped with reason "oscillation" and must not execute. The
+        # guard is on by default; a hub that disabled it (window 0) reports N/A.
+        plug = _probe_device(_PROBE_PLUG)
+        plug.update({"tags": ["certify-probe"],
+                     "actuators": [{"id": "turn_on", "type": "turn_on", "description": "On"},
+                                   {"id": "turn_off", "type": "turn_off", "description": "Off"}]})
+        request("POST", f"{base}/v1/devices/register", plug)
+
+        def _fire_action(action):
+            st, fired = request("POST", f"{base}/v1/intent/async",
+                                {"intent": "operate_device", "urgency": "info", "context": {
+                                    "proposed_actions": [{"device_id": _PROBE_PLUG, "action": action}]}})
+            if st != 200 or not fired.get("intent_id"):
+                return {}
+            time.sleep(1.5)
+            _, res = request("GET", f"{base}/v1/intent/{fired['intent_id']}")
+            return res or {}
+
+        _fire_action("turn_on")
+        _fire_action("turn_off")
+        third = _fire_action("turn_on")
+        osc = [r for r in (third.get("refused_proposals") or []) if r.get("reason") == "oscillation"]
+        third_ran = any(r.get("device_id") == _PROBE_PLUG for r in (third.get("results") or []))
+        if not osc and not third_ran and not third:
+            report.not_applicable.append(
+                ("C27  No oscillation across an opposite pair (rule 10)",
+                 "the third reversal produced no result — hub may have the guard disabled"))
+        else:
+            report.add(TestResult(
+                "C27  No oscillation across an opposite pair (rule 10)",
+                bool(osc) and not third_ran,
+                f"third reversal: {'dropped (oscillation)' if osc else 'not dropped'}; "
+                f"executed: {'yes' if third_ran else 'no'}"))
+
+        # C28. Human confirmation (rule 9, G9): releasing an action held for
+        # confirmation needs the operator credential. Without it, the confirm and
+        # deny endpoints refuse (403) — the agent's hub credential cannot release
+        # a held action. This holds whether or not a confirmation policy is
+        # configured: the surface must exist and be operator-gated.
+        cf_st, cf_body = request("POST", f"{base}/v1/intents/certify-no-such-intent/confirm", {})
+        dn_st, _ = request("POST", f"{base}/v1/intents/certify-no-such-intent/deny", {})
+        report.add(TestResult(
+            "C28  Releasing a held action needs the operator credential (rule 9)",
+            cf_st == 403 and dn_st == 403 and "operator_credential_required" in str(cf_body),
+            f"confirm → HTTP {cf_st}; deny → HTTP {dn_st} (without the operator credential)"))
     finally:
-        for did in (_PROBE_IN, _PROBE_OUT, _PROBE_LOCK, _PROBE_CONVEYOR):
+        for did in (_PROBE_IN, _PROBE_OUT, _PROBE_LOCK, _PROBE_CONVEYOR, _PROBE_PLUG):
             request("DELETE", f"{base}/v1/devices/{did}")
         for name in (_CLASS_RESTRICTS, _CLASS_INFORMS):
             request("DELETE", f"{base}/v1/intent-classes/{name}")

@@ -839,6 +839,15 @@ class CapabilityMatchingResolver(BaseResolver):
             seen.add((device_id, action))
             device = self.registry.get(device_id) if isinstance(device_id, str) else None
             reason = None
+            # At emergency urgency, an emergency-capable device that declared its
+            # emergency actions is governed by rule 5 (declared first), on BOTH
+            # paths: the authorization check below is its declared emergency
+            # actions, not the class's grants. Until 2026-10-09 this path refused
+            # a declared emergency action as `outside_class` when the class did
+            # not grant it (e.g. a TV's declared `display` under `ensure_safety`)
+            # -- G5 applied inconsistently between resolution and proposals.
+            _emergency_declared = (emergency and device is not None
+                                   and device.emergency_capable and bool(device.emergency_actions))
             if device is None:
                 reason = "unknown_device"
             elif action == "read_sensors":
@@ -848,11 +857,14 @@ class CapabilityMatchingResolver(BaseResolver):
                     reason = "outside_class"
             elif action not in {a.type for a in device.actuators}:
                 reason = "not_declared"
+            elif _emergency_declared:
+                # Authorization decided by the declared-emergency check below.
+                pass
             elif not any_declared and action not in class_actions:
                 reason = "outside_class"
             if reason is None and restrict_to and not self._at_location(device, restrict_to):
                 reason = "outside_place"
-            if (reason is None and emergency and device.emergency_capable and device.emergency_actions
+            if (reason is None and _emergency_declared
                     and action not in {e["action"] for e in device.emergency_actions}):
                 reason = "not_its_emergency_action"
             if reason:

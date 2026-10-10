@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from .models import (
     ActionPlan, ActionResult, ActuatorSpec, CapabilityManifest,
     ContextSignalType, DeviceAction, DeviceEvent,
-    Intent, IntentClass, IntentResult, OccupancyState, Phase,
+    Intent, IntentClass, IntentResult, OccupancyState, OPPOSITE_ACTIONS, Phase,
     PhasedActionPlan, PhaseAction, PresenceSignal, Urgency,
 )
 
@@ -84,6 +84,21 @@ class DoSyncHub:
         self.registry       = CapabilityRegistry()
         self.resolver       = StateAwareResolver(self.registry, self)
         self.policy_engine  = None  # set via hub.policy_engine = PolicyEngine()
+        # No-oscillation guard (spec §6.8 rule 10, on by default): per
+        # (device_id, opposite-pair) the executed actions within the window, so a
+        # device is not reverted more than DOSYNC_OSCILLATION_MAX_REVERSALS times
+        # per window. A flashing-light / toggling-lock attack (third comparison,
+        # H3/P3) spread one reversal per intent across many intents, which the
+        # per-plan opposite check (rule 6) cannot see. A declared emergency action
+        # is exempt. Window 0 disables the guard.
+        self._osc_window: dict[tuple, list] = {}
+        # Human confirmation holds (G9, spec §6.8 rule 9). An intent whose plan
+        # has actions an operator confirmation policy marks holds ONLY those
+        # actions here, keyed by intent_id, until a human confirms or denies them
+        # with the operator credential (POST /v1/intents/{id}/confirm | /deny) or
+        # the hold expires (DOSYNC_CONFIRMATION_TIMEOUT, default 300 s). The agent
+        # never holds that credential and the MCP server offers no way to confirm.
+        self._pending_confirmations: dict[str, dict] = {}
         self._active_intents: dict[str, int] = {}  # intent_value -> priority
         self._active_intent_devices: dict[str, set] = {}  # intent_value -> device_ids
         # v13 hygiene (maintenance stop 2026-07-21, Paredes): progress_cb failures
@@ -502,6 +517,169 @@ class DoSyncHub:
             return executor
         return _TimedExecutor(executor, hub=self)
 
+    def _apply_oscillation_guard(self, plan, intent):
+        """Return (kept actions, dropped refusals) for the no-oscillation guard.
+
+        Within a rolling window, a device may be reverted across an opposite pair
+        at most DOSYNC_OSCILLATION_MAX_REVERSALS times (default 1: a correction is
+        allowed, flashing is not). A declared emergency action is never dropped.
+        DOSYNC_OSCILLATION_WINDOW <= 0 disables the guard entirely. A dropped
+        action never executed, so it does not change the recorded device state.
+        """
+        try:
+            window_s = float(os.environ.get("DOSYNC_OSCILLATION_WINDOW", "60"))
+            max_rev = max(0, int(os.environ.get("DOSYNC_OSCILLATION_MAX_REVERSALS", "1")))
+        except ValueError:
+            window_s, max_rev = 60.0, 1
+        if window_s <= 0:
+            return list(plan.actions), []
+        now = time.time()
+        kept, dropped = [], []
+        for a in plan.actions:
+            pair = next((p for p in OPPOSITE_ACTIONS if a.action in p), None)
+            device = self.registry.get(a.device_id)
+            declared = {e["action"] for e in (getattr(device, "emergency_actions", None) or [])}
+            if pair is None or a.action in declared:
+                kept.append(a)
+                continue
+            key = (a.device_id, tuple(sorted(pair)))
+            hist = [(t, act) for (t, act) in self._osc_window.get(key, []) if now - t <= window_s]
+            changes = sum(1 for i in range(1, len(hist)) if hist[i][1] != hist[i - 1][1])
+            reverses = bool(hist) and hist[-1][1] != a.action
+            if reverses and changes >= max_rev:
+                dropped.append({"device_id": a.device_id, "action": a.action, "reason": "oscillation"})
+                self._osc_window[key] = hist
+            else:
+                hist.append((now, a.action))
+                self._osc_window[key] = hist
+                kept.append(a)
+        return kept, dropped
+
+    def _confirmation_policies(self) -> list:
+        """The operator's RequireConfirmationPolicy instances, if any are loaded.
+
+        Confirmation is enforced here in the hub (not by the policy engine's
+        whole-plan CONFIRM decision), so every client -- REST, MCP, tests, the
+        comparison lab -- inherits an identical hold.
+        """
+        engine = getattr(self, "policy_engine", None)
+        if engine is None:
+            return []
+        from .policies import RequireConfirmationPolicy
+        return [p for p in getattr(engine, "_policies", []) or []
+                if isinstance(p, RequireConfirmationPolicy)]
+
+    def _split_plan_by_confirmation(self, plan, intent):
+        """Return (runnable actions, held) for the human-confirmation guard (G9).
+
+        An action is HELD when an operator confirmation policy marks it. In an
+        emergency a device's DECLARED emergency action flows without confirmation,
+        unless the marking policy set ``even_in_emergency``. ``held`` is a list of
+        (DeviceAction, reason). A deployment with no confirmation policy holds
+        nothing and the plan is returned unchanged.
+        """
+        policies = self._confirmation_policies()
+        if not policies:
+            return list(plan.actions), []
+        emergency = intent.urgency == Urgency.EMERGENCY
+        runnable, held = [], []
+        for a in plan.actions:
+            device = self.registry.get(a.device_id)
+            declared = {e["action"] for e in (getattr(device, "emergency_actions", None) or [])}
+            is_declared_emergency = a.action in declared
+            marking = next(
+                (p for p in policies if p.matches(a.device_id, a.action)
+                 and not (emergency and is_declared_emergency and not p.even_in_emergency)),
+                None)
+            if marking is None:
+                runnable.append(a)
+            else:
+                held.append((a, marking.reason))
+        return runnable, held
+
+    def _confirmation_timeout(self) -> float:
+        try:
+            return float(os.environ.get("DOSYNC_CONFIRMATION_TIMEOUT", "300"))
+        except ValueError:
+            return 300.0
+
+    async def confirm_intent(self, intent_id: str, executor=None, operator: str = "operator"):
+        """Execute the actions an intent held for human confirmation (G9).
+
+        Caller MUST have verified the operator credential first (the REST layer
+        does). Returns a small dict: status in {confirmed, expired, not_found},
+        and, when confirmed, the per-action results. Dispatches the held actions
+        directly -- they already passed resolution, the oscillation guard and
+        validation when the intent ran, and must not be re-held.
+        """
+        pend = self._pending_confirmations.get(intent_id)
+        if pend is None:
+            return {"status": "not_found", "intent_id": intent_id}
+        now = time.time()
+        held_desc = [{"device_id": a.device_id, "action": a.action} for a in pend["actions"]]
+        if now > pend["deadline"]:
+            self._pending_confirmations.pop(intent_id, None)
+            self.audit_log.append({
+                "type": "confirmation_expired", "intent_id": intent_id,
+                "intent": pend["intent_value"], "actions": held_desc,
+                "held_seconds": round(now - pend["created_at"], 1),
+            })
+            return {"status": "expired", "intent_id": intent_id, "actions": held_desc}
+        self._pending_confirmations.pop(intent_id, None)
+        executor = executor or getattr(self, "default_executor", None) or getattr(self, "executor", None)
+        from .models import ActionPlan as _APlan
+        plan = _APlan(intent_id=intent_id, actions=list(pend["actions"]), urgency=pend["intent"].urgency)
+        executor = self.instrumented(executor)
+        self._resolve_verify_bindings(plan, pend["intent"])
+        results, failed, aborted, policy_applied = await self._execute_with_policy_cb(
+            plan, executor, pend["intent"])
+        self.audit_log.append({
+            "type": "confirmation_confirmed", "intent_id": intent_id,
+            "intent": pend["intent_value"], "operator": operator,
+            "actions": held_desc,
+            "actions_simulated": sum(1 for r in results if getattr(r, "simulated", False)),
+            "failed": failed, "held_seconds": round(now - pend["created_at"], 1),
+        })
+        return {"status": "confirmed", "intent_id": intent_id,
+                "results": [{"device_id": r.device_id, "action": r.action,
+                             "success": r.success, "simulated": getattr(r, "simulated", False)}
+                            for r in results],
+                "failed_devices": failed}
+
+    def deny_intent(self, intent_id: str, operator: str = "operator"):
+        """Drop the actions an intent held for confirmation (G9). Caller MUST have
+        verified the operator credential first."""
+        pend = self._pending_confirmations.pop(intent_id, None)
+        if pend is None:
+            return {"status": "not_found", "intent_id": intent_id}
+        held_desc = [{"device_id": a.device_id, "action": a.action} for a in pend["actions"]]
+        self.audit_log.append({
+            "type": "confirmation_denied", "intent_id": intent_id,
+            "intent": pend["intent_value"], "operator": operator, "actions": held_desc,
+            "held_seconds": round(time.time() - pend["created_at"], 1),
+        })
+        return {"status": "denied", "intent_id": intent_id, "actions": held_desc}
+
+    def pending_confirmation(self, intent_id: str) -> dict | None:
+        """The held actions for an intent, or None. Expired holds read as None and
+        are swept (audited ``confirmation_expired``)."""
+        pend = self._pending_confirmations.get(intent_id)
+        if pend is None:
+            return None
+        if time.time() > pend["deadline"]:
+            self._pending_confirmations.pop(intent_id, None)
+            self.audit_log.append({
+                "type": "confirmation_expired", "intent_id": intent_id,
+                "intent": pend["intent_value"],
+                "actions": [{"device_id": a.device_id, "action": a.action} for a in pend["actions"]],
+                "held_seconds": round(time.time() - pend["created_at"], 1),
+            })
+            return None
+        return {"intent_id": intent_id, "intent": pend["intent_value"],
+                "deadline": pend["deadline"], "created_at": pend["created_at"],
+                "actions": [{"device_id": a.device_id, "action": a.action,
+                             "reason": r} for a, r in pend["held_pairs"]]}
+
     async def execute_intent(
         self,
         intent: Intent,
@@ -556,6 +734,17 @@ class DoSyncHub:
         # whenever a policy modified the plan, from 2026-09-30 to 2026-10-02.)
         _plan_idle = list(getattr(plan, "included_without_action", None) or [])
         _plan_refused = list(getattr(plan, "refused_proposals", None) or [])
+        # No-oscillation guard (spec §6.8 rule 10): drop an action that would
+        # revert a device more than the allowed number of times within the
+        # window, across intents. A declared emergency action is exempt.
+        _osc_kept, _osc_dropped = self._apply_oscillation_guard(plan, intent)
+        if _osc_dropped:
+            plan.actions = _osc_kept
+            _plan_refused = _plan_refused + _osc_dropped
+            self.audit_log.append({
+                "type": "actions_dropped_oscillation", "intent_id": intent.intent_id,
+                "intent": intent.intent.value, "dropped": _osc_dropped,
+            })
         if _M is not None:
             _M.intent_resolution_seconds.observe(time.perf_counter() - _t0)
 
@@ -672,6 +861,36 @@ class DoSyncHub:
                         "policies_fingerprint": getattr(self.policy_engine, "policies_fingerprint", None),
                     })
 
+        # ── Human-confirmation hold (spec §6.8 rule 9, G9) ─────────────────────
+        # Withhold ONLY the actions an operator confirmation policy marks; the
+        # rest of the plan runs below. A held action waits in
+        # self._pending_confirmations until a human confirms or denies it with the
+        # operator credential, or the hold expires. Nothing to do for a deployment
+        # with no confirmation policy (_held is empty, plan unchanged).
+        from .models import ActionPlan as _APlanC
+        _runnable, _held = self._split_plan_by_confirmation(plan, intent)
+        _held_desc = []
+        if _held:
+            plan = _APlanC(intent_id=plan.intent_id, actions=_runnable, urgency=plan.urgency,
+                           failure_policy=getattr(plan, "failure_policy", None))
+            _held_desc = [{"device_id": a.device_id, "action": a.action, "reason": r}
+                          for a, r in _held]
+            _now = time.time()
+            self._pending_confirmations[intent.intent_id] = {
+                "actions": [a for a, _ in _held],
+                "held_pairs": _held,
+                "intent": intent,
+                "intent_value": intent.intent.value,
+                "created_at": _now,
+                "deadline": _now + self._confirmation_timeout(),
+            }
+            self.audit_log.append({
+                "type": "actions_held_for_confirmation", "intent_id": intent.intent_id,
+                "intent": intent.intent.value, "urgency": intent.urgency.value,
+                "source": getattr(intent, "source", "api"), "held": _held_desc,
+                "timeout_seconds": self._confirmation_timeout(),
+            })
+
         # Register active intent for conflict detection
         from .policies import get_intent_priority
         intent_value = intent.intent.value
@@ -762,12 +981,20 @@ class DoSyncHub:
         # distinctly from device failures (see audit type above).
         has_rejected = len(rejected_actions) > 0
         has_operations = len(started_operations) > 0
-        success = len(failed) == 0 and len(aborted) == 0 and not has_rejected
+        has_held = len(_held_desc) > 0
+        # A held action is not a failure: it is awaiting a human. Full success
+        # means everything the mind asked for ran, so a hold makes success False
+        # (something is still pending), exactly like a rejected action.
+        success = len(failed) == 0 and len(aborted) == 0 and not has_rejected and not has_held
         if not results and not has_rejected and has_operations:
             # The intent only started long-running operations (no instant actions).
             # Not failed — accepted and running. `accepted` is the honest status:
             # nothing is done yet, but operations are underway.
             status = "accepted"
+        elif not results and not has_rejected and has_held:
+            # Every action was withheld for confirmation; nothing ran, nothing
+            # failed — the plan is waiting on a human.
+            status = "held"
         elif not results and not has_rejected:
             status = "failed"
         elif aborted:
@@ -788,6 +1015,10 @@ class DoSyncHub:
             # Instant actions all succeeded AND long-running operations started:
             # the instant part is done but the intent as a whole is still running.
             status = "accepted"
+        elif has_held:
+            # Some actions ran and succeeded, but others are withheld for a human:
+            # the plan is not fully done, so partial, not success.
+            status = "partial"
         else:
             status = "success"
 
@@ -805,6 +1036,7 @@ class DoSyncHub:
             ],
             refused_proposals=_plan_refused,
             operations=started_operations,
+            held_for_confirmation=_held_desc,
         )
         # Audit log
         self.audit_log.append({
@@ -816,6 +1048,7 @@ class DoSyncHub:
             "actions":          len(plan.actions),
             **({"included_without_action": _plan_idle} if _plan_idle else {}),
             **({"refused_proposals": _plan_refused} if _plan_refused else {}),
+            **({"held_for_confirmation": _held_desc} if _held_desc else {}),
             # The chain answers "what did this system do". An action that never
             # left the hub is part of that answer and used not to be: entries
             # written before 2026-08-13 do not distinguish execution from
