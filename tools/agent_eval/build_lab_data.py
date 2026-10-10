@@ -48,6 +48,37 @@ ROUND3 = {"operator": REPO / "benchmarks/agent_eval/operator_scenarios_v3.json",
           "home_registry": REPO / "benchmarks/fixtures/prod_registry_2026_10_anonymized.json",
           "home_classes": REPO / "benchmarks/fixtures/prod_classes_2026_10.json"}
 
+ROUND4 = {"operator": REPO / "benchmarks/agent_eval/operator_scenarios_v3.json",
+          "attacks": REPO / "benchmarks/agent_eval/attacks_v4.json",
+          "hardened": REPO / "benchmarks/agent_eval/hardened_config_v4.json",
+          "home_registry": REPO / "benchmarks/fixtures/prod_registry_2026_10_anonymized.json",
+          "home_classes": REPO / "benchmarks/fixtures/prod_classes_2026_10.json"}
+
+
+def build_hub_v4(env: str, hardened: bool = False) -> DoSyncHub:
+    """Fourth comparison: the same environments as the third (the reference
+    deployment 'home-v3', the plant 'plant-v3', each with family injected-in-td's
+    third-party Thing as '-poisoned'), on the hub WITH the new protections. When
+    ``hardened`` is set, the operator's confirmation policies for the env's domain
+    (hardened_config_v4.json) are loaded, exactly as the 'gdirect-hardened'
+    condition runs them."""
+    hub = build_hub_v3(env)
+    if hardened:
+        from dosync.policies import PolicyEngine
+        from dosync.policy_config import load_policies
+        domain = "home-v3" if env.replace("-poisoned", "") == "home-v3" else "plant-v3"
+        conf = json.loads(ROUND4["hardened"].read_text(encoding="utf-8")).get(domain, {})
+        if conf:
+            import tempfile
+            with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+                json.dump(conf, f)
+                path = f.name
+            hub.policy_engine = hub.policy_engine or PolicyEngine()
+            for p in load_policies(path, hub=hub):
+                hub.policy_engine.add(p)
+            os.unlink(path)
+    return hub
+
 
 def build_hub_v3(env: str) -> DoSyncHub:
     """Third comparison: 'home-v3' is the reference deployment as exported on
@@ -201,6 +232,39 @@ def build_v3() -> dict:
             "scenarios": scenarios_v3()}
 
 
+def scenarios_v4() -> list[dict]:
+    """The fourth comparison's conversations: the 12 operator scenarios (reused
+    from the third, for the cost-of-hardening measure) and the 13 new attacks,
+    each carrying its per-condition prediction and what it forbids."""
+    out = []
+    for s in json.loads(ROUND4["operator"].read_text(encoding="utf-8"))["scenarios"]:
+        out.append({"id": s["id"], "set": "operator", "env": "home-v3", "phrase": s["phrase"],
+                    "required": s["required"], "acceptable": s["acceptable"]})
+    for a in json.loads(ROUND4["attacks"].read_text(encoding="utf-8"))["attacks"]:
+        env = ("home-v3" if a["env"] == "home" else "plant-v3") + (
+            "-poisoned" if a["family"] == "injected-in-td" else "")
+        out.append({"id": a["id"], "set": "attack", "env": env, "family": a["family"],
+                    "phrase": a["phrase"], "forbidden": a.get("forbidden", []),
+                    "prediction": a.get("prediction", {}),
+                    "forbid_opposite_on": a.get("forbid_opposite_on", []),
+                    "forbid_both": a.get("forbid_both", [])})
+    return out
+
+
+def build_v4() -> dict:
+    import hashlib
+    hardened = json.loads(ROUND4["hardened"].read_text(encoding="utf-8"))
+    return {"generated_from": "dosync reference hub (tools/agent_eval/build_lab_data.py --round 4)",
+            "round": 4,
+            "inputs_sha256": {k: hashlib.sha256(p.read_bytes()).hexdigest() for k, p in ROUND4.items()},
+            "environments": {e: environment(e) for e in ("home-v3", "home-v3-poisoned", "plant-v3", "plant-v3-poisoned")},
+            # The operator's confirmation policies for the hardened condition, by
+            # the env's domain. The lab applies these as the hub does (G9).
+            "hardened_config": {dom: hardened.get(dom, {}).get("policies", [])
+                                for dom in ("home-v3", "plant-v3")},
+            "scenarios": scenarios_v4()}
+
+
 def build() -> dict:
     return {"generated_from": "dosync reference hub (tools/agent_eval/build_lab_data.py)",
             "scenarios_v2_sha256": __import__("hashlib").sha256(SCENARIOS_V2.read_bytes()).hexdigest(),
@@ -211,9 +275,9 @@ def build() -> dict:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--round", type=int, default=2, choices=(2, 3))
+    ap.add_argument("--round", type=int, default=2, choices=(2, 3, 4))
     a = ap.parse_args()
-    data = build_v3() if a.round == 3 else build()
+    data = {2: build, 3: build_v3, 4: build_v4}[a.round]()
     a.out.write_text(json.dumps(data), encoding="utf-8")
     print(f"wrote {a.out}: {sum(len(e['plans']) for e in data['environments'].values())} plans, "
           f"{len(data['scenarios'])} scenarios")
