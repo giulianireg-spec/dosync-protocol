@@ -47,6 +47,11 @@ def _hub_with_lamp():
     # (found 2026-07-14 while tracing why the suite left an 80KB dosync.db and a
     # broken audit chain behind). Tests never touch a real database.
     hub = DoSyncHub(db_path=":memory:")
+    # A deployment class, registered as a deployment registers it: SAMUEL
+    # admission refuses an unregistered class on every door (2026-10-11).
+    hub.db.save_intent_class(name="set_environment", urgency="info", resolution_tags=[],
+                             resolution_actuators=["turn_on", "set_brightness", "go_to"],
+                             description="test deployment class", domain="test")
     m = CapabilityManifest(
         device_id="lamp-01", device_name="Lamp", manufacturer="X", model="Y",
         firmware="1", category=DeviceCategory.ACTUATOR, tags=["light"],

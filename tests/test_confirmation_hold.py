@@ -41,7 +41,11 @@ def _fire(hub, actions, urgency=Urgency.INFO, iid="x", cls="operate_device"):
     plan = ActionPlan(intent_id=iid, urgency=urgency,
                       actions=[DeviceAction(device_id=d, action=a) for d, a in actions])
     hub.resolver.resolve = lambda intent: plan
-    intent = Intent(intent=IntentClass(cls), urgency=urgency, context={})
+    # operate_device acts only on proposals (SAMUEL admission refuses it without
+    # them, on every door since 2026-10-11), so its actions travel as proposals.
+    ctx = ({"proposed_actions": [{"device_id": d, "action": a} for d, a in actions]}
+           if cls == "operate_device" else {})
+    intent = Intent(intent=IntentClass(cls), urgency=urgency, context=ctx)
     intent.intent_id = iid
     return asyncio.run(hub.execute_intent(intent, SimulatedExecutor()))
 

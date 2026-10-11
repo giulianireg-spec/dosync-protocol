@@ -90,8 +90,11 @@ class DoSyncHub:
         # per window. A flashing-light / toggling-lock attack (third comparison,
         # H3/P3) spread one reversal per intent across many intents, which the
         # per-plan opposite check (rule 6) cannot see. A declared emergency action
-        # is exempt. Window 0 disables the guard.
-        self._osc_window: dict[tuple, list] = {}
+        # is exempt. Window 0 disables the guard. The rule lives in the SAMUEL
+        # kernel (dosync/samuel/oscillation.py); the hub owns its state.
+        from .samuel import OscillationGuard
+        self.oscillation = OscillationGuard()
+        self._osc_window = self.oscillation.history
         # Human confirmation holds (G9, spec §6.8 rule 9). An intent whose plan
         # has actions an operator confirmation policy marks holds ONLY those
         # actions here, keyed by intent_id, until a human confirms or denies them
@@ -518,42 +521,10 @@ class DoSyncHub:
         return _TimedExecutor(executor, hub=self)
 
     def _apply_oscillation_guard(self, plan, intent):
-        """Return (kept actions, dropped refusals) for the no-oscillation guard.
-
-        Within a rolling window, a device may be reverted across an opposite pair
-        at most DOSYNC_OSCILLATION_MAX_REVERSALS times (default 1: a correction is
-        allowed, flashing is not). A declared emergency action is never dropped.
-        DOSYNC_OSCILLATION_WINDOW <= 0 disables the guard entirely. A dropped
-        action never executed, so it does not change the recorded device state.
-        """
-        try:
-            window_s = float(os.environ.get("DOSYNC_OSCILLATION_WINDOW", "60"))
-            max_rev = max(0, int(os.environ.get("DOSYNC_OSCILLATION_MAX_REVERSALS", "1")))
-        except ValueError:
-            window_s, max_rev = 60.0, 1
-        if window_s <= 0:
-            return list(plan.actions), []
-        now = time.time()
-        kept, dropped = [], []
-        for a in plan.actions:
-            pair = next((p for p in OPPOSITE_ACTIONS if a.action in p), None)
-            device = self.registry.get(a.device_id)
-            declared = {e["action"] for e in (getattr(device, "emergency_actions", None) or [])}
-            if pair is None or a.action in declared:
-                kept.append(a)
-                continue
-            key = (a.device_id, tuple(sorted(pair)))
-            hist = [(t, act) for (t, act) in self._osc_window.get(key, []) if now - t <= window_s]
-            changes = sum(1 for i in range(1, len(hist)) if hist[i][1] != hist[i - 1][1])
-            reverses = bool(hist) and hist[-1][1] != a.action
-            if reverses and changes >= max_rev:
-                dropped.append({"device_id": a.device_id, "action": a.action, "reason": "oscillation"})
-                self._osc_window[key] = hist
-            else:
-                hist.append((now, a.action))
-                self._osc_window[key] = hist
-                kept.append(a)
-        return kept, dropped
+        """Return (kept actions, dropped refusals) for the no-oscillation guard
+        (G4, spec §6.8 rule 10). The rule is the SAMUEL kernel's
+        (dosync/samuel/oscillation.py); see it for the window and exemptions."""
+        return self.oscillation.apply(plan.actions, self.registry.get, time.time())
 
     def _confirmation_policies(self) -> list:
         """The operator's RequireConfirmationPolicy instances, if any are loaded.
@@ -571,31 +542,11 @@ class DoSyncHub:
 
     def _split_plan_by_confirmation(self, plan, intent):
         """Return (runnable actions, held) for the human-confirmation guard (G9).
-
-        An action is HELD when an operator confirmation policy marks it. In an
-        emergency a device's DECLARED emergency action flows without confirmation,
-        unless the marking policy set ``even_in_emergency``. ``held`` is a list of
-        (DeviceAction, reason). A deployment with no confirmation policy holds
-        nothing and the plan is returned unchanged.
-        """
-        policies = self._confirmation_policies()
-        if not policies:
-            return list(plan.actions), []
-        emergency = intent.urgency == Urgency.EMERGENCY
-        runnable, held = [], []
-        for a in plan.actions:
-            device = self.registry.get(a.device_id)
-            declared = {e["action"] for e in (getattr(device, "emergency_actions", None) or [])}
-            is_declared_emergency = a.action in declared
-            marking = next(
-                (p for p in policies if p.matches(a.device_id, a.action)
-                 and not (emergency and is_declared_emergency and not p.even_in_emergency)),
-                None)
-            if marking is None:
-                runnable.append(a)
-            else:
-                held.append((a, marking.reason))
-        return runnable, held
+        ``held`` is a list of (DeviceAction, reason). The rule is the SAMUEL
+        kernel's (dosync/samuel/confirmation.py); the hub keeps the holds."""
+        from .samuel import split_by_confirmation
+        return split_by_confirmation(plan.actions, self._confirmation_policies(),
+                                     intent.urgency, self.registry.get)
 
     def _confirmation_timeout(self) -> float:
         try:
@@ -705,6 +656,33 @@ class DoSyncHub:
         # fails explicitly (never silently falls to the flat path): a declared
         # composition the hub cannot compose is a configuration error that must shout.
         intent_class_row = self.db.get_intent_class(intent.intent.value)
+
+        # ── SAMUEL admission (G2, G3, G4; refusals are G6) ───────────────────
+        # The intent as a whole: its class is registered and grants what it
+        # narrows to, a restricting place exists, opposite actions are not left
+        # ambiguous, proposals are well formed. The REST layer runs the same
+        # admit() first so it can answer 422 at once; this call is what makes the
+        # rule hold for every other door too -- the hub's own alerts, a library
+        # caller, a bridge. Until 2026-10-11 these refusals existed only in the
+        # REST handler.
+        from .samuel import admit
+        _admission = admit(intent.intent.value, intent_class_row, intent.urgency,
+                           intent.context, self.registry.active())
+        if not _admission.admitted:
+            log.warning("Intent %s REFUSED (%s): %s", intent.intent.value,
+                        _admission.refused, _admission.detail)
+            self.audit_log.append({
+                "type": "intent_refused", "intent_id": intent.intent_id,
+                "intent": intent.intent.value, "urgency": intent.urgency.value,
+                "source": getattr(intent, "source", "api"),
+                "reason": _admission.refused, "detail": _admission.detail,
+            })
+            return IntentResult(intent_id=intent.intent_id, success=False, results=[],
+                                failed_devices=[], status="refused",
+                                refused_reason=_admission.refused,
+                                refused_detail=_admission.detail)
+        intent.context = _admission.context
+
         composition_kind = (intent_class_row or {}).get("composition_kind")
         if composition_kind:
             return await self._route_composite_intent(
@@ -713,18 +691,14 @@ class DoSyncHub:
         _t0 = time.perf_counter()
         if (intent.context or {}).get("proposed_actions"):
             # Governed direct mode: validate what the agent proposed instead of
-            # resolving (spec §6.8 rule 7). An external resolver's local fallback
-            # applies the same guarantees.
-            _validate = (getattr(self.resolver, "validate_proposals", None)
-                         or getattr(getattr(self.resolver, "_fallback", None), "validate_proposals", None))
-            if _validate is None:
-                from .models import ActionPlan as _APlan
-                plan = _APlan(intent_id=intent.intent_id, actions=[], urgency=intent.urgency,
-                              refused_proposals=[{"device_id": p.get("device_id"), "action": p.get("action"),
-                                                  "reason": "resolver_cannot_validate"}
-                                                 for p in intent.context["proposed_actions"]])
-            else:
-                plan = _validate(intent)
+            # resolving (spec §6.8 rule 7). The SAMUEL kernel validates, not the
+            # resolver: resolution is one way of proposing, and a hub whose
+            # resolver is external validates proposals all the same. (Until
+            # 2026-10-11 an external resolver without validate_proposals made the
+            # hub refuse every proposal as `resolver_cannot_validate`.)
+            from .samuel import ClassGrant, validate_proposals
+            plan = validate_proposals(intent, ClassGrant.from_row(intent_class_row, intent.context),
+                                      self.registry.get, self.registry.active())
         else:
             plan = self.resolver.resolve(intent)
         # Parameter validation and the policy engine rebuild the plan from its

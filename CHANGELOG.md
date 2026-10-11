@@ -10,6 +10,31 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **The SAMUEL kernel: the nine guarantees decided in one place (`dosync/samuel/`).** If the agent is the mind
+  and the devices the body, DoSync is the nervous system, and this is the part of it that decides what may
+  pass. Extracted, not rewritten: admission of an intent as a whole (`samuel.admit`), validation of proposed
+  actions (`samuel.validate_proposals`), the no-oscillation guard (`samuel.OscillationGuard`) and the
+  confirmation split (`samuel.split_by_confirmation`) moved out of `server.py`, `resolvers.py` and `hub.py`
+  unchanged; those call the kernel now. The kernel imports nothing of DoSync but its data models and has no
+  I/O (`tests/test_samuel_kernel_boundary.py` fails otherwise). Resolution stays outside it: it is one more
+  way of proposing, and the hub validates proposals itself, so a hub whose resolver is external no longer
+  refuses every proposal as `resolver_cannot_validate`. Behaviour is otherwise identical: suite, certification
+  (CONFORMANCE 72/72), the laboratory's parity and the fourth comparison's replay (144/144 identical) give the
+  same results before and after.
+
+### Fixed
+- **Intent refusals held only on the REST surface.** `unknown_location`, `invalid_actions`,
+  `ambiguous_actions`, `invalid_proposals` and `proposals_required` were decided in the handler of
+  `POST /v1/intent/async`; an intent reaching `DoSyncHub.execute_intent` any other way — the hub's own
+  capability-anomaly alert, a library caller, a future bridge — skipped them, and an unregistered class
+  resolved to nothing instead of being refused (`not_registered`). Both doors now call `samuel.admit()`; the
+  object door returns `status: "refused"` with `refused_reason`/`refused_detail` and records `intent_refused`
+  (spec §7.8). Not reachable by an agent (the MCP server enters by REST), but it contradicted "the guarantees a
+  hub enforces on both agent paths". `tests/test_samuel_every_door.py`. Four test files that stubbed the
+  resolver and fired `operate_device` without proposals, or an unregistered class, now fire as a real caller
+  must.
+
 ### Added
 - **Three protections, after the third agent comparison showed the hub does not bound a misled agent**
   (panel `paper-eval/PANEL-protecciones-2026-10-07.md`). The third comparison's honest finding: SAMUEL never

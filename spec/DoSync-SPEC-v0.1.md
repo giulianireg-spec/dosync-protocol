@@ -949,6 +949,7 @@ log, not evidence.
 | Type | Meaning |
 |---|---|
 | `intent_executed` | An intent was resolved to a plan and dispatched |
+| `intent_refused` | An intent that reached the hub without passing through the REST surface was refused as a whole (`reason`: one of the intent refusals of SAMUEL §5.1; `detail`). The REST surface answers the same refusals with 422 before the hub is reached (added 2026-10-11) |
 | `intent_pending_confirmation` | A custom policy returned the engine's whole-plan `CONFIRM` (legacy) |
 | `actions_held_for_confirmation` | One or more actions were withheld for a human (rule 9), listing each held `{device_id, action, reason}` |
 | `confirmation_confirmed` | A held action was released by an operator, with the operator marker and how long it was held |

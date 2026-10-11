@@ -795,6 +795,12 @@ class IntentResult:
     # The held actions did NOT run; a human confirms or denies them out of band
     # (POST /v1/intents/{id}/confirm or /deny, operator credential only).
     held_for_confirmation: list       = field(default_factory=list)
+    # Set when SAMUEL refused the intent as a whole before anything ran
+    # (status "refused"): one of dosync.samuel.INTENT_REFUSALS, and why. The REST
+    # surface answers those with 422 before reaching the hub; this is how every
+    # other caller learns the same thing.
+    refused_reason: str               = ""
+    refused_detail: str               = ""
     # "success"        — all actions completed successfully
     # "partial"        — some actions failed or were rejected, rest continued
     # "partial_abort"  — some actions executed, rest aborted by ABORT policy
@@ -806,6 +812,8 @@ class IntentResult:
     #   (not failed) — accepted and running. Only appears when `operations` is non-empty.
     # "held"           — every action was withheld for human confirmation (G9); nothing
     #   ran and nothing failed. Only appears when `held_for_confirmation` is non-empty.
+    # "refused"        — SAMUEL refused the intent as a whole (refused_reason); nothing
+    #   was resolved, proposed or run.
     # rejected_actions: actions dropped because their params violated the
     #   actuator's JSON Schema — distinct from failed_devices (device didn't
     #   respond). Each entry: {device_id, action, reason}.

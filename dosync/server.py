@@ -2053,92 +2053,22 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
         _count_rejection("invalid_urgency", req.intent, "_invalid")
         raise HTTPException(status_code=422, detail=f"Urgency '{req.urgency}' not valid. Use: emergency, alert, warning, info")
 
-    # A location that restricts where the intent acts must name a place some
-    # device is actually at. Otherwise a typo ("main-bedrom") resolves to no
-    # device at all and the intent "completes" with zero actions -- silent. It
-    # is refused here instead, and counted, like any other refusal. Only when
-    # the location restricts: an alert's location just says where something
-    # happened. An EMERGENCY is never refused: with no device at its location it
-    # acts as an emergency without one would, and that is recorded (below) --
-    # never narrowed to nothing, never silently widened.
-    _location = (req.context or {}).get("location")
-    _location_not_found = None
-    if isinstance(_location, str) and _location:
-        _cls = hub.db.get_intent_class(req.intent) or {}
-        if _cls.get("location_role", "restricts") == "restricts":
-            if not any(device_at_location(d, _location) for d in hub.registry.active()):
-                if urgency == Urgency.EMERGENCY:
-                    _location_not_found = _location
-                else:
-                    _count_rejection("unknown_location", req.intent, req.urgency)
-                    raise HTTPException(
-                        status_code=422,
-                        detail=f"No device is at location '{_location}'. '{req.intent}' "
-                               "acts only where context.location says, and no registered "
-                               "device is there. Check the spelling, or omit location "
-                               "to act on every capable device.")
-
-    # An intent may narrow its class's actions (context.action_types), and must when
-    # the class asks for actions that undo each other: control_access asks for
-    # lock and unlock, and "secure the plant" sent a lock both. Outside an
-    # emergency such an intent is refused, saying which it must choose; in an
-    # emergency the resolver never sends both (declared emergency actions, or
-    # none). Protocol 0.5, spec §6.
-    from dosync.models import opposite_pairs as _opposite_pairs
-    _cls_row = hub.db.get_intent_class(req.intent) or {}
-    _class_actions = list(_cls_row.get("resolution_actuators") or [])
-    _wanted = (req.context or {}).get("action_types")
-    _any_declared = "*" in _class_actions
-    if _wanted is not None:
-        if (not isinstance(_wanted, list) or not _wanted
-                or not all(isinstance(a, str) for a in _wanted)
-                or not (_any_declared or set(_wanted) <= set(_class_actions))):
-            _count_rejection("invalid_actions", req.intent, req.urgency)
-            raise HTTPException(
-                status_code=422,
-                detail=f"context.action_types must be a non-empty subset of the actions "
-                       f"'{req.intent}' asks for: {sorted(_class_actions)}")
-    # Governed direct mode: the agent proposes the actions itself (spec §6
-    # rule 7). Each one names its direction, so the class's ambiguity does not
-    # apply; the hub checks every proposal instead.
-    _proposals = (req.context or {}).get("proposed_actions")
-    if isinstance(_proposals, list) and not _proposals:
-        # An empty list means the agent proposes nothing: the hub resolves the
-        # intent as usual. Refusing it as malformed (2026-10-02) cost the
-        # second agent comparison every sensor read an agent asked for through
-        # report_status with an empty list -- the governed direct mode's only
-        # recall loss the hub caused. Found by that comparison; not re-measured.
+    # SAMUEL admission (dosync/samuel/intake.py): the intent as a whole -- a
+    # restricting place that exists, actions the class grants, opposite actions
+    # not left ambiguous, well-formed proposals. The same admit() runs inside
+    # hub.execute_intent for every other door; here it runs first so the caller
+    # gets a 422 at once, and the refusal is counted under its reason.
+    from dosync.samuel import admit as _admit
+    _admission = _admit(req.intent, hub.db.get_intent_class(req.intent), urgency,
+                        req.context, hub.registry.active())
+    if not _admission.admitted:
+        _count_rejection(_admission.refused, req.intent, req.urgency)
+        raise HTTPException(status_code=422, detail=_admission.detail)
+    _location_not_found = _admission.location_not_found
+    if req.context is not None and "proposed_actions" in req.context \
+            and "proposed_actions" not in _admission.context:
+        # An empty proposal list means "no proposals" (see intake.admit).
         req.context.pop("proposed_actions", None)
-        _proposals = None
-    if _proposals is not None:
-        if (not isinstance(_proposals, list) or len(_proposals) > 200
-                or not all(isinstance(p, dict) and isinstance(p.get("device_id"), str)
-                           and isinstance(p.get("action"), str)
-                           and isinstance(p.get("params", {}), dict) for p in _proposals)):
-            _count_rejection("invalid_proposals", req.intent, req.urgency)
-            raise HTTPException(
-                status_code=422,
-                detail="context.proposed_actions must be a list (at most 200) of "
-                       "{device_id, action, params?} objects; an empty list means none")
-    if _any_declared and _proposals is None:
-        # operate_device grants any declared action, so it acts only on what the
-        # agent names: there is nothing to resolve.
-        _count_rejection("proposals_required", req.intent, req.urgency)
-        raise HTTPException(
-            status_code=422,
-            detail=f"'{req.intent}' acts only on the actions you propose: put the device "
-                   "and action in context.proposed_actions, e.g. "
-                   '[{"device_id": "lamp-hall", "action": "turn_off"}]')
-    _effective = set(_wanted) if _wanted else ({a for a in _class_actions if a != "*"})
-    _pairs = _opposite_pairs(_effective)
-    if _pairs and urgency != Urgency.EMERGENCY and _proposals is None:
-        _count_rejection("ambiguous_actions", req.intent, req.urgency)
-        raise HTTPException(
-            status_code=422,
-            detail=f"'{req.intent}' asks for actions that undo each other: "
-                   + ", ".join(f"{a}/{b}" for a, b in _pairs)
-                   + ". Say which you mean with context.action_types, e.g. "
-                   f"{{\"action_types\": [\"{_pairs[0][0]}\"]}}.")
 
     # ── Idempotency check (protocol v0.2, opt-in) ─────────────────────────
     # If the client supplied an idempotency key, deduplicate against prior

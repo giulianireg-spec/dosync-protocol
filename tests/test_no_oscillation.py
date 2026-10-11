@@ -35,7 +35,9 @@ def _fire(hub, device_id, action, urgency=Urgency.INFO, iid="x"):
     plan = ActionPlan(intent_id=iid, actions=[DeviceAction(device_id=device_id, action=action)],
                       urgency=urgency)
     hub.resolver.resolve = lambda intent: plan
-    intent = Intent(intent=IntentClass("operate_device"), urgency=urgency, context={})
+    # operate_device acts only on proposals (SAMUEL admission, every door).
+    intent = Intent(intent=IntentClass("operate_device"), urgency=urgency,
+                    context={"proposed_actions": [{"device_id": device_id, "action": action}]})
     intent.intent_id = iid
     return asyncio.run(hub.execute_intent(intent, SimulatedExecutor()))
 

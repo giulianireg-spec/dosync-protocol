@@ -35,6 +35,11 @@ def _run(coro):
 def _hub_with_devices():
     """A hub with one instant lamp and one long-running 'mover' (telemetry-capable)."""
     hub = DoSyncHub(db_path=":memory:")
+    # A deployment class, registered as a deployment registers it: SAMUEL
+    # admission refuses an unregistered class on every door (2026-10-11).
+    hub.db.save_intent_class(name="set_environment", urgency="info", resolution_tags=[],
+                             resolution_actuators=["turn_on", "set_brightness", "go_to"],
+                             description="test deployment class", domain="test")
     hub.db.init_operations_table()
     lamp = CapabilityManifest(
         device_id="lamp-01", device_name="Lamp", manufacturer="X", model="Y",
