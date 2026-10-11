@@ -58,3 +58,27 @@ def test_a_device_with_a_needed_sensor_and_no_shared_tag_takes_part():
                                          urgency=Urgency.INFO, context={}))
     assert "probe-1" in {d["device_id"] for d in report["included"]}, \
         "a device declaring the smoke sensor the class needs was left out"
+
+
+def test_a_class_that_grants_actions_resolves_by_capability_without_tags():
+    """Rule 1: tags only rank. A class with grants and no tags -- every class
+    defined in SAMUEL's model -- resolves to the devices that declare what it
+    grants, as explain() always said. Until 2026-10-11 resolve() branched on tags
+    alone and read such a class as a status query (sensor reads, no action).
+    Found by samuel-certify S08."""
+    from dosync.hub import DoSyncHub
+    from dosync.models import (ActuatorSpec, CapabilityManifest, DeviceCategory, Intent,
+                               IntentClass, Urgency)
+    hub = DoSyncHub(db_path=":memory:")
+    for did, place in (("cell-2-lock", "plant-1/line-3/cell-2"), ("line-30-lock", "plant-1/line-30")):
+        hub.register_device(CapabilityManifest(
+            device_id=did, device_name=did, manufacturer="t", model="t", firmware="",
+            category=DeviceCategory.ACTUATOR, tags=[], sensors=[], events=[],
+            actuators=[ActuatorSpec("lock", "lock", ""), ActuatorSpec("unlock", "unlock", "")],
+            location=place))
+    hub.db.save_intent_class(name="secure_cells", urgency="alert", resolution_tags=[],
+                             resolution_actuators=["lock", "unlock"], description="t",
+                             domain="plant", location_role="restricts")
+    plan = hub.resolver.resolve(Intent(intent=IntentClass("secure_cells"), urgency=Urgency.ALERT,
+                                       context={"location": "plant-1/line-3", "action_types": ["lock"]}))
+    assert {(a.device_id, a.action) for a in plan.actions} == {("cell-2-lock", "lock")}

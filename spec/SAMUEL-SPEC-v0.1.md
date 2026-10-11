@@ -3,8 +3,8 @@
 *What an AI agent may do to physical devices, within limits the operator sets and
 the hub enforces.*
 
-**Version 0.1 — 2026-10-05. Status: draft, extracted from DoSync protocol 0.5.
-DoSync is its reference implementation.**
+**Version 0.1 — 2026-10-05. Status: superseded by [v0.2](SAMUEL-SPEC-v0.2.md) (2026-10-11), which is
+normative on its own. Kept as the version the IIWOT 2027 submission describes.**
 
 The limits in the name are the agent's: the bounds of what it is allowed to do —
 which actions, on which devices, in which places, in an emergency — not

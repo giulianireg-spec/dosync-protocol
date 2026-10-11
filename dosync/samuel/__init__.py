@@ -1,6 +1,6 @@
 """SAMUEL — the governance kernel of DoSync.
 
-Standard for Agent Mediation Under Enforceable Limits (spec/SAMUEL-SPEC-v0.1.md):
+Standard for Agent Mediation Under Enforceable Limits (spec/SAMUEL-SPEC-v0.2.md):
 what an AI agent may do to physical devices, within limits the operator sets and
 the hub enforces -- in a home, a plant, a ward, a fleet of drones alike.
 

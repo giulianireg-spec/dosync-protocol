@@ -953,7 +953,13 @@ class CapabilityMatchingResolver(BaseResolver):
         # index is an accelerator now, not the boundary of who is considered.
         target_tags = set(resolution.get("tags", []))
 
-        if target_tags:
+        # A class that grants actions resolves by capability whether or not it
+        # names tags (rule 1: tags only rank). Until 2026-10-11 this branched on
+        # tags alone, so a class with grants and no tags -- every class defined in
+        # SAMUEL's model, which has no tags -- was read as a status query and
+        # resolved to sensor reads, while explain() (which branches on tags AND
+        # actions) listed the devices it would act on. Found by samuel-certify S08.
+        if target_tags or resolution.get("actuators"):
             # Union index: candidates are devices with ANY of the target tags.
             # O(|target_tags| + |candidates|) with the inverted index.
             candidates = self._candidates(intent, resolution)

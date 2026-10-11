@@ -467,13 +467,17 @@ A compliant implementation MAY configure stricter per-deployment limits. It MUST
 
 ---
 
-### 6.8 Governance rules (normative)
+### 6.8 Governance rules
 
 These rules decide what runs, whoever chose it: the hub resolving an intent, an
-agent proposing actions, or an operator acting on one device. They are stated
-here once; SAMUEL, the governance specification (`spec/SAMUEL-SPEC-v0.1.md`), restates them
-as guarantees, independent of how devices are described, and points back to this
-list. They were added to the protocol in 0.5 (§10.5).
+agent proposing actions, or an operator acting on one device. Since 2026-10-11
+they are normative in SAMUEL, the governance specification
+(`spec/SAMUEL-SPEC-v0.2.md`, §5, rules R1–R12), independent of how devices are
+described; where this list and SAMUEL could seem to disagree, SAMUEL is
+normative. This list keeps DoSync's details (endpoints, environment variables,
+`explain`) and the history of each rule. They were added to the protocol in 0.5
+(§10.5); in the reference hub they are decided by the SAMUEL kernel,
+`dosync/samuel/`.
 
 1. **Devices are selected by capability.** A device takes part when it declares an actuator or sensor the intent needs; its tag overlap only ranks it. Under `0.4` a device was selected on tag match. This change was made on 2026-09-04 without a version increment; it is recorded here.
 2. **A location restricts.** When `context.location` is present and the intent class declares `location_role: "restricts"` (the default), only devices at that location act — in an `emergency` too, including the force-inclusion of emergency-capable devices. Under `0.4` a location only added to a device's score and every capable device acted. A class whose location only says where something happened declares `"informs"`; among the universal classes, `alert_anomaly`, `notify` and `ensure_safety` do.
@@ -949,7 +953,7 @@ log, not evidence.
 | Type | Meaning |
 |---|---|
 | `intent_executed` | An intent was resolved to a plan and dispatched |
-| `intent_refused` | An intent that reached the hub without passing through the REST surface was refused as a whole (`reason`: one of the intent refusals of SAMUEL §5.1; `detail`). The REST surface answers the same refusals with 422 before the hub is reached (added 2026-10-11) |
+| `intent_refused` | An intent was refused as a whole before anything ran (`reason`: one of the intent refusals of SAMUEL §7.1; `detail`). On the REST surface the refusal is also answered with 422; `intent_id` is null there, since none was assigned (added 2026-10-11 — until then a 422 was only counted, and left no entry, against G6) |
 | `intent_pending_confirmation` | A custom policy returned the engine's whole-plan `CONFIRM` (legacy) |
 | `actions_held_for_confirmation` | One or more actions were withheld for a human (rule 9), listing each held `{device_id, action, reason}` |
 | `confirmation_confirmed` | A held action was released by an operator, with the operator marker and how long it was held |

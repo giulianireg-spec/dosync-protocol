@@ -23,7 +23,30 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (CONFORMANCE 72/72), the laboratory's parity and the fourth comparison's replay (144/144 identical) give the
   same results before and after.
 
+### Added
+- **SAMUEL 0.2 (`spec/SAMUEL-SPEC-v0.2.md`), normative on its own.** Rules R1–R12 stated in SAMUEL itself
+  (the protocol's §6.8 now defers to it), a threat model (hub and operator credential trusted; the attacker
+  controls the agent's inputs and does not know what the operator marked), the lifecycle of a hold, the
+  record, an HTTP binding (§11) and conformance (§12). §13 says what was measured against a misled agent and
+  that the guarantees are tested, not formally verified. v0.1 is kept, marked superseded.
+- **The SAMUEL HTTP binding, `/samuel/v0` (`dosync/samuel_http.py`).** Eight operations in SAMUEL's model —
+  a device is `{actions, sensors, place, emergency_capable, emergency_actions}`, not a Capability Manifest —
+  with two credentials: the agent's (bearer) fires intents; the operator's (`X-Operator-Token`) places
+  devices, defines classes, releases or denies holds and reads the record. No `explain`. Policies are set
+  over it only in conformance mode.
+- **`samuel-certify` (`dosync/samuel_certify.py`).** The conformance suite any hub runs against the binding:
+  standard library only, 21 checks mapped to G1–G9, a scene of a production cell, a line and a hangar bay.
+  The reference hub conforms (21/21, `tests/test_samuel_conformance.py`); CI runs it after `dosync-certify`.
+
 ### Fixed
+- **A class that grants actions but names no tags resolved to sensor reads.** `resolve()` decided "status
+  query" on the absence of tags alone, while `explain()` looked at tags and actions — so a class defined in
+  SAMUEL's model (which has no tags) listed in `explain` the devices it would act on and then read their
+  sensors instead. Rule 1 says tags only rank. No production class was affected (the only tagless class with
+  grants, `operate_device`, acts only on proposals). Found by `samuel-certify` S08.
+- **A refused intent left no entry in the record.** On the REST surface a 422 was counted in the metrics and
+  returned to the caller, but not appended to the audit log, against G6 ("returned with its reason and
+  recorded"). Every refusal of `POST /v1/intent/async` is recorded now as `intent_refused`.
 - **Intent refusals held only on the REST surface.** `unknown_location`, `invalid_actions`,
   `ambiguous_actions`, `invalid_proposals` and `proposals_required` were decided in the handler of
   `POST /v1/intent/async`; an intent reaching `DoSyncHub.execute_intent` any other way — the hub's own

@@ -663,6 +663,7 @@ jobs:
           DOSYNC_DEMO_TOKEN: ci-certification-token
           DOSYNC_POLICIES: .github/certification/policies.json
           DOSYNC_DB: /tmp/certify.db
+          DOSYNC_OPERATOR_TOKEN: ci-operator-token
         run: |
           python -m uvicorn dosync.server:app --host 127.0.0.1 --port 47299 > /tmp/hub.log 2>&1 &
           for i in $(seq 1 30); do
@@ -685,3 +686,9 @@ jobs:
               --host 127.0.0.1 --port 47299 --tier "$tier" --output "/tmp/certification-$tier.json" \
               || { echo "--- tier $tier failed; hub log ---"; tail -60 /tmp/hub.log; exit 1; }
           done
+          # SAMUEL conformance, with the suite an implementer runs: standard library
+          # only, against the binding, never DoSync's own API.
+          python dosync/samuel_certify.py --url http://127.0.0.1:47299 \
+            --agent-token ci-certification-token --operator-token ci-operator-token \
+            --json /tmp/samuel-conformance.json \
+            || { echo "--- SAMUEL conformance failed; hub log ---"; tail -60 /tmp/hub.log; exit 1; }

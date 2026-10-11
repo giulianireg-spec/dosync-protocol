@@ -2021,6 +2021,18 @@ def _count_rejection(reason: str, intent_class: str, urgency: str) -> None:
     M.intent_rejections_total.inc({"reason": reason})
 
 
+def _record_refusal(reason: str, intent: str, urgency: str, detail: str = "") -> None:
+    """G6: a refused intent is returned with its reason AND recorded in the audit
+    log. Until 2026-10-11 a 422 here was only counted -- refused intents left no
+    entry in the chain. The intent and urgency are recorded as given (truncated),
+    never used as metric labels."""
+    hub.audit_log.append({
+        "type": "intent_refused", "intent_id": None,
+        "intent": str(intent)[:80], "urgency": str(urgency)[:20],
+        "source": "api", "reason": reason, "detail": str(detail)[:300],
+    })
+
+
 def _rejections_by_reason() -> dict:
     counts = {r: 0 for r in _REJECTION_REASONS}
     for (reason,), n in M.intent_rejections_total.samples().items():
@@ -2037,11 +2049,13 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
         # Cardinality rule: rejected intents carry arbitrary user strings — never
         # use them as a label value. Count them under the fixed "_invalid" class.
         _count_rejection("invalid_name", "_invalid", req.urgency)
+        _record_refusal("invalid_name", req.intent, req.urgency, str(e))
         raise HTTPException(status_code=422, detail=str(e))
     # Validate intent class is registered in DB
     if not hub.db.get_intent_class(req.intent):
         registered = [r["name"] for r in hub.db.list_intent_classes()]
         _count_rejection("not_registered", "_invalid", req.urgency)
+        _record_refusal("not_registered", req.intent, req.urgency)
         raise HTTPException(
             status_code=422,
             detail=f"Intent '{req.intent}' is not registered. "
@@ -2051,6 +2065,7 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
         urgency = Urgency(req.urgency)
     except ValueError:
         _count_rejection("invalid_urgency", req.intent, "_invalid")
+        _record_refusal("invalid_urgency", req.intent, req.urgency)
         raise HTTPException(status_code=422, detail=f"Urgency '{req.urgency}' not valid. Use: emergency, alert, warning, info")
 
     # SAMUEL admission (dosync/samuel/intake.py): the intent as a whole -- a
@@ -2063,6 +2078,7 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
                         req.context, hub.registry.active())
     if not _admission.admitted:
         _count_rejection(_admission.refused, req.intent, req.urgency)
+        _record_refusal(_admission.refused, req.intent, req.urgency, _admission.detail)
         raise HTTPException(status_code=422, detail=_admission.detail)
     _location_not_found = _admission.location_not_found
     if req.context is not None and "proposed_actions" in req.context \
@@ -2090,6 +2106,7 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
             # Anti-suppression: same key, different body → reject. A key cannot
             # be reused to suppress a different intent.
             _count_rejection("idempotency_conflict", req.intent, req.urgency)
+            _record_refusal("idempotency_conflict", req.intent, req.urgency)
             raise HTTPException(
                 status_code=409,
                 detail="Idempotency key reused with a different request body.",
@@ -3501,3 +3518,10 @@ def get_operation(operation_id: str, auth: str = Depends(require_auth)):
     if op is None:
         raise HTTPException(status_code=404, detail=f"Operation '{operation_id}' not found")
     return op
+
+
+# ── SAMUEL HTTP binding (SAMUEL-SPEC-v0.2 §11) ────────────────────────────────
+# A small surface on which any hub can be certified against SAMUEL, in SAMUEL's
+# model rather than DoSync's. Same hub, same kernel; only the language differs.
+from dosync.samuel_http import router as _samuel_router  # noqa: E402
+app.include_router(_samuel_router)
