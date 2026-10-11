@@ -143,10 +143,13 @@ def run(hub: Hub) -> Report:
 
     # S01 -- what the hub says it is (G8's report)
     st, info = hub.call("GET", "/samuel/v0")
-    r.add("S01", "G8", "The hub reports the SAMUEL binding, and direct control closed or operator-only",
+    r.add("S01", "G8", "The hub reports the SAMUEL binding, direct control closed or operator-only, "
+                       "and configuration reserved to the operator",
           st == 200 and info.get("binding") == "samuel/v0"
-          and info.get("direct_control") in ("closed", "operator"),
-          f"status {st}: {info.get('binding')}, direct_control={info.get('direct_control')}")
+          and info.get("direct_control") in ("closed", "operator")
+          and info.get("configuration") == "operator",
+          f"status {st}: {info.get('binding')}, direct_control={info.get('direct_control')}, "
+          f"configuration={info.get('configuration')}")
     if st != 200:
         return r
 

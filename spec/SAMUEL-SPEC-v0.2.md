@@ -67,8 +67,12 @@ A hub governs with this model, whatever format its devices come from.
 | emergency actions | What it does in an emergency, a subset of its declared actions | **The operator** |
 
 A device's place and emergency actions MUST NOT be taken from a third party's
-description of it, and MUST NOT be set with the agent credential: they are
-decisions of the deployment.
+description of it: they are decisions of the deployment. To conform, a hub MUST
+reserve setting them, and defining intent classes, to the operator credential on
+every interface it offers, and report so (`configuration: operator`, §11). A hub
+MAY let a deployment leave them open to the hub's general credential (reporting
+`configuration: hub`); such a deployment does not conform, because an agent
+holding that credential could place devices or grant itself authority.
 
 **An intent class** has: the actions it grants (a list of action types, or `*`
 for any action a device declares), the sensors it reads, a default urgency, and a
@@ -275,7 +279,7 @@ operator credential is sent as `X-Operator-Token`. They MUST be different.
 
 | Operation | Credential | Body / answer |
 |---|---|---|
-| `GET /samuel/v0` | any | `{binding: "samuel/v0", samuel, resolves, direct_control: closed\|operator\|open, oscillation: {window_seconds, max_reversals}, confirmation_timeout_seconds, conformance_mode}` |
+| `GET /samuel/v0` | any | `{binding: "samuel/v0", samuel, resolves, direct_control: closed\|operator\|open, configuration: operator\|hub, oscillation: {window_seconds, max_reversals}, confirmation_timeout_seconds, conformance_mode}` |
 | `PUT /samuel/v0/devices/{id}` | operator | `{actions: [{type, params_schema?}], sensors: [{type, kind?}], place, emergency_capable, emergency_actions: [{action, params?}]}` |
 | `PUT /samuel/v0/classes/{name}` | operator | `{grants, sensors?, urgency?, location_role}`; a universal class cannot be redefined (409) |
 | `POST /samuel/v0/intents` | agent | `{class, urgency, context}` → `{intent_id, status, ran: [{device_id, action}], refused: [{device_id, action, reason}], held: [{device_id, action, reason}]}`; a refusal of the intent as a whole is 422 `{reason, detail}` |

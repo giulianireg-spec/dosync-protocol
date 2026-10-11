@@ -38,6 +38,18 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   standard library only, 21 checks mapped to G1–G9, a scene of a production cell, a line and a hangar bay.
   The reference hub conforms (21/21, `tests/test_samuel_conformance.py`); CI runs it after `dosync-certify`.
 
+- **`DOSYNC_CONFIGURATION_CREDENTIAL` (`hub` | `operator`; default `hub`).** SAMUEL reserves to the operator
+  where a device is, what it does in an emergency and which intent classes exist (a class is a grant of
+  authority). On `/v1` these took the hub credential — the one an agent's tools also hold — so an agent with
+  HTTP access and the token could move a device, change its emergency actions or register a class that a
+  policy on `operate_device` did not cover. The default stays as it was, by the deployment's choice: the hub
+  warns once at start while configuration is open and reports the setting (`/v1/status`
+  `configuration_credential`, `/samuel/v0` `configuration`). With `operator` (and `DOSYNC_OPERATOR_TOKEN`
+  set), `PATCH /v1/devices/{id}` changing a place or emergency actions, `POST /v1/things` and
+  `POST /v1/devices/register` carrying them, and creating or deleting an intent class need `X-Operator-Token`;
+  a rename does not. SAMUEL conformance requires `operator` (samuel-certify S01). `dosync-certify` sends the
+  operator credential, when it has one, on its own configuration requests only.
+
 ### Fixed
 - **A class that grants actions but names no tags resolved to sensor reads.** `resolve()` decided "status
   query" on the absence of tags alone, while `explain()` looked at tags and actions — so a class defined in

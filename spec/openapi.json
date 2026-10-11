@@ -162,6 +162,38 @@
               "type": "string",
               "title": "Device Id"
             }
+          },
+          {
+            "name": "x-operator-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Token"
+            }
+          },
+          {
+            "name": "x-dosync-operator-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dosync-Operator-Token"
+            }
           }
         ],
         "requestBody": {
@@ -292,17 +324,56 @@
         "summary": "Import Thing",
         "description": "Register a W3C WoT Thing Description as a governed device.\n\nThe body is a TD, or {\"td\": <TD>, \"location\": \"<place>\", \"emergency_actions\":\n[...]}: a Thing's place and emergency actions are the operator's (spec §2),\nnever taken from a third-party TD. The response says how each affordance was\nmapped to a DoSync action type and whether it can run over HTTP.",
         "operationId": "import_thing_v1_things_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-operator-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Token"
+            }
+          },
+          {
+            "name": "x-dosync-operator-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dosync-Operator-Token"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "additionalProperties": true,
                 "type": "object",
+                "additionalProperties": true,
                 "title": "Req"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -323,12 +394,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/v1/devices/register": {
@@ -338,15 +404,54 @@
         ],
         "summary": "Register Device",
         "operationId": "register_device_v1_devices_register_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-operator-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Token"
+            }
+          },
+          {
+            "name": "x-dosync-operator-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dosync-Operator-Token"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RegisterDeviceRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -367,12 +472,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/v1/intents/{intent_class}/explain": {
@@ -770,44 +870,60 @@
       }
     },
     "/v1/intent-classes": {
-      "get": {
-        "tags": [
-          "Protocol"
-        ],
-        "summary": "List all intent classes",
-        "description": "List all registered intent classes — universal and domain-specific.\nNo distinction between built-in and custom: all live in the DB.",
-        "operationId": "list_intent_classes_v1_intent_classes_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json; charset=utf-8": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
       "post": {
         "tags": [
           "Protocol"
         ],
         "summary": "Register a custom intent class",
         "operationId": "register_intent_class_v1_intent_classes_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-operator-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Token"
+            }
+          },
+          {
+            "name": "x-dosync-operator-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dosync-Operator-Token"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CustomIntentClassRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -828,12 +944,30 @@
               }
             }
           }
-        },
+        }
+      },
+      "get": {
+        "tags": [
+          "Protocol"
+        ],
+        "summary": "List all intent classes",
+        "description": "List all registered intent classes — universal and domain-specific.\nNo distinction between built-in and custom: all live in the DB.",
+        "operationId": "list_intent_classes_v1_intent_classes_get",
         "security": [
           {
             "HTTPBearer": []
           }
-        ]
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        }
       }
     },
     "/v1/intent-classes/{name}": {
@@ -856,6 +990,38 @@
             "schema": {
               "type": "string",
               "title": "Name"
+            }
+          },
+          {
+            "name": "x-operator-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Token"
+            }
+          },
+          {
+            "name": "x-dosync-operator-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dosync-Operator-Token"
             }
           }
         ],

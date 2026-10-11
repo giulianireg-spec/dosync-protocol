@@ -44,6 +44,7 @@ def conformance_hub(monkeypatch):
     from dosync.executor import SimulatedExecutor
     from dosync.hub import DoSyncHub
     monkeypatch.setenv("DOSYNC_OPERATOR_TOKEN", "conformance-operator")
+    monkeypatch.setenv("DOSYNC_CONFIGURATION_CREDENTIAL", "operator")
     monkeypatch.setattr(srv, "_certify_mode", True)
     monkeypatch.setattr(srv, "hub", DoSyncHub(db_path=":memory:"))
     monkeypatch.setattr(srv, "executor", SimulatedExecutor(failure_rate=0.0))

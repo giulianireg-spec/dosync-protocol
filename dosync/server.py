@@ -63,6 +63,35 @@ def direct_control_mode() -> str:
     return mode if mode in DIRECT_CONTROL_MODES else "off"
 
 
+# What SAMUEL reserves to the operator (§3): where a device is, what it does in an
+# emergency, and which intent classes exist (a class is a grant of authority). On
+# /v1 these take the hub credential -- the one the agent's tools also hold -- by
+# default, as they always did; a deployment that wants SAMUEL's separation sets
+# DOSYNC_CONFIGURATION_CREDENTIAL=operator and they then need the operator
+# credential. The setting is the deployment's to make (decided 2026-10-11): the
+# hub warns at start while it is open, and reports it in /v1/status and
+# /samuel/v0; SAMUEL conformance requires "operator".
+CONFIGURATION_CREDENTIAL_MODES = ("hub", "operator")
+
+
+def configuration_credential_mode() -> str:
+    mode = os.environ.get("DOSYNC_CONFIGURATION_CREDENTIAL", "hub").strip().lower()
+    return mode if mode in CONFIGURATION_CREDENTIAL_MODES else "hub"
+
+
+def _require_configuration_credential(what: str, *tokens) -> None:
+    """Placement, emergency actions and intent classes: open to the hub credential
+    unless the deployment set DOSYNC_CONFIGURATION_CREDENTIAL=operator."""
+    if configuration_credential_mode() != "operator":
+        return
+    if not any(_operator_credential_ok(t) for t in tokens if t):
+        raise HTTPException(
+            status_code=403,
+            detail=f"operator_credential_required: {what} is the operator's on this hub "
+                   "(DOSYNC_CONFIGURATION_CREDENTIAL=operator). Send X-Operator-Token. "
+                   "Agents fire intents; they do not place devices or grant authority.")
+
+
 def _operator_credential_ok(given) -> bool:
     import hmac
     expected = os.environ.get("DOSYNC_OPERATOR_TOKEN", "")
@@ -695,6 +724,15 @@ async def lifespan(app: FastAPI):
     log.info("DoSync Hub started — port %s, database %s",
              os.environ.get("DOSYNC_PORT", "47200"),
              ":memory: (certify mode)" if _certify_mode else _resolve_db_path())
+    if configuration_credential_mode() != "operator":
+        # Not an error -- the deployment's choice (2026-10-11). Said once, at start,
+        # so it is a known setting and not a surprise.
+        log.warning(
+            "Configuration is open to the hub credential: placing devices, setting "
+            "emergency actions and registering intent classes do not need the "
+            "operator credential. An agent holding the hub token could do them. "
+            "Set DOSYNC_OPERATOR_TOKEN and DOSYNC_CONFIGURATION_CREDENTIAL=operator "
+            "to reserve them to the operator (required for SAMUEL conformance).")
     # Transport discoverers: they find, they do not execute. Registered
     # separately from adapters so a component that executes nothing does not
     # have to pretend to be an executor in order to be searched.
@@ -1238,6 +1276,8 @@ def _flag_room_alias(req: dict, response: Response) -> None:
 
 @app.patch("/v1/devices/{device_id}", tags=["Devices"])
 async def rename_device(device_id: str, req: dict, response: Response,
+                        x_operator_token: str | None = Header(default=None),
+                        x_dosync_operator_token: str | None = Header(default=None),
                         auth: str = Depends(require_auth)):
     """Change a device's display name, its location, its emergency actions, or any of them.
 
@@ -1257,6 +1297,9 @@ async def rename_device(device_id: str, req: dict, response: Response,
         raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
 
     _flag_room_alias(req, response)
+    if any(k in req for k in ("location", "room", "emergency_actions")):
+        _require_configuration_credential("a device's place and emergency actions",
+                                          x_operator_token, x_dosync_operator_token)
     # Either or both: a new name, a new location. "room" is accepted as an alias
     # of "location" for the clients that already send it; it was stored on an
     # attribute to_dict() never wrote, so it was lost on the next restart and
@@ -1349,7 +1392,9 @@ async def rename_device(device_id: str, req: dict, response: Response,
 
 
 @app.post("/v1/things", tags=["Devices"])
-def import_thing(req: dict, auth: str = Depends(require_auth)):
+def import_thing(req: dict, auth: str = Depends(require_auth),
+                 x_operator_token: str | None = Header(default=None),
+                 x_dosync_operator_token: str | None = Header(default=None)):
     """Register a W3C WoT Thing Description as a governed device.
 
     The body is a TD, or {"td": <TD>, "location": "<place>", "emergency_actions":
@@ -1360,6 +1405,9 @@ def import_thing(req: dict, auth: str = Depends(require_auth)):
     from dosync.models import normalize_location
     from dosync.wot_import import import_td
     td = req.get("td") if isinstance(req.get("td"), dict) else req
+    if td is not req and (req.get("location") or req.get("emergency_actions")):
+        _require_configuration_credential("a device's place and emergency actions",
+                                          x_operator_token, x_dosync_operator_token)
     try:
         manifest, report = import_td(td)
     except ValueError as e:
@@ -1383,7 +1431,12 @@ def import_thing(req: dict, auth: str = Depends(require_auth)):
 
 
 @app.post("/v1/devices/register", tags=["Devices"])
-def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth)):
+def register_device(req: RegisterDeviceRequest, auth: str = Depends(require_auth),
+                    x_operator_token: str | None = Header(default=None),
+                    x_dosync_operator_token: str | None = Header(default=None)):
+    if req.emergency_actions:
+        _require_configuration_credential("a device's emergency actions",
+                                          x_operator_token, x_dosync_operator_token)
     # ── Device authentication ──────────────────────────────────────────────
     from dosync.auth import get_device_auth_manager
     device_auth = get_device_auth_manager()
@@ -1865,7 +1918,11 @@ class CustomIntentClassRequest(BaseModel):
 async def register_intent_class(
     req: CustomIntentClassRequest,
     auth: str = Depends(require_auth),
+    x_operator_token: str | None = Header(default=None),
+    x_dosync_operator_token: str | None = Header(default=None),
 ):
+    _require_configuration_credential("an intent class (a grant of authority)",
+                                      x_operator_token, x_dosync_operator_token)
     # Validate name format: ^[a-z][a-z0-9_]*$
     name = req.name.strip().lower().replace(" ", "_").replace("-", "_")
     if not name:
@@ -1950,7 +2007,11 @@ async def list_intent_classes(auth: str = Depends(require_auth)):
 
 
 @app.delete("/v1/intent-classes/{name}", tags=["Protocol"], summary="Delete a custom intent class")
-async def delete_intent_class(name: str, auth: str = Depends(require_auth)):
+async def delete_intent_class(name: str, auth: str = Depends(require_auth),
+                              x_operator_token: str | None = Header(default=None),
+                              x_dosync_operator_token: str | None = Header(default=None)):
+    _require_configuration_credential("an intent class (a grant of authority)",
+                                      x_operator_token, x_dosync_operator_token)
     row = hub.db.get_intent_class(name)
     if row and row.get("is_universal"):
         raise HTTPException(
@@ -3465,6 +3526,7 @@ def get_status():
         # hub counted it only in /metrics, where nobody looked.
         "intents_rejected": _rejections_by_reason(),
         "direct_control": direct_control_mode(),
+        "configuration_credential": configuration_credential_mode(),
         "emergency_location_fallbacks": int(sum(
             M.emergency_location_fallbacks_total.samples().values())),
         # The hub cannot see whether checkpoints are EXPORTED — that happens

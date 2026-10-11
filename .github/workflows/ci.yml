@@ -664,6 +664,7 @@ jobs:
           DOSYNC_POLICIES: .github/certification/policies.json
           DOSYNC_DB: /tmp/certify.db
           DOSYNC_OPERATOR_TOKEN: ci-operator-token
+          DOSYNC_CONFIGURATION_CREDENTIAL: operator
         run: |
           python -m uvicorn dosync.server:app --host 127.0.0.1 --port 47299 > /tmp/hub.log 2>&1 &
           for i in $(seq 1 30); do

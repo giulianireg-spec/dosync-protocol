@@ -74,6 +74,10 @@ def samuel_info(auth: str = Depends(require_auth)):
         "implementation": f"DoSync {srv.__version__}",
         "resolves": True,
         "direct_control": _direct_control_setting(),
+        # Who may place devices, set emergency actions and define classes on the
+        # hub's other interfaces: "operator" conforms; "hub" means the hub
+        # credential -- which an agent's tools hold -- can (SAMUEL §3).
+        "configuration": srv.configuration_credential_mode(),
         "oscillation": {"window_seconds": window, "max_reversals": max_rev},
         "confirmation_timeout_seconds": srv.hub._confirmation_timeout(),
         "conformance_mode": bool(srv._certify_mode),

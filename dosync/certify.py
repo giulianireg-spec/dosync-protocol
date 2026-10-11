@@ -92,6 +92,17 @@ def request(
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    # A hub may reserve configuration -- placing devices, setting emergency
+    # actions, defining intent classes -- to the operator credential
+    # (DOSYNC_CONFIGURATION_CREDENTIAL=operator, SAMUEL §3). The suite configures
+    # its own probes, so it sends the operator credential, when it has one, on
+    # those requests only: the checks that an action or a confirmation WITHOUT it
+    # is refused (C26, C28) never carry it.
+    import re
+    operator = os.environ.get("DOSYNC_OPERATOR_TOKEN", "")
+    if operator and method in ("POST", "PATCH", "PUT", "DELETE") and re.search(
+            r"/v1/(intent-classes|devices/register$|things$|devices/[^/]+$)", url):
+        headers["X-Operator-Token"] = operator
 
     ctx = ssl.create_default_context()
     if ca_cert and os.path.exists(os.path.expanduser(ca_cert)):

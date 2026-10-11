@@ -34,6 +34,7 @@ settings exist for deployments whose needs differ from that, not as a checklist.
 | `DOSYNC_TOKEN` | _unset_ |
 | `DOSYNC_DIRECT_CONTROL` | `off` |
 | `DOSYNC_OPERATOR_TOKEN` | _unset_ |
+| `DOSYNC_CONFIGURATION_CREDENTIAL` | `hub` |
 | `DOSYNC_DEVICE_AUTH` | `permissive` |
 | `DOSYNC_LIGHTWEIGHT_HEARTBEAT` | _unset_ |
 | `DOSYNC_DEMO_TOKEN` | _unset_ |
