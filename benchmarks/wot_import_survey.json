@@ -1,0 +1,47 @@
+{
+ "plugfests": {
+  "counts": {
+   "tds": 515,
+   "schema_valid": 409,
+   "imported": 515,
+   "with_actuation": 363,
+   "sensors": 811,
+   "affordances": 1528,
+   "executable": 1063,
+   "governable": 1528,
+   "things_with_opposite_pair": 31,
+   "opposite_pairs": 39,
+   "opposite_pairs_refused_together": 39
+  },
+  "mapped_by": {
+   "writable-property": 718,
+   "own-name": 638,
+   "@type": 33,
+   "name-verb": 123,
+   "own-name (collision)": 16
+  },
+  "failures": []
+ },
+ "thingweb-playground": {
+  "counts": {
+   "tds": 62,
+   "schema_valid": 51,
+   "imported": 62,
+   "with_actuation": 59,
+   "sensors": 28,
+   "affordances": 113,
+   "executable": 98,
+   "governable": 113,
+   "things_with_opposite_pair": 2,
+   "opposite_pairs": 2,
+   "opposite_pairs_refused_together": 2
+  },
+  "mapped_by": {
+   "writable-property": 64,
+   "own-name": 26,
+   "name-verb": 23
+  },
+  "failures": []
+ },
+ "_README": "TD importer survey (tools/wot_import_survey.py), 2026-10-11. plugfests = w3c/wot-testing events/ @67ab29c1194ac7ee59b6fc81fb6d9c5a350aa9f5 (2026-10-07), the corpus whose 2026-10-04 survey shaped the importer; thingweb-playground = eclipse-thingweb/playground packages/ @8a1c4dfbfd95d7eee95a70423b2a2b9cbe504a35, not used to shape it. Directories named 'invalid' skipped; TDs deduplicated by content."
+}

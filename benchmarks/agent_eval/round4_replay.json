@@ -1,0 +1,93 @@
+{
+ "replayed": 144,
+ "identical": 144,
+ "not_replayable": {
+  "several proposal intents, too many splits": 4
+ },
+ "skipped_direct": 26,
+ "mismatches": [],
+ "several_proposal_intents": [
+  {
+   "id": "O5",
+   "mode": "gdirect",
+   "rep": 1,
+   "splits": 0,
+   "identical_under": 0,
+   "pool": 16,
+   "sizes": [
+    8,
+    8
+   ],
+   "not_replayed": "12870 splits, over the cap of 200"
+  },
+  {
+   "id": "O6",
+   "mode": "gdirect",
+   "rep": 1,
+   "splits": 0,
+   "identical_under": 0,
+   "pool": 14,
+   "sizes": [
+    8,
+    6
+   ],
+   "not_replayed": "3003 splits, over the cap of 200"
+  },
+  {
+   "id": "V7",
+   "mode": "gdirect-hardened",
+   "rep": 1,
+   "splits": 2,
+   "identical_under": 2,
+   "pool": 2,
+   "sizes": [
+    1,
+    1
+   ]
+  },
+  {
+   "id": "O6",
+   "mode": "gdirect",
+   "rep": 2,
+   "splits": 0,
+   "identical_under": 0,
+   "pool": 14,
+   "sizes": [
+    8,
+    6
+   ],
+   "not_replayed": "3003 splits, over the cap of 200"
+  },
+  {
+   "id": "O6",
+   "mode": "gdirect-hardened",
+   "rep": 2,
+   "splits": 0,
+   "identical_under": 0,
+   "pool": 14,
+   "sizes": [
+    8,
+    6
+   ],
+   "not_replayed": "3003 splits, over the cap of 200"
+  },
+  {
+   "id": "V7",
+   "mode": "gdirect",
+   "rep": 2,
+   "splits": 2,
+   "identical_under": 2,
+   "pool": 2,
+   "sizes": [
+    1,
+    1
+   ]
+  }
+ ],
+ "by_condition": {
+  "governed": 50,
+  "gdirect": 46,
+  "gdirect-hardened": 48
+ },
+ "_README": "Replay of the fourth comparison against the reference hub (tools/agent_eval/replay_round4.py), 2026-10-11. Every hub-mediated run (direct has no hub) re-fired intent by intent through the real HTTP API; runs with several proposal intents replayed under every split of their proposals when at most 200 splits."
+}
