@@ -126,6 +126,7 @@ dosync-hub     = "dosync.cli:hub"
 dosync-manage  = "dosync.manage:main"
 dosync-certify = "dosync.certify:main"
 samuel-certify = "dosync.samuel_certify:main"
+dosync-mcp     = "dosync.mcp_cli:main"
 
 [tool.setuptools.dynamic]
 version = { attr = "dosync.__version__" }

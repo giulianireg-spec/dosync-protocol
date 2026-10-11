@@ -82,6 +82,7 @@ settings exist for deployments whose needs differ from that, not as a checklist.
 | `DOSYNC_EMERGENCY_CLAIM_GRACE` | `3` |
 | `DOSYNC_EMERGENCY_CLAIM_MAX_HOLD` | `60` |
 | `DOSYNC_VALIDATE_PARAMS` | `true` |
+| `DOSYNC_POLICIES` | _unset_ |
 | `DOSYNC_EMERGENCY_CONTACT` | _unset_ |
 | `DOSYNC_RESOLVER_URL` | _unset_ |
 | `DOSYNC_RESOLVER_CA_CERT` | _unset_ |

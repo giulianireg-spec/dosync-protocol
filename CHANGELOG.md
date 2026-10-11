@@ -10,6 +10,30 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **A person can govern the hub from the dashboard, without a terminal.** What SAMUEL reserves to a person
+  had endpoints and no page, so its guarantees held for developers only. The dashboard now has **⏸**
+  (every action held for confirmation, with Confirm/Deny), **Governance** (where each device is, what it does
+  in an emergency, and which actions must wait for a person) and **Agent** (the MCP configuration for the
+  agent you use, with this hub's address and command filled in). Backed by `GET /v1/confirmations` (all
+  holds, oldest first), `GET /v1/governance`, `PUT /v1/governance/confirmation-marks` and
+  `GET /v1/agent/connect`. Confirmation marks set here are kept by the hub, add to the deployment policy file
+  (which stays read-only to the hub), hold exactly like it, are audited (`confirmation_marks_changed`) and
+  always need the operator credential — removing a mark removes a restriction. The operator credential is
+  kept for the browser tab only (sessionStorage), never with the hub token.
+- **`dosync-mcp`**: runs the MCP server, `--print-config` prints the block any MCP client pastes (this
+  installation's interpreter, hub address, token), `--check` says in words what is missing. The step that
+  stopped non-developers — which python, inside a pipx venv they never see — is no longer theirs to work out.
+- **CI job `pipx-path`** on Linux and macOS runs the README's path as a person would: pipx install, inject
+  MCP, `dosync-hub`, dashboard served, `dosync-mcp --check`, and an agent started from the printed
+  configuration listing tools and calling `dosync_get_status` (`tools/smoke_mcp_stdio.py`).
+
+### Fixed
+- **Certify mode is isolated from the machine it runs on.** On the Pi it loaded `/etc/dosync/policies.json`,
+  the deployment's `.env` (with a real phone number) and a notifier. It now loads a policy file only when
+  `DOSYNC_POLICIES` names one, and neither `.env` nor notifications. An in-memory database is reported as
+  such, not as a `…/:memory:` path that never existed.
+
 ### Changed
 - **The SAMUEL kernel: the nine guarantees decided in one place (`dosync/samuel/`).** If the agent is the mind
   and the devices the body, DoSync is the nervous system, and this is the part of it that decides what may

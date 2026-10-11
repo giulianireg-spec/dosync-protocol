@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 import json
 import os
+import sys
 import re
 from fastapi import (Depends, FastAPI, Header, HTTPException, Query, Request, Response, WebSocket,
                      WebSocketDisconnect)
@@ -312,6 +313,15 @@ try:
     # policy must never fail quietly.
     from dosync import policy_config
     _policies_path = policy_config.configured_path()
+    if _certify_mode and _policies_path and not os.environ.get("DOSYNC_POLICIES"):
+        # Conformance runs against a hub with no deployment of its own. Picking
+        # up /etc/dosync/policies.json because it happens to exist on the machine
+        # (the Pi, 2026-10-11) made the result depend on that house's rules.
+        # A conformance run that WANTS a policy file names it explicitly.
+        logging.getLogger("dosync.server").info(
+            "Certify mode: not loading %s (found, not named). Set DOSYNC_POLICIES "
+            "to run conformance with a policy file.", _policies_path)
+        _policies_path = None
     if _policies_path:
         _loaded = policy_config.load_into(policy_engine, _policies_path, hub=hub)
         logging.getLogger("dosync.server").info(
@@ -365,6 +375,11 @@ except Exception:
 
 # ── Notification adapter ──────────────────────────────────────────────────────
 try:
+    if _certify_mode:
+        # Same isolation as the policy file: a conformance hub must not read the
+        # deployment's .env (on the Pi it loaded a real phone number) or wire a
+        # notifier that could reach a person.
+        raise RuntimeError("certify mode — deployment .env and notifications not loaded")
     from dosync.adapters.notifications import NotificationAdapter, load_env_file
     # Explicit, once, at startup — importing a module must not mutate the
     # environment (that silently defeated test isolation on the deployment).
@@ -377,7 +392,8 @@ try:
     logging.getLogger("dosync.server").info("NotificationAdapter registered")
 except Exception as _e:
     notifier = None
-    logging.getLogger("dosync.server").warning("Notifications not available: %s", _e)
+    (logging.getLogger("dosync.server").info if _certify_mode
+     else logging.getLogger("dosync.server").warning)("Notifications not available: %s", _e)
 
 # ── Auth setup ────────────────────────────────────────────────────────────────
 # Two possible sources, and the order between them is stated rather than left to
@@ -2384,6 +2400,98 @@ async def pending_confirmation_endpoint(intent_id: str, auth: str = Depends(requ
         raise HTTPException(status_code=404,
                             detail=f"No actions are held for confirmation on intent '{intent_id}'.")
     return pend
+
+
+@app.get("/v1/confirmations", tags=["AI"],
+         summary="Every action still held for human confirmation (G9)")
+async def list_confirmations(auth: str = Depends(require_auth)):
+    """What waits for a person, across all intents, oldest first — for an
+    operator's console. Readable with the hub credential; releasing or refusing
+    any of it needs the operator credential (`/v1/intents/{id}/confirm|deny`)."""
+    return {
+        "pending": hub.pending_confirmations(),
+        "operator_configured": bool(os.environ.get("DOSYNC_OPERATOR_TOKEN")),
+        "timeout_seconds": hub._confirmation_timeout(),
+    }
+
+
+def _mark_view(policy) -> dict:
+    return {"actions": sorted(getattr(policy, "_actuator_types", []) or []),
+            "device_ids": sorted(policy._device_ids) if getattr(policy, "_device_ids", None) else None,
+            "even_in_emergency": policy.even_in_emergency, "reason": policy.reason}
+
+
+@app.get("/v1/governance", tags=["Protocol"],
+         summary="Who may configure what on this hub, and what waits for a person")
+async def governance(auth: str = Depends(require_auth)):
+    """The governance settings an operator's console needs to show, in one read:
+    which credential configuration takes, whether an operator credential exists,
+    the direct-control path, and the confirmation marks from both sources (the
+    deployment file, read-only here, and the hub's own, editable with the
+    operator credential)."""
+    from dosync.policies import RequireConfirmationPolicy
+    engine = getattr(hub, "policy_engine", None)
+    from_file = [] if engine is None else [
+        _mark_view(p) for p in getattr(engine, "_policies", []) or []
+        if isinstance(p, RequireConfirmationPolicy)]
+    return {
+        "configuration_credential": configuration_credential_mode(),
+        "operator_configured": bool(os.environ.get("DOSYNC_OPERATOR_TOKEN")),
+        "direct_control": direct_control_mode(),
+        "confirmation_timeout_seconds": hub._confirmation_timeout(),
+        "confirmation_marks": {
+            "deployment_file": from_file,
+            "policies_path": getattr(engine, "policies_path", None),
+            "hub": hub.confirmation_marks(),
+        },
+    }
+
+
+@app.put("/v1/governance/confirmation-marks", tags=["Protocol"],
+         summary="Replace the confirmation marks the hub keeps (operator only)")
+async def put_confirmation_marks(
+    body: dict,
+    auth: str = Depends(require_auth),
+    x_operator_token: str | None = Header(default=None),
+    x_dosync_operator_token: str | None = Header(default=None),
+):
+    """Mark actions that must wait for a person (G9) without editing files.
+
+    Always needs the operator credential, whatever DOSYNC_CONFIGURATION_CREDENTIAL
+    says: removing a mark removes a restriction, and the agent must not be able to
+    unmark what the operator marked. Marks ADD to `require_confirmation` entries in
+    the deployment policy file, which stays read-only here."""
+    if not any(_operator_credential_ok(t) for t in (x_operator_token, x_dosync_operator_token) if t):
+        raise HTTPException(
+            status_code=403,
+            detail="operator_credential_required: confirmation marks are the operator's. "
+                   "Send X-DoSync-Operator-Token. If the hub has no DOSYNC_OPERATOR_TOKEN, "
+                   "set one first — without it nothing marked could ever be released.")
+    try:
+        marks = hub.set_confirmation_marks(body.get("marks") if isinstance(body, dict) else None)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return {"marks": marks}
+
+
+@app.get("/v1/agent/connect", tags=["AI"],
+         summary="What an agent on this computer needs to connect over MCP")
+async def agent_connect_info(auth: str = Depends(require_auth)):
+    """The command that starts the DoSync MCP server with THIS installation, for
+    the dashboard's "Connect your agent" page. Valid for an agent on the machine
+    the hub runs on; an agent elsewhere installs dosync there and runs
+    `dosync-mcp --print-config`. The token is not returned: the browser that
+    asks already has it."""
+    from dosync import mcp_cli
+    return {
+        "command": sys.executable,
+        "args": ["-m", "dosync.mcp_server"],
+        "mcp_installed": mcp_cli.mcp_installed(),
+        "install_hint": mcp_cli._install_hint(),
+        "client_config_paths": mcp_cli.client_config_paths(),
+        "elsewhere": 'pipx install "dosync[mcp]"  then  dosync-mcp --print-config '
+                     '--hub-url <this hub address> --token <your token>',
+    }
 
 
 @app.post("/v1/event", tags=["Devices"])

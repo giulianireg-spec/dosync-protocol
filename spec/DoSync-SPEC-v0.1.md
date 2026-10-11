@@ -650,6 +650,9 @@ by the intent's id, for a human:
 POST /v1/intents/{intent_id}/confirm      → runs the held actions
 POST /v1/intents/{intent_id}/deny         → drops the held actions
 GET  /v1/intents/{intent_id}/pending      → what is held (read-only)
+GET  /v1/confirmations                    → every hold still waiting (read-only)
+GET  /v1/governance                       → credential settings and confirmation marks
+PUT  /v1/governance/confirmation-marks    → replace the hub's marks (operator only)
 ```
 
 - **Confirm and deny need the operator credential**, the same one direct control
@@ -660,7 +663,22 @@ GET  /v1/intents/{intent_id}/pending      → what is held (read-only)
   never *released*. If no operator credential is configured, nothing can be
   released: a deployment that marks actions for confirmation MUST set one.
 - **Reading what is held** needs only the hub credential: knowing an action waits
-  is not acting on it.
+  is not acting on it. `GET /v1/confirmations` lists every hold still waiting,
+  oldest first (expired holds are swept and audited on the way), so an operator's
+  console — the reference dashboard is one — can show them without knowing the
+  intent ids in advance.
+- **Marking from a console.** Besides `require_confirmation` entries in the
+  deployment policy file (read-only to the hub), the reference hub keeps
+  *confirmation marks* in its own store: `PUT /v1/governance/confirmation-marks`
+  with `{"marks": [{"actions": [...], "device_ids": [...] | null,
+  "even_in_emergency": bool, "reason": "..."}]}` replaces them, and marks ADD to
+  the file's policies. Changing marks always needs the operator credential —
+  whatever `DOSYNC_CONFIGURATION_CREDENTIAL` says, since removing a mark removes
+  a restriction — and is audited (`confirmation_marks_changed`).
+  `GET /v1/governance` reports both sources and the credential settings.
+- **Connecting an agent** (reference hub, non-normative). `GET /v1/agent/connect`
+  returns the command that starts this installation's MCP server, so a console
+  can write an MCP client's configuration; it never returns a credential.
 - `confirm` returns `confirmed` with the per-action results, or `expired` if the
   hold aged out (`DOSYNC_CONFIRMATION_TIMEOUT`, default 300 s), or `404` if
   nothing is held for that intent (never held, already released, or already
@@ -959,6 +977,7 @@ log, not evidence.
 | `confirmation_confirmed` | A held action was released by an operator, with the operator marker and how long it was held |
 | `confirmation_denied` | A held action was dropped by an operator |
 | `confirmation_expired` | A held action aged out unreleased (`DOSYNC_CONFIRMATION_TIMEOUT`) |
+| `confirmation_marks_changed` | The operator replaced the confirmation marks kept by the hub (§7.3.2), with `before` and `after` |
 | `actions_dropped_oscillation` | One or more actions were dropped to stop a device oscillating across an opposite pair (rule 10) |
 | `emergency_unsatisfiable` | An emergency intent resolved to no capable device |
 | `phase_executed` | One phase of a multi-phase intent completed |

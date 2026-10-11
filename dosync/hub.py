@@ -534,11 +534,90 @@ class DoSyncHub:
         comparison lab -- inherits an identical hold.
         """
         engine = getattr(self, "policy_engine", None)
-        if engine is None:
-            return []
         from .policies import RequireConfirmationPolicy
-        return [p for p in getattr(engine, "_policies", []) or []
-                if isinstance(p, RequireConfirmationPolicy)]
+        from_file = [] if engine is None else [
+            p for p in getattr(engine, "_policies", []) or []
+            if isinstance(p, RequireConfirmationPolicy)]
+        return from_file + self._confirmation_mark_policies()
+
+    # ── Confirmation marks set from the dashboard (G9) ─────────────────────────
+    # The deployment policy file is the deployer's and stays read-only to the
+    # hub. A person who runs a hub without editing files marks consequential
+    # actions here instead; marks are stored in the hub's own database, ADD to
+    # whatever the file declares, and are changed only with the operator
+    # credential (the REST layer checks it). Stored as plain data so a mark reads
+    # the same in any domain: an action name, optionally some devices.
+    _MARKS_SETTING = "confirmation_marks"
+
+    @staticmethod
+    def normalize_confirmation_mark(index: int, mark) -> dict:
+        """Validate one mark; raise ValueError naming what is wrong."""
+        if not isinstance(mark, dict):
+            raise ValueError(f"marks[{index}]: expected an object")
+        actions = mark.get("actions")
+        if (not isinstance(actions, list) or not actions
+                or not all(isinstance(a, str) and a.strip() for a in actions)):
+            raise ValueError(f"marks[{index}]: 'actions' must be a non-empty list of action names")
+        devices = mark.get("device_ids")
+        if devices is not None and (not isinstance(devices, list)
+                                    or not all(isinstance(d, str) and d for d in devices)):
+            raise ValueError(f"marks[{index}]: 'device_ids' must be a list of device ids, or null for any device")
+        reason = mark.get("reason") or ""
+        if not isinstance(reason, str):
+            raise ValueError(f"marks[{index}]: 'reason' must be text")
+        return {"actions": sorted({a.strip() for a in actions}),
+                "device_ids": sorted(set(devices)) if devices else None,
+                "even_in_emergency": bool(mark.get("even_in_emergency", False)),
+                "reason": reason.strip()}
+
+    def confirmation_marks(self) -> list[dict]:
+        try:
+            marks = self.db.get_setting(self._MARKS_SETTING, [])
+        except Exception:
+            return []
+        return marks if isinstance(marks, list) else []
+
+    def set_confirmation_marks(self, marks: list, changed_by: str = "operator") -> list[dict]:
+        """Replace the dashboard's confirmation marks. Validates all before storing
+        any; the change is recorded in the audit chain."""
+        if not isinstance(marks, list):
+            raise ValueError("'marks' must be a list")
+        clean = [self.normalize_confirmation_mark(i, m) for i, m in enumerate(marks)]
+        before = self.confirmation_marks()
+        self.db.set_setting(self._MARKS_SETTING, clean)
+        self._marks_cache = None
+        self.audit_log.append({
+            "type": "confirmation_marks_changed", "changed_by": changed_by,
+            "before": before, "after": clean,
+        })
+        return clean
+
+    def _confirmation_mark_policies(self) -> list:
+        cached = getattr(self, "_marks_cache", None)
+        if cached is not None:
+            return cached
+        from .policies import RequireConfirmationPolicy
+        built = []
+        for m in self.confirmation_marks():
+            try:
+                built.append(RequireConfirmationPolicy(
+                    actuator_types=m["actions"], device_ids=m.get("device_ids"),
+                    even_in_emergency=m.get("even_in_emergency", False),
+                    reason=m.get("reason") or "Marked for confirmation by the operator"))
+            except Exception:
+                log.warning("Ignoring an unreadable confirmation mark: %r", m)
+        self._marks_cache = built
+        return built
+
+    def pending_confirmations(self) -> list[dict]:
+        """Every hold still waiting for a human, oldest first. Expired holds are
+        swept (and audited) on the way, exactly as a single read sweeps them."""
+        out = []
+        for intent_id in list(self._pending_confirmations):
+            pend = self.pending_confirmation(intent_id)
+            if pend is not None:
+                out.append(pend)
+        return sorted(out, key=lambda p: p["created_at"])
 
     def _split_plan_by_confirmation(self, plan, intent):
         """Return (runnable actions, held) for the human-confirmation guard (G9).

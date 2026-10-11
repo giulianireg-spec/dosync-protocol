@@ -250,6 +250,15 @@ Paste the API key the hub printed on startup, press **Scan**, and the hub
 searches every transport it can reach — WiFi broadcast, mDNS, SSDP, Bluetooth —
 and shows what answered. Name anything you want to keep and it is adopted.
 
+**Governance is on the same page.** **⏸** lists actions an agent asked for
+that you marked as needing a person — confirm or deny them there. **Governance**
+is where you say where each device is (`kitchen`, `plant-1/line-3`,
+`ward-2/room-12` — any path), what it does in an emergency, and which actions
+must wait for you. Releasing a held action or changing those marks takes the
+*operator credential* (`DOSYNC_OPERATOR_TOKEN`, set where the hub starts), which
+your agent never holds. **Agent** connects the agent you use (see
+[Connecting an agent](#connecting-an-agent)).
+
 **Start here.** Discovering and adopting a device needs no terminal and no
 JSON: a 3D printer, a television and a Bluetooth sensor were adopted this way
 on the reference deployment without a line being typed. The API calls below are
@@ -726,6 +735,27 @@ test, so it is named rather than recommended.
 ---
 
 ## Connecting an agent
+
+**The short way — no paths to work out.** Install the MCP part once, then let
+DoSync write your agent's configuration:
+
+```bash
+pipx install "dosync[mcp]"          # or, if DoSync is already installed:
+                                    #    pipx inject dosync "mcp>=1.27.0,<2.0"
+dosync-mcp --check --token <your token>          # says what is missing, in words
+dosync-mcp --print-config --token <your token>   # the block to paste into your agent
+```
+
+Or open the dashboard and press **Agent**: it shows the same block, with this
+hub's address and your token already filled in, and where common agents keep
+the file. Any MCP client works — Claude Desktop, Claude Code, Cursor or another;
+the protocol does not pick your agent. When the agent runs on a different
+computer from the hub, install DoSync there too and add `--hub-url
+http://<hub address>:47200`. CI runs exactly this path (pipx → hub → dashboard →
+agent) on Linux and macOS on every change.
+
+Everything below explains what that command writes, for when you want to do it
+by hand.
 
 This page has said "MCP" a dozen times — a badge at the top, a section on why
 MCP is the channel rather than the rival, a drone that flew a mission through

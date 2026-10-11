@@ -157,7 +157,10 @@ class DoSyncDB:
         self._conn.executescript(SCHEMA)
         self._conn.commit()
         self._migrate_schema()
-        log.info("Database initialized: %s", self.db_path.resolve())
+        # ":memory:" is not a file; resolving it printed a path that never existed
+        # (".../dosync-protocol/:memory:"), seen on the Pi in certify mode.
+        log.info("Database initialized: %s",
+                 "in memory" if str(self.db_path) == ":memory:" else self.db_path.resolve())
         self._seed_universal_intents()
 
     def _migrate_schema(self) -> None:
@@ -551,7 +554,8 @@ class DoSyncDB:
     def stats(self) -> dict:
         """Summary of the database state."""
         return {
-            "db_path":        str(self.db_path.resolve()),
+            "db_path":        (":memory:" if str(self.db_path) == ":memory:"
+                               else str(self.db_path.resolve())),
             "db_size_kb":     round(self.db_path.stat().st_size / 1024, 1)
                               if self.db_path.exists() else 0,
             "devices":        self.device_count(),

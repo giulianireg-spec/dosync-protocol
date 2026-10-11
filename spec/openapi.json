@@ -1307,6 +1307,162 @@
         }
       }
     },
+    "/v1/confirmations": {
+      "get": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Every action still held for human confirmation (G9)",
+        "description": "What waits for a person, across all intents, oldest first — for an\noperator's console. Readable with the hub credential; releasing or refusing\nany of it needs the operator credential (`/v1/intents/{id}/confirm|deny`).",
+        "operationId": "list_confirmations_v1_confirmations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/governance": {
+      "get": {
+        "tags": [
+          "Protocol"
+        ],
+        "summary": "Who may configure what on this hub, and what waits for a person",
+        "description": "The governance settings an operator's console needs to show, in one read:\nwhich credential configuration takes, whether an operator credential exists,\nthe direct-control path, and the confirmation marks from both sources (the\ndeployment file, read-only here, and the hub's own, editable with the\noperator credential).",
+        "operationId": "governance_v1_governance_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/governance/confirmation-marks": {
+      "put": {
+        "tags": [
+          "Protocol"
+        ],
+        "summary": "Replace the confirmation marks the hub keeps (operator only)",
+        "description": "Mark actions that must wait for a person (G9) without editing files.\n\nAlways needs the operator credential, whatever DOSYNC_CONFIGURATION_CREDENTIAL\nsays: removing a mark removes a restriction, and the agent must not be able to\nunmark what the operator marked. Marks ADD to `require_confirmation` entries in\nthe deployment policy file, which stays read-only here.",
+        "operationId": "put_confirmation_marks_v1_governance_confirmation_marks_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-operator-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Token"
+            }
+          },
+          {
+            "name": "x-dosync-operator-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dosync-Operator-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/connect": {
+      "get": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "What an agent on this computer needs to connect over MCP",
+        "description": "The command that starts the DoSync MCP server with THIS installation, for\nthe dashboard's \"Connect your agent\" page. Valid for an agent on the machine\nthe hub runs on; an agent elsewhere installs dosync there and runs\n`dosync-mcp --print-config`. The token is not returned: the browser that\nasks already has it.",
+        "operationId": "agent_connect_info_v1_agent_connect_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/v1/event": {
       "post": {
         "tags": [

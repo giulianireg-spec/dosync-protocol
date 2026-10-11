@@ -253,6 +253,33 @@
   .check-row .fail { color: var(--red); }
   .check-row .na   { color: var(--text-dim); }
 
+  /* ── Governance: holds, places, marks, agent (2026-10-11) ──
+     What SAMUEL reserves to a person — releasing a held action, placing a
+     device, saying what it does in an emergency, marking what must wait — had
+     endpoints and no page. A person who does not use curl could not do any of
+     it, so the guarantees existed for developers only. */
+  .btn.hold-on { background: var(--amber); color: #111; }
+  .mono { font-family: var(--mono); font-size: .72rem; }
+  .gov-section { margin-bottom: 1.2rem; }
+  .gov-section h4 { font-size: .78rem; font-weight: 600; margin-bottom: .45rem;
+                    text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); }
+  .gov-note { font-size: .75rem; color: var(--text-dim); line-height: 1.5; margin-bottom: .5rem; }
+  .gov-row { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center;
+             padding: .45rem 0; border-bottom: 1px solid var(--border); font-size: .76rem; }
+  .gov-row .name { min-width: 150px; font-weight: 500; }
+  .gov-row .mono { font-family: var(--mono); font-size: .68rem; color: var(--text-dim); }
+  .gov-input { background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+               color: var(--text); padding: .25rem .45rem; font-size: .74rem; font-family: var(--mono); }
+  .gov-input:focus { border-color: var(--blue); outline: none; }
+  .gov-check { display: inline-flex; gap: .25rem; align-items: center; font-size: .72rem;
+               color: var(--text-dim); margin-right: .4rem; }
+  .hold-card { border: 1px solid var(--amber); border-radius: 6px; padding: .7rem .8rem;
+               margin-bottom: .7rem; background: rgba(217,119,6,.07); font-size: .78rem; }
+  .hold-card .acts { font-family: var(--mono); font-size: .72rem; margin: .4rem 0; line-height: 1.6; }
+  .agent-config { width: 100%; height: 230px; resize: vertical; background: #060912;
+                  color: var(--text); border: 1px solid var(--text-mute); border-radius: 4px;
+                  padding: .6rem; font-family: var(--mono); font-size: .72rem; }
+
   .panel {
     border-right: 1px solid var(--border);
     overflow: hidden;
@@ -532,6 +559,12 @@
          author could not work out where to get one — so a newcomer certainly
          cannot. Keys are stored hashed and shown once, so the honest answer is
          not "look it up" but "choose or mint one", and the page now says so. -->
+    <button class="btn sm ghost" id="holdsBtn" onclick="openHolds()"
+            title="Actions held until a person confirms them">⏸ <span id="holdsCount">0</span></button>
+    <button class="btn sm ghost" onclick="openGovernance()"
+            title="Where devices are, what they do in an emergency, what needs a person">Governance</button>
+    <button class="btn sm ghost" onclick="openAgent()"
+            title="Connect the agent you use (any MCP client)">Agent</button>
     <button class="btn sm" onclick="showTokenHelp()" title="Where do I get a token?">?</button>
     <button class="btn sm" onclick="openAccess()" title="Access settings">⚙</button>
   </div>
@@ -640,6 +673,36 @@
 </div>
 
 <div class="toast-container" id="toastContainer"></div>
+
+<div class="draft-check" id="holdsDlg">
+  <div class="draft-box">
+    <h3>Waiting for a person</h3>
+    <div class="inner" id="holdsBody"></div>
+    <div class="foot">
+      <button class="btn ghost sm" onclick="closeDlg('holdsDlg')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="draft-check" id="govDlg">
+  <div class="draft-box" style="width:min(940px,100%)">
+    <h3>Governance — what the operator decides, not the agent</h3>
+    <div class="inner" id="govBody"></div>
+    <div class="foot">
+      <button class="btn ghost sm" onclick="closeDlg('govDlg')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="draft-check" id="agentDlg">
+  <div class="draft-box">
+    <h3>Connect your agent</h3>
+    <div class="inner" id="agentBody"></div>
+    <div class="foot">
+      <button class="btn ghost sm" onclick="closeDlg('agentDlg')">Close</button>
+    </div>
+  </div>
+</div>
 
 <div class="draft-check" id="draftCheck">
   <div class="draft-box">
@@ -799,6 +862,7 @@ function connect() {
     loadDevices();
     loadIntents();
     loadAudit();
+    pollHolds();
   };
 
   socket.onmessage = (e) => {
@@ -1447,9 +1511,352 @@ function toast(msg, type = 'info') {
   setTimeout(() => el.remove(), 4000);
 }
 
+// ── Governance (SAMUEL §3, G9) ────────────────────────────────────────────────
+// The OPERATOR credential is not the hub token. The agent holds the hub token;
+// the operator credential (DOSYNC_OPERATOR_TOKEN, set where the hub starts) is
+// what releases a held action and, when the deployment asks for it, places
+// devices. Kept for this browser tab only (sessionStorage): closing the tab
+// forgets it, so a shared screen does not keep the operator's authority.
+let operatorToken = '';
+try { operatorToken = sessionStorage.getItem('dosync_operator') || ''; } catch {}
+
+function setOperatorToken(v) {
+  operatorToken = (v || '').trim();
+  try {
+    if (operatorToken) sessionStorage.setItem('dosync_operator', operatorToken);
+    else sessionStorage.removeItem('dosync_operator');
+  } catch {}
+}
+
+function askOperatorToken() {
+  const v = prompt("Operator credential\n\n" +
+    "This is the DOSYNC_OPERATOR_TOKEN set where the hub was started — not the " +
+    "hub token your agent uses. It stays in this tab only and is forgotten " +
+    "when you close it.");
+  if (v && v.trim()) setOperatorToken(v);
+  return operatorToken;
+}
+
+// fetch that reports the hub's own explanation (`detail`) instead of a bare
+// "403 Forbidden" — every refusal here says what to do, so show it.
+async function call(method, path, body, asOperator = false) {
+  const h = headers();
+  if (asOperator) {
+    if (!operatorToken && !askOperatorToken()) throw new Error('No operator credential given');
+    h['X-DoSync-Operator-Token'] = operatorToken;
+  } else if (operatorToken) {
+    h['X-DoSync-Operator-Token'] = operatorToken;
+  }
+  const r = await fetch(HUB + path, { method, headers: h,
+                                      body: body ? JSON.stringify(body) : undefined });
+  let data = null;
+  try { data = await r.json(); } catch {}
+  if (!r.ok) {
+    const detail = (data && (typeof data.detail === 'string' ? data.detail
+                    : JSON.stringify(data.detail))) || `${r.status} ${r.statusText}`;
+    if (r.status === 403 && /operator_credential/.test(detail)) setOperatorToken('');
+    throw new Error(detail);
+  }
+  return data;
+}
+
+function closeDlg(id) { document.getElementById(id).classList.remove('open'); }
+function openDlg(id)  { document.getElementById(id).classList.add('open'); }
+
+let deviceNames = {};
+async function refreshDeviceNames() {
+  try {
+    const d = await call('GET', '/v1/devices');
+    deviceNames = {};
+    (d.devices || []).forEach(x => deviceNames[x.device_id] = x.device_name || x.device_id);
+    return d.devices || [];
+  } catch { return []; }
+}
+
+// ── Holds: what waits for a person ────────────────────────────────────────────
+let knownHolds = new Set();
+let lastHolds = { pending: [], operator_configured: false };
+
+async function pollHolds() {
+  try {
+    lastHolds = await call('GET', '/v1/confirmations');
+  } catch { return; }
+  const pending = lastHolds.pending || [];
+  document.getElementById('holdsCount').textContent = pending.length;
+  document.getElementById('holdsBtn').classList.toggle('hold-on', pending.length > 0);
+  const ids = new Set(pending.map(p => p.intent_id));
+  for (const id of ids) {
+    if (!knownHolds.has(id)) {
+      const p = pending.find(x => x.intent_id === id);
+      toast(`⏸ "${p.intent}" is holding ${p.actions.length} action(s) for you — press ⏸`, 'info');
+    }
+  }
+  knownHolds = ids;
+  if (document.getElementById('holdsDlg').classList.contains('open')) renderHolds();
+}
+
+function renderHolds() {
+  const body = document.getElementById('holdsBody');
+  const pending = lastHolds.pending || [];
+  let html = '<p class="gov-note">An operator marked these actions as ones that must ' +
+    'not run on an agent\'s say-so. The rest of each intent already ran. Confirming ' +
+    'runs them now; denying drops them. Either way it is recorded in the audit log.</p>';
+  if (!lastHolds.operator_configured) {
+    html += '<div class="verdict bad">This hub has no operator credential ' +
+      '(DOSYNC_OPERATOR_TOKEN), so nothing held can be released. Set one where the ' +
+      'hub starts and restart it.</div>';
+  }
+  if (!pending.length) {
+    html += '<div class="empty"><div class="empty-text">Nothing is waiting.</div></div>';
+  }
+  const now = Date.now() / 1000;
+  pending.forEach(p => {
+    const left = Math.max(0, Math.round(p.deadline - now));
+    html += `<div class="hold-card">
+      <div><b>${esc(p.intent)}</b> <span class="mono" style="color:var(--text-dim)">
+        ${esc(p.intent_id)}</span> — expires in ${Math.floor(left / 60)}m ${left % 60}s</div>
+      <div class="acts">${p.actions.map(a =>
+        `${esc(deviceNames[a.device_id] || a.device_id)} → <b>${esc(a.action)}</b>` +
+        (a.reason ? ` <span style="color:var(--text-dim)">(${esc(a.reason)})</span>` : '')
+      ).join('<br>')}</div>
+      <button class="btn sm" onclick="decideHold('${esc(p.intent_id)}','confirm')">Confirm — run them</button>
+      <button class="btn sm danger" onclick="decideHold('${esc(p.intent_id)}','deny')">Deny — drop them</button>
+    </div>`;
+  });
+  body.innerHTML = html;
+}
+
+async function openHolds() {
+  await refreshDeviceNames();
+  await pollHolds();
+  renderHolds();
+  openDlg('holdsDlg');
+}
+
+async function decideHold(intentId, what) {
+  try {
+    const r = await call('POST', `/v1/intents/${encodeURIComponent(intentId)}/${what}`, {}, true);
+    const msg = r.status === 'confirmed'
+      ? `✓ Confirmed — ${(r.results || []).filter(x => x.success).length} action(s) ran`
+      : r.status === 'expired' ? '⌛ Too late — the hold had expired; nothing ran'
+      : '✕ Denied — the held actions were dropped';
+    toast(msg, r.status === 'confirmed' ? 'success' : 'info');
+  } catch (e) { toast('Not done: ' + e.message, 'error'); }
+  await pollHolds();
+  renderHolds();
+  loadAudit();
+}
+
+// ── Governance page ──────────────────────────────────────────────────────────
+let govMarks = [];
+let govDevices = [];
+
+async function openGovernance() {
+  openDlg('govDlg');
+  await renderGovernance();
+}
+
+function actuatorTypes(d) {
+  return [...new Set(((d.capabilities || {}).actuators || []).map(a => a.type))];
+}
+
+async function renderGovernance() {
+  const body = document.getElementById('govBody');
+  body.innerHTML = '<p class="gov-note">Loading…</p>';
+  let g;
+  try { g = await call('GET', '/v1/governance'); }
+  catch (e) { body.innerHTML = `<div class="verdict bad">${esc(e.message)}</div>`; return; }
+  govDevices = await refreshDeviceNames();
+  govMarks = JSON.parse(JSON.stringify(g.confirmation_marks.hub || []));
+  const allActions = [...new Set(govDevices.flatMap(actuatorTypes))].sort();
+
+  let html = '<div class="gov-section"><h4>Who decides</h4>';
+  html += '<p class="gov-note">Your agent fires intents. Where a device is, what it does ' +
+    'in an emergency and which actions wait for a person are decided here, by you.</p>';
+  if (g.configuration_credential === 'operator') {
+    html += '<div class="verdict good">Places and emergency actions need the operator ' +
+      'credential on this hub: an agent cannot change them.</div>';
+  } else {
+    html += '<div class="verdict mixed">On this hub the agent\'s token can also change ' +
+      'places and emergency actions (the default). To reserve them to you, start the hub ' +
+      'with <span class="mono">DOSYNC_CONFIGURATION_CREDENTIAL=operator</span> and an ' +
+      '<span class="mono">DOSYNC_OPERATOR_TOKEN</span>. Your choice — nothing breaks either way.</div>';
+  }
+  html += `<div class="gov-row"><span class="name">Operator credential</span>
+    <span class="mono">${g.operator_configured ? 'set on this hub' : 'NOT set on this hub — holds cannot be released'}</span>
+    <span class="mono">· this tab: ${operatorToken ? 'entered' : 'not entered'}</span>
+    <button class="btn ghost sm" onclick="askOperatorToken();renderGovernance()">Enter</button>
+    ${operatorToken ? '<button class="btn ghost sm" onclick="setOperatorToken(\'\');renderGovernance()">Forget</button>' : ''}
+  </div></div>`;
+
+  html += '<div class="gov-section"><h4>Where each device is, and what it does in an emergency</h4>';
+  html += '<p class="gov-note">A place is a path you choose — <span class="mono">kitchen</span>, ' +
+    '<span class="mono">plant-1/line-3</span>, <span class="mono">ward-2/room-12</span>. An intent ' +
+    'aimed at a place acts only on devices placed there. Emergency actions are what a device ' +
+    'does when an emergency is declared; they are never held for confirmation unless a mark ' +
+    'below says "even in an emergency".</p>';
+  if (!govDevices.length) html += '<p class="gov-note">No devices yet.</p>';
+  govDevices.forEach((d, i) => {
+    const types = actuatorTypes(d);
+    const emerg = new Set((d.emergency_actions || []).map(a => a.action));
+    html += `<div class="gov-row">
+      <span class="name">${esc(d.device_name || d.device_id)}<br>
+        <span class="mono">${esc(d.device_id)}</span></span>
+      <input class="gov-input" id="loc-${i}" placeholder="not placed" value="${esc(d.location || '')}" style="width:190px">
+      <span>${types.length ? types.map(t =>
+        `<label class="gov-check"><input type="checkbox" class="em-${i}" value="${esc(t)}"
+          ${emerg.has(t) ? 'checked' : ''}>${esc(t)}</label>`).join('')
+        : '<span class="mono">declares no actions</span>'}</span>
+      <button class="btn sm" onclick="saveDevice(${i})">Save</button>
+    </div>`;
+  });
+  html += '</div>';
+
+  html += '<div class="gov-section"><h4>What waits for a person</h4>';
+  html += '<p class="gov-note">A marked action does not run on an agent\'s say-so: it is ' +
+    'held until you confirm it (⏸ in the header) and dropped if you deny it or it ' +
+    `expires (${Math.round(g.confirmation_timeout_seconds)} s). Leave devices empty to ` +
+    'mark the action on every device. Changing marks always needs the operator credential.</p>';
+  const fileMarks = g.confirmation_marks.deployment_file || [];
+  if (fileMarks.length) {
+    html += `<p class="gov-note">From the deployment file${g.confirmation_marks.policies_path
+      ? ' (' + esc(g.confirmation_marks.policies_path) + ')' : ''} — read-only here:</p>`;
+    fileMarks.forEach(m => {
+      html += `<div class="gov-row"><span class="mono">${esc(m.actions.join(', '))} on
+        ${m.device_ids ? esc(m.device_ids.join(', ')) : 'any device'}
+        ${m.even_in_emergency ? '· even in an emergency' : ''} — ${esc(m.reason)}</span></div>`;
+    });
+  }
+  html += '<div id="marksRows"></div>';
+  html += `<datalist id="actionList">${allActions.map(a => `<option value="${esc(a)}">`).join('')}</datalist>`;
+  html += `<datalist id="deviceList2">${govDevices.map(d => `<option value="${esc(d.device_id)}">`).join('')}</datalist>`;
+  html += '<div style="margin-top:.6rem;display:flex;gap:.5rem">' +
+    '<button class="btn ghost sm" onclick="addMark()">+ Add a mark</button>' +
+    '<button class="btn sm" onclick="saveMarks()">Save marks</button></div></div>';
+  body.innerHTML = html;
+  renderMarks();
+}
+
+function renderMarks() {
+  const box = document.getElementById('marksRows');
+  if (!box) return;
+  if (!govMarks.length) {
+    box.innerHTML = '<p class="gov-note">No marks set here.</p>';
+    return;
+  }
+  box.innerHTML = govMarks.map((m, i) => `<div class="gov-row">
+    <input class="gov-input" list="actionList" placeholder="actions, e.g. unlock" style="width:180px"
+      value="${esc((m.actions || []).join(', '))}" onchange="govMarks[${i}].actions=splitList(this.value)">
+    <input class="gov-input" list="deviceList2" placeholder="devices (empty = any)" style="width:200px"
+      value="${esc((m.device_ids || []).join(', '))}" onchange="govMarks[${i}].device_ids=splitList(this.value)">
+    <label class="gov-check"><input type="checkbox" ${m.even_in_emergency ? 'checked' : ''}
+      onchange="govMarks[${i}].even_in_emergency=this.checked">even in an emergency</label>
+    <input class="gov-input" placeholder="why (shown to whoever confirms)" style="flex:1;min-width:160px"
+      value="${esc(m.reason || '')}" onchange="govMarks[${i}].reason=this.value">
+    <button class="btn ghost sm" title="Remove" onclick="govMarks.splice(${i},1);renderMarks()">✕</button>
+  </div>`).join('');
+}
+
+function splitList(v) {
+  const out = (v || '').split(',').map(x => x.trim()).filter(Boolean);
+  return out.length ? out : null;
+}
+
+function addMark() {
+  govMarks.push({ actions: [], device_ids: null, even_in_emergency: false, reason: '' });
+  renderMarks();
+}
+
+async function saveMarks() {
+  const marks = govMarks.map(m => ({ ...m, actions: m.actions || [] }));
+  if (marks.some(m => !m.actions.length)) { toast('Every mark needs at least one action', 'error'); return; }
+  try {
+    await call('PUT', '/v1/governance/confirmation-marks', { marks }, true);
+    toast('✓ Marks saved — recorded in the audit log', 'success');
+    await renderGovernance();
+    loadAudit();
+  } catch (e) { toast('Not saved: ' + e.message, 'error'); }
+}
+
+async function saveDevice(i) {
+  const d = govDevices[i];
+  const location = document.getElementById('loc-' + i).value.trim();
+  const emergency = [...document.querySelectorAll('.em-' + i)].filter(c => c.checked).map(c => c.value);
+  const prev = new Set((d.emergency_actions || []).map(a => a.action));
+  const body = {};
+  if (location !== (d.location || '')) body.location = location;
+  if (emergency.length !== prev.size || emergency.some(a => !prev.has(a))) body.emergency_actions = emergency;
+  if (!Object.keys(body).length) { toast('Nothing changed', 'info'); return; }
+  try {
+    await call('PATCH', '/v1/devices/' + encodeURIComponent(d.device_id), body);
+    toast('✓ Saved — recorded in the audit log', 'success');
+    await renderGovernance();
+    loadAudit();
+  } catch (e) {
+    if (/operator_credential_required/.test(e.message) && askOperatorToken()) return saveDevice(i);
+    toast('Not saved: ' + e.message, 'error');
+  }
+}
+
+// ── Connect your agent ────────────────────────────────────────────────────────
+// The protocol is meant to be used from whichever agent the person already
+// has. Any MCP client works; what a person cannot be expected to work out is
+// the exact command, the address and the token — so this page writes them.
+async function openAgent() {
+  openDlg('agentDlg');
+  const body = document.getElementById('agentBody');
+  body.innerHTML = '<p class="gov-note">Loading…</p>';
+  let info;
+  try { info = await call('GET', '/v1/agent/connect'); }
+  catch (e) { body.innerHTML = `<div class="verdict bad">${esc(e.message)}</div>`; return; }
+  const env = { DOSYNC_HUB_URL: HUB, DOSYNC_TOKEN: token || 'PASTE-YOUR-HUB-TOKEN-HERE' };
+  const block = { mcpServers: { dosync: { command: info.command, args: info.args, env } } };
+  const json = JSON.stringify(block, null, 2);
+  const cli = `claude mcp add dosync -e DOSYNC_HUB_URL=${HUB} -e DOSYNC_TOKEN=${env.DOSYNC_TOKEN} -- ` +
+              `${info.command} ${info.args.join(' ')}`;
+  const paths = Object.entries(info.client_config_paths || {})
+    .map(([k, v]) => `<div class="mono">${esc(k)}: ${esc(v)}</div>`).join('');
+  body.innerHTML = `
+    <p class="gov-note">DoSync works with any agent that speaks MCP (Claude Desktop, Claude Code,
+      Cursor, and others). The agent gets ten tools — list devices, fire an intent, read the
+      audit log… — and can never release what waits for you here.</p>
+    ${info.mcp_installed ? '' : `<div class="verdict mixed">The MCP part is not installed on the
+      hub's computer yet. Run once:<br><span class="mono">${esc(info.install_hint)}</span></div>`}
+    <div class="gov-section"><h4>If the agent runs on this hub's computer</h4>
+      <p class="gov-note">Paste this into the agent's MCP configuration (merge it into
+      "mcpServers" if there is one already), then restart the agent. It contains your hub
+      token — keep it private.</p>
+      <textarea class="agent-config" id="agentJson" readonly>${esc(json)}</textarea>
+      <div style="margin:.4rem 0"><button class="btn sm" onclick="copyText('agentJson')">Copy</button></div>
+      <div class="gov-note">Where common agents keep it:</div>${paths}
+      <div class="gov-note" style="margin-top:.5rem">Command-line agents:</div>
+      <textarea class="agent-config" id="agentCli" readonly style="height:70px">${esc(cli)}</textarea>
+      <div style="margin:.4rem 0"><button class="btn sm" onclick="copyText('agentCli')">Copy</button></div>
+    </div>
+    <div class="gov-section"><h4>If the agent runs on another computer</h4>
+      <p class="gov-note">Install DoSync there too (it only runs the small MCP part), then let it
+      write the configuration for you:</p>
+      <div class="mono">pipx install "dosync[mcp]"</div>
+      <div class="mono">dosync-mcp --print-config --hub-url ${esc(HUB)} --token &lt;your token&gt;</div>
+      <p class="gov-note" style="margin-top:.4rem">Check it with
+      <span class="mono">dosync-mcp --check --hub-url ${esc(HUB)} --token &lt;your token&gt;</span>.
+      For a hub served over https, add <span class="mono">--ca</span> with this hub's ca.crt.</p>
+    </div>`;
+}
+
+function copyText(id) {
+  const el = document.getElementById(id);
+  el.select();
+  try {
+    navigator.clipboard.writeText(el.value).then(() => toast('Copied', 'success'),
+                                                 () => document.execCommand('copy'));
+  } catch { document.execCommand('copy'); toast('Copied', 'success'); }
+}
+
 // ── Periodic refresh ──────────────────────────────────────────────────────────
 setInterval(loadStatus, 10000);
 setInterval(loadDevices, 30000);
+setInterval(pollHolds, 5000);
 </script>
 </body>
 </html>
