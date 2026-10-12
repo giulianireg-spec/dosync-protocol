@@ -13,14 +13,43 @@ on:
   push:
     branches: [ main ]
     tags: [ "v*" ]
+  # "Run workflow" with a version publishes that version from main, tagging it
+  # here: no local git, no tag push needed.
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (must equal dosync.__version__), e.g. 0.9.0"
+        required: true
 
 permissions:
   contents: read
 
 jobs:
+  tag:
+    name: Tag the release (Run workflow)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version must match the package and the add-on
+        run: |
+          V=$(python3 -c "import re;print(re.search(r'__version__ = \"(.+)\"', open('dosync/__init__.py').read()).group(1))")
+          test "$V" = "${{ inputs.version }}" || { echo "asked for ${{ inputs.version }}, package is $V"; exit 1; }
+          A=$(python3 -c "import yaml;print(yaml.safe_load(open('homeassistant-addon/config.yaml'))['version'])")
+          test "$A" = "$V" || { echo "add-on $A but package $V"; exit 1; }
+      - name: Create and push the tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ inputs.version }}" -m "DoSync ${{ inputs.version }}"
+          git push origin "v${{ inputs.version }}"
+
   image:
     name: Container image (amd64 + arm64)
+    needs: tag
+    if: always() && needs.tag.result != 'failure'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -74,8 +103,9 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=edge,branch=main
+            type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+            type=edge,branch=main,enable=${{ github.event_name == 'push' }}
       - name: Build and push amd64 + arm64
         uses: docker/build-push-action@v6
         with:
@@ -87,7 +117,7 @@ jobs:
 
   pypi:
     name: PyPI (trusted publishing)
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: always() && needs.image.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
     needs: image
     runs-on: ubuntu-latest
     environment: pypi
@@ -103,7 +133,7 @@ jobs:
 
   github-release:
     name: GitHub release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: always() && needs.image.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
     needs: image
     runs-on: ubuntu-latest
     permissions:
@@ -112,9 +142,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Release notes from the CHANGELOG
         run: |
-          V="${GITHUB_REF_NAME#v}"
+          V="${{ inputs.version }}"
+          [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
           awk -v v="$V" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on {print}' CHANGELOG.md > notes.md
           test -s notes.md || { echo "CHANGELOG has no section for $V"; exit 1; }
-          gh release create "$GITHUB_REF_NAME" --title "DoSync $V" --notes-file notes.md
+          gh release create "v$V" --title "DoSync $V" --notes-file notes.md
         env:
           GH_TOKEN: ${{ github.token }}
