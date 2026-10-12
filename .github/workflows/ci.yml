@@ -663,7 +663,8 @@ jobs:
       - name: node-wot uses DoSync's Things, governed
         env:
           DOSYNC_DB: ":memory:"
-        run: python -m pytest -v tests/test_wot_interop.py
+          DOSYNC_REQUIRE_NODE_WOT: "1"
+        run: python -m pytest -v -rs tests/test_wot_interop.py
 
   certify-structure:
     name: Certification suite — structural validation

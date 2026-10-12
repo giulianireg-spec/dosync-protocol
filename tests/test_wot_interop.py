@@ -119,9 +119,13 @@ def test_the_device_list_and_tds_need_the_hub_credential(hub_url):
         assert e.value.code == 401
 
 
-@pytest.mark.skipif(shutil.which("node") is None or not (INTEROP / "node_modules").is_dir(),
-                    reason="node-wot not installed (npm ci in tools/wot_interop)")
 def test_node_wot_uses_the_devices_and_samuel_governs_it(hub_url):
+    import os
+    if shutil.which("node") is None or not (INTEROP / "node_modules").is_dir():
+        # CI's wot-interop job sets this so a missing install fails, not skips.
+        if os.environ.get("DOSYNC_REQUIRE_NODE_WOT"):
+            pytest.fail("node-wot is required here and not installed")
+        pytest.skip("node-wot not installed (npm ci in tools/wot_interop)")
     url, token, hub = hub_url
     import urllib.request
     reading = json.dumps({"device_id": CELL.device_id, "event_id": "reading", "severity": "info",
