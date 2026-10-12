@@ -10,7 +10,57 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-10-12
+
+The release that closes the reengineering: SAMUEL as a standard of its own with
+DoSync as its reference hub, a hub a person can govern without a terminal, the
+hub's devices published as governed W3C WoT Things, and three ways to install it
+(pipx, one `docker run`, a Home Assistant add-on).
+
 ### Added
+- **W3C WoT: the hub's devices as governed Things (spec §5.10).** `GET /v1/things` and
+  `GET /v1/things/{id}` serve each device as a TD 1.1 (`application/td+json`, validated against the
+  official schema in the tests); `GET /.well-known/wot` describes the hub's Thing Description Directory
+  (WoT Discovery), public and naming no device. Every form addresses the hub, never the device:
+  `POST /v1/things/{id}/actions/{name}` fires `operate_device` with that one proposal (source `wot`), so
+  G1–G9 apply as to an agent — 200 `done`, **202 `held_for_confirmation`** when the operator marked it,
+  403 with the reason when SAMUEL or a policy stopped it, 404 for an undeclared action (absent from the TD
+  too). `GET /v1/things/{id}/properties/{name}` answers the last value a device reported. The exporter moved
+  from `tools/` into the package (`dosync/wot_export.py`); exported TDs used to point at the direct-control
+  path, closed by default, so a WoT consumer following them was refused.
+- **Interoperability tested with an independent WoT consumer.** CI job `wot-interop`: Eclipse Thingweb
+  node-wot discovers the hub, reads a production cell's TD, runs one action, gets another held for a person,
+  reads a property — from the TD alone (`tests/test_wot_interop.py`, `tools/wot_interop/`).
+- **Container image, amd64 + arm64, published by CI** (`.github/workflows/release.yml`): `docker run -d -p
+  47200:47200 -v dosync-data:/data ghcr.io/giulianireg-spec/dosync-protocol:latest`. MCP included,
+  everything under `/data`, smoke-tested before it is pushed. **Authentication is now on in the image**
+  (it was off): a container listens on the network; the token is printed in the log on first start.
+- **Home Assistant add-on** (`repository.yaml`, `homeassistant-addon/`) on the same image. Its options
+  become the hub's settings (`dosync-container`), and the bridge connects through the Supervisor with the
+  add-on's own token.
+- **Release workflow**: on a `v*` tag, the image (`<version>`, `latest`), PyPI by trusted publishing, and a
+  GitHub release with this file's section. `edge` image from `main`.
+- **samuel-certify S21**: the agent's credential is not accepted as the operator's (22 checks).
+
+### Changed
+- **The policy combination rule is the SAMUEL kernel's (H6).** How the operator's policies combine over a
+  plan — priority order, first denial decides, modifications accumulate, emergencies ask only absolute
+  restrictions — moved from `PolicyEngine.evaluate` into `dosync/samuel/policing.py`, with
+  `PolicyDecision`, `PolicyResult` and `BasePolicy`. `dosync.policies` re-exports them and its engine
+  delegates. The deployment's policies stay outside the kernel.
+
+### Security
+- **An operator credential equal to an agent credential is not honoured (H5).** If `DOSYNC_OPERATOR_TOKEN`
+  is also the hub token, the demo token or a stored API key, the agent could release its own holds. The hub
+  still starts, does not accept that value as the operator's, logs an ERROR, and reports
+  `operator_credential: same_as_agent` in `/v1/status`, `/v1/governance`, `/samuel/v0` and the dashboard.
+  Creating an agent key equal to the operator token is refused.
+- **A policy that fails no longer lets the plan through (H7).** A policy that raised was skipped, so an
+  operator's restriction with a bug was silently a pass. Outside an emergency the plan is now blocked with
+  reason `policy_error`; in an emergency the failure is recorded and does not block (evacuation is never
+  blocked by the hub). Audited as `policy_error`.
+
+### Added (since 0.8.0, before this release)
 - **A person can govern the hub from the dashboard, without a terminal.** What SAMUEL reserves to a person
   had endpoints and no page, so its guarantees held for developers only. The dashboard now has **⏸**
   (every action held for confirmation, with Confirm/Deny), **Governance** (where each device is, what it does

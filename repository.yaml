@@ -1,0 +1,5 @@
+# Home Assistant add-on repository. In Home Assistant: Settings → Add-ons →
+# Add-on store → ⋮ → Repositories → add this repository's URL.
+name: DoSync
+url: https://github.com/giulianireg-spec/dosync-protocol
+maintainer: Rodrigo Giuliani

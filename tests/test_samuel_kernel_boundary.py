@@ -53,3 +53,13 @@ def test_the_hub_and_the_rest_surface_use_the_kernel():
     for refusal in ("ambiguous_actions", "proposals_required", "invalid_proposals"):
         assert f'_count_rejection("{refusal}"' not in server, \
             f"{refusal} is decided by the kernel, not re-decided in server.py"
+
+
+def test_the_policy_combination_is_the_kernels():
+    """H6 (2026-10-12): how policies combine (R11/G7) is decided in the kernel;
+    dosync.policies keeps the deployment's policies and delegates."""
+    policies = (KERNEL.parent / "policies.py").read_text(encoding="utf-8")
+    assert "from .samuel.policing import" in policies
+    assert "return evaluate_policies(self._policies, intent, plan)" in policies
+    from dosync import policies as p, samuel
+    assert p.PolicyDecision is samuel.PolicyDecision and p.BasePolicy is samuel.BasePolicy

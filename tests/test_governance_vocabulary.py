@@ -10,11 +10,12 @@ import json
 import re
 from pathlib import Path
 
-from tools.export_thing_descriptions import DOSYNC_NS
+from dosync.wot_export import DOSYNC_NS
 
 REPO = Path(__file__).resolve().parent.parent
+# The exporter lives in the package since 2026-10-12 (the hub serves the TDs).
 EMITTED = set(re.findall(r'"dosync:([A-Za-z]+)"',
-                         (REPO / "tools" / "export_thing_descriptions.py").read_text(encoding="utf-8")))
+                         (REPO / "dosync" / "wot_export.py").read_text(encoding="utf-8")))
 
 
 def test_the_exporter_uses_the_published_namespace():

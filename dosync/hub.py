@@ -102,6 +102,7 @@ class DoSyncHub:
         # the hold expires (DOSYNC_CONFIRMATION_TIMEOUT, default 300 s). The agent
         # never holds that credential and the MCP server offers no way to confirm.
         self._pending_confirmations: dict[str, dict] = {}
+        self.last_readings: dict[str, dict] = {}   # device_id -> key -> {value, timestamp, event_id}
         self._active_intents: dict[str, int] = {}  # intent_value -> priority
         self._active_intent_devices: dict[str, set] = {}  # intent_value -> device_ids
         # v13 hygiene (maintenance stop 2026-07-21, Paredes): progress_cb failures
@@ -821,6 +822,18 @@ class DoSyncHub:
             from .policies import PolicyDecision
             from .models import ActionPlan as _AP
             policy_result = self.policy_engine.evaluate(intent, plan)
+            if getattr(policy_result, "errors", None):
+                # H7 (2026-10-12): a policy that raised is on the record, whether
+                # it blocked the plan (outside an emergency) or did not (inside).
+                self.audit_log.append({
+                    "type":      "policy_error",
+                    "intent_id": intent.intent_id,
+                    "intent":    intent.intent.value,
+                    "urgency":   intent.urgency.value,
+                    "errors":    list(policy_result.errors),
+                    "blocked":   policy_result.decision == PolicyDecision.BLOCK
+                                 and str(policy_result.reason).startswith("policy_error"),
+                })
             if policy_result.decision == PolicyDecision.BLOCK:
                 # Determine if this is an emergency intent blocked by a non-bypassable policy
                 # This is a security-notable event: operator explicitly overrides emergency bypass
@@ -1224,6 +1237,13 @@ class DoSyncHub:
             "severity":  event.severity.value,
             "data":      event.data,
         })
+        # Last value reported per key, so a WoT consumer can read a property
+        # (GET /v1/things/{id}/properties/{name}) without subscribing first.
+        if isinstance(event.data, dict):
+            seen = self.last_readings.setdefault(event.device_id, {})
+            for key, value in event.data.items():
+                seen[key] = {"value": value, "timestamp": event.timestamp,
+                             "event_id": event.event_id}
 
         for handler in self._event_handlers:
             if asyncio.iscoroutinefunction(handler):

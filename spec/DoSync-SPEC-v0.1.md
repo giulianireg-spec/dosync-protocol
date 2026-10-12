@@ -280,6 +280,51 @@ The reference hub does so at `POST /v1/things`, with the TD as body or as
   params). A Thing offering only other bindings is registered and governed, and
   its actions are refused at execution with that reason.
 
+### 5.10 Governed Things: the hub's devices as W3C WoT Thing Descriptions
+
+The other direction. A hub MAY publish each device it governs as a W3C WoT
+Thing Description 1.1, so that any WoT consumer -- one that knows nothing of
+DoSync -- can discover and use it. What makes such a TD DoSync's is that **its
+forms address the hub, never the device**, and every interaction they open is
+governed exactly like an agent's (SAMUEL G1–G9):
+
+- `GET /.well-known/wot` (WoT Discovery, introduction) answers the hub's Thing
+  Description Directory TD, without credentials and without naming any device.
+  It declares how to authenticate (bearer, or `nosec` when the hub runs without
+  authentication) and links to the directory.
+- `GET /v1/things` lists every device that is not quarantined as a TD;
+  `GET /v1/things/{id}` answers one, as `application/td+json`. Both need the hub
+  credential: a TD describes the deployment.
+- Each declared action becomes a TD action (named by the actuator's id, with
+  `dosync:capability` = its type). Its `input` is the action's parameter schema
+  exactly as declared; its `output` is the governed answer
+  (`{status, intent_id, response?, simulated?}`). Its form is
+  `POST v1/things/{id}/actions/{name}`.
+- **Invoking it fires `operate_device` with that single proposal** (source
+  `wot`). It is admitted, validated, policed, held and recorded exactly like a
+  proposal from an agent. The hub answers 200 `done` when it ran, **202
+  `held_for_confirmation`** when the operator marked it (a person releases it with
+  the operator credential, §7.3.2), 202 `running` for a long-running action, 403
+  `refused` or `not_run` with the reason when SAMUEL or a policy stopped it, 502
+  when the device failed, and 404 for an action the device does not declare --
+  which is also absent from its TD.
+- Each sensor becomes a read-only, observable property: `GET
+  v1/things/{id}/properties/{name}` answers the last value the device reported
+  (404 until it reports one); observation and events use the hub's WebSocket.
+  A sensor with a unit or bounds is typed `number`; otherwise the TD does not
+  invent a type.
+- Governance fields TD 1.1 does not define travel in the `dosync:` vocabulary
+  (`dosync:capability`, `dosync:location`, `dosync:emergencyCapable`,
+  `dosync:emergencyActions`, `dosync:sensorKind`, `dosync:severity`,
+  `dosync:category`, `dosync:tags`). Importing such a TD (§5.9) restores the
+  device with everything governance reads.
+
+The reference implementation validates every TD it serves against the official
+TD 1.1 JSON Schema and tests the binding with an independent consumer, Eclipse
+Thingweb node-wot (`tests/test_wot_interop.py`): it discovers the hub, reads a
+production cell's TD, runs one action, gets another held for a person, and reads
+a property, from the TD alone.
+
 ## 6. Layer 4 — Semantic Layer
 
 The semantic layer is the core differentiator of DoSync. It maps high-level AI intents to concrete device actions by matching intent requirements against registered device capabilities.
@@ -977,6 +1022,7 @@ log, not evidence.
 | `confirmation_confirmed` | A held action was released by an operator, with the operator marker and how long it was held |
 | `confirmation_denied` | A held action was dropped by an operator |
 | `confirmation_expired` | A held action aged out unreleased (`DOSYNC_CONFIRMATION_TIMEOUT`) |
+| `policy_error` | An operator policy raised instead of answering. Outside an emergency the plan is blocked (`reason` begins `policy_error`, SAMUEL R11); in an emergency it is recorded and does not block. Lists each failing policy (added 2026-10-12) |
 | `confirmation_marks_changed` | The operator replaced the confirmation marks kept by the hub (§7.3.2), with `before` and `after` |
 | `actions_dropped_oscillation` | One or more actions were dropped to stop a device oscillating across an opposite pair (rule 10) |
 | `emergency_unsatisfiable` | An emergency intent resolved to no capable device |
@@ -1073,6 +1119,11 @@ server grows past this list.
 | GET | `/v1/operations/{operation_id}` | One operation |
 | GET | `/v1/hub/peers` | Known peer hubs |
 | POST | `/v1/hub/promote` | Promote a secondary hub |
+| GET | `/.well-known/wot` | WoT Discovery: the hub's Thing Description Directory, public, naming no device (§5.10) |
+| GET | `/v1/things` | Every governed device as a W3C WoT Thing Description (§5.10) |
+| GET | `/v1/things/{device_id}` | One device's Thing Description (`application/td+json`) |
+| POST | `/v1/things/{device_id}/actions/{name}` | Invoke a Thing's action, governed as `operate_device` (§5.10) |
+| GET | `/v1/things/{device_id}/properties/{name}` | The last value a Thing's property reported |
 
 ## 7.10 Signed heartbeats
 

@@ -51,84 +51,13 @@ if TYPE_CHECKING:
 log = logging.getLogger("dosync.policies")
 
 
-# ── Policy decision ───────────────────────────────────────────────────────────
-
-class PolicyDecision(str, Enum):
-    ALLOW   = "allow"    # proceed normally
-    BLOCK   = "block"    # reject the intent
-    CONFIRM = "confirm"  # require explicit confirmation
-    MODIFY  = "modify"   # adjust parameters before execution
-
-
-@dataclass
-class PolicyResult:
-    decision:    PolicyDecision
-    policy_name: str
-    reason:      str = ""
-    modified_actions: list = field(default_factory=list)
-
-    @staticmethod
-    def allow(policy_name: str) -> "PolicyResult":
-        return PolicyResult(PolicyDecision.ALLOW, policy_name)
-
-    @staticmethod
-    def block(policy_name: str, reason: str) -> "PolicyResult":
-        log.warning("Policy BLOCK [%s]: %s", policy_name, reason)
-        return PolicyResult(PolicyDecision.BLOCK, policy_name, reason)
-
-    @staticmethod
-    def confirm(policy_name: str, reason: str) -> "PolicyResult":
-        log.info("Policy CONFIRM [%s]: %s", policy_name, reason)
-        return PolicyResult(PolicyDecision.CONFIRM, policy_name, reason)
-
-
-# ── Base policy ───────────────────────────────────────────────────────────────
-
-class BasePolicy(ABC):
-    """
-    Base class for all DoSync policies.
-
-    To implement a custom policy:
-        class MyPolicy(BasePolicy):
-            def evaluate(self, intent, plan) -> PolicyResult:
-                ...
-    """
-
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Unique name for this policy."""
-        ...
-
-    @property
-    def priority(self) -> int:
-        """Lower number = evaluated first. Default 100."""
-        return 100
-
-    @property
-    def bypass_on_emergency(self) -> bool:
-        """Whether EMERGENCY urgency bypasses this policy.
-
-        Default: True — most safety policies should be bypassed for emergencies
-        (time restrictions, confirmation requirements, device exclusions).
-
-        Set to False for policies that represent absolute operator constraints
-        that must be honored even in emergencies (e.g. BlockIntentPolicy when
-        an operator has explicitly prohibited an intent class).
-
-        Note: IntentRateLimitPolicy and DeviceActuatorRateLimitPolicy handle
-        emergency bypass internally and do not rely on this flag.
-        """
-        return True
-
-    @abstractmethod
-    def evaluate(self, intent: "Intent", plan: "ActionPlan") -> PolicyResult | None:
-        """
-        Evaluate this policy against the intent and action plan.
-        Return None to abstain (policy does not apply to this intent).
-        Return a PolicyResult to make a decision.
-        """
-        ...
+# ── Policy decision, result and contract ───────────────────────────────────────
+# Defined by the SAMUEL kernel (dosync/samuel/policing.py) since 2026-10-12 (H6):
+# how the operator's policies combine is the standard's (R11/G7); WHICH policies
+# exist is the deployment's, and they live below. Re-exported here so every
+# existing `from dosync.policies import PolicyDecision, ...` keeps working.
+from .samuel.policing import (POLICY_ERROR, BasePolicy, PolicyDecision,  # noqa: E402,F401
+                              PolicyResult, evaluate_policies)
 
 
 # ── Built-in policies ─────────────────────────────────────────────────────────
@@ -707,115 +636,11 @@ class PolicyEngine:
         return [{"name": p.name, "priority": p.priority} for p in self._policies]
 
     def evaluate(self, intent: "Intent", plan: "ActionPlan") -> PolicyResult:
-        """
-        Evaluate all policies. Returns the first blocking/confirming result,
-        or ALLOW if all policies pass. MODIFY policies are applied cumulatively.
-        """
-        from .models import Urgency
-
-        # Emergency intents bypass policies that declare bypass_on_emergency=True.
-        # Policies with bypass_on_emergency=False are still evaluated
-        # (e.g. BlockIntentPolicy — operator blocks are absolute).
-        if intent.urgency == Urgency.EMERGENCY:
-            non_bypassable = [p for p in self._policies if not p.bypass_on_emergency]
-            emergency_plan = plan
-            emergency_modified: list[str] = []
-            emergency_reasons: list[str] = []
-            if non_bypassable:
-                for policy in non_bypassable:
-                    try:
-                        result = policy.evaluate(intent, emergency_plan)
-                    except Exception as e:
-                        log.error("Policy '%s' raised an exception: %s", policy.name, e)
-                        continue
-                    if result is None:
-                        continue
-                    if result.decision == PolicyDecision.BLOCK:
-                        log.info(
-                            "PolicyEngine: EMERGENCY intent blocked by non-bypassable policy '%s': %s",
-                            policy.name, result.reason,
-                        )
-                        return result
-                    if result.decision == PolicyDecision.MODIFY:
-                        # A non-bypassable policy's decision is honored WHATEVER it
-                        # is — not only BLOCK. Until 2026-07-14 this branch
-                        # evaluated the policy, received its MODIFY, and silently
-                        # discarded it on the way to allow("emergency_bypass"): the
-                        # deployer declared an absolute restriction, the engine
-                        # asked the policy, got the answer, and threw it away.
-                        # Nobody noticed because every MODIFY policy in the tree was
-                        # bypassable, so the case never arose until an operator
-                        # needed "these devices must not act, not even in an
-                        # emergency" (a ward where lights must never come on, a
-                        # screen nobody will read while evacuating).
-                        from .models import ActionPlan
-                        emergency_plan = ActionPlan(
-                            intent_id=plan.intent_id,
-                            actions=result.modified_actions,
-                            urgency=plan.urgency,
-                        )
-                        emergency_modified.append(policy.name)
-                        emergency_reasons.append(f"{policy.name}: {result.reason}")
-            log.info(
-                "PolicyEngine: EMERGENCY intent — %d/%d policies bypassed",
-                len(self._policies) - len(non_bypassable), len(self._policies),
-            )
-            if emergency_modified:
-                log.info("PolicyEngine: EMERGENCY plan modified by non-bypassable %s",
-                         emergency_modified)
-                return PolicyResult(
-                    decision=PolicyDecision.MODIFY,
-                    policy_name=", ".join(emergency_modified),
-                    # Carry each policy's OWN declared reason: for audit
-                    # provenance, "why was this removed" is the operator's
-                    # words, not this engine's generic phrasing.
-                    reason="; ".join(emergency_reasons)
-                           or "Plan modified by non-bypassable policies",
-                    modified_actions=emergency_plan.actions,
-                )
-            return PolicyResult.allow("emergency_bypass")
-
-        current_plan = plan
-        modify_applied = []
-        modify_reasons: list[str] = []
-
-        for policy in self._policies:
-            try:
-                result = policy.evaluate(intent, current_plan)
-            except Exception as e:
-                log.error("Policy '%s' raised an exception: %s", policy.name, e)
-                continue
-
-            if result is None:
-                continue  # policy abstained
-
-            if result.decision == PolicyDecision.BLOCK:
-                return result  # stop immediately
-
-            if result.decision == PolicyDecision.CONFIRM:
-                return result  # stop and request confirmation
-
-            if result.decision == PolicyDecision.MODIFY:
-                # Apply modification and continue evaluating
-                from .models import ActionPlan
-                current_plan = ActionPlan(
-                    intent_id=plan.intent_id,
-                    actions=result.modified_actions,
-                    urgency=plan.urgency,
-                )
-                modify_applied.append(policy.name)
-                modify_reasons.append(f"{policy.name}: {result.reason}")
-
-        if modify_applied:
-            log.info("PolicyEngine: MODIFY applied by %s", modify_applied)
-            return PolicyResult(
-                decision=PolicyDecision.MODIFY,
-                policy_name=", ".join(modify_applied),
-                reason="; ".join(modify_reasons) or "Plan modified by policies",
-                modified_actions=current_plan.actions,
-            )
-
-        return PolicyResult.allow("no_policy_matched")
+        """Combine every registered policy over the plan. The rule is the SAMUEL
+        kernel's (samuel.policing.evaluate_policies, R11/G7): first BLOCK or
+        CONFIRM decides, MODIFY accumulates, emergencies ask only non-bypassable
+        policies, and a policy that fails blocks outside an emergency (H7)."""
+        return evaluate_policies(self._policies, intent, plan)
 
 
 # ── Intent priority map ───────────────────────────────────────────────────────

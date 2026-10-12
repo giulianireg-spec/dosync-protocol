@@ -3,7 +3,7 @@
   "info": {
     "title": "DoSync Hub",
     "description": "DoSync Protocol — REST API\n\nThe hub that connects an AI to physical devices.\nOpen protocol · Apache 2.0 · github.com/giulianireg-spec/dosync-protocol",
-    "version": "0.8.0"
+    "version": "0.9.0"
   },
   "paths": {
     "/": {
@@ -375,6 +375,202 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "WoT"
+        ],
+        "summary": "Every governed device as a W3C WoT Thing Description",
+        "operationId": "wot_list_things_v1_things_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/wot": {
+      "get": {
+        "tags": [
+          "WoT"
+        ],
+        "summary": "WoT Discovery: this hub's Thing Description Directory",
+        "description": "Public (WoT Discovery introduction): describes the directory and how to\nauthenticate to it; names no device.",
+        "operationId": "wot_well_known__well_known_wot_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/things/{device_id}": {
+      "get": {
+        "tags": [
+          "WoT"
+        ],
+        "summary": "One device as a W3C WoT Thing Description",
+        "operationId": "wot_get_thing_v1_things__device_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/things/{device_id}/properties/{name}": {
+      "get": {
+        "tags": [
+          "WoT"
+        ],
+        "summary": "Read a Thing's property: the last value its device reported",
+        "operationId": "wot_read_property_v1_things__device_id__properties__name__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/things/{device_id}/actions/{name}": {
+      "post": {
+        "tags": [
+          "WoT"
+        ],
+        "summary": "Invoke a Thing's action, governed by SAMUEL",
+        "description": "The body is the action's input (its parameters). Answers:\n\n- 200 and the device's response: it ran.\n- 202 `held_for_confirmation`: the operator marked it; a person releases it\n  (POST /v1/intents/{intent_id}/confirm with the operator credential).\n- 202 `running`: a long-running action; follow `GET /v1/intent/{intent_id}`.\n- 403 with the reason: refused by SAMUEL (outside the class or the place,\n  a policy, ...). 422: the request as a whole was refused (admission).\n- 502: the hub sent it and the device failed.",
+        "operationId": "wot_invoke_action_v1_things__device_id__actions__name__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",

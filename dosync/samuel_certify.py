@@ -314,6 +314,26 @@ def run(hub: Hub) -> Report:
     st_ag, _ = hub.call("GET", "/samuel/v0/audit", operator=False)
     r.add("S20", "G6", "The record is the operator's to read (an agent's credential gets 403)",
           st_ag == 403, f"status {st_ag}")
+
+    # S21 -- the two credentials are distinct (SAMUEL §3): the agent's credential,
+    # presented as the operator's, opens nothing.
+    if hub.agent and hub.agent == hub.operator:
+        r.add("S21", "G8", "The agent's credential is not accepted as the operator's",
+              False, "the suite was given the same value for both credentials")
+    else:
+        st_as_op = 403
+        if hub.agent:
+            req = urllib.request.Request(hub.url + "/samuel/v0/audit", method="GET", headers={
+                "Authorization": f"Bearer {hub.agent}", "X-Operator-Token": hub.agent})
+            try:
+                with urllib.request.urlopen(req, context=hub.ctx, timeout=30) as resp:
+                    st_as_op = resp.status
+            except urllib.error.HTTPError as e:
+                st_as_op = e.code
+        reported = info.get("operator_credential", "ok")
+        r.add("S21", "G8", "The agent's credential is not accepted as the operator's",
+              st_as_op == 403 and reported == "ok",
+              f"agent token as operator: {st_as_op}; hub reports operator_credential={reported}")
     return r
 
 

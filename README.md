@@ -205,9 +205,13 @@ its first step.
 ### Install and run — five minutes, no hardware
 
 ```bash
-pipx install dosync      # recommended
+pipx install "dosync[mcp]"      # recommended; [mcp] adds the agent connection
 dosync-hub
 ```
+
+Prefer a container, or run Home Assistant? See [Docker — one
+command](#docker--one-command) and [Home Assistant add-on](#home-assistant-add-on):
+all three end in the same dashboard.
 
 <details>
 <summary><b>On Windows</b> — pipx is not installed with Python there</summary>
@@ -615,13 +619,37 @@ hub.
 a network you do not control, do not click through — that is exactly the case
 the warning exists for.
 
-### Docker
+### Docker — one command
 
 ```bash
-docker run -p 47200:47200 dosync/hub        # published image
-# or, from a clone:
-docker compose up
+docker run -d --name dosync -p 47200:47200 -v dosync-data:/data \
+  ghcr.io/giulianireg-spec/dosync-protocol:latest
+docker logs dosync        # the hub's token, printed on first start
 ```
+
+Then open `http://localhost:47200`. The image is built for amd64 and arm64 (a
+Raspberry Pi), includes the MCP server (`docker exec dosync dosync-mcp
+--print-config`), keeps its database, keys and audit chain in the `/data`
+volume, and has **authentication on**: a container listens on the network. On
+Linux add `--network host` so discovery (mDNS, SSDP, broadcast) sees your
+network — a bridged container only sees itself. Settings are the same
+environment variables as anywhere (`-e DOSYNC_OPERATOR_TOKEN=…`), and a
+`policies.json` placed in the volume is loaded. From a clone, `docker compose up`
+runs a demo with sample devices.
+
+### Home Assistant add-on
+
+In Home Assistant: **Settings → Add-ons → Add-on store → ⋮ → Repositories**, add
+
+```
+https://github.com/giulianireg-spec/dosync-protocol
+```
+
+install **DoSync**, start it, read the token in its **Log** tab and press **Open
+web UI**. It runs the same image, and its Home Assistant bridge connects through
+the Supervisor — no long-lived token to create. Your entities appear as devices,
+governed by your rules; the operator token, who configures, and the confirmation
+timeout are options of the add-on.
 
 ### From source (development)
 
@@ -955,6 +983,15 @@ Devices described by a **W3C WoT Thing Description** join the same way: `POST
 its actions, reports how it mapped each one, and governs it like any other
 device — see spec §5.9.
 
+And the other way: **every device the hub governs is published as a W3C WoT
+Thing Description**, so any WoT consumer — one that has never heard of DoSync —
+can find and use it. `GET /.well-known/wot` describes the directory, `GET
+/v1/things` lists the TDs, and each action's form points at the hub, never at the
+device: invoking it runs through the same rules as an agent's request (an action
+you marked comes back `202 held_for_confirmation` and waits for you in ⏸).
+Tested in CI with an independent consumer, Eclipse Thingweb node-wot — see spec
+§5.10.
+
 The raw HTTP path, `POST /v1/device/action`, is **closed by default**. It names
 a device and an action with no intent around it, so the hub's guarantees cannot
 apply to it; it exists for an operator, not an agent.
@@ -968,7 +1005,8 @@ apply to it; it exists for an operator, not an agent.
 | Web dashboard | ✅ |
 | API key authentication + SHA-256 audit log | ✅ |
 | Capability-based resolver | ✅ |
-| Certification CLI — Basic 10 · Standard 33 · Emergency 44 · Conformance 70, each run in CI against a live hub (signed reports) | ✅ |
+| Certification CLI — Basic 10 · Standard 33 · Emergency 44 · Conformance 72, each run in CI against a live hub (signed reports) | ✅ |
+| W3C WoT: import Thing Descriptions, publish governed ones, WoT Discovery; interop tested with node-wot | ✅ |
 | Philips WiZ adapter (UDP local) | ✅ |
 | Home Assistant bridge (10 domains) | ✅ |
 | Native MCP server (Claude, ChatGPT, any LLM) | ✅ |

@@ -71,3 +71,4 @@ benchmarks/fixtures/prod_registry.json
 # may point anywhere; this covers the obvious place.
 notification-templates.json
 notification-templates.*.json
+tools/wot_interop/node_modules/

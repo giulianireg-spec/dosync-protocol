@@ -1,6 +1,8 @@
 services:
 
   dosync-hub:
+    # The published image; `docker compose build` builds it from this checkout instead.
+    image: ghcr.io/giulianireg-spec/dosync-protocol:latest
     build: .
     container_name: dosync-hub
     ports:
@@ -16,7 +18,7 @@ services:
       # Demo token — change before any non-local deployment
       - DOSYNC_DEMO_TOKEN=dosync-demo-token
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request, os; req=urllib.request.Request('http://localhost:47200/v1/status', headers={'Authorization':'Bearer '+os.environ.get('DOSYNC_DEMO_TOKEN','dosync-demo-token')}); urllib.request.urlopen(req)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:47200/.well-known/wot')"]
       interval: 5s
       timeout: 3s
       retries: 5

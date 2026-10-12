@@ -78,6 +78,7 @@ def samuel_info(auth: str = Depends(require_auth)):
         # hub's other interfaces: "operator" conforms; "hub" means the hub
         # credential -- which an agent's tools hold -- can (SAMUEL §3).
         "configuration": srv.configuration_credential_mode(),
+        "operator_credential": srv.operator_credential_state(),
         "oscillation": {"window_seconds": window, "max_reversals": max_rev},
         "confirmation_timeout_seconds": srv.hub._confirmation_timeout(),
         "conformance_mode": bool(srv._certify_mode),

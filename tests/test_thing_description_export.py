@@ -42,10 +42,13 @@ def test_a_device_with_every_governance_field_survives_the_td():
 def test_an_action_invoked_through_the_td_goes_through_the_hub():
     td = manifest_to_td(_full_device())
     form = td["actions"]["stop"]["forms"][0]
-    assert form["href"] == "v1/device/action" and form["op"] == "invokeaction", \
+    # The governed binding (spec §5.10), not the direct-control path, which is
+    # closed by default: a WoT consumer that followed v1/device/action was refused.
+    assert form["href"] == "v1/things/td-probe-1/actions/stop" and form["op"] == "invokeaction", \
         "the TD must address the hub's governed action endpoint, not the device"
-    fixed = td["actions"]["stop"]["input"]["properties"]
-    assert fixed["device_id"] == {"const": "td-probe-1"} and fixed["action"] == {"const": "stop"}
+    assert "v1/device/action" not in json.dumps(td)
+    assert td["actions"]["stop"]["output"]["properties"]["status"]["enum"] == [
+        "done", "held_for_confirmation", "running"]
 
 
 def test_every_corpus_device_exports_valid_and_resolves_identically():

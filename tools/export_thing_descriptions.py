@@ -17,8 +17,9 @@ the W3C Thing Description (TD) 1.1 standardises. This tool shows the two fit:
               scenarios with both registries, and compare the plans.
 
 Forms address the hub, not the device: invoking an action through a TD goes
-through `POST /v1/device/action`, so the operator's policies and the audit log
-apply; sensor readings and events are observed on the hub's WebSocket.
+through the hub's governed binding (`POST /v1/things/{id}/actions/{name}`), so
+every SAMUEL guarantee applies; the hub serves these same TDs at
+`GET /v1/things` (dosync/wot_export.py, where the mapping now lives).
 
     PYTHONPATH=. python3 tools/export_thing_descriptions.py --out /tmp/tds
 """
@@ -40,8 +41,6 @@ from dosync.models import (ActuatorSpec, CapabilityManifest, DeviceCategory,    
 from tools.recall_benchmark import _register_domain_intents, load_registry        # noqa: E402
 
 TD_SCHEMA = REPO / "tools" / "vendor" / "w3c-wot-td-1.1-validation.schema.json"
-TD_CONTEXT = "https://www.w3.org/2022/wot/td/v1.1"
-DOSYNC_NS = "https://dosync.dev/ns/governance#"
 SETS = (
     ("residential", "benchmarks/fixtures/prod_registry_anonymized.json",
      ("benchmarks/fixtures/prod_ground_truth_operator.json",
@@ -51,77 +50,8 @@ SETS = (
 )
 
 
-def manifest_to_td(m: CapabilityManifest, base: str = "https://dosync-hub.local:47200/") -> dict:
-    ws = base.replace("https://", "wss://").replace("http://", "ws://") + "ws"
-    td = {
-        "@context": [TD_CONTEXT, {"dosync": DOSYNC_NS}],
-        "id": f"urn:dosync:device:{m.device_id}",
-        "title": m.device_name,
-        "base": base,
-        "securityDefinitions": {"bearer_sc": {"scheme": "bearer", "in": "header"}},
-        "security": "bearer_sc",
-        "dosync:category": m.category.value,
-        "dosync:tags": list(m.tags),
-        "dosync:emergencyCapable": bool(m.emergency_capable),
-        "properties": {}, "actions": {}, "events": {},
-    }
-    if m.location:
-        td["dosync:location"] = m.location
-    if m.emergency_actions:
-        td["dosync:emergencyActions"] = [dict(a) for a in m.emergency_actions]
-    for a in m.actuators:
-        td["actions"][a.id] = {
-            "title": a.description or a.id,
-            "dosync:capability": a.type,
-            "synchronous": a.execution_model == "instant",
-            "input": {"type": "object",
-                      "properties": {"device_id": {"const": m.device_id},
-                                     "action": {"const": a.id},
-                                     # exactly as declared ({} when none): writing
-                                     # a placeholder schema here changed every
-                                     # action's description on the round trip
-                                     "params": dict(a.params_schema or {})},
-                      "required": ["device_id", "action"]},
-            "forms": [{"href": "v1/device/action", "op": "invokeaction",
-                       "contentType": "application/json"}],
-        }
-    for s in m.sensors:
-        prop = {"title": s.description or s.id, "readOnly": True, "observable": True,
-                "dosync:capability": s.type, "dosync:sensorKind": s.kind,
-                "forms": [{"href": ws, "op": "observeproperty"}]}
-        if s.unit:
-            prop["unit"] = s.unit
-        if s.range and len(s.range) == 2:
-            prop["minimum"], prop["maximum"] = s.range
-        td["properties"][s.id] = prop
-    for e in m.events:
-        td["events"][e.id] = {"title": e.description or e.id,
-                              "dosync:severity": e.severity.value,
-                              "forms": [{"href": ws, "op": "subscribeevent"}]}
-    return td
-
-
-def td_to_manifest(td: dict) -> CapabilityManifest:
-    """Rebuild, from the TD alone, everything governance reads."""
-    device_id = td["id"].rsplit(":", 1)[-1]
-    actuators = [ActuatorSpec(k, v["dosync:capability"], v.get("title", ""),
-                              params_schema=(v["input"]["properties"].get("params") or {}),
-                              execution_model="instant" if v.get("synchronous", True) else "long_running")
-                 for k, v in (td.get("actions") or {}).items()]
-    sensors = [SensorSpec(id=k, type=v["dosync:capability"], description=v.get("title", ""),
-                          unit=v.get("unit"),
-                          range=([v["minimum"], v["maximum"]] if "minimum" in v and "maximum" in v else None),
-                          kind=v.get("dosync:sensorKind", "environment"))
-               for k, v in (td.get("properties") or {}).items()]
-    events = [EventSpec(k, Severity(v.get("dosync:severity", "info")), v.get("title", ""))
-              for k, v in (td.get("events") or {}).items()]
-    return CapabilityManifest(
-        device_id=device_id, device_name=td["title"], manufacturer="td", model="td", firmware="td",
-        category=DeviceCategory(td["dosync:category"]), tags=list(td.get("dosync:tags") or []),
-        actuators=actuators, sensors=sensors, events=events,
-        emergency_capable=bool(td.get("dosync:emergencyCapable")),
-        emergency_actions=[dict(a) for a in (td.get("dosync:emergencyActions") or [])],
-        location=td.get("dosync:location", ""))
+from dosync.wot_export import (DOSYNC_NS, TD_CONTEXT, manifest_to_td,  # noqa: E402,F401
+                               td_to_manifest)  # moved into the package 2026-10-12
 
 
 def governance_fields(m: CapabilityManifest) -> dict:

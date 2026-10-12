@@ -93,10 +93,42 @@ def _require_configuration_credential(what: str, *tokens) -> None:
                    "Agents fire intents; they do not place devices or grant authority.")
 
 
+def _collides_with_agent_credential(token: str) -> bool:
+    """Whether `token` is also a credential an agent can hold: the hub token from
+    the environment, the demo token, or any stored API key."""
+    import hmac
+    for name in ("DOSYNC_TOKEN", "DOSYNC_DEMO_TOKEN"):
+        value = os.environ.get(name, "")
+        if value and hmac.compare_digest(value, token):
+            return True
+    try:
+        from dosync.auth import hash_token
+        return bool(hub.db.verify_api_key(hash_token(token)))
+    except Exception:
+        return False
+
+
+def operator_credential_state() -> str:
+    """unset | ok | same_as_agent (H5, SAMUEL §3: the two credentials MUST differ).
+
+    An operator credential that is also an agent credential separates nothing:
+    the agent could release its own holds and, where configuration is reserved,
+    place devices and grant itself classes. Such a value is NOT honoured as the
+    operator's -- the hub still runs (a hub switched off governs nothing), the
+    operator paths stay closed, and the hub says so at start and in its status.
+    """
+    expected = os.environ.get("DOSYNC_OPERATOR_TOKEN", "")
+    if not expected:
+        return "unset"
+    return "same_as_agent" if _collides_with_agent_credential(expected) else "ok"
+
+
 def _operator_credential_ok(given) -> bool:
     import hmac
     expected = os.environ.get("DOSYNC_OPERATOR_TOKEN", "")
-    return bool(expected) and isinstance(given, str) and hmac.compare_digest(given, expected)
+    if not (expected and isinstance(given, str) and hmac.compare_digest(given, expected)):
+        return False
+    return operator_credential_state() == "ok"
 
 
 def _resolve_db_path() -> str:
@@ -740,6 +772,12 @@ async def lifespan(app: FastAPI):
     log.info("DoSync Hub started — port %s, database %s",
              os.environ.get("DOSYNC_PORT", "47200"),
              ":memory: (certify mode)" if _certify_mode else _resolve_db_path())
+    if operator_credential_state() == "same_as_agent":
+        log.error(
+            "DOSYNC_OPERATOR_TOKEN is also an agent credential (the hub token, the demo "
+            "token or a stored API key). It is NOT honoured as the operator's: nothing "
+            "held can be released with it and nothing reserved can be configured. "
+            "Set an operator token the agent does not have, and restart.")
     if configuration_credential_mode() != "operator":
         # Not an error -- the deployment's choice (2026-10-11). Said once, at start,
         # so it is a known setting and not a surprise.
@@ -1444,6 +1482,147 @@ def import_thing(req: dict, auth: str = Depends(require_auth),
     hub.register_device(manifest)
     return {"registered": True, "device_id": manifest.device_id, "location": manifest.location,
             "emergency_actions": [e["action"] for e in manifest.emergency_actions], **report}
+
+
+# ── W3C WoT binding: the hub's devices as governed Things (2026-10-12) ───────
+# Any WoT consumer can read these TDs and invoke their actions without knowing
+# DoSync exists. Every form points here, never at the device, and an invocation
+# is fired as operate_device with that one proposal: G1-G9 apply exactly as they
+# do to an agent over MCP. See dosync/wot_export.py and spec §5.10.
+
+def _wot_auth_required() -> bool:
+    from dosync.auth import get_auth_manager
+    manager = get_auth_manager()
+    return bool(manager and manager.enabled)
+
+
+def _td_response(body) -> JSONResponse:
+    from dosync.wot_export import TD_MEDIA_TYPE
+    return JSONResponse(body, media_type=TD_MEDIA_TYPE)
+
+
+@app.get("/.well-known/wot", tags=["WoT"], include_in_schema=True,
+         summary="WoT Discovery: this hub's Thing Description Directory")
+def wot_well_known(request: Request):
+    """Public (WoT Discovery introduction): describes the directory and how to
+    authenticate to it; names no device."""
+    from dosync.wot_export import directory_td
+    return _td_response(directory_td(str(request.base_url), _wot_auth_required()))
+
+
+@app.get("/v1/things", tags=["WoT"], summary="Every governed device as a W3C WoT Thing Description")
+def wot_list_things(request: Request, auth: str = Depends(require_auth)):
+    from dosync.hub import is_quarantined
+    from dosync.wot_export import manifest_to_td
+    base, need = str(request.base_url), _wot_auth_required()
+    return JSONResponse([manifest_to_td(d, base, need) for d in hub.registry.all()
+                         if not is_quarantined(d)])
+
+
+@app.get("/v1/things/{device_id}", tags=["WoT"], summary="One device as a W3C WoT Thing Description")
+def wot_get_thing(device_id: str, request: Request, auth: str = Depends(require_auth)):
+    from dosync.wot_export import manifest_to_td
+    device = hub.registry.get(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail=f"No Thing '{device_id}' on this hub")
+    return _td_response(manifest_to_td(device, str(request.base_url), _wot_auth_required()))
+
+
+@app.get("/v1/things/{device_id}/properties/{name}", tags=["WoT"],
+         summary="Read a Thing's property: the last value its device reported")
+def wot_read_property(device_id: str, name: str, auth: str = Depends(require_auth)):
+    device = hub.registry.get(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail=f"No Thing '{device_id}' on this hub")
+    sensor = next((s for s in device.sensors if s.id == name), None)
+    if sensor is None:
+        raise HTTPException(status_code=404, detail=f"Thing '{device_id}' has no property '{name}'")
+    seen = (getattr(hub, "last_readings", {}) or {}).get(device_id, {})
+    reading = seen.get(sensor.id) or seen.get(sensor.type)
+    if reading is None:
+        raise HTTPException(status_code=404,
+                            detail=f"'{name}' has not reported a value since the hub started")
+    return JSONResponse(reading["value"], headers={
+        "X-DoSync-Reading-Timestamp": str(reading["timestamp"])})
+
+
+@app.post("/v1/things/{device_id}/actions/{name}", tags=["WoT"],
+          summary="Invoke a Thing's action, governed by SAMUEL")
+async def wot_invoke_action(device_id: str, name: str, request: Request,
+                            auth: str = Depends(require_auth)):
+    """The body is the action's input (its parameters). Answers:
+
+    - 200 and the device's response: it ran.
+    - 202 `held_for_confirmation`: the operator marked it; a person releases it
+      (POST /v1/intents/{intent_id}/confirm with the operator credential).
+    - 202 `running`: a long-running action; follow `GET /v1/intent/{intent_id}`.
+    - 403 with the reason: refused by SAMUEL (outside the class or the place,
+      a policy, ...). 422: the request as a whole was refused (admission).
+    - 502: the hub sent it and the device failed.
+    """
+    from dosync.wot_export import action_names
+    device = hub.registry.get(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail=f"No Thing '{device_id}' on this hub")
+    actuator = action_names(device).get(name) or next(
+        (a for a in device.actuators if a.type == name), None)
+    if actuator is None:
+        raise HTTPException(status_code=404, detail=f"Thing '{device_id}' has no action '{name}'")
+    raw = await request.body()
+    params = {}
+    if raw:
+        try:
+            params = json.loads(raw)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="the action's input must be JSON")
+    if params is not None and not isinstance(params, dict):
+        params = {"value": params}
+    proposal = {"device_id": device_id, "action": actuator.type}
+    if params:
+        proposal["params"] = params
+    started = await execute_intent_async(
+        IntentRequest(intent="operate_device", urgency="info", source="wot",
+                      context={"proposed_actions": [proposal], "via": "wot"}),
+        auth=auth)
+    intent_id = started["intent_id"]
+    deadline = _time.time() + 30
+    while _time.time() < deadline:
+        entry = _intent_store.get(intent_id) or {}
+        if entry.get("status") != "pending":
+            break
+        await asyncio.sleep(0.05)
+    entry = _intent_store.get(intent_id) or {}
+    result = entry.get("result") or {}
+    if entry.get("status") == "pending" or not result:
+        return JSONResponse({"status": "running", "intent_id": intent_id,
+                             "follow": f"/v1/intent/{intent_id}"}, status_code=202)
+    if result.get("held_for_confirmation"):
+        return JSONResponse({"status": "held_for_confirmation", "intent_id": intent_id,
+                             "held": result["held_for_confirmation"],
+                             "pending": f"/v1/intents/{intent_id}/pending"}, status_code=202)
+    if result.get("refused_proposals"):
+        refused = result["refused_proposals"][0]
+        return JSONResponse({"status": "refused", "intent_id": intent_id,
+                             "reason": refused.get("reason"), "refused": result["refused_proposals"]},
+                            status_code=403)
+    ran = [r for r in result.get("results") or [] if r["device_id"] == device_id]
+    if not ran:
+        blocked = next((e for e in reversed(hub.audit_log.entries())
+                        if e.get("intent_id") == intent_id
+                        and e.get("type") in ("intent_blocked", "policy_modified",
+                                              "actions_dropped_oscillation",
+                                              "intent_pending_confirmation")), None)
+        return JSONResponse({"status": "not_run", "intent_id": intent_id,
+                             "reason": (blocked or {}).get("reason") or (blocked or {}).get("type")
+                                       or "the operator's rules did not let it run",
+                             "policy": (blocked or {}).get("policy")}, status_code=403)
+    r = ran[0]
+    if not r["success"]:
+        return JSONResponse({"status": "failed", "intent_id": intent_id, "error": r.get("error")},
+                            status_code=502)
+    return JSONResponse({"status": "done", "intent_id": intent_id, "response": r.get("response"),
+                         "simulated": r.get("simulated", False)},
+                        headers={"X-DoSync-Intent-Id": intent_id})
 
 
 @app.post("/v1/devices/register", tags=["Devices"])
@@ -2410,7 +2589,8 @@ async def list_confirmations(auth: str = Depends(require_auth)):
     any of it needs the operator credential (`/v1/intents/{id}/confirm|deny`)."""
     return {
         "pending": hub.pending_confirmations(),
-        "operator_configured": bool(os.environ.get("DOSYNC_OPERATOR_TOKEN")),
+        "operator_configured": operator_credential_state() == "ok",
+        "operator_credential": operator_credential_state(),
         "timeout_seconds": hub._confirmation_timeout(),
     }
 
@@ -2436,7 +2616,8 @@ async def governance(auth: str = Depends(require_auth)):
         if isinstance(p, RequireConfirmationPolicy)]
     return {
         "configuration_credential": configuration_credential_mode(),
-        "operator_configured": bool(os.environ.get("DOSYNC_OPERATOR_TOKEN")),
+        "operator_configured": operator_credential_state() == "ok",
+        "operator_credential": operator_credential_state(),
         "direct_control": direct_control_mode(),
         "confirmation_timeout_seconds": hub._confirmation_timeout(),
         "confirmation_marks": {
@@ -3635,6 +3816,7 @@ def get_status():
         "intents_rejected": _rejections_by_reason(),
         "direct_control": direct_control_mode(),
         "configuration_credential": configuration_credential_mode(),
+        "operator_credential": operator_credential_state(),
         "emergency_location_fallbacks": int(sum(
             M.emergency_location_fallbacks_total.samples().values())),
         # The hub cannot see whether checkpoints are EXPORTED — that happens

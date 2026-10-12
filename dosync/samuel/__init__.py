@@ -24,21 +24,29 @@ What the kernel decides, and where:
   confirmation.split_by_confirmation()
                                  what the operator marked waits for a person,
                                  the rest runs (G9)
+  policing.evaluate_policies()   how the operator's policies combine over a
+                                 plan: priority order, first block decides,
+                                 modifications accumulate, emergencies ask only
+                                 absolute restrictions, a failing policy blocks
+                                 outside an emergency (G7)
 
 What it does NOT do: choose devices, execute anything, talk HTTP, touch a
 database, or know any adapter. It reads plain values and returns decisions; the
-hub records them (G6), applies the operator's policy engine (G7) and keeps the
-side door shut (G8). tests/test_samuel_kernel_boundary.py fails if a module here
-imports anything of DoSync beyond its data models -- that boundary is what lets
+hub records them (G6), supplies the deployment's policies (the kernel combines
+them, G7) and keeps the side door shut (G8). tests/test_samuel_kernel_boundary.py
+fails if a module here imports anything of DoSync beyond its data models -- that boundary is what lets
 SAMUEL be implemented without DoSync, in another language, from these files.
 """
 from .intake import Admission, INTENT_REFUSALS, admit
 from .proposals import PROPOSAL_REFUSALS, ClassGrant, validate_proposals
 from .oscillation import OscillationGuard
 from .confirmation import split_by_confirmation
+from .policing import (POLICY_ERROR, BasePolicy, PolicyDecision, PolicyResult,
+                       evaluate_policies)
 
 __all__ = [
     "Admission", "INTENT_REFUSALS", "admit",
     "PROPOSAL_REFUSALS", "ClassGrant", "validate_proposals",
     "OscillationGuard", "split_by_confirmation",
+    "POLICY_ERROR", "BasePolicy", "PolicyDecision", "PolicyResult", "evaluate_policies",
 ]

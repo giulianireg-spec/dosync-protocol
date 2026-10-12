@@ -1,0 +1,31 @@
+configuration:
+  auth_required:
+    name: Require a token
+    description: >-
+      Agents and the dashboard need the hub's token. It is printed in this
+      add-on's Log on first start. Turn off only on a network nothing outside
+      can reach.
+  operator_token:
+    name: Operator token
+    description: >-
+      Yours, not the agent's. It releases actions held for your confirmation
+      and, if you reserve configuration, places devices. Must differ from the
+      agent's token (the hub refuses it otherwise). Leave empty to hold nothing.
+  configuration_credential:
+    name: Who configures
+    description: >-
+      hub (default): the agent's token can also place devices and set emergency
+      actions. operator: only the operator token can (required for SAMUEL
+      conformance).
+  home_assistant_bridge:
+    name: Govern Home Assistant's devices
+    description: >-
+      Import this Home Assistant's entities as devices and run their actions
+      through DoSync's rules.
+  confirmation_timeout:
+    name: Confirmation timeout (seconds)
+    description: How long a held action waits for you before it is dropped. Default 300.
+  log_level:
+    name: Log level
+network:
+  47200/tcp: DoSync hub (dashboard and API)

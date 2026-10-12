@@ -639,6 +639,32 @@ jobs:
           PY=$(python -c "import json;print(json.load(open('mcp-config.json'))['mcpServers']['dosync']['command'])")
           "$PY" "$GITHUB_WORKSPACE/tools/smoke_mcp_stdio.py" mcp-config.json
 
+  wot-interop:
+    # An independent W3C WoT consumer, Eclipse Thingweb node-wot, uses the hub's
+    # devices from their Thing Descriptions alone -- discovery, one action run,
+    # one held for a person, a property read -- and every TD served is checked
+    # against the official TD 1.1 schema. "Compatible with WoT" as a claim
+    # someone else's code verifies, not one this project makes about itself.
+    name: W3C WoT interoperability (node-wot consumes governed Things)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: pip install -e . pytest
+      - name: Install node-wot (pinned)
+        working-directory: tools/wot_interop
+        run: npm ci
+      - name: node-wot uses DoSync's Things, governed
+        env:
+          DOSYNC_DB: ":memory:"
+        run: python -m pytest -v tests/test_wot_interop.py
+
   certify-structure:
     name: Certification suite — structural validation
     runs-on: ubuntu-latest

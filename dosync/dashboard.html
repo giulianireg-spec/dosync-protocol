@@ -1601,7 +1601,11 @@ function renderHolds() {
   let html = '<p class="gov-note">An operator marked these actions as ones that must ' +
     'not run on an agent\'s say-so. The rest of each intent already ran. Confirming ' +
     'runs them now; denying drops them. Either way it is recorded in the audit log.</p>';
-  if (!lastHolds.operator_configured) {
+  if (lastHolds.operator_credential === 'same_as_agent') {
+    html += '<div class="verdict bad">The operator credential on this hub is the same as ' +
+      'an agent token, so the hub does not honour it: an agent must not be able to ' +
+      'release what it asked for. Set a different DOSYNC_OPERATOR_TOKEN and restart.</div>';
+  } else if (!lastHolds.operator_configured) {
     html += '<div class="verdict bad">This hub has no operator credential ' +
       '(DOSYNC_OPERATOR_TOKEN), so nothing held can be released. Set one where the ' +
       'hub starts and restart it.</div>';
@@ -1683,7 +1687,9 @@ async function renderGovernance() {
       '<span class="mono">DOSYNC_OPERATOR_TOKEN</span>. Your choice — nothing breaks either way.</div>';
   }
   html += `<div class="gov-row"><span class="name">Operator credential</span>
-    <span class="mono">${g.operator_configured ? 'set on this hub' : 'NOT set on this hub — holds cannot be released'}</span>
+    <span class="mono">${g.operator_credential === 'same_as_agent'
+      ? 'NOT honoured — it equals an agent token; set a different DOSYNC_OPERATOR_TOKEN'
+      : g.operator_configured ? 'set on this hub' : 'NOT set on this hub — holds cannot be released'}</span>
     <span class="mono">· this tab: ${operatorToken ? 'entered' : 'not entered'}</span>
     <button class="btn ghost sm" onclick="askOperatorToken();renderGovernance()">Enter</button>
     ${operatorToken ? '<button class="btn ghost sm" onclick="setOperatorToken(\'\');renderGovernance()">Forget</button>' : ''}

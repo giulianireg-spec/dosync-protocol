@@ -99,6 +99,7 @@ settings exist for deployments whose needs differ from that, not as a checklist.
 
 | Setting | Default |
 |---|---|
+| `DOSYNC_CONTAINER_DATA` | `/data` |
 | `DOSYNC_HA_IMPORT_INTERVAL` | `900` |
 | `DOSYNC_HA_LOCATION_TAGS` | _unset_ |
 | `DOSYNC_LLM_BASE_URL` | _unset_ |

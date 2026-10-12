@@ -174,7 +174,12 @@ configuration and MUST be reported (§11); the reference values are 60 s and 1.
 
 **R11 — Policies before anything runs.** The operator's policies evaluate every
 plan before it runs and MAY deny it or remove devices from it; a modification is
-recorded with the plan before and after.
+recorded with the plan before and after. Policies are asked in the operator's
+order; the first denial decides and modifications accumulate. In an emergency
+only the policies the operator made absolute are asked. A policy that cannot be
+evaluated (it fails instead of answering) denies the plan, with reason
+`policy_error` -- a restriction that could not be checked is not one that passed
+-- except in an emergency, where the failure is recorded and does not deny.
 
 **R12 — Nothing is silent.** A refused intent, a refused proposal, a dropped,
 held, released, denied or expired action, and a policy's decision are each
@@ -275,7 +280,10 @@ can. Measured on 515 public plugfest TDs, 81% of actions kept their own names.
 
 A conforming hub exposes these operations under one base path (`/samuel/v0` in
 the reference implementation). The agent credential is a bearer token; the
-operator credential is sent as `X-Operator-Token`. They MUST be different.
+operator credential is sent as `X-Operator-Token`. They MUST be different. A hub
+MUST NOT honour, as the operator's, a value that is also an agent credential, and
+reports which it is doing (`operator_credential`: `ok`, `unset` or `same_as_agent`
+in `GET /samuel/v0`).
 
 | Operation | Credential | Body / answer |
 |---|---|---|
@@ -307,7 +315,7 @@ check against its binding, in conformance mode:
 | G5 Declared first | S11, S12 (if the hub resolves) |
 | G6 Accountable | S19, S20 |
 | G7 Policed | S13 |
-| G8 No side door | S01, S02 |
+| G8 No side door | S01, S02, S21 |
 | G9 Confirmed | S14, S15, S16, S17 |
 
 The suite's scene is a production cell, a line and a hangar bay. DoSync also

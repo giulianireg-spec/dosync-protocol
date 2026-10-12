@@ -1,0 +1,39 @@
+name: DoSync
+version: "0.9.0"
+slug: dosync
+description: >-
+  Governance between AI agents and your devices: the agent asks, DoSync decides
+  what may run, holds what you marked for your confirmation, and records it all.
+url: https://github.com/giulianireg-spec/dosync-protocol
+# The same multi-architecture image `docker run` uses (built by CI from this
+# repository); the Supervisor pulls <image>:<version>.
+image: ghcr.io/giulianireg-spec/dosync-protocol
+arch:
+  - aarch64
+  - amd64
+init: false
+startup: application
+boot: auto
+# Discovery (mDNS, SSDP, broadcast) needs to see the network, not a bridge.
+host_network: true
+# The bridge reaches Home Assistant through the Supervisor with the add-on's
+# own token: nobody creates a long-lived token.
+homeassistant_api: true
+webui: "http://[HOST]:[PORT:47200]"
+ports:
+  47200/tcp: 47200
+ports_description:
+  47200/tcp: DoSync hub (dashboard and API)
+options:
+  auth_required: true
+  operator_token: ""
+  configuration_credential: hub
+  home_assistant_bridge: true
+  log_level: info
+schema:
+  auth_required: bool
+  operator_token: password?
+  configuration_credential: list(hub|operator)
+  home_assistant_bridge: bool
+  confirmation_timeout: int(30,86400)?
+  log_level: list(critical|error|warning|info|debug)

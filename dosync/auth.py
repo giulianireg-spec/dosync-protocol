@@ -96,6 +96,14 @@ class AuthManager:
                     "offline at full speed.")
         else:
             token = secrets.token_urlsafe(32)
+        operator = os.environ.get("DOSYNC_OPERATOR_TOKEN", "")
+        if operator and secrets.compare_digest(token, operator):
+            # H5: an agent key equal to the operator credential would hand the
+            # agent the operator's authority (SAMUEL §3: they MUST differ).
+            raise ValueError(
+                "That value is this hub's operator credential. An agent key must be "
+                "different: whoever holds the operator credential releases held "
+                "actions, and the agent must not be able to.")
         key_hash = hash_token(token)
         self.db.save_api_key(key_hash, label)
         log.info("New API key generated: label='%s'", label)
