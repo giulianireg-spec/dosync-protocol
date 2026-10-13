@@ -33,4 +33,7 @@ Every governed device is also published as a W3C WoT Thing Description at
 `/v1/things`, and `/.well-known/wot` describes the directory, so WoT tools can
 use them — through the same rules.
 
+Running Home Assistant Container or Core (no add-ons)? Run DoSync with pipx or
+Docker and set `HA_URL` and `HA_TOKEN` — see the project README.
+
 More: https://github.com/giulianireg-spec/dosync-protocol

@@ -651,6 +651,12 @@ the Supervisor — no long-lived token to create. Your entities appear as device
 governed by your rules; the operator token, who configures, and the confirmation
 timeout are options of the add-on.
 
+**Home Assistant Container or Core** (installed with Docker or Python) has no
+add-ons. Run DoSync with pipx or Docker as above and point its bridge at Home
+Assistant: `HA_URL=http://<home-assistant>:8123` and `HA_TOKEN=<a long-lived
+access token>` (Home Assistant → your profile → Security → Long-lived access
+tokens). The entities appear as devices exactly as with the add-on.
+
 ### From source (development)
 
 ```bash
