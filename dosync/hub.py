@@ -817,6 +817,7 @@ class DoSyncHub:
         if _validate and intent.urgency != Urgency.EMERGENCY:
             plan, rejected_actions = self._validate_plan_params(plan, intent)
 
+        _policy_removed: list = []
         # Policy Engine evaluation
         if self.policy_engine:
             from .policies import PolicyDecision
@@ -861,7 +862,10 @@ class DoSyncHub:
                     "reason":            policy_result.reason,
                     "emergency_override": is_emergency_block,
                 })
-                return IntentResult(intent_id=intent.intent_id, success=False, results=[], failed_devices=[])
+                return IntentResult(intent_id=intent.intent_id, success=False, results=[], failed_devices=[],
+                                    status="failed",
+                                    blocked_by={"policy": policy_result.policy_name,
+                                                "reason": policy_result.reason})
             elif policy_result.decision == PolicyDecision.CONFIRM:
                 log.info("Intent PENDING CONFIRMATION by policy '%s': %s",
                          policy_result.policy_name, policy_result.reason)
@@ -872,7 +876,11 @@ class DoSyncHub:
                     "policy": policy_result.policy_name,
                     "reason": policy_result.reason,
                 })
-                return IntentResult(intent_id=intent.intent_id, success=False, results=[], failed_devices=[])
+                return IntentResult(intent_id=intent.intent_id, success=False, results=[], failed_devices=[],
+                                    status="failed",
+                                    blocked_by={"policy": policy_result.policy_name,
+                                                "reason": policy_result.reason,
+                                                "kind": "confirm"})
             elif policy_result.decision == PolicyDecision.MODIFY:
                 # ── AUDIT-PROVENANCE (2026-07-18, from external review) ──────
                 # Until today a MODIFY left its trace in the runtime log and
@@ -899,6 +907,11 @@ class DoSyncHub:
                     "removed_devices":     sorted(set(_pre_devices) - set(_post_devices)),
                     "policies_fingerprint": getattr(self.policy_engine, "policies_fingerprint", None),
                 })
+                _kept = {(a.device_id, a.action) for a in policy_result.modified_actions}
+                _policy_removed = [
+                    {"device_id": a.device_id, "action": a.action,
+                     "policy": policy_result.policy_name, "reason": policy_result.reason}
+                    for a in plan.actions if (a.device_id, a.action) not in _kept]
                 plan = _AP(intent_id=plan.intent_id, actions=policy_result.modified_actions, urgency=plan.urgency)
 
                 # ── EMERGENCY-UNSAT-ESCALATION (same review) ─────────────────
@@ -1103,6 +1116,7 @@ class DoSyncHub:
             refused_proposals=_plan_refused,
             operations=started_operations,
             held_for_confirmation=_held_desc,
+            removed_by_policy=_policy_removed,
         )
         # Audit log
         self.audit_log.append({

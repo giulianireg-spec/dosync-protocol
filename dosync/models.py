@@ -801,6 +801,13 @@ class IntentResult:
     # other caller learns the same thing.
     refused_reason: str               = ""
     refused_detail: str               = ""
+    # Set when an operator policy denied the whole plan: {"policy", "reason"}.
+    # Until 2026-10-14 only the audit log said so; a caller -- the MCP tool an
+    # agent uses -- saw an empty result and reported "Nothing ran" with no reason.
+    blocked_by: dict                  = field(default_factory=dict)
+    # Actions an operator policy removed from the plan (MODIFY): each
+    # {device_id, action, policy, reason}. Same silence, same fix.
+    removed_by_policy: list           = field(default_factory=list)
     # "success"        — all actions completed successfully
     # "partial"        — some actions failed or were rejected, rest continued
     # "partial_abort"  — some actions executed, rest aborted by ABORT policy

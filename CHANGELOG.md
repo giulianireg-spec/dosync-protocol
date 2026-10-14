@@ -10,6 +10,14 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **An agent is told why nothing ran.** Asked to switch a TV's Ambilight off on the reference deployment, the
+  agent was answered "Nothing ran." twice with no reason: the MCP tool read only actions that ran or were
+  refused, and an operator policy's decision reached the audit log but not the result. Intent results now
+  carry `blocked_by` (`{policy, reason}`) and `removed_by_policy` (`[{device_id, action, policy, reason}]`),
+  and `dosync_control_device` / `dosync_fire_intent` say in words what was held for a person, denied or
+  removed — and that a hold is released only by a person in the dashboard.
+
 ## [0.9.0] — 2026-10-12
 
 The release that closes the reengineering: SAMUEL as a standard of its own with

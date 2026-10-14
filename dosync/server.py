@@ -2440,6 +2440,11 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
                 # with POST /v1/intents/{id}/confirm (operator credential).
                 **({"held_for_confirmation": list(result.held_for_confirmation)}
                    if getattr(result, "held_for_confirmation", None) else {}),
+                # Why nothing (or less) ran, when an operator policy decided it.
+                **({"blocked_by": dict(result.blocked_by)}
+                   if getattr(result, "blocked_by", None) else {}),
+                **({"removed_by_policy": list(result.removed_by_policy)}
+                   if getattr(result, "removed_by_policy", None) else {}),
                 "results": [
                     {"device_id": r.device_id, "action": r.action, "success": r.success,
                      "response": r.response, "error": r.error,

@@ -629,14 +629,9 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         # a person. Report this plainly — but offer no way to release them. Confirming
         # is an operator action with a credential this agent does not hold; there is
         # deliberately no MCP tool for it.
-        held = result.get("held_for_confirmation") or []
-        if held:
-            text += (f"\n{len(held)} action(s) are held for a person to confirm. "
-                     f"They did not run.\n")
-            for h in held[:8]:
-                text += f"  ⏸ [{h.get('device_id')}] {h.get('action')} — {h.get('reason','needs confirmation')}\n"
-            text += ("A human must confirm or deny these with the operator credential. "
-                     "You cannot release them from here.\n")
+        governance = _governance_lines(result)
+        if governance:
+            text += "\n" + "\n".join(governance) + "\n"
 
         return [types.TextContent(type="text", text=text)]
     elif name == "dosync_list_devices":
@@ -918,7 +913,13 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         lines = [f"✅ {r.get('device_id')}: {r.get('action', action)}" for r in done]
         lines += [f"⚠️ {r.get('device_id')}: {action} failed" for r in failed]
         lines += [f"⛔ {r['device_id']}: {r['action']} refused by the hub ({r['reason']})" for r in refused]
-        return [types.TextContent(type="text", text="\n".join(lines) or "Nothing ran.")]
+        lines += _governance_lines(result)
+        if not lines:
+            # Never an unexplained "Nothing ran" (G6): say where the reason is.
+            lines = [f"Nothing ran, and the hub gave no reason in the result (status "
+                     f"{result.get('status', 'unknown')}). The audit log has intent "
+                     f"{fired['intent_id']}: dosync_get_audit_log shows why."]
+        return [types.TextContent(type="text", text="\n".join(lines))]
 
     else:
         return [types.TextContent(
@@ -941,6 +942,29 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 TRANSPORT = os.environ.get("DOSYNC_MCP_TRANSPORT", "stdio").strip().lower()
 MCP_HOST  = os.environ.get("DOSYNC_MCP_HOST", "127.0.0.1")
 MCP_PORT  = int(os.environ.get("DOSYNC_MCP_PORT", "47210"))
+
+
+def _governance_lines(result: dict) -> list:
+    """What the operator's rules did to an intent, in words an agent can relay:
+    actions held for a person (G9), a plan an operator policy denied (G7), and
+    actions a policy removed. Offers no way to override any of it -- releasing a
+    hold needs the operator credential, which this server never holds."""
+    lines = []
+    held = result.get("held_for_confirmation") or []
+    if held:
+        lines.append(f"⏸ {len(held)} action(s) are held for a person to confirm. They did not run:")
+        lines += [f"  ⏸ {h.get('device_id')}: {h.get('action')} — {h.get('reason') or 'needs confirmation'}"
+                  for h in held[:8]]
+        lines.append("A person confirms or denies them in DoSync's dashboard (⏸) with the operator "
+                     "credential. You cannot release them from here.")
+    blocked = result.get("blocked_by") or {}
+    if blocked:
+        lines.append(f"⛔ The operator's policy '{blocked.get('policy')}' did not allow this: "
+                     f"{blocked.get('reason') or 'no reason given'}")
+    for r in (result.get("removed_by_policy") or [])[:8]:
+        lines.append(f"⛔ {r.get('device_id')}: {r.get('action')} removed by the operator's policy "
+                     f"'{r.get('policy')}' ({r.get('reason') or 'no reason given'})")
+    return lines
 
 
 def _init_options():
