@@ -56,7 +56,12 @@ def test_a_removed_device_says_which_policy_and_why():
 
 
 def test_the_mcp_tools_put_it_in_words():
-    mcp_server = pytest.importorskip("dosync.mcp_server")
+    # Not importorskip: without the [mcp] extra, dosync.mcp_server exits at import
+    # (SystemExit, which importorskip does not catch) -- the floor CI job has no mcp.
+    import importlib.util
+    if importlib.util.find_spec("mcp") is None:
+        pytest.skip("the [mcp] extra is not installed")
+    from dosync import mcp_server
     lines = mcp_server._governance_lines({
         "held_for_confirmation": [{"device_id": TV, "action": "turn_off", "reason": "a person decides"}],
         "blocked_by": {"policy": "block_intent", "reason": "not at night"},
