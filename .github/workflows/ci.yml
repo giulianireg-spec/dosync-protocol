@@ -636,17 +636,29 @@ jobs:
           DOSYNC_DB: ${{ runner.temp }}/pipx-hub.db
           DOSYNC_OPERATOR_TOKEN: ci-operator
         run: |
+          # Each check names itself on failure, with the hub's log, as an
+          # annotation: readable wherever the raw log is not.
+          fail() {
+            log=$(tail -25 hub.log 2>/dev/null | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=$1::${2:-}%0A--- hub.log ---%0A$log"; exit 1; }
           dosync-hub --port 47302 > hub.log 2>&1 &
           for i in $(seq 1 60); do curl -sf -o status.json http://127.0.0.1:47302/v1/status && break; sleep 1; done
-          test -s status.json || { tail -40 hub.log; exit 1; }
-          curl -sf http://127.0.0.1:47302/ | grep -q "openGovernance()" || { echo "dashboard missing"; exit 1; }
-          curl -sf http://127.0.0.1:47302/v1/confirmations | grep -q '"pending"'
-          curl -sf http://127.0.0.1:47302/v1/agent/connect | grep -q '"mcp_installed":true'
-          dosync-mcp --check --hub-url http://127.0.0.1:47302
-          dosync-mcp --print-config --hub-url http://127.0.0.1:47302 > mcp-config.json
+          test -s status.json || fail "hub did not start"
+          page=$(curl -sf http://127.0.0.1:47302/) || fail "dashboard not served"
+          grep -q "openGovernance()" <<< "$page" || fail "dashboard missing its console"
+          conf=$(curl -sf http://127.0.0.1:47302/v1/confirmations) || fail "confirmations not served"
+          grep -q '"pending"' <<< "$conf" || fail "confirmations malformed" "$conf"
+          agent=$(curl -sf http://127.0.0.1:47302/v1/agent/connect) || fail "agent/connect not served"
+          grep -q '"mcp_installed":true' <<< "$agent" || fail "MCP not installed per hub" "$agent"
+          out=$(dosync-mcp --check --hub-url http://127.0.0.1:47302 2>&1) || fail "dosync-mcp --check" "$out"
+          dosync-mcp --print-config --hub-url http://127.0.0.1:47302 > mcp-config.json 2> cfg.err \
+            || fail "dosync-mcp --print-config" "$(cat cfg.err)"
           cat mcp-config.json
-          PY=$(python -c "import json;print(json.load(open('mcp-config.json'))['mcpServers']['dosync']['command'])")
-          "$PY" "$GITHUB_WORKSPACE/tools/smoke_mcp_stdio.py" mcp-config.json || { tail -40 hub.log; exit 1; }
+          PY=$(python -c "import json;print(json.load(open('mcp-config.json'))['mcpServers']['dosync']['command'])") \
+            || fail "config is not JSON" "$(head -c 600 mcp-config.json)"
+          out=$("$PY" "$GITHUB_WORKSPACE/tools/smoke_mcp_stdio.py" mcp-config.json 2>&1) \
+            || fail "agent over MCP stdio" "$(tail -c 1500 <<< "$out" | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+          echo "$out"
 
   wot-interop:
     # An independent W3C WoT consumer, Eclipse Thingweb node-wot, uses the hub's
