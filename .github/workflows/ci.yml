@@ -640,7 +640,8 @@ jobs:
           # annotation: readable wherever the raw log is not.
           fail() {
             log=$(tail -25 hub.log 2>/dev/null | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
-            echo "::error title=$1::${2:-}%0A--- hub.log ---%0A$log"; exit 1; }
+            detail=$(printf '%s' "${2:-}" | tail -c 2500 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=$1::$detail--- hub.log ---%0A$log"; exit 1; }
           dosync-hub --port 47302 > hub.log 2>&1 &
           for i in $(seq 1 60); do curl -sf -o status.json http://127.0.0.1:47302/v1/status && break; sleep 1; done
           test -s status.json || fail "hub did not start"
@@ -657,7 +658,7 @@ jobs:
           PY=$(python -c "import json;print(json.load(open('mcp-config.json'))['mcpServers']['dosync']['command'])") \
             || fail "config is not JSON" "$(head -c 600 mcp-config.json)"
           out=$("$PY" "$GITHUB_WORKSPACE/tools/smoke_mcp_stdio.py" mcp-config.json 2>&1) \
-            || fail "agent over MCP stdio" "$(tail -c 1500 <<< "$out" | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+            || fail "agent over MCP stdio" "$out"
           echo "$out"
 
   wot-interop:
