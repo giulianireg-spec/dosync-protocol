@@ -338,6 +338,14 @@ def run(hub: Hub) -> Report:
 
 
 def main(argv=None):
+    # Standard library only, so not dosync._console: on Windows a redirected
+    # stdout is in the legacy code page and cannot encode the report's marks.
+    for stream in (sys.stdout, sys.stderr):
+        if (getattr(stream, "encoding", "") or "").lower().replace("-", "") != "utf8":
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (AttributeError, ValueError, OSError):
+                pass
     ap = argparse.ArgumentParser(description="samuel-certify: SAMUEL conformance for any hub")
     ap.add_argument("--url", required=True)
     ap.add_argument("--agent-token", default="")

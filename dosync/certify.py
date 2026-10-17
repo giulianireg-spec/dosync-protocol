@@ -1388,6 +1388,8 @@ def run_conformance_05(base: str, report: CertReport):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    from dosync._console import utf8_stdio
+    utf8_stdio()
     parser = argparse.ArgumentParser(
         description="DoSync Certification CLI v0.3 — protocol conformance testing",
         formatter_class=argparse.RawDescriptionHelpFormatter,

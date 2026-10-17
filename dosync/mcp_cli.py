@@ -132,6 +132,8 @@ def check(args) -> int:
 
 
 def main(argv=None) -> None:
+    from dosync._console import utf8_stdio
+    utf8_stdio()
     p = argparse.ArgumentParser(
         prog="dosync-mcp",
         description="Run the DoSync MCP server, or print the configuration your agent needs.")

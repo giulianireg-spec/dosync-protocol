@@ -381,6 +381,8 @@ def draft_adapter(args):
 
 
 def main():
+    from dosync._console import utf8_stdio
+    utf8_stdio()
     parser = argparse.ArgumentParser(
         description="DoSync Management CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,

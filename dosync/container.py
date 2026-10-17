@@ -80,6 +80,8 @@ def settings(env: dict, data: Path) -> tuple[dict, list[str]]:
 
 
 def main(argv=None) -> None:
+    from dosync._console import utf8_stdio
+    utf8_stdio()
     data = Path(os.environ.get("DOSYNC_CONTAINER_DATA", "/data"))
     data.mkdir(parents=True, exist_ok=True)
     env, notes = settings(dict(os.environ), data)

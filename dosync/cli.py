@@ -17,6 +17,8 @@ def hub(argv=None) -> None:
     would then exist in two places and disagree. The flags below are only the
     ones you need before the application starts — where to listen.
     """
+    from dosync._console import utf8_stdio
+    utf8_stdio()
     parser = argparse.ArgumentParser(
         prog="dosync-hub",
         description="Run the DoSync hub.",
