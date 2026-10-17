@@ -165,6 +165,11 @@ action runs only when a person confirms it with the operator credential, and is
 dropped when denied; an unreleased hold expires. In an emergency, a device's
 declared emergency actions are not held by a mark unless the mark says
 `even_in_emergency`.
+A mark MAY hold only from a number of distinct devices within a window,
+counting what the hub already ran on devices it covers, so that a plan cannot
+avoid it by arriving one device at a time. A person MAY release part of a hold;
+what they leave out is denied and recorded as such. (Both added 2026-10-17: a
+mark that held every light one by one was being confirmed without being read.)
 
 **R10 — No device oscillates.** Within a rolling window, a device is not reversed
 across an opposite pair more than an allowed number of times, across separate

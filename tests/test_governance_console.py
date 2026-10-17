@@ -116,7 +116,8 @@ def test_governance_reports_both_sources(setup):
     g = client.get("/v1/governance").json()
     assert g["configuration_credential"] == "hub" and g["operator_configured"] is True
     assert g["confirmation_marks"]["deployment_file"] == [
-        {"actions": ["close"], "device_ids": ["gate"], "even_in_emergency": False, "reason": "from the file"}]
+        {"actions": ["close"], "device_ids": ["gate"], "even_in_emergency": False, "reason": "from the file",
+         "min_devices": 1, "window_seconds": 300}]
     assert g["confirmation_marks"]["hub"][0]["actions"] == ["turn_off"]
     # both hold: the file's and the console's
     r = _fire(hub, [("gate", "close"), ("lamp", "turn_off")], "hold-2")

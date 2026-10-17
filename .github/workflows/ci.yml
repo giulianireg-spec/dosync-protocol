@@ -594,14 +594,21 @@ jobs:
     # they run it: pipx, the hub's own command, the dashboard in a browser, and
     # an agent connected over MCP with the configuration `dosync-mcp` prints.
     # Validated by hand on macOS and Windows in August; nothing protected it
-    # since. If this job fails, the README is lying to its readers.
+    # since. If this job fails, the README is lying to its readers. Windows
+    # joined the matrix on 2026-10-17: it was the one system the README names
+    # that no machine checked.
     name: The README install path (pipx → hub → dashboard → agent)
     runs-on: ${{ matrix.os }}
     needs: test
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, macos-latest ]
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+    defaults:
+      run:
+        # Git Bash on Windows: the same script everywhere, so a difference in
+        # the result is a difference in DoSync, not in the test.
+        shell: bash
 
     steps:
       - uses: actions/checkout@v4
@@ -616,8 +623,11 @@ jobs:
           python -m pipx install "$WHEEL"
           python -m pipx inject dosync "mcp>=1.27.0,<2.0"
           python -m pipx ensurepath
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: The hub starts and serves the dashboard
+          BIN=$(python -m pipx environment --value PIPX_BIN_DIR)
+          echo "pipx puts commands in $BIN"
+          echo "$BIN" >> "$GITHUB_PATH"
+      - name: The hub starts and serves the dashboard; an agent connects with the configuration dosync-mcp prints
+        # One step: Windows ends a step's background processes with the step.
         working-directory: ${{ runner.temp }}
         env:
           DOSYNC_AUTH: "false"
@@ -625,19 +635,16 @@ jobs:
           DOSYNC_OPERATOR_TOKEN: ci-operator
         run: |
           dosync-hub --port 47302 > hub.log 2>&1 &
-          for i in $(seq 1 40); do curl -sf -o status.json http://127.0.0.1:47302/v1/status && break; sleep 1; done
+          for i in $(seq 1 60); do curl -sf -o status.json http://127.0.0.1:47302/v1/status && break; sleep 1; done
           test -s status.json || { tail -40 hub.log; exit 1; }
           curl -sf http://127.0.0.1:47302/ | grep -q "openGovernance()" || { echo "dashboard missing"; exit 1; }
           curl -sf http://127.0.0.1:47302/v1/confirmations | grep -q '"pending"'
           curl -sf http://127.0.0.1:47302/v1/agent/connect | grep -q '"mcp_installed":true'
-      - name: An agent connects with the configuration dosync-mcp prints
-        working-directory: ${{ runner.temp }}
-        run: |
           dosync-mcp --check --hub-url http://127.0.0.1:47302
           dosync-mcp --print-config --hub-url http://127.0.0.1:47302 > mcp-config.json
           cat mcp-config.json
           PY=$(python -c "import json;print(json.load(open('mcp-config.json'))['mcpServers']['dosync']['command'])")
-          "$PY" "$GITHUB_WORKSPACE/tools/smoke_mcp_stdio.py" mcp-config.json
+          "$PY" "$GITHUB_WORKSPACE/tools/smoke_mcp_stdio.py" mcp-config.json || { tail -40 hub.log; exit 1; }
 
   wot-interop:
     # An independent W3C WoT consumer, Eclipse Thingweb node-wot, uses the hub's

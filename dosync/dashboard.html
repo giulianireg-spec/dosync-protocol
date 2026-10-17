@@ -738,8 +738,13 @@ let intentCount = 0;
 // warns at every startup that TLS is not configured — and the moment an
 // operator complied, its own interface stopped working. It also broke on any
 // port other than 47200.
-const HUB = `${window.location.protocol}//${window.location.host}`;
-const WS  = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+// The page may be served under a path prefix -- Home Assistant's ingress puts
+// it at /api/hassio_ingress/<token>/ -- so the hub is wherever this page is,
+// not the root of the host. (2026-10-17: it assumed the root.)
+const BASE = window.location.pathname.replace(/\/[^/]*$/, '');
+const HUB = `${window.location.protocol}//${window.location.host}${BASE}`;
+const WS  = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${BASE}`;
+const UNDER_INGRESS = /\/api\/hassio_ingress\//.test(window.location.pathname);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
@@ -1619,12 +1624,14 @@ function renderHolds() {
     html += `<div class="hold-card">
       <div><b>${esc(p.intent)}</b> <span class="mono" style="color:var(--text-dim)">
         ${esc(p.intent_id)}</span> — expires in ${Math.floor(left / 60)}m ${left % 60}s</div>
-      <div class="acts">${p.actions.map(a =>
-        `${esc(deviceNames[a.device_id] || a.device_id)} → <b>${esc(a.action)}</b>` +
+      <div class="acts">${p.actions.map((a, k) =>
+        `<label class="gov-check" style="color:var(--text)"><input type="checkbox" checked
+           class="hold-${esc(p.intent_id)}" data-device="${esc(a.device_id)}" data-action="${esc(a.action)}">
+         ${esc(deviceNames[a.device_id] || a.device_id)} → <b>${esc(a.action)}</b></label>` +
         (a.reason ? ` <span style="color:var(--text-dim)">(${esc(a.reason)})</span>` : '')
       ).join('<br>')}</div>
-      <button class="btn sm" onclick="decideHold('${esc(p.intent_id)}','confirm')">Confirm — run them</button>
-      <button class="btn sm danger" onclick="decideHold('${esc(p.intent_id)}','deny')">Deny — drop them</button>
+      <button class="btn sm" onclick="decideHold('${esc(p.intent_id)}','confirm')">Confirm the ticked ones</button>
+      <button class="btn sm danger" onclick="decideHold('${esc(p.intent_id)}','deny')">Deny all</button>
     </div>`;
   });
   body.innerHTML = html;
@@ -1638,10 +1645,21 @@ async function openHolds() {
 }
 
 async function decideHold(intentId, what) {
+  // Untick an action to deny it while confirming the rest (one decision).
+  let body = {};
+  if (what === 'confirm') {
+    const boxes = [...document.querySelectorAll('.hold-' + CSS.escape(intentId))];
+    const ticked = boxes.filter(b => b.checked);
+    if (!ticked.length) { what = 'deny'; }
+    else if (ticked.length < boxes.length) {
+      body = { actions: ticked.map(b => ({ device_id: b.dataset.device, action: b.dataset.action })) };
+    }
+  }
   try {
-    const r = await call('POST', `/v1/intents/${encodeURIComponent(intentId)}/${what}`, {}, true);
+    const r = await call('POST', `/v1/intents/${encodeURIComponent(intentId)}/${what}`, body, true);
     const msg = r.status === 'confirmed'
       ? `✓ Confirmed — ${(r.results || []).filter(x => x.success).length} action(s) ran`
+      + ((r.denied || []).length ? `, ${r.denied.length} denied` : '')
       : r.status === 'expired' ? '⌛ Too late — the hold had expired; nothing ran'
       : '✕ Denied — the held actions were dropped';
     toast(msg, r.status === 'confirmed' ? 'success' : 'info');
@@ -1722,7 +1740,9 @@ async function renderGovernance() {
   html += '<p class="gov-note">A marked action does not run on an agent\'s say-so: it is ' +
     'held until you confirm it (⏸ in the header) and dropped if you deny it or it ' +
     `expires (${Math.round(g.confirmation_timeout_seconds)} s). Leave devices empty to ` +
-    'mark the action on every device. Changing marks always needs the operator credential.</p>';
+    'mark the action on every device. "From N devices" holds only larger requests (counting ' +
+    'the last 5 minutes, so splitting a request does not avoid it); leave it at 1 for actions ' +
+    'that must always wait. Changing marks always needs the operator credential.</p>';
   const fileMarks = g.confirmation_marks.deployment_file || [];
   if (fileMarks.length) {
     html += `<p class="gov-note">From the deployment file${g.confirmation_marks.policies_path
@@ -1730,6 +1750,7 @@ async function renderGovernance() {
     fileMarks.forEach(m => {
       html += `<div class="gov-row"><span class="mono">${esc(m.actions.join(', '))} on
         ${m.device_ids ? esc(m.device_ids.join(', ')) : 'any device'}
+        ${(m.min_devices || 1) > 1 ? '· from ' + m.min_devices + ' devices' : ''}
         ${m.even_in_emergency ? '· even in an emergency' : ''} — ${esc(m.reason)}</span></div>`;
     });
   }
@@ -1755,6 +1776,9 @@ function renderMarks() {
       value="${esc((m.actions || []).join(', '))}" onchange="govMarks[${i}].actions=splitList(this.value)">
     <input class="gov-input" list="deviceList2" placeholder="devices (empty = any)" style="width:200px"
       value="${esc((m.device_ids || []).join(', '))}" onchange="govMarks[${i}].device_ids=splitList(this.value)">
+    <label class="gov-check" title="Hold only when the request acts on at least this many devices, counting the last minutes">from
+      <input class="gov-input" type="number" min="1" style="width:52px" value="${m.min_devices || 1}"
+        onchange="govMarks[${i}].min_devices=Math.max(1, parseInt(this.value)||1)"> device(s)</label>
     <label class="gov-check"><input type="checkbox" ${m.even_in_emergency ? 'checked' : ''}
       onchange="govMarks[${i}].even_in_emergency=this.checked">even in an emergency</label>
     <input class="gov-input" placeholder="why (shown to whoever confirms)" style="flex:1;min-width:160px"
@@ -1769,7 +1793,8 @@ function splitList(v) {
 }
 
 function addMark() {
-  govMarks.push({ actions: [], device_ids: null, even_in_emergency: false, reason: '' });
+  govMarks.push({ actions: [], device_ids: null, even_in_emergency: false, reason: '',
+                 min_devices: 1, window_seconds: 300 });
   renderMarks();
 }
 
@@ -1815,10 +1840,14 @@ async function openAgent() {
   let info;
   try { info = await call('GET', '/v1/agent/connect'); }
   catch (e) { body.innerHTML = `<div class="verdict bad">${esc(e.message)}</div>`; return; }
-  const env = { DOSYNC_HUB_URL: HUB, DOSYNC_TOKEN: token || 'PASTE-YOUR-HUB-TOKEN-HERE' };
+  // Through Home Assistant's ingress the page's address needs a Home Assistant
+  // session; an agent must reach the hub on its own port instead.
+  const hubForAgent = UNDER_INGRESS
+    ? `http://${window.location.hostname}:${info.port}` : HUB;
+  const env = { DOSYNC_HUB_URL: hubForAgent, DOSYNC_TOKEN: token || 'PASTE-YOUR-HUB-TOKEN-HERE' };
   const block = { mcpServers: { dosync: { command: info.command, args: info.args, env } } };
   const json = JSON.stringify(block, null, 2);
-  const cli = `claude mcp add dosync -e DOSYNC_HUB_URL=${HUB} -e DOSYNC_TOKEN=${env.DOSYNC_TOKEN} -- ` +
+  const cli = `claude mcp add dosync -e DOSYNC_HUB_URL=${hubForAgent} -e DOSYNC_TOKEN=${env.DOSYNC_TOKEN} -- ` +
               `${info.command} ${info.args.join(' ')}`;
   const paths = Object.entries(info.client_config_paths || {})
     .map(([k, v]) => `<div class="mono">${esc(k)}: ${esc(v)}</div>`).join('');
@@ -1843,9 +1872,9 @@ async function openAgent() {
       <p class="gov-note">Install DoSync there too (it only runs the small MCP part), then let it
       write the configuration for you:</p>
       <div class="mono">pipx install "dosync[mcp]"</div>
-      <div class="mono">dosync-mcp --print-config --hub-url ${esc(HUB)} --token &lt;your token&gt;</div>
+      <div class="mono">dosync-mcp --print-config --hub-url ${esc(hubForAgent)} --token &lt;your token&gt;</div>
       <p class="gov-note" style="margin-top:.4rem">Check it with
-      <span class="mono">dosync-mcp --check --hub-url ${esc(HUB)} --token &lt;your token&gt;</span>.
+      <span class="mono">dosync-mcp --check --hub-url ${esc(hubForAgent)} --token &lt;your token&gt;</span>.
       For a hub served over https, add <span class="mono">--ca</span> with this hub's ca.crt.</p>
     </div>`;
 }

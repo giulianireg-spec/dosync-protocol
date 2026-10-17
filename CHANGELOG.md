@@ -10,6 +10,25 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Confirm part of a hold.** `POST /v1/intents/{id}/confirm` accepts `{"actions": [{device_id, action}, ...]}`:
+  those run and the rest of that hold is denied (`confirmation_denied`, `partial: true`); an action the hold does
+  not contain is 422 and nothing changes. The dashboard's hold cards have a tick per action. (Spec §7.3.2.)
+- **Hold only from a number of devices.** A confirmation mark may set `min_devices` and `window_seconds`
+  (default 1 and 300 s): it holds only when the plan plus what the hub already ran on the devices it covers within
+  the window reaches that many devices — one light off runs, the whole house dark waits for a person, and asking
+  one device at a time does not get around it. The dashboard's mark form has "from N devices". (Spec §7.3.2,
+  SAMUEL R9.)
+- **WoT `queryaction`.** A 202 from a governed Thing's action carries `href` and `Location`
+  (`/v1/things/{id}/actions/{name}/{intent_id}`); `GET` on it answers `pending`, `running`, `completed` with the
+  output, or `failed` with the reason (denied, expired, device failed, policy). Every action's TD has the form.
+  (Spec §5.10.)
+- **The dashboard in Home Assistant's sidebar.** The add-on declares ingress; the dashboard now works under any
+  path prefix (a reverse proxy, Home Assistant's ingress) instead of assuming the root of the host. Through
+  ingress, the agent configuration it writes points at the hub's own port.
+- **Windows in CI.** The README's install path (pipx → hub → dashboard → agent over MCP) now runs on Windows as
+  well as Linux and macOS.
+
 ### Fixed
 - **An agent is told why nothing ran.** Asked to switch a TV's Ambilight off on the reference deployment, the
   agent was answered "Nothing ran." twice with no reason: the MCP tool read only actions that ran or were

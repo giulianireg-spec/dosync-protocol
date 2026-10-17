@@ -593,6 +593,70 @@
         }
       }
     },
+    "/v1/things/{device_id}/actions/{name}/{intent_id}": {
+      "get": {
+        "tags": [
+          "WoT"
+        ],
+        "summary": "Status of an action invocation (WoT queryaction)",
+        "description": "Follow an invocation that answered 202: held for a person, or running.\n`status` is pending (held, waiting for a person), running, completed (with\n`output`, the device's answer) or failed (with `error`: denied, expired,\nrefused, or the device's error).",
+        "operationId": "wot_query_action_v1_things__device_id__actions__name___intent_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Intent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json; charset=utf-8": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/devices/register": {
       "post": {
         "tags": [

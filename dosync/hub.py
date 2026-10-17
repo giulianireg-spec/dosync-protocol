@@ -102,7 +102,10 @@ class DoSyncHub:
         # the hold expires (DOSYNC_CONFIRMATION_TIMEOUT, default 300 s). The agent
         # never holds that credential and the MCP server offers no way to confirm.
         self._pending_confirmations: dict[str, dict] = {}
-        self.last_readings: dict[str, dict] = {}   # device_id -> key -> {value, timestamp, event_id}
+        self.last_readings: dict[str, dict] = {}
+        from collections import deque as _deque
+        self._recent_runs = _deque(maxlen=10000)   # (time, device_id, action) that ran
+        self._hold_outcomes: dict[str, dict] = {}   # intent_id -> how its hold ended   # device_id -> key -> {value, timestamp, event_id}
         self._active_intents: dict[str, int] = {}  # intent_value -> priority
         self._active_intent_devices: dict[str, set] = {}  # intent_value -> device_ids
         # v13 hygiene (maintenance stop 2026-07-21, Paredes): progress_cb failures
@@ -419,8 +422,22 @@ class DoSyncHub:
     # call by name, so every caller keeps working. The parallel / abort / retry
     # strategies are internal to PlanExecutor and are not delegated.
     async def _execute_with_policy_cb(self, plan, executor, intent, progress_cb=None):
-        return await self._plan_executor._execute_with_policy_cb(
+        out = await self._plan_executor._execute_with_policy_cb(
             plan, executor, intent, progress_cb)
+        # What ran, for confirmation thresholds counted over a window (G9).
+        now = time.time()
+        for r in out[0] or []:
+            if getattr(r, "success", False):
+                self._recent_runs.append((now, r.device_id, r.action))
+        return out
+
+    def _recently_acted(self, rule) -> set:
+        """Devices `rule` matches that acted within its window."""
+        window = getattr(rule, "window_seconds", 300)
+        horizon = time.time() - window
+        while self._recent_runs and self._recent_runs[0][0] < time.time() - 86400:
+            self._recent_runs.popleft()
+        return {d for t, d, a in self._recent_runs if t >= horizon and rule.matches(d, a)}
 
     async def _execute_with_policy(self, plan, executor, intent):
         return await self._plan_executor._execute_with_policy(plan, executor, intent)
@@ -566,10 +583,17 @@ class DoSyncHub:
         reason = mark.get("reason") or ""
         if not isinstance(reason, str):
             raise ValueError(f"marks[{index}]: 'reason' must be text")
+        min_devices = mark.get("min_devices", 1)
+        window = mark.get("window_seconds", 300)
+        if isinstance(min_devices, bool) or not isinstance(min_devices, int) or min_devices < 1:
+            raise ValueError(f"marks[{index}]: 'min_devices' must be an integer of 1 or more")
+        if isinstance(window, bool) or not isinstance(window, int) or not 1 <= window <= 86400:
+            raise ValueError(f"marks[{index}]: 'window_seconds' must be an integer between 1 and 86400")
         return {"actions": sorted({a.strip() for a in actions}),
                 "device_ids": sorted(set(devices)) if devices else None,
                 "even_in_emergency": bool(mark.get("even_in_emergency", False)),
-                "reason": reason.strip()}
+                "reason": reason.strip(),
+                "min_devices": min_devices, "window_seconds": window}
 
     def confirmation_marks(self) -> list[dict]:
         try:
@@ -604,7 +628,8 @@ class DoSyncHub:
                 built.append(RequireConfirmationPolicy(
                     actuator_types=m["actions"], device_ids=m.get("device_ids"),
                     even_in_emergency=m.get("even_in_emergency", False),
-                    reason=m.get("reason") or "Marked for confirmation by the operator"))
+                    reason=m.get("reason") or "Marked for confirmation by the operator",
+                    min_devices=m.get("min_devices", 1), window_seconds=m.get("window_seconds", 300)))
             except Exception:
                 log.warning("Ignoring an unreadable confirmation mark: %r", m)
         self._marks_cache = built
@@ -626,7 +651,8 @@ class DoSyncHub:
         kernel's (dosync/samuel/confirmation.py); the hub keeps the holds."""
         from .samuel import split_by_confirmation
         return split_by_confirmation(plan.actions, self._confirmation_policies(),
-                                     intent.urgency, self.registry.get)
+                                     intent.urgency, self.registry.get,
+                                     recent=self._recently_acted)
 
     def _confirmation_timeout(self) -> float:
         try:
@@ -634,7 +660,17 @@ class DoSyncHub:
         except ValueError:
             return 300.0
 
-    async def confirm_intent(self, intent_id: str, executor=None, operator: str = "operator"):
+    def _remember_hold_outcome(self, intent_id: str, outcome: dict) -> None:
+        """How a hold ended, for a consumer following it later (WoT queryaction)."""
+        self._hold_outcomes[intent_id] = {**outcome, "at": time.time()}
+        while len(self._hold_outcomes) > 1000:
+            self._hold_outcomes.pop(next(iter(self._hold_outcomes)))
+
+    def hold_outcome(self, intent_id: str) -> dict | None:
+        return self._hold_outcomes.get(intent_id)
+
+    async def confirm_intent(self, intent_id: str, executor=None, operator: str = "operator",
+                             only: list | None = None):
         """Execute the actions an intent held for human confirmation (G9).
 
         Caller MUST have verified the operator credential first (the REST layer
@@ -642,6 +678,10 @@ class DoSyncHub:
         and, when confirmed, the per-action results. Dispatches the held actions
         directly -- they already passed resolution, the oscillation guard and
         validation when the intent ran, and must not be re-held.
+
+        ``only`` (2026-10-17): a list of {device_id, action} to release; the other
+        held actions of this intent are denied in the same decision. A pair that
+        is not held raises ValueError and nothing changes.
         """
         pend = self._pending_confirmations.get(intent_id)
         if pend is None:
@@ -655,11 +695,30 @@ class DoSyncHub:
                 "intent": pend["intent_value"], "actions": held_desc,
                 "held_seconds": round(now - pend["created_at"], 1),
             })
+            self._remember_hold_outcome(intent_id, {"status": "failed", "error": "expired"})
             return {"status": "expired", "intent_id": intent_id, "actions": held_desc}
+        selected = list(pend["actions"])
+        dropped = []
+        if only is not None:
+            wanted = {(o.get("device_id"), o.get("action")) for o in only if isinstance(o, dict)}
+            held_pairs = {(a.device_id, a.action) for a in pend["actions"]}
+            unknown = wanted - held_pairs
+            if unknown or len(wanted) != len(only):
+                raise ValueError(f"not held on this intent: {sorted(map(list, unknown)) or 'malformed list'}")
+            selected = [a for a in pend["actions"] if (a.device_id, a.action) in wanted]
+            dropped = [a for a in pend["actions"] if (a.device_id, a.action) not in wanted]
         self._pending_confirmations.pop(intent_id, None)
+        if dropped:
+            self.audit_log.append({
+                "type": "confirmation_denied", "intent_id": intent_id,
+                "intent": pend["intent_value"], "operator": operator,
+                "actions": [{"device_id": a.device_id, "action": a.action} for a in dropped],
+                "partial": True, "held_seconds": round(now - pend["created_at"], 1),
+            })
+        held_desc = [{"device_id": a.device_id, "action": a.action} for a in selected]
         executor = executor or getattr(self, "default_executor", None) or getattr(self, "executor", None)
         from .models import ActionPlan as _APlan
-        plan = _APlan(intent_id=intent_id, actions=list(pend["actions"]), urgency=pend["intent"].urgency)
+        plan = _APlan(intent_id=intent_id, actions=selected, urgency=pend["intent"].urgency)
         executor = self.instrumented(executor)
         self._resolve_verify_bindings(plan, pend["intent"])
         results, failed, aborted, policy_applied = await self._execute_with_policy_cb(
@@ -670,12 +729,19 @@ class DoSyncHub:
             "actions": held_desc,
             "actions_simulated": sum(1 for r in results if getattr(r, "simulated", False)),
             "failed": failed, "held_seconds": round(now - pend["created_at"], 1),
+            **({"partial": True} if dropped else {}),
         })
+        out_results = [{"device_id": r.device_id, "action": r.action,
+                        "success": r.success, "simulated": getattr(r, "simulated", False),
+                        "response": getattr(r, "response", None)}
+                       for r in results]
+        self._remember_hold_outcome(intent_id, {
+            "status": "completed", "results": out_results,
+            "denied": [{"device_id": a.device_id, "action": a.action} for a in dropped]})
         return {"status": "confirmed", "intent_id": intent_id,
-                "results": [{"device_id": r.device_id, "action": r.action,
-                             "success": r.success, "simulated": getattr(r, "simulated", False)}
-                            for r in results],
-                "failed_devices": failed}
+                "results": out_results, "failed_devices": failed,
+                **({"denied": [{"device_id": a.device_id, "action": a.action} for a in dropped]}
+                   if dropped else {})}
 
     def deny_intent(self, intent_id: str, operator: str = "operator"):
         """Drop the actions an intent held for confirmation (G9). Caller MUST have
@@ -684,6 +750,7 @@ class DoSyncHub:
         if pend is None:
             return {"status": "not_found", "intent_id": intent_id}
         held_desc = [{"device_id": a.device_id, "action": a.action} for a in pend["actions"]]
+        self._remember_hold_outcome(intent_id, {"status": "failed", "error": "denied"})
         self.audit_log.append({
             "type": "confirmation_denied", "intent_id": intent_id,
             "intent": pend["intent_value"], "operator": operator, "actions": held_desc,
@@ -699,6 +766,7 @@ class DoSyncHub:
             return None
         if time.time() > pend["deadline"]:
             self._pending_confirmations.pop(intent_id, None)
+            self._remember_hold_outcome(intent_id, {"status": "failed", "error": "expired"})
             self.audit_log.append({
                 "type": "confirmation_expired", "intent_id": intent_id,
                 "intent": pend["intent_value"],

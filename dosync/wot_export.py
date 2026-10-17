@@ -38,6 +38,7 @@ TD_MEDIA_TYPE = "application/td+json"
 GOVERNED_OUTPUT = {
     "type": "object",
     "properties": {
+        "href": {"type": "string", "description": "status resource (queryaction) when not done"},
         "status": {"type": "string", "enum": ["done", "held_for_confirmation", "running"],
                    "description": "done: it ran. held_for_confirmation: the operator marked "
                                   "this action; a person releases it (HTTP 202). running: "
@@ -96,7 +97,14 @@ def manifest_to_td(m: CapabilityManifest, base: str = "https://dosync-hub.local:
             # long-running actions answer 202 with where to follow them
             "synchronous": a.execution_model == "instant",
             "forms": [{"href": f"{path}/actions/{name}", "op": "invokeaction",
-                       "htv:methodName": "POST", "contentType": "application/json"}],
+                       "htv:methodName": "POST", "contentType": "application/json"},
+                      # An invocation held for a person, or still running, is
+                      # followed at the status resource the 202 answer names
+                      # (WoT HTTP Basic Profile, asynchronous actions).
+                      {"href": f"{path}/actions/{name}/{{actionID}}", "op": "queryaction",
+                       "htv:methodName": "GET", "contentType": "application/json"}],
+            "uriVariables": {"actionID": {"type": "string",
+                                          "description": "intent_id returned by the invocation"}},
         }
         if a.params_schema:
             # The action's input IS its parameters -- exactly as declared, so a

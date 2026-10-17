@@ -1593,13 +1593,17 @@ async def wot_invoke_action(device_id: str, name: str, request: Request,
         await asyncio.sleep(0.05)
     entry = _intent_store.get(intent_id) or {}
     result = entry.get("result") or {}
+    status_href = f"/v1/things/{device_id}/actions/{name}/{intent_id}"
     if entry.get("status") == "pending" or not result:
-        return JSONResponse({"status": "running", "intent_id": intent_id,
-                             "follow": f"/v1/intent/{intent_id}"}, status_code=202)
+        return JSONResponse({"status": "running", "intent_id": intent_id, "href": status_href,
+                             "follow": f"/v1/intent/{intent_id}"}, status_code=202,
+                            headers={"Location": status_href})
     if result.get("held_for_confirmation"):
         return JSONResponse({"status": "held_for_confirmation", "intent_id": intent_id,
+                             "href": status_href,
                              "held": result["held_for_confirmation"],
-                             "pending": f"/v1/intents/{intent_id}/pending"}, status_code=202)
+                             "pending": f"/v1/intents/{intent_id}/pending"}, status_code=202,
+                            headers={"Location": status_href})
     if result.get("refused_proposals"):
         refused = result["refused_proposals"][0]
         return JSONResponse({"status": "refused", "intent_id": intent_id,
@@ -1623,6 +1627,48 @@ async def wot_invoke_action(device_id: str, name: str, request: Request,
     return JSONResponse({"status": "done", "intent_id": intent_id, "response": r.get("response"),
                          "simulated": r.get("simulated", False)},
                         headers={"X-DoSync-Intent-Id": intent_id})
+
+
+@app.get("/v1/things/{device_id}/actions/{name}/{intent_id}", tags=["WoT"],
+         summary="Status of an action invocation (WoT queryaction)")
+def wot_query_action(device_id: str, name: str, intent_id: str, auth: str = Depends(require_auth)):
+    """Follow an invocation that answered 202: held for a person, or running.
+    `status` is pending (held, waiting for a person), running, completed (with
+    `output`, the device's answer) or failed (with `error`: denied, expired,
+    refused, or the device's error)."""
+    held = hub.pending_confirmation(intent_id)
+    if held is not None:
+        return {"status": "pending", "intent_id": intent_id, "reason": "held_for_confirmation",
+                "held": held["actions"], "deadline": held["deadline"]}
+    outcome = hub.hold_outcome(intent_id)
+    if outcome is not None:
+        if outcome["status"] == "completed":
+            mine = [r for r in outcome.get("results") or [] if r["device_id"] == device_id]
+            if mine and mine[0].get("success"):
+                return {"status": "completed", "intent_id": intent_id,
+                        "output": {"status": "done", "intent_id": intent_id,
+                                   "response": mine[0].get("response"),
+                                   "simulated": mine[0].get("simulated", False)}}
+            denied = any(d["device_id"] == device_id for d in outcome.get("denied") or [])
+            return {"status": "failed", "intent_id": intent_id,
+                    "error": "denied" if denied else "device_failed"}
+        return {"status": "failed", "intent_id": intent_id, "error": outcome.get("error")}
+    entry = _intent_store.get(intent_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"No invocation '{intent_id}' is known to this hub")
+    if entry.get("status") == "pending":
+        return {"status": "running", "intent_id": intent_id}
+    result = entry.get("result") or {}
+    mine = [r for r in result.get("results") or [] if r["device_id"] == device_id]
+    if mine and mine[0].get("success"):
+        return {"status": "completed", "intent_id": intent_id,
+                "output": {"status": "done", "intent_id": intent_id,
+                           "response": mine[0].get("response"),
+                           "simulated": mine[0].get("simulated", False)}}
+    return {"status": "failed", "intent_id": intent_id,
+            "error": (result.get("blocked_by") or {}).get("reason")
+                     or ((result.get("refused_proposals") or [{}])[0].get("reason"))
+                     or (mine[0].get("error") if mine else "not_run")}
 
 
 @app.post("/v1/devices/register", tags=["Devices"])
@@ -2536,6 +2582,7 @@ def _require_operator(x_dosync_operator_token: str | None):
           summary="Release actions an intent held for human confirmation (G9)")
 async def confirm_intent_endpoint(
     intent_id: str,
+    request: Request,
     auth: str = Depends(require_auth),
     x_dosync_operator_token: str | None = Header(default=None),
 ):
@@ -2546,7 +2593,23 @@ async def confirm_intent_endpoint(
     `confirmed` or `expired` otherwise.
     """
     _require_operator(x_dosync_operator_token)
-    result = await hub.confirm_intent(intent_id, executor, operator="operator")
+    # Optional body {"actions": [{device_id, action}, ...]}: release only those;
+    # the intent's other held actions are denied in the same decision.
+    only = None
+    raw = await request.body()
+    if raw:
+        try:
+            body = json.loads(raw)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="body must be JSON")
+        if isinstance(body, dict) and "actions" in body:
+            only = body["actions"]
+            if not isinstance(only, list) or not only:
+                raise HTTPException(status_code=422, detail="'actions' must be a non-empty list")
+    try:
+        result = await hub.confirm_intent(intent_id, executor, operator="operator", only=only)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     if result["status"] == "not_found":
         raise HTTPException(status_code=404,
                             detail=f"No actions are held for confirmation on intent '{intent_id}'.")
@@ -2603,7 +2666,9 @@ async def list_confirmations(auth: str = Depends(require_auth)):
 def _mark_view(policy) -> dict:
     return {"actions": sorted(getattr(policy, "_actuator_types", []) or []),
             "device_ids": sorted(policy._device_ids) if getattr(policy, "_device_ids", None) else None,
-            "even_in_emergency": policy.even_in_emergency, "reason": policy.reason}
+            "even_in_emergency": policy.even_in_emergency, "reason": policy.reason,
+            "min_devices": getattr(policy, "min_devices", 1),
+            "window_seconds": getattr(policy, "window_seconds", 300)}
 
 
 @app.get("/v1/governance", tags=["Protocol"],
@@ -2673,6 +2738,9 @@ async def agent_connect_info(auth: str = Depends(require_auth)):
         "command": sys.executable,
         "args": ["-m", "dosync.mcp_server"],
         "mcp_installed": mcp_cli.mcp_installed(),
+        # The port the hub listens on: behind a proxy (Home Assistant's ingress)
+        # the page's own address is not one an agent can use.
+        "port": int(os.environ.get("DOSYNC_PORT", "47200")),
         "install_hint": mcp_cli._install_hint(),
         "client_config_paths": mcp_cli.client_config_paths(),
         "elsewhere": 'pipx install "dosync[mcp]"  then  dosync-mcp --print-config '

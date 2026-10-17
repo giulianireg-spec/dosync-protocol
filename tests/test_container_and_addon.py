@@ -80,3 +80,17 @@ def test_the_image_starts_through_the_container_entry_point():
     assert re.search(r'^CMD \["dosync-container"\]', dockerfile, re.M)
     assert "[mcp]" in dockerfile
     assert "DOSYNC_AUTH=false" not in re.sub(r"#.*", "", dockerfile), "auth must stay on in the image"
+
+
+def test_the_dashboard_works_under_a_path_prefix_and_the_addon_declares_ingress():
+    """Home Assistant's ingress serves the dashboard at /api/hassio_ingress/<token>/.
+    The page used to address the root of the host, so every call missed the hub.
+    (Checked end to end through a prefix proxy in a browser on 2026-10-17.)"""
+    import yaml
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    html = (root / "dosync" / "dashboard.html").read_text(encoding="utf-8")
+    assert "const BASE = window.location.pathname" in html
+    assert "${window.location.host}${BASE}" in html
+    cfg = yaml.safe_load((root / "homeassistant-addon" / "config.yaml").read_text())
+    assert cfg["ingress"] is True and cfg["ingress_port"] == 47200

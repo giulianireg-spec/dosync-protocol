@@ -308,6 +308,15 @@ governed exactly like an agent's (SAMUEL G1–G9):
   `refused` or `not_run` with the reason when SAMUEL or a policy stopped it, 502
   when the device failed, and 404 for an action the device does not declare --
   which is also absent from its TD.
+- **A 202 names where to follow it** (WoT `queryaction`, added 2026-10-17). A
+  `held_for_confirmation` or `running` answer carries `href` and a `Location`
+  header: `v1/things/{id}/actions/{name}/{intent_id}`. `GET` on it answers the
+  action's status as WoT defines it -- `pending` while a person has not decided,
+  `running`, `completed` with the governed `output`, or `failed` with an `error`
+  (`denied`, `expired`, `device_failed`, or the policy's or SAMUEL's reason) --
+  and 404 for an id the hub does not know. Each action's TD carries this as a
+  second form (`op: queryaction`, `uriVariables.actionID`). Reading it needs the
+  hub credential; it releases nothing.
 - Each sensor becomes a read-only, observable property: `GET
   v1/things/{id}/properties/{name}` answers the last value the device reported
   (404 until it reports one); observation and events use the hub's WebSocket.
@@ -716,7 +725,8 @@ PUT  /v1/governance/confirmation-marks    → replace the hub's marks (operator 
   deployment policy file (read-only to the hub), the reference hub keeps
   *confirmation marks* in its own store: `PUT /v1/governance/confirmation-marks`
   with `{"marks": [{"actions": [...], "device_ids": [...] | null,
-  "even_in_emergency": bool, "reason": "..."}]}` replaces them, and marks ADD to
+  "even_in_emergency": bool, "reason": "...", "min_devices": n,
+  "window_seconds": s}]}` replaces them, and marks ADD to
   the file's policies. Changing marks always needs the operator credential —
   whatever `DOSYNC_CONFIGURATION_CREDENTIAL` says, since removing a mark removes
   a restriction — and is audited (`confirmation_marks_changed`).
@@ -724,6 +734,20 @@ PUT  /v1/governance/confirmation-marks    → replace the hub's marks (operator 
 - **Connecting an agent** (reference hub, non-normative). `GET /v1/agent/connect`
   returns the command that starts this installation's MCP server, so a console
   can write an MCP client's configuration; it never returns a credential.
+- **Confirming part of a hold** (added 2026-10-17). `confirm` MAY carry
+  `{"actions": [{"device_id": ..., "action": ...}, ...]}`: only those run, and
+  the rest of that intent's hold is denied and audited as such
+  (`confirmation_denied` with `partial: true`). A pair the hold does not contain
+  is `422` and nothing changes; without a body every held action runs, as
+  before. A person who wants nine of ten lights off does not have to deny all
+  ten and ask the agent again.
+- **Holding only from a number of devices** (added 2026-10-17). A mark MAY set
+  `min_devices` (default 1) and `window_seconds` (default 300, at most 86400):
+  it then holds only when the plan, together with what the hub already ran on
+  devices the mark covers within the window, reaches `min_devices` distinct
+  devices. One light off runs; the whole house dark waits for a person. The
+  window closes the path of asking for the same thing one device at a time.
+  An action that ran before the threshold was reached is not undone.
 - `confirm` returns `confirmed` with the per-action results, or `expired` if the
   hold aged out (`DOSYNC_CONFIRMATION_TIMEOUT`, default 300 s), or `404` if
   nothing is held for that intent (never held, already released, or already
@@ -1020,7 +1044,7 @@ log, not evidence.
 | `intent_pending_confirmation` | A custom policy returned the engine's whole-plan `CONFIRM` (legacy) |
 | `actions_held_for_confirmation` | One or more actions were withheld for a human (rule 9), listing each held `{device_id, action, reason}` |
 | `confirmation_confirmed` | A held action was released by an operator, with the operator marker and how long it was held |
-| `confirmation_denied` | A held action was dropped by an operator |
+| `confirmation_denied` | A held action was dropped by an operator, or left out when an operator confirmed part of a hold (`partial: true`) |
 | `confirmation_expired` | A held action aged out unreleased (`DOSYNC_CONFIRMATION_TIMEOUT`) |
 | `policy_error` | An operator policy raised instead of answering. Outside an emergency the plan is blocked (`reason` begins `policy_error`, SAMUEL R11); in an emergency it is recorded and does not block. Lists each failing policy (added 2026-10-12) |
 | `confirmation_marks_changed` | The operator replaced the confirmation marks kept by the hub (§7.3.2), with `before` and `after` |
@@ -1123,6 +1147,7 @@ server grows past this list.
 | GET | `/v1/things` | Every governed device as a W3C WoT Thing Description (§5.10) |
 | GET | `/v1/things/{device_id}` | One device's Thing Description (`application/td+json`) |
 | POST | `/v1/things/{device_id}/actions/{name}` | Invoke a Thing's action, governed as `operate_device` (§5.10) |
+| GET | `/v1/things/{device_id}/actions/{name}/{intent_id}` | WoT `queryaction`: status of an action that answered 202 (§5.10) |
 | GET | `/v1/things/{device_id}/properties/{name}` | The last value a Thing's property reported |
 
 ## 7.10 Signed heartbeats

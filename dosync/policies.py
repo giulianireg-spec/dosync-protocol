@@ -157,11 +157,30 @@ class RequireConfirmationPolicy(BasePolicy):
     """
 
     def __init__(self, actuator_types: list[str], device_ids: list[str] | None = None,
-                 even_in_emergency: bool = False, reason: str = ""):
+                 even_in_emergency: bool = False, reason: str = "",
+                 min_devices: int = 1, window_seconds: int = 300):
         self._actuator_types = set(actuator_types)
         self._device_ids = set(device_ids) if device_ids else None  # None = any device
         self._even_in_emergency = bool(even_in_emergency)
         self._reason = reason or f"Confirmation required for: {actuator_types}"
+        # Threshold (2026-10-17): hold only when this mark would act on at least
+        # min_devices devices -- counting the ones it let act on in the last
+        # window_seconds, so splitting one large request into several small ones
+        # does not slip under it. 1 (default) holds every marked action.
+        if not isinstance(min_devices, int) or min_devices < 1:
+            raise ValueError("min_devices must be an integer of 1 or more")
+        if not isinstance(window_seconds, int) or not 1 <= window_seconds <= 86400:
+            raise ValueError("window_seconds must be an integer between 1 and 86400")
+        self._min_devices = min_devices
+        self._window_seconds = window_seconds
+
+    @property
+    def min_devices(self) -> int:
+        return self._min_devices
+
+    @property
+    def window_seconds(self) -> int:
+        return self._window_seconds
 
     @property
     def name(self) -> str:

@@ -19,7 +19,12 @@ host_network: true
 # The bridge reaches Home Assistant through the Supervisor with the add-on's
 # own token: nobody creates a long-lived token.
 homeassistant_api: true
-webui: "http://[HOST]:[PORT:47200]"
+# The dashboard in Home Assistant's sidebar (ingress): Home Assistant proxies it
+# and handles who may open it; the hub still asks for its own token.
+ingress: true
+ingress_port: 47200
+panel_icon: mdi:shield-check
+panel_title: DoSync
 ports:
   47200/tcp: 47200
 ports_description:
