@@ -14,6 +14,13 @@ import json
 import os
 import sys
 
+# The hub's status text carries ✓; on Windows a captured stdout is cp1252.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError, OSError):
+        pass
+
 
 async def main(cfg: dict) -> int:
     from mcp import ClientSession, StdioServerParameters
