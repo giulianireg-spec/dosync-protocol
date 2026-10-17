@@ -94,3 +94,18 @@ def test_the_dashboard_works_under_a_path_prefix_and_the_addon_declares_ingress(
     assert "${window.location.host}${BASE}" in html
     cfg = yaml.safe_load((root / "homeassistant-addon" / "config.yaml").read_text())
     assert cfg["ingress"] is True and cfg["ingress_port"] == 47200
+
+
+def test_every_file_in_the_repository_can_be_checked_out_on_windows():
+    """A cover image named with a '?' stopped the Windows CI job at checkout."""
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    try:
+        names = subprocess.run(["git", "ls-files"], cwd=root, capture_output=True,
+                               text=True, check=True).stdout.splitlines()
+    except Exception:
+        import pytest
+        pytest.skip("not a git checkout")
+    bad = [n for n in names if any(c in n for c in '<>:"|?*\\')]
+    assert not bad, bad

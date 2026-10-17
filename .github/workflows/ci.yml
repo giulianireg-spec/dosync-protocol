@@ -607,8 +607,10 @@ jobs:
     defaults:
       run:
         # Git Bash on Windows: the same script everywhere, so a difference in
-        # the result is a difference in DoSync, not in the test.
-        shell: bash
+        # the result is a difference in DoSync, not in the test. Not plain
+        # `bash`: GitHub adds pipefail to it, and `curl | grep -q` then fails
+        # whenever grep stops reading first.
+        shell: bash -e {0}
 
     steps:
       - uses: actions/checkout@v4
