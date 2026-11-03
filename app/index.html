@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="es" data-lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DoSync App — tu casa, en tus palabras (beta)</title>
+<meta name="description" content="DoSync App: app gratis para Android que maneja tu casa con tus palabras. El teléfono es el hub. Beta abierta: descárgala y cuéntanos cómo te fue.">
+<link rel="canonical" href="https://dosync.dev/app/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="DoSync">
+<meta property="og:title" content="DoSync App — tu casa, en tus palabras (beta abierta)">
+<meta property="og:description" content="App gratis para Android: luces, aires, teles y electrodomésticos de más de 80 marcas, con tus palabras. El teléfono es el hub.">
+<meta property="og:image" content="https://dosync.dev/app/img/01-inicio.jpg">
+<meta property="og:url" content="https://dosync.dev/app/">
+<meta name="twitter:card" content="summary">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{
+  --purple:#534AB7;--purple-light:#1A1830;--purple-mid:#AFA9EC;--purple-dark:#7F77DD;
+  --teal:#1D9E75;--teal-light:#0A2018;--amber:#E0A84A;--amber-light:#241B0B;
+  --text:#F0EEE8;--text-muted:#888780;--text-faint:#5F5E5A;
+  --border:#2C2C2A;--bg:#0D0D0C;--bg-subtle:#111110;--bg-card:#1A1A18;
+  --font-sans:'DM Sans',sans-serif;--font-mono:'DM Mono',monospace;--font-display:'DM Serif Display',serif;
+  --radius:8px;--radius-lg:12px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:var(--font-sans);color:var(--text);background:var(--bg);font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
+a{color:var(--purple-mid);text-decoration:none}
+a:hover{color:var(--text)}
+.skip-link{position:absolute;left:-999px;top:8px;background:var(--purple);color:#fff;padding:8px 12px;border-radius:var(--radius)}
+.skip-link:focus{left:8px}
+
+/* Idioma: se muestra solo el bloque del idioma elegido. */
+html[data-lang="es"] [lang="en"]:not(html), html[data-lang="en"] [lang="es"]:not(html){display:none !important}
+
+nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 40px;height:60px;background:rgba(13,13,12,0.92);border-bottom:0.5px solid var(--border);backdrop-filter:blur(8px)}
+.nav-logo{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:500;color:var(--text)}
+.nav-logo svg{width:22px;height:22px}
+.nav-links{display:flex;gap:24px;align-items:center}
+.nav-links a{font-size:14px;color:var(--text-muted)}
+.nav-links a:hover,.nav-links a.active{color:var(--text)}
+.lang-switch{display:inline-flex;border:0.5px solid var(--border);border-radius:20px;overflow:hidden}
+.lang-switch button{background:none;border:none;color:var(--text-muted);font:500 12px var(--font-sans);padding:5px 10px;cursor:pointer}
+.lang-switch button[aria-pressed="true"]{background:var(--purple-light);color:var(--purple-mid)}
+
+.wrap{max-width:1100px;margin:0 auto;padding:0 40px}
+section{padding:72px 0;border-bottom:0.5px solid var(--border)}
+.eyebrow{font-size:12px;font-weight:500;color:var(--purple-dark);letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px}
+h1{font-family:var(--font-display);font-size:56px;line-height:1.05;letter-spacing:-.015em;margin-bottom:20px;font-weight:400}
+h1 em{font-style:italic;color:var(--purple-mid)}
+h2{font-family:var(--font-display);font-size:34px;line-height:1.15;margin-bottom:16px;font-weight:400}
+h3{font-size:16px;font-weight:500;margin-bottom:6px}
+.lead{font-size:18px;color:var(--text-muted);max-width:620px;line-height:1.65}
+p{color:var(--text-muted)}
+
+.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:56px;align-items:center;padding:80px 0 72px}
+.beta-pill{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:500;color:var(--amber);background:var(--amber-light);border:0.5px solid #5A4421;padding:4px 12px;border-radius:20px;margin-bottom:20px}
+.beta-pill::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--amber)}
+.ctas{display:flex;gap:12px;flex-wrap:wrap;margin-top:32px}
+.btn{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:500;padding:12px 20px;border-radius:var(--radius);border:0.5px solid var(--border);color:var(--text);background:var(--bg-card)}
+.btn:hover{border-color:var(--purple-dark);color:var(--text)}
+.btn.primary{background:var(--purple);border-color:var(--purple);color:#fff}
+.btn.primary:hover{background:#4A42A6}
+.btn[aria-disabled="true"]{opacity:.55;cursor:default;pointer-events:none}
+.btn small{font-size:12px;font-weight:400;color:var(--text-muted)}
+.cta-note{font-size:13px;color:var(--text-faint);margin-top:14px}
+.phone{justify-self:center;width:280px;border-radius:28px;border:0.5px solid var(--border);overflow:hidden;box-shadow:0 30px 80px rgba(83,74,183,.18)}
+.phone img{display:block;width:100%;height:auto}
+
+.callout{background:var(--amber-light);border:0.5px solid #5A4421;border-radius:var(--radius-lg);padding:22px 26px;display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start}
+.callout .icon{font-size:22px;line-height:1.2}
+.callout h3{color:var(--amber)}
+.callout p{color:#C9B898}
+
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:36px}
+.card{background:var(--bg-card);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:22px}
+.card .k{font-family:var(--font-mono);font-size:12px;color:var(--purple-dark);margin-bottom:10px}
+.card p{font-size:14px;line-height:1.6}
+.say{font-family:var(--font-mono);font-size:13px;color:var(--purple-mid);background:var(--purple-light);border:0.5px solid #3A3480;border-radius:var(--radius);padding:3px 8px;display:inline-block;margin:2px 4px 2px 0}
+
+.shots{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:36px}
+.shots figure{border-radius:18px;overflow:hidden;border:0.5px solid var(--border);background:var(--bg-card)}
+.shots img{display:block;width:100%;height:auto}
+.shots figcaption{font-size:12px;color:var(--text-faint);padding:10px 12px}
+
+.brands{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:32px}
+.brands .card p{font-size:13.5px}
+
+.steps{counter-reset:s;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:32px}
+.steps .card{position:relative;padding-top:44px}
+.steps .card::before{counter-increment:s;content:counter(s);position:absolute;top:16px;left:22px;font-family:var(--font-mono);font-size:12px;color:var(--purple-dark);border:0.5px solid #534AB7;border-radius:20px;padding:1px 9px}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:32px}
+.list{list-style:none;margin-top:10px}
+.list li{font-size:14px;color:var(--text-muted);padding:6px 0;border-bottom:0.5px solid var(--border)}
+.list li:last-child{border-bottom:none}
+
+footer{padding:40px 0;background:var(--bg-subtle)}
+.footer-inner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px}
+.footer-links{display:flex;gap:24px;flex-wrap:wrap}
+.footer-links a{font-size:13px;color:var(--text-muted)}
+.footer-copy{font-size:12px;color:var(--text-faint)}
+
+@media(max-width:900px){
+  nav{padding:0 16px}
+  .nav-links a.hide-sm{display:none}
+  .nav-links{gap:14px}
+  .wrap{padding:0 16px}
+  .hero{grid-template-columns:1fr;gap:40px;padding:48px 0}
+  h1{font-size:38px}
+  h2{font-size:27px}
+  .grid,.brands,.steps,.two{grid-template-columns:1fr}
+  .shots{grid-template-columns:repeat(2,1fr)}
+  .phone{width:240px}
+  section{padding:52px 0}
+}
+</style>
+</head>
+<body>
+<a href="#main" class="skip-link"><span lang="es">Ir al contenido</span><span lang="en">Skip to content</span></a>
+
+<nav>
+  <a class="nav-logo" href="/">
+    <svg viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="11" cy="11" r="3" fill="#534AB7"/>
+      <circle cx="3" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
+      <circle cx="19" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
+      <circle cx="3" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
+      <circle cx="19" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
+      <line x1="5" y1="6" x2="9" y2="10" stroke="#AFA9EC" stroke-width="1"/>
+      <line x1="17" y1="6" x2="13" y2="10" stroke="#AFA9EC" stroke-width="1"/>
+      <line x1="5" y1="16" x2="9" y2="12" stroke="#AFA9EC" stroke-width="1"/>
+      <line x1="17" y1="16" x2="13" y2="12" stroke="#AFA9EC" stroke-width="1"/>
+    </svg>
+    DoSync
+  </a>
+  <div class="nav-links">
+    <a href="/" class="hide-sm"><span lang="es">Protocolo</span><span lang="en">Protocol</span></a>
+    <a href="/concepts" class="hide-sm"><span lang="es">Conceptos</span><span lang="en">Concepts</span></a>
+    <a href="/app/" class="active">DoSync App</a>
+    <a href="https://github.com/giulianireg-spec/dosync-app-beta" class="hide-sm">GitHub ↗</a>
+    <span class="lang-switch" role="group" aria-label="Idioma / Language">
+      <button type="button" data-set-lang="es" aria-pressed="true">ES</button>
+      <button type="button" data-set-lang="en" aria-pressed="false">EN</button>
+    </span>
+  </div>
+</nav>
+
+<main id="main">
+<div class="wrap">
+
+  <!-- Portada -->
+  <div class="hero">
+    <div>
+      <span class="beta-pill"><span lang="es">Beta abierta</span><span lang="en">Open beta</span></span>
+      <h1 lang="es">Tu casa, <em>en tus palabras</em>.</h1>
+      <h1 lang="en">Your home, <em>in your own words</em>.</h1>
+      <p class="lead" lang="es">DoSync App es una app gratis para Android que maneja luces, aires, teles, cerraduras y electrodomésticos diciendo lo que quieres. El teléfono es el hub: no hay que comprar otro aparato ni crear una cuenta nuestra.</p>
+      <p class="lead" lang="en">DoSync App is a free Android app that runs your lights, ACs, TVs, locks and appliances by saying what you want. Your phone is the hub: no extra device to buy, no account of ours to create.</p>
+      <div class="ctas">
+        <a class="btn primary" href="https://github.com/giulianireg-spec/dosync-app-beta/releases/latest">
+          <span lang="es">Descargar la beta</span><span lang="en">Download the beta</span> <small>APK · Android 8+</small>
+        </a>
+        <a class="btn" aria-disabled="true" title="Muy pronto · Coming soon">
+          Google Play <small><span lang="es">prueba abierta · muy pronto</span><span lang="en">open testing · coming soon</span></small>
+        </a>
+        <a class="btn" href="https://github.com/giulianireg-spec/dosync-app-beta"><span lang="es">Ver el repositorio</span><span lang="en">View the repository</span> ↗</a>
+      </div>
+      <p class="cta-note" lang="es">Gratis. Con IA opcional: la tuya (Claude, Gemini o ChatGPT) o Gemini Nano en el teléfono.</p>
+      <p class="cta-note" lang="en">Free. Optional AI: your own (Claude, Gemini or ChatGPT) or on-device Gemini Nano.</p>
+    </div>
+    <div class="phone"><img src="img/01-inicio.jpg" width="720" height="1280" alt="Pantalla de inicio de DoSync App: escribir o decir una orden"></div>
+  </div>
+
+  <!-- Aviso de beta -->
+  <div class="callout" role="note">
+    <div class="icon" aria-hidden="true">🧪</div>
+    <div lang="es">
+      <h3>Está en beta, y tu opinión vale oro</h3>
+      <p>La app ya funciona en casas reales, pero la seguimos probando con muchas marcas y aparatos: puede haber errores, y algunas marcas están probadas solo con simuladores. Cualquier opinión se agradece muchísimo: lo que funcionó, lo que no, y lo que te gustaría que haga. <a href="#opiniones">Cómo contarnos</a>.</p>
+    </div>
+    <div lang="en">
+      <h3>It's a beta, and your feedback is gold</h3>
+      <p>The app already works in real homes, but we're still testing it with many brands and devices: expect rough edges, and some brands are tested only against simulators. Any feedback is truly appreciated: what worked, what didn't, and what you'd like it to do. <a href="#opiniones">How to tell us</a>.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Qué es -->
+<section id="que-es">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="es">El proyecto</span><span lang="en">The project</span></div>
+    <h2 lang="es">Un asistente de verdad para la casa</h2>
+    <h2 lang="en">A real assistant for the home</h2>
+    <p class="lead" lang="es">Cada marca trae su app, y la casa termina repartida en diez. DoSync junta todo en un solo lugar y lo maneja con lenguaje común. Detrás está el <a href="/">protocolo abierto DoSync</a>: la IA propone, y las reglas de la casa deciden qué se hace y qué espera tu confirmación.</p>
+    <p class="lead" lang="en">Every brand ships its own app, and the home ends up split across ten of them. DoSync brings it all together and runs it in plain language. Underneath is the <a href="/">open DoSync protocol</a>: the AI proposes, and the home's rules decide what runs and what waits for your confirmation.</p>
+    <div class="grid">
+      <div class="card">
+        <div class="k">01</div>
+        <h3 lang="es">Dile lo que quieres</h3><h3 lang="en">Say what you want</h3>
+        <p lang="es"><span class="say">apagá todas las luces</span><span class="say">poné el aire a 24</span> Entiende 6 idiomas en el teléfono, gratis y sin IA.</p>
+        <p lang="en"><span class="say">turn off all the lights</span><span class="say">set the AC to 24</span> Understands 6 languages on the phone, free and without AI.</p>
+      </div>
+      <div class="card">
+        <div class="k">02</div>
+        <h3 lang="es">Lo complejo, con IA</h3><h3 lang="en">The complex, with AI</h3>
+        <p lang="es"><span class="say">poné el último video de Luisito Comunica</span> Busca en internet, encadena pasos, programa temporizadores y reglas.</p>
+        <p lang="en"><span class="say">play that channel's latest video on the TV</span> Searches the web, chains steps, schedules timers and rules.</p>
+      </div>
+      <div class="card">
+        <div class="k">03</div>
+        <h3 lang="es">Solo, aunque cierres la app</h3><h3 lang="en">On its own, even with the app closed</h3>
+        <p lang="es">Escenas y rutinas a una hora, al llegar o irte de casa, o cuando algo cambia: <span class="say">si pasa de 28°, prendé el aire</span></p>
+        <p lang="en">Scenes and routines at a time, when you arrive or leave, or when something changes: <span class="say">if it's above 28°, turn on the AC</span></p>
+      </div>
+      <div class="card">
+        <div class="k">04</div>
+        <h3 lang="es">Encuentra tus aparatos</h3><h3 lang="en">Finds your devices</h3>
+        <p lang="es">Busca en tu WiFi y por Bluetooth, y una guía por marca te dice qué hacer en cada caso.</p>
+        <p lang="en">Scans your Wi-Fi and Bluetooth, and a per-brand guide tells you what to do in each case.</p>
+      </div>
+      <div class="card">
+        <div class="k">05</div>
+        <h3 lang="es">También lo viejo</h3><h3 lang="en">Older gear too</h3>
+        <p lang="es">Aires y teles con control remoto, con el emisor infrarrojo del teléfono o un Broadlink: cientos de modelos.</p>
+        <p lang="en">ACs and TVs with a remote, through the phone's IR blaster or a Broadlink: hundreds of models.</p>
+      </div>
+      <div class="card">
+        <div class="k">06</div>
+        <h3 lang="es">Lo delicado, con permiso</h3><h3 lang="en">Sensitive things ask first</h3>
+        <p lang="es">Abrir una cerradura o el portón, prender un horno: siempre esperan tu confirmación, venga la orden de donde venga.</p>
+        <p lang="en">Unlocking a door, opening the gate, turning on an oven: always wait for your confirmation, wherever the command came from.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Capturas -->
+<section id="capturas">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="es">Así se ve</span><span lang="en">What it looks like</span></div>
+    <h2 lang="es">Simple a propósito</h2>
+    <h2 lang="en">Simple on purpose</h2>
+    <div class="shots">
+      <figure><img src="img/01-inicio.jpg" width="720" height="1280" loading="lazy" alt="Inicio"><figcaption><span lang="es">Escribe o dicta una orden</span><span lang="en">Type or say a command</span></figcaption></figure>
+      <figure><img src="img/04-dispositivos.jpg" width="720" height="1280" loading="lazy" alt="Dispositivos"><figcaption><span lang="es">Lo que encontró en tu casa</span><span lang="en">What it found at home</span></figcaption></figure>
+      <figure><img src="img/03-controles.jpg" width="720" height="1280" loading="lazy" alt="Controles"><figcaption><span lang="es">Los controles de cada aparato</span><span lang="en">Each device's controls</span></figcaption></figure>
+      <figure><img src="img/02-rutinas.jpg" width="720" height="1280" loading="lazy" alt="Rutinas"><figcaption><span lang="es">Rutinas que se hacen solas</span><span lang="en">Routines that run themselves</span></figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- Marcas -->
+<section id="marcas">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="es">Compatibilidad</span><span lang="en">Compatibility</span></div>
+    <h2 lang="es">Más de 80 marcas, en América y Europa</h2>
+    <h2 lang="en">80+ brands, across the Americas and Europe</h2>
+    <p class="lead" lang="es">Muchas por tu WiFi, sin internet; otras con la cuenta de la marca. La guía de la app muestra primero las más comunes en tu país.</p>
+    <p class="lead" lang="en">Many over your Wi-Fi, without internet; others through the brand's account. The in-app guide shows the most common brands in your country first.</p>
+    <div class="brands">
+      <div class="card"><h3 lang="es">Luces y enchufes</h3><h3 lang="en">Lights and plugs</h3><p>Philips Hue · WiZ · TP-Link Kasa / Tapo · Shelly · Sonoff · Tasmota · Yeelight · Govee · LIFX · Nanoleaf · Tuya / Smart Life · Belkin Wemo · IKEA · deCONZ</p></div>
+      <div class="card"><h3 lang="es">Teles y audio</h3><h3 lang="en">TVs and audio</h3><p>Samsung · LG · Philips · Android TV / Google TV · Fire TV · Roku · Vizio · Chromecast · Sonos · Denon / Marantz · Yamaha · Onkyo</p></div>
+      <div class="card"><h3 lang="es">Clima</h3><h3 lang="en">Climate</h3><p><span lang="es">Aires con control remoto</span><span lang="en">ACs with a remote</span> · Gree · Daikin · tado° · Netatmo · Google Nest · Bosch Smart Home · Homematic · FRITZ!DECT</p></div>
+      <div class="card"><h3 lang="es">Electrodomésticos</h3><h3 lang="en">Appliances</h3><p>Bosch / Siemens (Home Connect) · Electrolux / AEG · Miele · LG ThinQ · Samsung SmartThings · Roomba · Xiaomi</p></div>
+      <div class="card"><h3 lang="es">Puertas y persianas</h3><h3 lang="en">Doors and blinds</h3><p>Nuki · Tedee · Somfy TaHoma · Hunter Douglas PowerView · Legrand / BTicino · SwitchBot</p></div>
+      <div class="card"><h3 lang="es">Y todo lo de tu sistema</h3><h3 lang="en">Plus your own system</h3><p>Home Assistant · Zigbee2MQTT · SmartThings · ESPHome</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- Cómo probarla -->
+<section id="probar">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="es">Beta abierta</span><span lang="en">Open beta</span></div>
+    <h2 lang="es">Cómo probarla</h2>
+    <h2 lang="en">How to try it</h2>
+    <div class="steps">
+      <div class="card">
+        <h3 lang="es">Bájala de GitHub</h3><h3 lang="en">Get it from GitHub</h3>
+        <p lang="es">En <a href="https://github.com/giulianireg-spec/dosync-app-beta/releases/latest">la última versión</a>, baja <code>DoSync-x.y.z.apk</code> en tu Android (8.0 o más nuevo) y ábrelo. Te va a pedir permiso para instalar desde ese origen.</p>
+        <p lang="en">From <a href="https://github.com/giulianireg-spec/dosync-app-beta/releases/latest">the latest version</a>, download <code>DoSync-x.y.z.apk</code> on your Android phone (8.0 or newer) and open it. It will ask permission to install from that source.</p>
+      </div>
+      <div class="card">
+        <h3 lang="es">O únete en Google Play</h3><h3 lang="en">Or join on Google Play</h3>
+        <p lang="es">La prueba abierta de Google Play llega muy pronto: el botón de arriba se activa cuando esté lista. Si ya la tienes desde GitHub, desinstálala antes (están firmadas distinto).</p>
+        <p lang="en">Google Play open testing is coming soon: the button above turns on when it's ready. If you installed it from GitHub, uninstall that one first (they're signed differently).</p>
+      </div>
+      <div class="card">
+        <h3 lang="es">Agrega tu casa</h3><h3 lang="en">Add your home</h3>
+        <p lang="es">Toca "Buscar en mi WiFi", o elige tu marca en la guía. Después escribe o dicta lo que quieras.</p>
+        <p lang="en">Tap "Search my Wi-Fi", or pick your brand in the guide. Then type or say what you want.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Opiniones -->
+<section id="opiniones">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="es">Tu opinión</span><span lang="en">Your feedback</span></div>
+    <h2 lang="es">Cuéntanos cómo te fue</h2>
+    <h2 lang="en">Tell us how it went</h2>
+    <p class="lead" lang="es">Es una beta: lo que nos cuentes define qué marcas se suman y qué se mejora primero. Gracias por tomarte el tiempo.</p>
+    <p class="lead" lang="en">It's a beta: what you tell us decides which brands come next and what gets fixed first. Thanks for taking the time.</p>
+    <div class="two">
+      <div class="card">
+        <h3 lang="es">En GitHub</h3><h3 lang="en">On GitHub</h3>
+        <ul class="list">
+          <li><a href="https://github.com/giulianireg-spec/dosync-app-beta/issues/new?template=opinion.yml"><span lang="es">💬 Contar cómo te fue</span><span lang="en">💬 Share your experience</span></a></li>
+          <li><a href="https://github.com/giulianireg-spec/dosync-app-beta/issues/new?template=error.yml"><span lang="es">🐞 Avisar de un error</span><span lang="en">🐞 Report a bug</span></a></li>
+          <li><a href="https://github.com/giulianireg-spec/dosync-app-beta/issues/new?template=marca.yml"><span lang="es">🔌 Pedir una marca o aparato</span><span lang="en">🔌 Request a brand or device</span></a></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 lang="es">Sin GitHub</h3><h3 lang="en">Without GitHub</h3>
+        <ul class="list">
+          <li><a href="mailto:giulianireg@gmail.com?subject=DoSync%20App%20beta">✉️ giulianireg@gmail.com</a></li>
+          <li lang="es">Desde la app: Ajustes → reportar una respuesta rara de la IA.</li>
+          <li lang="en">From the app: Settings → report an odd AI answer.</li>
+          <li lang="es">Para no compartir de más: no incluyas contraseñas, claves ni tu dirección.</li>
+          <li lang="en">Please don't include passwords, keys or your address.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Privacidad -->
+<section id="privacidad">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="es">Privacidad</span><span lang="en">Privacy</span></div>
+    <h2 lang="es">Tus datos se quedan en tu teléfono</h2>
+    <h2 lang="en">Your data stays on your phone</h2>
+    <p class="lead" lang="es">DoSync no tiene servidores que reciban tus datos ni crea cuentas. Las claves de tus aparatos y cuentas quedan cifradas en el teléfono, y casi todo funciona por tu WiFi, sin internet. <a href="https://giulianireg-spec.github.io/dosync-adapters/privacidad/">Política de privacidad</a>.</p>
+    <p class="lead" lang="en">DoSync has no servers that receive your data and creates no accounts. Your device and account keys are encrypted on the phone, and most things work over your Wi-Fi, without internet. <a href="https://giulianireg-spec.github.io/dosync-adapters/privacy/">Privacy policy</a>.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap footer-inner">
+    <div class="footer-links">
+      <a href="/"><span lang="es">Protocolo DoSync</span><span lang="en">DoSync Protocol</span></a>
+      <a href="https://github.com/giulianireg-spec/dosync-app-beta">DoSync App beta ↗</a>
+      <a href="https://giulianireg-spec.github.io/dosync-adapters/privacidad/"><span lang="es">Privacidad</span><span lang="en">Privacy</span></a>
+      <a href="mailto:giulianireg@gmail.com"><span lang="es">Contacto</span><span lang="en">Contact</span></a>
+    </div>
+    <div class="footer-copy">© 2026 Rodrigo Giuliani · <span lang="es">DoSync App es gratis; su código no es público.</span><span lang="en">DoSync App is free; its source code is not public.</span></div>
+  </div>
+</footer>
+
+<script>
+// Idioma: ?lang=en, lo elegido antes, o el del navegador (español si empieza con "es").
+(function () {
+  var root = document.documentElement;
+  var pick = function (l) {
+    root.setAttribute('data-lang', l);
+    root.lang = l;
+    document.querySelectorAll('[data-set-lang]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-set-lang') === l)); });
+    try { localStorage.setItem('dosync-app-lang', l); } catch (e) {}
+  };
+  var q = new URLSearchParams(location.search).get('lang');
+  var saved = null;
+  try { saved = localStorage.getItem('dosync-app-lang'); } catch (e) {}
+  var nav = (navigator.language || 'en').toLowerCase().indexOf('es') === 0 ? 'es' : 'en';
+  pick(q === 'es' || q === 'en' ? q : saved || nav);
+  document.querySelectorAll('[data-set-lang]').forEach(function (b) { b.addEventListener('click', function () { pick(b.getAttribute('data-set-lang')); }); });
+})();
+</script>
+</body>
+</html>
