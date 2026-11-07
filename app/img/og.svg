@@ -1,0 +1,49 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <!-- Source of og.png, the image shown when dosync.dev/app is shared. -->
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800;900&amp;display=swap');
+    .sans{font-family:'Archivo',sans-serif}
+  </style>
+  <rect width="1200" height="630" fill="#E4E2DD"/>
+
+  <!-- Logo C and wordmark -->
+  <rect x="80" y="64" width="64" height="64" rx="14" fill="#1E1E1C"/>
+  <g transform="translate(80.5 65)">
+    <path d="M14 10h14c13 0 21 8 21 21s-8 21-21 21H14z" fill="#F4F3EF"/>
+    <circle cx="29" cy="31" r="8" fill="#F26B1D"/>
+  </g>
+  <text x="162" y="111" class="sans" font-size="46" font-weight="800" letter-spacing="-2.3" fill="#1E1E1C">d</text>
+  <circle cx="204" cy="97" r="12" fill="none" stroke="#1E1E1C" stroke-width="7"/>
+  <circle cx="204" cy="97" r="4.5" fill="#F26B1D"/>
+  <text x="219" y="111" class="sans" font-size="46" font-weight="800" letter-spacing="-2.3" fill="#1E1E1C">sync</text>
+  <rect x="340" y="80" width="126" height="30" rx="4" fill="#F7E6DA"/>
+  <rect x="340" y="108" width="126" height="2" fill="#F26B1D"/>
+  <circle cx="356" cy="95" r="4.5" fill="#F26B1D"/>
+  <text x="369" y="101" class="sans" font-size="14" font-weight="600" letter-spacing=".5" fill="#B5470A">OPEN BETA</text>
+
+  <!-- Headline -->
+  <text class="sans" font-size="76" font-weight="900" letter-spacing="-3.4" fill="#1E1E1C">
+    <tspan x="80" y="270">Your home,</tspan>
+    <tspan x="80" y="356" fill="#B5470A">in your own</tspan>
+    <tspan x="80" y="442" fill="#B5470A">words.</tspan>
+  </text>
+  <text class="sans" font-size="23" font-weight="600" fill="#5F5E5A">
+    <tspan x="80" y="500">Free Android app · 80+ brands · your phone is the hub</tspan>
+  </text>
+
+  <!-- Two phones -->
+  <g transform="translate(756 56) rotate(-4)">
+    <rect x="-10" y="-10" width="216" height="452" rx="30" fill="#1E1E1C"/>
+    <clipPath id="a"><rect width="196" height="432" rx="22"/></clipPath>
+    <image href="01-inicio.jpg" width="196" height="436" preserveAspectRatio="xMidYMin slice" clip-path="url(#a)"/>
+  </g>
+  <g transform="translate(940 110) rotate(4)">
+    <rect x="-10" y="-10" width="216" height="452" rx="30" fill="#1E1E1C"/>
+    <clipPath id="b"><rect width="196" height="432" rx="22"/></clipPath>
+    <image href="05-noche.jpg" width="196" height="436" preserveAspectRatio="xMidYMin slice" clip-path="url(#b)"/>
+  </g>
+
+  <!-- The pilot strip -->
+  <rect y="618" width="1200" height="12" fill="#1E1E1C"/>
+  <rect y="618" width="240" height="12" fill="#F26B1D"/>
+</svg>

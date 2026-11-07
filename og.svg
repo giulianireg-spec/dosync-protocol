@@ -1,65 +1,72 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1200" height="630" fill="#0D0D0C"/>
-  
-  <!-- Grid lines subtle -->
-  <line x1="0" y1="210" x2="1200" y2="210" stroke="#1A1A18" stroke-width="1"/>
-  <line x1="0" y1="420" x2="1200" y2="420" stroke="#1A1A18" stroke-width="1"/>
-  <line x1="400" y1="0" x2="400" y2="630" stroke="#1A1A18" stroke-width="1"/>
-  <line x1="800" y1="0" x2="800" y2="630" stroke="#1A1A18" stroke-width="1"/>
+  <!-- Source of og.png, the image shown when dosync.dev is shared. Tecla style:
+       grey wall, plates with a ledge, the orange pilot light, logo C. -->
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800;900&amp;family=DM+Mono:wght@400;500&amp;display=swap');
+    .sans{font-family:'Archivo',sans-serif}
+    .mono{font-family:'DM Mono',monospace}
+  </style>
+  <rect width="1200" height="630" fill="#E4E2DD"/>
 
-  <!-- Logo mark -->
-  <circle cx="96" cy="96" r="10" fill="#534AB7"/>
-  <circle cx="60" cy="60" r="7" fill="none" stroke="#534AB7" stroke-width="2"/>
-  <circle cx="132" cy="60" r="7" fill="none" stroke="#534AB7" stroke-width="2"/>
-  <circle cx="60" cy="132" r="7" fill="none" stroke="#534AB7" stroke-width="2"/>
-  <circle cx="132" cy="132" r="7" fill="none" stroke="#534AB7" stroke-width="2"/>
-  <line x1="67" y1="67" x2="88" y2="88" stroke="#AFA9EC" stroke-width="1.5"/>
-  <line x1="125" y1="67" x2="104" y2="88" stroke="#AFA9EC" stroke-width="1.5"/>
-  <line x1="67" y1="125" x2="88" y2="104" stroke="#AFA9EC" stroke-width="1.5"/>
-  <line x1="125" y1="125" x2="104" y2="104" stroke="#AFA9EC" stroke-width="1.5"/>
+  <!-- Logo C and wordmark -->
+  <rect x="80" y="64" width="64" height="64" rx="14" fill="#1E1E1C"/>
+  <g transform="translate(80.5 65)">
+    <path d="M14 10h14c13 0 21 8 21 21s-8 21-21 21H14z" fill="#F4F3EF"/>
+    <circle cx="29" cy="31" r="8" fill="#F26B1D"/>
+  </g>
+  <text x="162" y="111" class="sans" font-size="46" font-weight="800" letter-spacing="-2.3" fill="#1E1E1C">d</text>
+  <circle cx="204" cy="97" r="12" fill="none" stroke="#1E1E1C" stroke-width="7"/>
+  <circle cx="204" cy="97" r="4.5" fill="#F26B1D"/>
+  <text x="219" y="111" class="sans" font-size="46" font-weight="800" letter-spacing="-2.3" fill="#1E1E1C">sync</text>
+  <rect x="340" y="80" width="74" height="30" rx="4" fill="#F4F3EF"/>
+  <rect x="340" y="108" width="74" height="2" fill="#CFCDC6"/>
+  <text x="377" y="101" class="sans" font-size="14" font-weight="600" letter-spacing=".5" fill="#5F5E5A" text-anchor="middle">v0.4</text>
 
-  <!-- DoSync wordmark -->
-  <text x="172" y="82" font-family="Georgia, serif" font-size="48" font-weight="400" fill="#F0EEE8">DoSync</text>
-  
-  <!-- v0.3 pill -->
-  <rect x="172" y="100" width="52" height="22" rx="11" fill="#1A1830"/>
-  <text x="198" y="115" font-family="Arial, sans-serif" font-size="12" fill="#AFA9EC" text-anchor="middle">v0.4.2</text>
+  <!-- Headline -->
+  <text class="sans" font-size="68" font-weight="900" letter-spacing="-3" fill="#1E1E1C">
+    <tspan x="80" y="262">When an AI acts on</tspan>
+    <tspan x="80" y="340">the physical world,</tspan>
+    <tspan x="80" y="418" fill="#B5470A">someone answers.</tspan>
+  </text>
+  <circle cx="92" cy="483" r="7" fill="#F26B1D"/>
+  <text x="112" y="491" class="sans" font-size="24" font-weight="600" fill="#5F5E5A">Open protocol · Apache 2.0 · dosync.dev</text>
 
-  <!-- Main headline -->
-  <text x="96" y="260" font-family="Georgia, serif" font-size="64" font-weight="400" fill="#F0EEE8">When an AI acts on</text>
-  <text x="96" y="340" font-family="Georgia, serif" font-size="64" font-weight="400" fill="#F0EEE8">the physical world,</text>
-  <text x="96" y="420" font-family="Georgia, serif" font-size="64" font-style="italic" fill="#7F77DD">someone answers.</text>
+  <!-- Right: commands vs goals -->
+  <rect x="790" y="176" width="330" height="128" rx="6" fill="#CFCDC6"/>
+  <rect x="790" y="176" width="330" height="124" rx="6" fill="#F4F3EF"/>
+  <text x="812" y="206" class="sans" font-size="13" font-weight="600" letter-spacing="1.5" fill="#7A7872">EXISTING PROTOCOLS</text>
+  <text class="mono" font-size="15" fill="#5F5E5A">
+    <tspan x="812" y="236">lock.unlock()</tspan>
+    <tspan x="812" y="260">light.set_brightness(100)</tspan>
+    <tspan x="812" y="284">thermostat.set_temp(21)</tspan>
+  </text>
 
-  <!-- Tagline -->
-  <text x="96" y="490" font-family="Arial, sans-serif" font-size="24" fill="#888780">Open protocol · Apache 2.0 · dosync.dev</text>
+  <rect x="790" y="318" width="330" height="128" rx="6" fill="#F26B1D"/>
+  <rect x="790" y="318" width="330" height="124" rx="6" fill="#F7E6DA"/>
+  <circle cx="817" cy="343" r="5" fill="#F26B1D"/>
+  <text x="831" y="348" class="sans" font-size="13" font-weight="600" letter-spacing="1.5" fill="#B5470A">DOSYNC</text>
+  <text class="mono" font-size="15" fill="#1E1E1C">
+    <tspan x="812" y="378">"there is an emergency"</tspan>
+    <tspan x="812" y="402">"nobody is home"</tspan>
+    <tspan x="812" y="426">"good morning"</tspan>
+  </text>
 
-  <!-- Right side — before/after -->
-  <rect x="820" y="180" width="320" height="120" rx="8" fill="#1A1A18" stroke="#2C2C2A" stroke-width="1"/>
-  <text x="840" y="210" font-family="Arial, sans-serif" font-size="13" fill="#5F5E5A">Existing protocols</text>
-  <text x="840" y="238" font-family="Courier New, monospace" font-size="14" fill="#888780">lock.unlock()</text>
-  <text x="840" y="260" font-family="Courier New, monospace" font-size="14" fill="#888780">light.set_brightness(100)</text>
-  <text x="840" y="282" font-family="Courier New, monospace" font-size="14" fill="#888780">thermostat.set_temp(21)</text>
+  <!-- Figures as keys -->
+  <g class="sans" text-anchor="middle">
+    <rect x="790" y="462" width="102" height="62" rx="6" fill="#1E1E1C"/>
+    <text x="841" y="490" font-size="20" font-weight="800" fill="#F4F3EF">56/56</text>
+    <text x="841" y="510" font-size="11" font-weight="600" fill="#A3A19A">conformance</text>
+    <rect x="904" y="462" width="102" height="66" rx="6" fill="#CFCDC6"/>
+    <rect x="904" y="462" width="102" height="62" rx="6" fill="#F4F3EF"/>
+    <text x="955" y="490" font-size="20" font-weight="800" fill="#1E1E1C">&lt;100ms</text>
+    <text x="955" y="510" font-size="11" font-weight="600" fill="#5F5E5A">intent → action</text>
+    <rect x="1018" y="462" width="102" height="66" rx="6" fill="#CFCDC6"/>
+    <rect x="1018" y="462" width="102" height="62" rx="6" fill="#F4F3EF"/>
+    <text x="1069" y="490" font-size="20" font-weight="800" fill="#1E1E1C">900+</text>
+    <text x="1069" y="510" font-size="11" font-weight="600" fill="#5F5E5A">tests</text>
+  </g>
 
-  <rect x="820" y="320" width="320" height="120" rx="8" fill="#1A1830" stroke="#534AB7" stroke-width="1"/>
-  <circle cx="840" cy="342" r="5" fill="#7F77DD"/>
-  <text x="854" y="347" font-family="Arial, sans-serif" font-size="13" fill="#7F77DD">DoSync</text>
-  <text x="840" y="378" font-family="Courier New, monospace" font-size="14" fill="#AFA9EC">"there is an emergency"</text>
-  <text x="840" y="400" font-family="Courier New, monospace" font-size="14" fill="#AFA9EC">"nobody is home"</text>
-  <text x="840" y="422" font-family="Courier New, monospace" font-size="14" fill="#AFA9EC">"good morning"</text>
-
-  <!-- Stats row -->
-  <rect x="820" y="460" width="72" height="48" rx="6" fill="#111110" stroke="#2C2C2A" stroke-width="1"/>
-  <text x="856" y="482" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#F0EEE8" text-anchor="middle">56/56</text>
-  <text x="856" y="498" font-family="Arial, sans-serif" font-size="11" fill="#5F5E5A" text-anchor="middle">conformance</text>
-
-  <rect x="904" y="460" width="72" height="48" rx="6" fill="#111110" stroke="#2C2C2A" stroke-width="1"/>
-  <text x="940" y="482" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#F0EEE8" text-anchor="middle">&lt;100ms</text>
-  <text x="940" y="498" font-family="Arial, sans-serif" font-size="11" fill="#5F5E5A" text-anchor="middle">intent→action</text>
-
-  <rect x="988" y="460" width="72" height="48" rx="6" fill="#111110" stroke="#2C2C2A" stroke-width="1"/>
-  <text x="1024" y="482" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#F0EEE8" text-anchor="middle">9</text>
-  <text x="1024" y="498" font-family="Arial, sans-serif" font-size="11" fill="#5F5E5A" text-anchor="middle">adapters</text>
-
-  <!-- Bottom border accent -->
-  <rect x="0" y="620" width="1200" height="10" fill="#534AB7"/>
+  <!-- The pilot strip -->
+  <rect y="618" width="1200" height="12" fill="#1E1E1C"/>
+  <rect y="618" width="240" height="12" fill="#F26B1D"/>
 </svg>
