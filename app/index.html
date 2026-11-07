@@ -13,105 +13,130 @@
 <meta property="og:image" content="https://dosync.dev/app/img/01-inicio.jpg">
 <meta property="og:url" content="https://dosync.dev/app/">
 <meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#E4E2DD" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#151513" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231E1E1C'/%3E%3Cg transform='translate(.5 1)'%3E%3Cpath d='M14 10h14c13 0 21 8 21 21s-8 21-21 21H14z' fill='%23F4F3EF'/%3E%3Ccircle cx='29' cy='31' r='8' fill='%23F26B1D'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800;900&display=swap" rel="stylesheet">
 <style>
+/* Estilo "Tecla", el mismo de la app: pared gris, placas con un canto abajo como
+   una tecla de luz, teclas negras y un piloto naranja para lo que está prendido. */
 :root{
-  --purple:#534AB7;--purple-light:#1A1830;--purple-mid:#AFA9EC;--purple-dark:#7F77DD;
-  --teal:#1D9E75;--teal-light:#0A2018;--amber:#E0A84A;--amber-light:#241B0B;
-  --text:#F0EEE8;--text-muted:#888780;--text-faint:#5F5E5A;
-  --border:#2C2C2A;--bg:#0D0D0C;--bg-subtle:#111110;--bg-card:#1A1A18;
-  --font-sans:'DM Sans',sans-serif;--font-mono:'DM Mono',monospace;--font-display:'DM Serif Display',serif;
-  --radius:8px;--radius-lg:12px;
+  --wall:#E4E2DD;--plate:#F4F3EF;--edge:#CFCDC6;--ink:#1E1E1C;--on-ink:#F4F3EF;
+  --text:#1E1E1C;--muted:#6B6A66;--faint:#8C8A84;--pilot:#F26B1D;--pilot-text:#B5470A;--led-off:#BDBBB3;
+  --font:'Archivo',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --wall:#151513;--plate:#22221F;--edge:#0B0B0A;--ink:#ECEAE4;--on-ink:#151513;
+    --text:#ECEAE4;--muted:#A3A19A;--faint:#7A7872;--pilot-text:#F28A4B;--led-off:#4A4945;
+  }
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{font-family:var(--font-sans);color:var(--text);background:var(--bg);font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
-a{color:var(--purple-mid);text-decoration:none}
+body{font-family:var(--font);color:var(--text);background:var(--wall);font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
+a{color:var(--pilot-text);text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:3px}
 a:hover{color:var(--text)}
-.skip-link{position:absolute;left:-999px;top:8px;background:var(--purple);color:#fff;padding:8px 12px;border-radius:var(--radius)}
+.skip-link{position:absolute;left:-999px;top:8px;background:var(--ink);color:var(--on-ink);padding:8px 12px;border-radius:6px}
 .skip-link:focus{left:8px}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--wall);padding:1px 6px;border-radius:4px}
 
 /* Idioma: se muestra solo el bloque del idioma elegido. */
 html[data-lang="es"] [lang="en"]:not(html), html[data-lang="en"] [lang="es"]:not(html){display:none !important}
 
-nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 40px;height:60px;background:rgba(13,13,12,0.92);border-bottom:0.5px solid var(--border);backdrop-filter:blur(8px)}
-.nav-logo{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:500;color:var(--text)}
-.nav-logo svg{width:22px;height:22px}
-.nav-links{display:flex;gap:24px;align-items:center}
-.nav-links a{font-size:14px;color:var(--text-muted)}
-.nav-links a:hover,.nav-links a.active{color:var(--text)}
-.lang-switch{display:inline-flex;border:0.5px solid var(--border);border-radius:20px;overflow:hidden}
-.lang-switch button{background:none;border:none;color:var(--text-muted);font:500 12px var(--font-sans);padding:5px 10px;cursor:pointer}
-.lang-switch button[aria-pressed="true"]{background:var(--purple-light);color:var(--purple-mid)}
+/* El piloto */
+.led{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--pilot);box-shadow:0 0 8px var(--pilot);flex:none}
+.led.off{background:var(--led-off);box-shadow:none}
+
+nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 40px;height:64px;background:color-mix(in srgb,var(--wall) 92%,transparent);backdrop-filter:blur(8px)}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text)}
+.nav-logo svg{width:30px;height:30px;flex:none}
+.wordmark{display:inline-flex;align-items:center;font-weight:800;font-size:24px;letter-spacing:-1.2px;line-height:1}
+.wordmark .o{width:16px;height:16px;border:3.5px solid currentColor;border-radius:50%;margin:3px 1px 0;display:inline-flex;align-items:center;justify-content:center}
+.wordmark .o::after{content:"";width:5px;height:5px;border-radius:50%;background:var(--pilot)}
+.nav-links{display:flex;gap:22px;align-items:center}
+.nav-links a{font-size:14px;font-weight:600;color:var(--muted);text-decoration:none}
+.nav-links a:hover{color:var(--text)}
+.nav-links a.active{color:var(--text);display:inline-flex;align-items:center;gap:7px}
+.nav-links a.active::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--pilot)}
+.lang-switch{display:inline-flex;background:var(--plate);border-bottom:3px solid var(--edge);border-radius:6px;overflow:hidden}
+.lang-switch button{background:none;border:none;color:var(--muted);font:600 12px var(--font);padding:6px 11px;cursor:pointer;letter-spacing:1px}
+.lang-switch button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
 
 .wrap{max-width:1100px;margin:0 auto;padding:0 40px}
-section{padding:72px 0;border-bottom:0.5px solid var(--border)}
-.eyebrow{font-size:12px;font-weight:500;color:var(--purple-dark);letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px}
-h1{font-family:var(--font-display);font-size:56px;line-height:1.05;letter-spacing:-.015em;margin-bottom:20px;font-weight:400}
-h1 em{font-style:italic;color:var(--purple-mid)}
-h2{font-family:var(--font-display);font-size:34px;line-height:1.15;margin-bottom:16px;font-weight:400}
-h3{font-size:16px;font-weight:500;margin-bottom:6px}
-.lead{font-size:18px;color:var(--text-muted);max-width:620px;line-height:1.65}
-p{color:var(--text-muted)}
+section{padding:72px 0;scroll-margin-top:64px}
+.eyebrow{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px}
+h1{font-size:64px;line-height:1;letter-spacing:-2.5px;margin-bottom:22px;font-weight:900}
+h1 em{font-style:normal;color:var(--pilot-text)}
+h2{font-size:38px;line-height:1.08;letter-spacing:-1.3px;margin-bottom:16px;font-weight:800}
+h3{font-size:17px;font-weight:800;letter-spacing:-.3px;margin-bottom:6px}
+.lead{font-size:18px;color:var(--muted);max-width:640px;line-height:1.6}
+p{color:var(--muted)}
 
-.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:56px;align-items:center;padding:80px 0 72px}
-.beta-pill{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:500;color:var(--amber);background:var(--amber-light);border:0.5px solid #5A4421;padding:4px 12px;border-radius:20px;margin-bottom:20px}
-.beta-pill::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--amber)}
+/* Placas y teclas */
+.card{background:var(--plate);border-bottom:4px solid var(--edge);border-radius:6px;padding:22px}
+.card.on{background:var(--ink);border-bottom:0;border-top:3px solid var(--edge)}
+.card.on h3,.card.on .k{color:var(--on-ink)}
+.card.on p{color:color-mix(in srgb,var(--on-ink) 72%,transparent)}
+
+.hero{display:grid;grid-template-columns:1.25fr .75fr;gap:56px;align-items:center;padding:72px 0 64px}
+.beta-pill{display:inline-flex;align-items:center;gap:9px;font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);background:var(--plate);border-bottom:3px solid var(--edge);padding:6px 13px;border-radius:6px;margin-bottom:24px}
 .ctas{display:flex;gap:12px;flex-wrap:wrap;margin-top:32px}
-.btn{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:500;padding:12px 20px;border-radius:var(--radius);border:0.5px solid var(--border);color:var(--text);background:var(--bg-card)}
-.btn:hover{border-color:var(--purple-dark);color:var(--text)}
-.btn.primary{background:var(--purple);border-color:var(--purple);color:#fff}
-.btn.primary:hover{background:#4A42A6}
-.btn[aria-disabled="true"]{opacity:.55;cursor:default;pointer-events:none}
-.btn small{font-size:12px;font-weight:400;color:var(--text-muted)}
-.cta-note{font-size:13px;color:var(--text-faint);margin-top:14px}
-.phone{justify-self:center;width:280px;border-radius:28px;border:0.5px solid var(--border);overflow:hidden;box-shadow:0 30px 80px rgba(83,74,183,.18)}
-.phone img{display:block;width:100%;height:auto}
+.btn{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:600;padding:13px 22px;border-radius:28px;border:2px solid var(--text);color:var(--text);background:transparent;text-decoration:none;transition:transform .08s}
+.btn:hover{color:var(--text);transform:translateY(1.5px)}
+.btn.primary{background:var(--pilot);border-color:var(--pilot);color:#1E1E1C}
+.btn.primary:hover{color:#1E1E1C}
+.btn[aria-disabled="true"]{opacity:.45;cursor:default;pointer-events:none}
+.btn small{font-size:12px;font-weight:400;opacity:.75}
+.cta-note{font-size:13px;color:var(--faint);margin-top:14px}
+.phone{justify-self:center;width:280px;padding:10px;border-radius:34px;background:var(--ink);box-shadow:0 30px 60px rgba(30,30,28,.22)}
+.phone img{display:block;width:100%;height:auto;border-radius:25px}
 
-.callout{background:var(--amber-light);border:0.5px solid #5A4421;border-radius:var(--radius-lg);padding:22px 26px;display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start}
-.callout .icon{font-size:22px;line-height:1.2}
-.callout h3{color:var(--amber)}
-.callout p{color:#C9B898}
+.callout{background:var(--ink);border-radius:6px;border-top:3px solid var(--edge);padding:24px 26px;display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start}
+.callout .led{margin-top:7px}
+.callout h3{color:var(--on-ink)}
+.callout p{color:color-mix(in srgb,var(--on-ink) 72%,transparent)}
+.callout a{color:var(--pilot)}
 
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:36px}
-.card{background:var(--bg-card);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:22px}
-.card .k{font-family:var(--font-mono);font-size:12px;color:var(--purple-dark);margin-bottom:10px}
-.card p{font-size:14px;line-height:1.6}
-.say{font-family:var(--font-mono);font-size:13px;color:var(--purple-mid);background:var(--purple-light);border:0.5px solid #3A3480;border-radius:var(--radius);padding:3px 8px;display:inline-block;margin:2px 4px 2px 0}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:36px}
+.card .k{font-size:12px;font-weight:800;color:var(--pilot-text);letter-spacing:1.5px;margin-bottom:10px}
+.card p{font-size:14.5px;line-height:1.6}
+.say{font-size:13px;font-weight:600;color:var(--on-ink);background:var(--ink);border-radius:20px;padding:3px 11px;display:inline-block;margin:2px 4px 4px 0}
 
-.shots{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:36px}
-.shots figure{border-radius:18px;overflow:hidden;border:0.5px solid var(--border);background:var(--bg-card)}
+.shots{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:36px}
+.shots figure{border-radius:6px;overflow:hidden;background:var(--plate);border-bottom:4px solid var(--edge)}
 .shots img{display:block;width:100%;height:auto}
-.shots figcaption{font-size:12px;color:var(--text-faint);padding:10px 12px}
+.shots figcaption{font-size:12.5px;font-weight:600;color:var(--muted);padding:10px 12px}
 
-.brands{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:32px}
+.brands{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:32px}
 .brands .card p{font-size:13.5px}
 
-.steps{counter-reset:s;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:32px}
-.steps .card{position:relative;padding-top:44px}
-.steps .card::before{counter-increment:s;content:counter(s);position:absolute;top:16px;left:22px;font-family:var(--font-mono);font-size:12px;color:var(--purple-dark);border:0.5px solid #534AB7;border-radius:20px;padding:1px 9px}
+.steps{counter-reset:s;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:32px}
+.steps .card{position:relative;padding-top:58px}
+.steps .card::before{counter-increment:s;content:counter(s);position:absolute;top:18px;left:22px;font-size:14px;font-weight:800;color:var(--on-ink);background:var(--ink);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center}
 
-.two{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:32px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:32px}
 .list{list-style:none;margin-top:10px}
-.list li{font-size:14px;color:var(--text-muted);padding:6px 0;border-bottom:0.5px solid var(--border)}
+.list li{font-size:14.5px;color:var(--muted);padding:9px 0;border-bottom:2px solid var(--wall);display:flex;align-items:center;gap:10px}
 .list li:last-child{border-bottom:none}
+.list li .led{width:8px;height:8px}
 
-footer{padding:40px 0;background:var(--bg-subtle)}
+footer{padding:40px 0;background:var(--ink)}
 .footer-inner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px}
 .footer-links{display:flex;gap:24px;flex-wrap:wrap}
-.footer-links a{font-size:13px;color:var(--text-muted)}
-.footer-copy{font-size:12px;color:var(--text-faint)}
+.footer-links a{font-size:13px;font-weight:600;color:var(--on-ink);text-decoration:none}
+.footer-links a:hover{color:var(--pilot)}
+.footer-copy{font-size:12px;color:color-mix(in srgb,var(--on-ink) 60%,transparent)}
 
 @media(max-width:900px){
   nav{padding:0 16px}
   .nav-links a.hide-sm{display:none}
   .nav-links{gap:14px}
   .wrap{padding:0 16px}
-  .hero{grid-template-columns:1fr;gap:40px;padding:48px 0}
-  h1{font-size:38px}
-  h2{font-size:27px}
+  .hero{grid-template-columns:1fr;gap:40px;padding:40px 0 48px}
+  h1{font-size:44px;letter-spacing:-1.6px}
+  h2{font-size:29px}
   .grid,.brands,.steps,.two{grid-template-columns:1fr}
   .shots{grid-template-columns:repeat(2,1fr)}
   .phone{width:240px}
@@ -123,19 +148,9 @@ footer{padding:40px 0;background:var(--bg-subtle)}
 <a href="#main" class="skip-link"><span lang="es">Ir al contenido</span><span lang="en">Skip to content</span></a>
 
 <nav>
-  <a class="nav-logo" href="/">
-    <svg viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <circle cx="11" cy="11" r="3" fill="#534AB7"/>
-      <circle cx="3" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
-      <circle cx="19" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
-      <circle cx="3" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
-      <circle cx="19" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
-      <line x1="5" y1="6" x2="9" y2="10" stroke="#AFA9EC" stroke-width="1"/>
-      <line x1="17" y1="6" x2="13" y2="10" stroke="#AFA9EC" stroke-width="1"/>
-      <line x1="5" y1="16" x2="9" y2="12" stroke="#AFA9EC" stroke-width="1"/>
-      <line x1="17" y1="16" x2="13" y2="12" stroke="#AFA9EC" stroke-width="1"/>
-    </svg>
-    DoSync
+  <a class="nav-logo" href="/" aria-label="DoSync">
+    <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1E1E1C"/><g transform="translate(.5 1)"><path d="M14 10h14c13 0 21 8 21 21s-8 21-21 21H14z" fill="#F4F3EF"/><circle cx="29" cy="31" r="8" fill="#F26B1D"/></g></svg>
+    <span class="wordmark" aria-hidden="true">d<span class="o"></span>sync</span>
   </a>
   <div class="nav-links">
     <a href="/" class="hide-sm"><span lang="es">Protocolo</span><span lang="en">Protocol</span></a>
@@ -155,7 +170,7 @@ footer{padding:40px 0;background:var(--bg-subtle)}
   <!-- Portada -->
   <div class="hero">
     <div>
-      <span class="beta-pill"><span lang="es">Beta abierta</span><span lang="en">Open beta</span></span>
+      <span class="beta-pill"><span class="led"></span><span lang="es">Beta abierta</span><span lang="en">Open beta</span></span>
       <h1 lang="es">Tu casa, <em>en tus palabras</em>.</h1>
       <h1 lang="en">Your home, <em>in your own words</em>.</h1>
       <p class="lead" lang="es">DoSync App es una app gratis para Android que maneja luces, aires, teles, cerraduras y electrodomésticos diciendo lo que quieres. El teléfono es el hub: no hay que comprar otro aparato ni crear una cuenta nuestra.</p>
@@ -172,12 +187,12 @@ footer{padding:40px 0;background:var(--bg-subtle)}
       <p class="cta-note" lang="es">Gratis. Con IA opcional: la tuya (Claude, Gemini o ChatGPT) o Gemini Nano en el teléfono.</p>
       <p class="cta-note" lang="en">Free. Optional AI: your own (Claude, Gemini or ChatGPT) or on-device Gemini Nano.</p>
     </div>
-    <div class="phone"><img src="img/01-inicio.jpg" width="720" height="1280" alt="Pantalla de inicio de DoSync App: escribir o decir una orden"></div>
+    <div class="phone"><img src="img/01-inicio.jpg" width="576" height="1280" alt="Pantalla de inicio de DoSync App: escribir o decir una orden"></div>
   </div>
 
   <!-- Aviso de beta -->
   <div class="callout" role="note">
-    <div class="icon" aria-hidden="true">🧪</div>
+    <span class="led" aria-hidden="true"></span>
     <div lang="es">
       <h3>Está en beta, y tu opinión vale oro</h3>
       <p>La app ya funciona en casas reales, pero la seguimos probando con muchas marcas y aparatos: puede haber errores, y algunas marcas están probadas solo con simuladores. Cualquier opinión se agradece muchísimo: lo que funcionó, lo que no, y lo que te gustaría que haga. <a href="#opiniones">Cómo contarnos</a>.</p>
@@ -228,7 +243,7 @@ footer{padding:40px 0;background:var(--bg-subtle)}
         <p lang="es">Aires y teles con control remoto, con el emisor infrarrojo del teléfono o un Broadlink: cientos de modelos.</p>
         <p lang="en">ACs and TVs with a remote, through the phone's IR blaster or a Broadlink: hundreds of models.</p>
       </div>
-      <div class="card">
+      <div class="card on">
         <div class="k">06</div>
         <h3 lang="es">Lo delicado, con permiso</h3><h3 lang="en">Sensitive things ask first</h3>
         <p lang="es">Abrir una cerradura o el portón, prender un horno: siempre esperan tu confirmación, venga la orden de donde venga.</p>
@@ -245,10 +260,11 @@ footer{padding:40px 0;background:var(--bg-subtle)}
     <h2 lang="es">Simple a propósito</h2>
     <h2 lang="en">Simple on purpose</h2>
     <div class="shots">
-      <figure><img src="img/01-inicio.jpg" width="720" height="1280" loading="lazy" alt="Inicio"><figcaption><span lang="es">Escribe o dicta una orden</span><span lang="en">Type or say a command</span></figcaption></figure>
-      <figure><img src="img/04-dispositivos.jpg" width="720" height="1280" loading="lazy" alt="Dispositivos"><figcaption><span lang="es">Lo que encontró en tu casa</span><span lang="en">What it found at home</span></figcaption></figure>
-      <figure><img src="img/03-controles.jpg" width="720" height="1280" loading="lazy" alt="Controles"><figcaption><span lang="es">Los controles de cada aparato</span><span lang="en">Each device's controls</span></figcaption></figure>
-      <figure><img src="img/02-rutinas.jpg" width="720" height="1280" loading="lazy" alt="Rutinas"><figcaption><span lang="es">Rutinas que se hacen solas</span><span lang="en">Routines that run themselves</span></figcaption></figure>
+      <figure><img src="img/01-inicio.jpg" width="576" height="1280" loading="lazy" alt="Inicio"><figcaption><span lang="es">Escribe o dicta una orden</span><span lang="en">Type or say a command</span></figcaption></figure>
+      <figure><img src="img/04-dispositivos.jpg" width="576" height="1280" loading="lazy" alt="Dispositivos"><figcaption><span lang="es">Lo que encontró en tu casa</span><span lang="en">What it found at home</span></figcaption></figure>
+      <figure><img src="img/03-controles.jpg" width="576" height="1280" loading="lazy" alt="Controles"><figcaption><span lang="es">Los controles de cada aparato</span><span lang="en">Each device's controls</span></figcaption></figure>
+      <figure><img src="img/02-rutinas.jpg" width="576" height="1280" loading="lazy" alt="Rutinas"><figcaption><span lang="es">Rutinas que se hacen solas</span><span lang="en">Routines that run themselves</span></figcaption></figure>
+      <figure><img src="img/05-noche.jpg" width="576" height="1280" loading="lazy" alt="Modo noche"><figcaption><span lang="es">Y de noche, a oscuras</span><span lang="en">And at night, dark</span></figcaption></figure>
     </div>
   </div>
 </section>
@@ -310,15 +326,15 @@ footer{padding:40px 0;background:var(--bg-subtle)}
       <div class="card">
         <h3 lang="es">En GitHub</h3><h3 lang="en">On GitHub</h3>
         <ul class="list">
-          <li><a href="https://github.com/giulianireg-spec/dosync-app-beta/issues/new?template=opinion.yml"><span lang="es">💬 Contar cómo te fue</span><span lang="en">💬 Share your experience</span></a></li>
-          <li><a href="https://github.com/giulianireg-spec/dosync-app-beta/issues/new?template=error.yml"><span lang="es">🐞 Avisar de un error</span><span lang="en">🐞 Report a bug</span></a></li>
-          <li><a href="https://github.com/giulianireg-spec/dosync-app-beta/issues/new?template=marca.yml"><span lang="es">🔌 Pedir una marca o aparato</span><span lang="en">🔌 Request a brand or device</span></a></li>
+          <li><span class="led" aria-hidden="true"></span><a href="https://github.com/giulianireg-spec/dosync-app-beta/issues/new?template=opinion.yml"><span lang="es">Contar cómo te fue</span><span lang="en">Share your experience</span></a></li>
+          <li><span class="led" aria-hidden="true"></span><a href="https://github.com/giulianireg-spec/dosync-app-beta/issues/new?template=error.yml"><span lang="es">Avisar de un error</span><span lang="en">Report a bug</span></a></li>
+          <li><span class="led" aria-hidden="true"></span><a href="https://github.com/giulianireg-spec/dosync-app-beta/issues/new?template=marca.yml"><span lang="es">Pedir una marca o aparato</span><span lang="en">Request a brand or device</span></a></li>
         </ul>
       </div>
       <div class="card">
         <h3 lang="es">Sin GitHub</h3><h3 lang="en">Without GitHub</h3>
         <ul class="list">
-          <li><a href="mailto:giulianireg@gmail.com?subject=DoSync%20App%20beta">✉️ giulianireg@gmail.com</a></li>
+          <li><span class="led" aria-hidden="true"></span><a href="mailto:giulianireg@gmail.com?subject=DoSync%20App%20beta">giulianireg@gmail.com</a></li>
           <li lang="es">Desde la app: Ajustes → reportar una respuesta rara de la IA.</li>
           <li lang="en">From the app: Settings → report an odd AI answer.</li>
           <li lang="es">Para no compartir de más: no incluyas contraseñas, claves ni tu dirección.</li>
