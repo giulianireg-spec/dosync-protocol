@@ -1,0 +1,158 @@
+/* tecla.css — the DoSync look, shared by every page of dosync.dev and by the app.
+   A grey wall, off-white plates with a ledge underneath like a light switch, black
+   keys, and an orange pilot light for what is on. Each page keeps its own layout
+   stylesheet; this one is loaded after it and supplies the palette, the type and
+   the plate/key shapes. Light by day, "night" when the system is in dark mode. */
+
+:root{
+  --wall:#E4E2DD;--plate:#F4F3EF;--edge:#CFCDC6;--ink:#1E1E1C;--on-ink:#F4F3EF;
+  --text:#1E1E1C;--muted:#5F5E5A;--faint:#7A7872;
+  --pilot:#F26B1D;--pilot-text:#B5470A;--tint:#F7E6DA;--led-off:#BDBBB3;
+  --console:#1E1E1C;--console-text:#D8D6CE;
+  --ok:#2F7D4A;--ok-tint:#E1EFE4;--bad:#C2361F;--bad-tint:#F7E1DC;--warn:#9A5A04;--warn-tint:#F6EBD7;
+  --font-sans:'Archivo',system-ui,sans-serif;--font-display:'Archivo',system-ui,sans-serif;
+  --font-mono:'DM Mono',ui-monospace,Menlo,monospace;
+  --radius:6px;--radius-lg:6px;
+
+  /* The names the page stylesheets already use, pointed at the palette above. */
+  --purple:var(--pilot);--purple-light:var(--tint);--purple-mid:var(--pilot-text);--purple-dark:var(--pilot-text);
+  --teal:var(--ok);--teal-light:var(--ok-tint);
+  --gray-50:var(--plate);--gray-100:var(--wall);--gray-200:var(--edge);--gray-400:var(--faint);--gray-600:var(--muted);--gray-900:var(--console);
+  --text-muted:var(--muted);--text-faint:var(--faint);
+  --border:var(--edge);--bg:var(--wall);--bg-subtle:var(--plate);--bg-card:var(--plate);
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --wall:#151513;--plate:#22221F;--edge:#0B0B0A;--ink:#ECEAE4;--on-ink:#151513;
+    --text:#ECEAE4;--muted:#A3A19A;--faint:#85837C;
+    --pilot-text:#F28A4B;--tint:#2E2118;--led-off:#4A4945;
+    --console:#0E0E0D;--console-text:#D8D6CE;
+    --ok:#5DCAA5;--ok-tint:#14261D;--bad:#EA6B59;--bad-tint:#2C1512;--warn:#EFA43A;--warn-tint:#2A2010;
+  }
+}
+
+body{font-family:var(--font-sans);background:var(--wall);color:var(--text)}
+::selection{background:var(--pilot);color:#1E1E1C}
+
+/* Type: Archivo, heavy and tight for titles. No serif, no italics. */
+h1,h2,h3,.hero h1,.section-title,.series-title,.article-title,.article-body h2{font-family:var(--font-display);font-weight:800;letter-spacing:-.03em}
+.hero h1{font-weight:900;letter-spacing:-.045em}
+.hero h1 em,.article-title em,h1 em,h2 em{font-style:normal;color:var(--pilot-text)}
+.hero-eyebrow,.section-eyebrow,.series-eyebrow,.sidebar-label{color:var(--muted);font-weight:600;letter-spacing:1.5px}
+
+/* The pilot light */
+.led{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--pilot);box-shadow:0 0 8px var(--pilot);flex:none}
+
+/* Bar on top, same on every page */
+nav:not(.sidebar-nav):not(.mobile-nav){height:64px;background:color-mix(in srgb,var(--wall) 92%,transparent);border-bottom:0}
+.nav-logo{display:flex;align-items:center;gap:10px;color:var(--text);text-decoration:none}
+.nav-logo svg,.footer-logo svg{width:30px;height:30px;flex:none}
+.wordmark{display:inline-flex;align-items:center;font-family:var(--font-sans);font-weight:800;font-size:24px;letter-spacing:-1.2px;line-height:1;color:var(--text)}
+.wordmark .o{width:16px;height:16px;border:3.5px solid currentColor;border-radius:50%;margin:3px 1px 0;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box}
+.wordmark .o::after{content:"";width:5px;height:5px;border-radius:50%;background:var(--pilot)}
+.nav-links a{font-weight:600;color:var(--muted)}
+.nav-links a:hover{color:var(--text)}
+.nav-pill{background:var(--plate);color:var(--muted);border-bottom:2px solid var(--edge);border-radius:4px;font-weight:600;letter-spacing:.5px}
+
+/* Buttons: pills. The main one is orange; the rest are outlined. */
+.nav-cta,.btn-primary{background:var(--pilot);color:#1E1E1C;border-radius:28px;font-weight:600;font-family:var(--font-sans)}
+.btn-primary svg path{stroke:#1E1E1C}
+.btn-secondary{border:2px solid var(--text);border-radius:28px;color:var(--text);font-weight:600}
+.btn-secondary:hover{background:transparent;border-color:var(--text)}
+.nav-cta:hover,.btn-primary:hover,.btn-secondary:hover{opacity:1;transform:translateY(1.5px)}
+
+/* Plates: no hairlines, a ledge underneath. */
+section{border-top:0}
+.compare-card,.qs-step,.use-case,.cert-tier,.status-item,.roadmap,.demo-video-box,.article-body .callout,.cert-cta{border:0;border-bottom:4px solid var(--edge);border-radius:6px;background:var(--plate)}
+.compare-card.accent,.cert-tier.featured,.article-body .callout{background:var(--tint);border-bottom-color:var(--pilot)}
+.compare-code{color:var(--text)}
+.compare-card.accent .compare-code{color:var(--pilot-text)}
+.compare-label .dot{background:var(--led-off)}
+.compare-label .dot.active{background:var(--pilot);box-shadow:0 0 6px var(--pilot)}
+.layers{border:0;gap:6px;background:transparent}
+.layer{background:var(--plate);border-bottom:4px solid var(--edge);border-radius:6px}
+.layer:first-child{background:var(--ink);border-bottom-color:var(--ink)}
+.layer:first-child .layer-num,.layer:first-child .layer-desc{color:color-mix(in srgb,var(--on-ink) 70%,transparent)}
+.layer:first-child .layer-name{color:var(--on-ink)}
+.qs-step-header{border-bottom:0}
+.qs-step-num,.play-btn{background:var(--ink);color:var(--on-ink)}
+.play-btn svg{fill:var(--on-ink)}
+.cert-tier-badge{background:var(--wall);color:var(--muted)}
+.cert-tier.featured .cert-tier-badge{background:var(--pilot);color:#1E1E1C}
+.cert-tier.featured .cert-tier-name,.cert-tier.featured .cert-tier-desc,.cert-tier.featured .cert-requirements li{color:var(--text)}
+.status-badge.done{background:var(--ok-tint);color:var(--ok);border:0}
+.status-badge.planned{background:var(--wall);color:var(--muted)}
+.roadmap-q{color:var(--pilot-text)}
+
+/* Consoles stay dark in both themes: they are terminals. */
+.terminal-body,.terminal-bar,.qs-code,.cert-cta,pre{background:var(--console);border:0;border-radius:6px}
+.demo-terminal{background:var(--console);border-radius:6px}
+.terminal-body,.qs-code,.cert-cta-text,pre code{color:var(--console-text)}
+.qs-code{border-radius:0}
+.cert-cta{border-bottom:4px solid var(--edge)}
+.t-cmd{color:#F4F3EF}
+.t-prompt,.t-success,.qs-code .prompt,.cert-cta-text .prompt{color:#5DCAA5}
+.t-device{color:#F28A4B}
+.t-action{color:#EFA43A}
+.t-comment,.compare-code .comment{color:#8C8A84}
+.compare-code .comment{color:var(--faint)}
+code{color:var(--pilot-text)}
+pre code{color:var(--console-text)}
+
+/* Concepts page */
+.sidebar-item{border-radius:6px}
+.sidebar-item:hover{background:var(--plate);border-color:transparent}
+.sidebar-item.active{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
+.sidebar-item.active .sidebar-num{color:var(--pilot)}
+.article-num{background:var(--ink);color:var(--on-ink);border:0}
+.article-body blockquote{border-left:3px solid var(--pilot)}
+.article-body .callout p{color:var(--text)}
+.article-devto{background:transparent;color:var(--text);border:2px solid var(--text);border-radius:28px;font-weight:600}
+.article-devto:hover{background:transparent;color:var(--text)}
+.article{border-bottom:0}
+.mobile-nav{background:color-mix(in srgb,var(--wall) 97%,transparent) !important;border-top:0 !important}
+
+/* Footer: an ink band */
+footer{background:var(--ink);border-top:0}
+footer,.footer-logo{color:var(--on-ink)}
+.footer-links a{color:var(--on-ink);font-weight:600}
+.footer-links a:hover{color:var(--pilot)}
+.footer-note{color:color-mix(in srgb,var(--on-ink) 60%,transparent)}
+footer .wordmark{color:var(--on-ink);font-size:20px}
+
+.skip-link{background:var(--ink);color:var(--on-ink)}
+
+/* Phones: the bar keeps the logo, the app and the main button; the rest is in the page. */
+@media (max-width:900px){
+  nav:not(.sidebar-nav):not(.mobile-nav){padding:0 16px;gap:12px}
+  .nav-logo .nav-pill,.nav-links .nav-pill{display:none}
+  .nav-links{gap:14px;flex-wrap:nowrap;min-width:0}
+  .nav-links a:not([href="/app/"]){display:none}
+  .nav-cta{padding:7px 14px;font-size:13px;white-space:nowrap}
+  .wordmark{font-size:21px}
+}
+
+/* Concepts on a phone: the five parts as keys along the bottom. */
+@media (max-width:860px){
+  .mobile-nav{top:auto !important;height:64px !important;padding:6px 8px !important;gap:6px !important;border-top:0 !important}
+  .mobile-nav-item{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border-radius:6px;background:var(--plate);border-bottom:3px solid var(--edge);color:var(--muted);text-decoration:none}
+  .mobile-nav-item.active{background:var(--ink);color:var(--on-ink);border-bottom-color:var(--ink)}
+  .mobile-nav-num{font-size:13px;font-weight:800}
+  .mobile-nav-item.active .mobile-nav-num{color:var(--pilot)}
+  .mobile-nav-label{font-size:9.5px;font-weight:600;line-height:1.1;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 3px}
+}
+
+/* Inside a console the inline colors use their night values, whatever the theme. */
+:is(.terminal-body,.terminal-bar,.qs-code,.cert-cta,pre) [style*="--pilot-text"]{color:#F28A4B !important}
+:is(.terminal-body,.terminal-bar,.qs-code,.cert-cta,pre) [style*="--ok)"]{color:#5DCAA5 !important}
+:is(.terminal-body,.terminal-bar,.qs-code,.cert-cta,pre) [style*="--warn)"]{color:#EFA43A !important}
+:is(.terminal-body,.terminal-bar,.qs-code,.cert-cta,pre) [style*="--muted)"]{color:#8C8A84 !important}
+:is(.terminal-body,.terminal-bar,.qs-code,.cert-cta,pre) [style*="--text)"]{color:#F4F3EF !important}
+
+/* Two-column blocks written inline fold to one column on a phone. */
+@media (max-width:900px){
+  main [style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr !important}
+  main [style*="grid-template-columns:repeat(4,1fr)"]{grid-template-columns:repeat(2,1fr) !important}
+  main [style*="grid-template-columns:repeat(3,1fr)"]{grid-template-columns:1fr !important}
+}

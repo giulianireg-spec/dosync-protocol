@@ -1,15 +1,15 @@
 <!DOCTYPE html>
-<html lang="es" data-lang="es">
+<html lang="en" data-lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DoSync App — tu casa, en tus palabras (beta)</title>
-<meta name="description" content="DoSync App: app gratis para Android que maneja tu casa con tus palabras. El teléfono es el hub. Beta abierta: descárgala y cuéntanos cómo te fue.">
+<title>DoSync App — your home, in your own words (beta)</title>
+<meta name="description" content="DoSync App: a free Android app that runs your home in your own words. Your phone is the hub. Open beta: download it and tell us how it went.">
 <link rel="canonical" href="https://dosync.dev/app/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="DoSync">
-<meta property="og:title" content="DoSync App — tu casa, en tus palabras (beta abierta)">
-<meta property="og:description" content="App gratis para Android: luces, aires, teles y electrodomésticos de más de 80 marcas, con tus palabras. El teléfono es el hub.">
+<meta property="og:title" content="DoSync App — your home, in your own words (open beta)">
+<meta property="og:description" content="Free Android app: lights, ACs, TVs and appliances from 80+ brands, in your own words. Your phone is the hub.">
 <meta property="og:image" content="https://dosync.dev/app/img/01-inicio.jpg">
 <meta property="og:url" content="https://dosync.dev/app/">
 <meta name="twitter:card" content="summary">
@@ -158,8 +158,8 @@ footer{padding:40px 0;background:var(--ink)}
     <a href="/app/" class="active">DoSync App</a>
     <a href="https://github.com/giulianireg-spec/dosync-app-beta" class="hide-sm">GitHub ↗</a>
     <span class="lang-switch" role="group" aria-label="Idioma / Language">
-      <button type="button" data-set-lang="es" aria-pressed="true">ES</button>
-      <button type="button" data-set-lang="en" aria-pressed="false">EN</button>
+      <button type="button" data-set-lang="es" aria-pressed="false">ES</button>
+      <button type="button" data-set-lang="en" aria-pressed="true">EN</button>
     </span>
   </div>
 </nav>
@@ -370,21 +370,23 @@ footer{padding:40px 0;background:var(--ink)}
 </footer>
 
 <script>
-// Idioma: ?lang=en, lo elegido antes, o el del navegador (español si empieza con "es").
+// Idioma: inglés, como el resto de dosync.dev, salvo que el enlace diga ?lang=es o
+// se elija ES con el botón. La elección queda en la dirección, así un enlace compartido abre igual.
 (function () {
   var root = document.documentElement;
-  var pick = function (l) {
+  var pick = function (l, keep) {
     root.setAttribute('data-lang', l);
     root.lang = l;
+    document.title = l === 'es' ? 'DoSync App — tu casa, en tus palabras (beta)' : 'DoSync App — your home, in your own words (beta)';
     document.querySelectorAll('[data-set-lang]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-set-lang') === l)); });
-    try { localStorage.setItem('dosync-app-lang', l); } catch (e) {}
+    if (keep) {
+      var u = new URL(location.href);
+      if (l === 'es') u.searchParams.set('lang', 'es'); else u.searchParams.delete('lang');
+      history.replaceState(null, '', u);
+    }
   };
-  var q = new URLSearchParams(location.search).get('lang');
-  var saved = null;
-  try { saved = localStorage.getItem('dosync-app-lang'); } catch (e) {}
-  var nav = (navigator.language || 'en').toLowerCase().indexOf('es') === 0 ? 'es' : 'en';
-  pick(q === 'es' || q === 'en' ? q : saved || nav);
-  document.querySelectorAll('[data-set-lang]').forEach(function (b) { b.addEventListener('click', function () { pick(b.getAttribute('data-set-lang')); }); });
+  pick(new URLSearchParams(location.search).get('lang') === 'es' ? 'es' : 'en');
+  document.querySelectorAll('[data-set-lang]').forEach(function (b) { b.addEventListener('click', function () { pick(b.getAttribute('data-set-lang'), true); }); });
 })();
 </script>
 </body>

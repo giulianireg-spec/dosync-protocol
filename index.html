@@ -60,27 +60,28 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231E1E1C'/%3E%3Cg transform='translate(.5 1)'%3E%3Cpath d='M14 10h14c13 0 21 8 21 21s-8 21-21 21H14z' fill='%23F4F3EF'/%3E%3Ccircle cx='29' cy='31' r='8' fill='%23F26B1D'/%3E%3C/g%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800;900&family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
 <style>
 :root{
-  --purple:#7F77DD;
-  --purple-light:#1A1830;
-  --purple-mid:#534AB7;
-  --purple-dark:#AFA9EC;
-  --teal:#1D9E75;
-  --teal-light:#0A2018;
-  --gray-50:#111110;
-  --gray-100:#1A1A18;
-  --gray-200:#2C2C2A;
-  --gray-400:#8A8A82;
-  --gray-600:#888780;
-  --gray-900:#F0EEE8;
-  --text:#F0EEE8;
-  --text-muted:#888780;
-  --text-faint:#8A8A82;
-  --border:#2C2C2A;
-  --bg:#0D0D0C;
-  --bg-subtle:#111110;
+  --purple:var(--pilot-text);
+  --purple-light:var(--tint);
+  --purple-mid:var(--pilot);
+  --purple-dark:var(--pilot-text);
+  --teal:var(--ok);
+  --teal-light:var(--ok-tint);
+  --gray-50:var(--plate);
+  --gray-100:var(--plate);
+  --gray-200:var(--edge);
+  --gray-400:var(--muted);
+  --gray-600:var(--muted);
+  --gray-900:var(--text);
+  --text:var(--text);
+  --text-muted:var(--muted);
+  --text-faint:var(--muted);
+  --border:var(--edge);
+  --bg:var(--wall);
+  --bg-subtle:var(--plate);
   --font-sans:'DM Sans',sans-serif;
   --font-mono:'DM Mono',monospace;
   --font-display:'DM Serif Display',serif;
@@ -99,7 +100,7 @@ nav{
   position:sticky;top:0;z-index:100;
   display:flex;align-items:center;justify-content:space-between;
   padding:0 40px;height:60px;
-  background:rgba(13,13,12,0.92);
+  background:var(--wall);
   border-bottom:0.5px solid var(--border);
   backdrop-filter:blur(8px);
 }
@@ -108,9 +109,9 @@ nav{
 .nav-links{display:flex;gap:28px;align-items:center}
 .nav-links a{font-size:14px;color:var(--text-muted);transition:color .15s}
 .nav-links a:hover{color:var(--text)}
-.nav-cta{background:#534AB7;color:#EEEDFE;border:none;padding:8px 18px;border-radius:var(--radius);font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font-sans);transition:opacity .15s}
+.nav-cta{background:var(--pilot);color:#1E1E1C;border:none;padding:8px 18px;border-radius:var(--radius);font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font-sans);transition:opacity .15s}
 .nav-cta:hover{opacity:.88}
-.nav-pill{font-size:11px;font-weight:500;background:#1A1830;color:#AFA9EC;padding:3px 9px;border-radius:20px;letter-spacing:.02em}
+.nav-pill{font-size:11px;font-weight:500;background:var(--tint);color:var(--pilot-text);padding:3px 9px;border-radius:20px;letter-spacing:.02em}
 
 /* Hero */
 .hero{
@@ -118,12 +119,12 @@ nav{
   max-width:1100px;margin:0 auto;
   display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;
 }
-.hero-eyebrow{font-size:12px;font-weight:500;color:#7F77DD;letter-spacing:.08em;text-transform:uppercase;margin-bottom:16px}
+.hero-eyebrow{font-size:12px;font-weight:500;color:var(--pilot-text);letter-spacing:.08em;text-transform:uppercase;margin-bottom:16px}
 .hero h1{font-family:var(--font-display);font-size:44px;line-height:1.1;letter-spacing:-.01em;margin-bottom:20px;color:var(--text)}
-.hero h1 em{font-style:italic;color:#7F77DD}
+.hero h1 em{color:var(--pilot-text)}
 .hero-sub{font-size:17px;color:var(--text-muted);line-height:1.65;margin-bottom:32px;max-width:440px}
 .hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:40px}
-.btn-primary{background:#534AB7;color:#EEEDFE;border:none;padding:11px 22px;border-radius:var(--radius);font-size:15px;font-weight:500;cursor:pointer;font-family:var(--font-sans);display:inline-flex;align-items:center;gap:7px;transition:opacity .15s}
+.btn-primary{background:var(--pilot);color:#1E1E1C;border:none;padding:11px 22px;border-radius:var(--radius);font-size:15px;font-weight:500;cursor:pointer;font-family:var(--font-sans);display:inline-flex;align-items:center;gap:7px;transition:opacity .15s}
 .btn-primary:hover{opacity:.88}
 .btn-secondary{background:transparent;color:var(--text);border:0.5px solid var(--gray-200);padding:11px 22px;border-radius:var(--radius);font-size:15px;cursor:pointer;font-family:var(--font-sans);transition:border-color .15s,background .15s}
 .btn-secondary:hover{border-color:var(--gray-400);background:var(--bg-subtle)}
@@ -135,48 +136,48 @@ nav{
 /* Compare card — hero right */
 .compare{display:flex;flex-direction:column;gap:12px}
 .compare-label{font-size:12px;font-weight:500;color:var(--text-faint);margin-bottom:8px;display:flex;align-items:center;gap:6px}
-.compare-label .dot{width:6px;height:6px;border-radius:50%;background:#2C2C2A}
-.compare-label .dot.active{background:#7F77DD}
-.compare-card{background:#1A1A18;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:20px 22px}
-.compare-card.accent{background:#1A1830;border-color:#534AB7}
+.compare-label .dot{width:6px;height:6px;border-radius:50%;background:var(--edge)}
+.compare-label .dot.active{background:var(--pilot-text)}
+.compare-card{background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius-lg);padding:20px 22px}
+.compare-card.accent{background:var(--tint);border-color:var(--pilot)}
 .compare-code{font-family:var(--font-mono);font-size:13px;color:#C8C6BB;line-height:2}
-.compare-card.accent .compare-code{color:#AFA9EC}
-.compare-code .comment{color:var(--gray-400);font-style:italic}
+.compare-card.accent .compare-code{color:var(--pilot-text)}
+.compare-code .comment{color:var(--gray-400);}
 
 /* Section common */
 section{padding:72px 40px;border-top:0.5px solid var(--border)}
 .section-inner{max-width:1100px;margin:0 auto}
-.section-eyebrow{font-size:12px;font-weight:500;color:#7F77DD;letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px}
+.section-eyebrow{font-size:12px;font-weight:500;color:var(--pilot-text);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px}
 .section-title{font-family:var(--font-display);font-size:34px;line-height:1.15;margin-bottom:16px;letter-spacing:-.01em}
 .section-sub{font-size:16px;color:var(--text-muted);max-width:520px;line-height:1.65}
 
 /* How it works */
 .layers{display:grid;grid-template-columns:repeat(5,1fr);gap:2px;margin-top:40px;border-radius:var(--radius-lg);overflow:hidden;border:0.5px solid var(--border)}
 .layer{padding:20px 16px;background:var(--bg-subtle);text-align:center;position:relative}
-.layer:first-child{background:#1A1830}
+.layer:first-child{background:var(--tint)}
 .layer-num{font-size:11px;font-weight:500;color:var(--text-faint);margin-bottom:6px}
-.layer:first-child .layer-num{color:#7F77DD}
+.layer:first-child .layer-num{color:var(--pilot-text)}
 .layer-name{font-size:14px;font-weight:500;color:var(--text);margin-bottom:4px}
-.layer:first-child .layer-name{color:#AFA9EC}
+.layer:first-child .layer-name{color:var(--pilot-text)}
 .layer-desc{font-size:12px;color:var(--text-faint);line-height:1.5}
-.layer:first-child .layer-desc{color:#7F77DD}
+.layer:first-child .layer-desc{color:var(--pilot-text)}
 
 /* Demo */
 .demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:40px;align-items:start}
 .demo-terminal{background:var(--gray-900);border-radius:var(--radius-lg);overflow:hidden}
-.terminal-bar{display:flex;align-items:center;gap:6px;padding:12px 16px;background:#111110}
+.terminal-bar{display:flex;align-items:center;gap:6px;padding:12px 16px;background:var(--plate)}
 .dot-r{width:10px;height:10px;border-radius:50%;background:#FF5F57}
 .dot-y{width:10px;height:10px;border-radius:50%;background:#FFBD2E}
 .dot-g{width:10px;height:10px;border-radius:50%;background:#28C840}
-.terminal-body{padding:20px;font-family:var(--font-mono);font-size:13px;line-height:2;color:#C8C6BB;background:#111110}
-.t-prompt{color:#1D9E75}
-.t-cmd{color:#F0EEE8}
-.t-comment{color:#8A8A82;font-style:italic}
-.t-success{color:#1D9E75}
-.t-device{color:#7F77DD}
-.t-action{color:#EF9F27}
+.terminal-body{padding:20px;font-family:var(--font-mono);font-size:13px;line-height:2;color:#C8C6BB;background:var(--plate)}
+.t-prompt{color:var(--ok)}
+.t-cmd{color:var(--text)}
+.t-comment{color:var(--muted);}
+.t-success{color:var(--ok)}
+.t-device{color:var(--pilot-text)}
+.t-action{color:var(--warn)}
 .demo-video-box{background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
-.video-placeholder{aspect-ratio:16/9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#111110;cursor:pointer;border-bottom:0.5px solid #2C2C2A}
+.video-placeholder{aspect-ratio:16/9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:var(--plate);cursor:pointer;border-bottom:0.5px solid var(--edge)}
 .play-btn{width:52px;height:52px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;transition:transform .15s}
 .play-btn:hover{transform:scale(1.06)}
 .play-btn svg{width:20px;height:20px;fill:#fff;margin-left:3px}
@@ -190,8 +191,8 @@ section{padding:72px 40px;border-top:0.5px solid var(--border)}
 .qs-step-header{padding:14px 18px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;gap:10px}
 .qs-step-num{width:22px;height:22px;border-radius:50%;background:var(--purple);color:#fff;font-size:11px;font-weight:500;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .qs-step-title{font-size:14px;font-weight:500}
-.qs-code{padding:16px 18px;font-family:var(--font-mono);font-size:12.5px;line-height:1.9;background:#111110;color:#C8C6BB;border-top:0.5px solid #2C2C2A}
-.qs-code .prompt{color:#1D9E75}
+.qs-code{padding:16px 18px;font-family:var(--font-mono);font-size:12.5px;line-height:1.9;background:var(--plate);color:#C8C6BB;border-top:0.5px solid var(--edge)}
+.qs-code .prompt{color:var(--ok)}
 
 /* Use cases */
 .use-cases{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:40px}
@@ -203,27 +204,27 @@ section{padding:72px 40px;border-top:0.5px solid var(--border)}
 /* Certification */
 .cert-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px}
 .cert-tier{border-radius:var(--radius-lg);padding:24px;border:0.5px solid var(--border)}
-.cert-tier.featured{background:#1A1830;border-color:#534AB7}
+.cert-tier.featured{background:var(--tint);border-color:var(--pilot)}
 .cert-tier-badge{font-size:11px;font-weight:500;background:var(--gray-100);color:var(--gray-600);padding:3px 10px;border-radius:20px;display:inline-block;margin-bottom:14px}
-.cert-tier.featured .cert-tier-badge{background:#534AB7;color:#EEEDFE}
+.cert-tier.featured .cert-tier-badge{background:var(--pilot);color:#1E1E1C}
 .cert-tier-name{font-size:18px;font-weight:500;margin-bottom:8px}
-.cert-tier.featured .cert-tier-name{color:#AFA9EC}
+.cert-tier.featured .cert-tier-name{color:var(--pilot-text)}
 .cert-tier-desc{font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.55}
-.cert-tier.featured .cert-tier-desc{color:#7F77DD}
+.cert-tier.featured .cert-tier-desc{color:var(--pilot-text)}
 .cert-requirements{list-style:none;display:flex;flex-direction:column;gap:6px}
 .cert-requirements li{font-size:13px;color:var(--text-muted);display:flex;align-items:flex-start;gap:8px}
 .cert-requirements li::before{content:"✓";color:var(--teal);font-weight:500;flex-shrink:0}
-.cert-tier.featured .cert-requirements li{color:#AFA9EC}
-.cert-cta{margin-top:40px;background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:24px 28px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.cert-tier.featured .cert-requirements li{color:var(--pilot-text)}
+.cert-cta{margin-top:40px;background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius-lg);padding:24px 28px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
 .cert-cta-text{color:#C8C6BB;font-family:var(--font-mono);font-size:13px;line-height:1.8}
-.cert-cta-text .prompt{color:#1D9E75}
+.cert-cta-text .prompt{color:var(--ok)}
 
 /* Status */
 .status-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:40px;align-items:start}
 .status-items{display:flex;flex-direction:column;gap:10px}
 .status-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius)}
 .status-badge{font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px;white-space:nowrap}
-.status-badge.done{background:#0A2018;color:#5DCAA5;border:0.5px solid #1D6B4A}
+.status-badge.done{background:var(--ok-tint);color:var(--ok);border:0.5px solid var(--ok)}
 .status-badge.wip{background:#FAEEDA;color:#633806}
 .status-badge.planned{background:var(--gray-100);color:var(--gray-600)}
 .status-item-name{font-size:14px;color:var(--text)}
@@ -231,7 +232,7 @@ section{padding:72px 40px;border-top:0.5px solid var(--border)}
 .roadmap h3{font-size:15px;font-weight:500;margin-bottom:16px}
 .roadmap-items{display:flex;flex-direction:column;gap:12px}
 .roadmap-item{display:flex;gap:14px;align-items:flex-start}
-.roadmap-q{font-size:12px;font-weight:500;color:#7F77DD;width:48px;flex-shrink:0;padding-top:1px}
+.roadmap-q{font-size:12px;font-weight:500;color:var(--pilot-text);width:48px;flex-shrink:0;padding-top:1px}
 .roadmap-text{font-size:13px;color:var(--text-muted);line-height:1.5}
 
 /* Footer */
@@ -264,9 +265,10 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
 .hero-actions{animation:fade-up .5s .3s ease both}
 .hero-stats{animation:fade-up .5s .4s ease both}
 .compare{animation:fade-up .5s .2s ease both}
-  .skip-link{position:absolute;left:-9999px;top:0;z-index:100;background:#534AB7;color:#fff;padding:10px 18px;border-radius:0 0 8px 0;font-size:14px;text-decoration:none}
+  .skip-link{position:absolute;left:-9999px;top:0;z-index:100;background:var(--pilot);color:#fff;padding:10px 18px;border-radius:0 0 8px 0;font-size:14px;text-decoration:none}
   .skip-link:focus{left:0}
 </style>
+<link rel="stylesheet" href="/tecla.css">
 </head>
 <body>
 <a href="#main" class="skip-link">Skip to content</a>
@@ -274,18 +276,7 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
 <!-- Nav -->
 <nav>
   <div class="nav-logo">
-    <svg viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="11" cy="11" r="3" fill="#534AB7"/>
-      <circle cx="3" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
-      <circle cx="19" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
-      <circle cx="3" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
-      <circle cx="19" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
-      <line x1="5" y1="6" x2="9" y2="10" stroke="#AFA9EC" stroke-width="1"/>
-      <line x1="17" y1="6" x2="13" y2="10" stroke="#AFA9EC" stroke-width="1"/>
-      <line x1="5" y1="16" x2="9" y2="12" stroke="#AFA9EC" stroke-width="1"/>
-      <line x1="17" y1="16" x2="13" y2="12" stroke="#AFA9EC" stroke-width="1"/>
-    </svg>
-    DoSync
+    <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1E1E1C"/><g transform="translate(.5 1)"><path d="M14 10h14c13 0 21 8 21 21s-8 21-21 21H14z" fill="#F4F3EF"/><circle cx="29" cy="31" r="8" fill="#F26B1D"/></g></svg><span class="wordmark" aria-hidden="true">d<span class="o"></span>sync</span>
     <span class="nav-pill">Apache 2.0</span>
   </div>
   <div class="nav-links">
@@ -329,7 +320,7 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
           lock.unlock()<br>
           light.set_brightness(100)<br>
           thermostat.set_temperature(21)<br>
-          <span style="color:#444441;font-style:italic">// hardcoded, per-device, per-scenario</span>
+          <span style="color:var(--edge);">// hardcoded, per-device, per-scenario</span>
         </div>
       </div>
       <div class="compare-card accent">
@@ -338,7 +329,7 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
           "there is an emergency at home"<br>
           "nobody is home — save energy"<br>
           "good morning"<br>
-          <span style="color:#7F77DD;font-style:italic">// every device resolves its own role</span>
+          <span style="color:var(--pilot-text);">// every device resolves its own role</span>
         </div>
       </div>
     </div>
@@ -396,11 +387,11 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
           <div><span class="t-prompt">user → </span><span class="t-cmd">"there is an emergency at home"</span></div>
           <div style="margin-top:8px"><span class="t-comment"># DoSync hub receives intent</span></div>
           <div><span class="t-comment"># ensure_safety [emergency]</span></div>
-          <div style="margin-top:8px"><span class="t-device">light-zone3-01</span> <span class="t-action">turn_on</span> <span style="color:#8A8A82">brightness=100</span> <span class="t-success">✓</span></div>
-          <div><span class="t-device">light-zone3-02</span> <span class="t-action">turn_on</span> <span style="color:#8A8A82">brightness=100</span> <span class="t-success">✓</span></div>
-          <div><span class="t-device">light-zone4-01</span> <span class="t-action">turn_on</span> <span style="color:#8A8A82">brightness=100</span> <span class="t-success">✓</span></div>
-          <div><span class="t-device">alarm-01</span> <span class="t-action">alarm</span> <span style="color:#8A8A82">pattern=emergency</span> <span class="t-success">✓</span></div>
-          <div><span class="t-device">notifier-01</span> <span class="t-action">notify</span> <span style="color:#8A8A82">→ +1555012...</span> <span class="t-success">✓</span></div>
+          <div style="margin-top:8px"><span class="t-device">light-zone3-01</span> <span class="t-action">turn_on</span> <span style="color:var(--muted)">brightness=100</span> <span class="t-success">✓</span></div>
+          <div><span class="t-device">light-zone3-02</span> <span class="t-action">turn_on</span> <span style="color:var(--muted)">brightness=100</span> <span class="t-success">✓</span></div>
+          <div><span class="t-device">light-zone4-01</span> <span class="t-action">turn_on</span> <span style="color:var(--muted)">brightness=100</span> <span class="t-success">✓</span></div>
+          <div><span class="t-device">alarm-01</span> <span class="t-action">alarm</span> <span style="color:var(--muted)">pattern=emergency</span> <span class="t-success">✓</span></div>
+          <div><span class="t-device">notifier-01</span> <span class="t-action">notify</span> <span style="color:var(--muted)">→ +1555012...</span> <span class="t-success">✓</span></div>
           <div style="margin-top:8px"><span class="t-comment"># 18 actions · 8 devices · 79ms</span></div>
           <div><span class="t-comment"># audit log updated · SHA-256 chain intact</span></div>
         </div>
@@ -456,10 +447,10 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
         <p style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:6px">Intent fired by API</p>
         <p style="font-size:13px;color:var(--text-muted);line-height:1.6">The full mission flown by posting the semantic intent to the hub. Proves the closed loop: command, telemetry, confirmed arrival at every step.</p>
       </div>
-      <div style="background:#1A1830;border:0.5px solid #534AB7;border-radius:var(--radius-lg);padding:20px 22px">
-        <p style="font-size:11px;font-weight:500;color:#7F77DD;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Path B — the real goal</p>
-        <p style="font-size:15px;font-weight:500;color:#AFA9EC;margin-bottom:6px">Intent fired by an AI model</p>
-        <p style="font-size:13px;color:#7F77DD;line-height:1.6">A model (Claude Haiku, via DoSync's native MCP server) read the goal in plain language, chose <code style="font-family:var(--font-mono);font-size:12px">inspect_area</code>, built the context, and fired it. The AI decided to act — the whole point of the protocol.</p>
+      <div style="background:var(--tint);border:0.5px solid var(--pilot);border-radius:var(--radius-lg);padding:20px 22px">
+        <p style="font-size:11px;font-weight:500;color:var(--pilot-text);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Path B — the real goal</p>
+        <p style="font-size:15px;font-weight:500;color:var(--pilot-text);margin-bottom:6px">Intent fired by an AI model</p>
+        <p style="font-size:13px;color:var(--pilot-text);line-height:1.6">A model (Claude Haiku, via DoSync's native MCP server) read the goal in plain language, chose <code style="font-family:var(--font-mono);font-size:12px">inspect_area</code>, built the context, and fired it. The AI decided to act — the whole point of the protocol.</p>
       </div>
     </div>
 
@@ -467,20 +458,20 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
     <div style="display:grid;gap:16px;margin-top:24px">
       <div style="background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
         <img src="img/drone-ai-conversation.png" alt="An AI model receives a plain-language instruction and fires the inspect_area intent" style="display:block;width:100%;height:auto">
-        <div style="padding:14px 18px;border-top:0.5px solid var(--border);font-size:13px;color:var(--text-muted);line-height:1.6"><span style="color:var(--text);font-weight:500">1 · The AI commands.</span> A sentence in plain language → the model fires <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">inspect_area</code> with the center, radius and altitude it inferred.</div>
+        <div style="padding:14px 18px;border-top:0.5px solid var(--border);font-size:13px;color:var(--text-muted);line-height:1.6"><span style="color:var(--text);font-weight:500">1 · The AI commands.</span> A sentence in plain language → the model fires <code style="font-family:var(--font-mono);color:var(--pilot-text);font-size:12px">inspect_area</code> with the center, radius and altitude it inferred.</div>
       </div>
       <div style="background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
         <img src="img/drone-hub-log.png" alt="DoSync hub log showing each waypoint command followed by a telemetry-confirmed arrival" style="display:block;width:100%;height:auto">
-        <div style="padding:14px 18px;border-top:0.5px solid var(--border);font-size:13px;color:var(--text-muted);line-height:1.6"><span style="color:var(--text);font-weight:500">2 · The hub confirms.</span> Every <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">go_to accepted</code> is followed by a telemetry-confirmed <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">reached target — FINISHED</code>. Acceptance ≠ completion.</div>
+        <div style="padding:14px 18px;border-top:0.5px solid var(--border);font-size:13px;color:var(--text-muted);line-height:1.6"><span style="color:var(--text);font-weight:500">2 · The hub confirms.</span> Every <code style="font-family:var(--font-mono);color:var(--pilot-text);font-size:12px">go_to accepted</code> is followed by a telemetry-confirmed <code style="font-family:var(--font-mono);color:var(--pilot-text);font-size:12px">reached target — FINISHED</code>. Acceptance ≠ completion.</div>
       </div>
       <div style="background:var(--bg-subtle);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
         <img src="img/drone-sitl-console.png" alt="ArduPilot SITL console: arm, takeoff, climb, RTL, land, disarm" style="display:block;width:100%;height:auto">
-        <div style="padding:14px 18px;border-top:0.5px solid var(--border);font-size:13px;color:var(--text-muted);line-height:1.6"><span style="color:var(--text);font-weight:500">3 · The drone flies.</span> ArduPilot SITL: <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">ARM → NAV_TAKEOFF → height 25 → RTL → land → DISARMED</code>. A complete autonomous mission.</div>
+        <div style="padding:14px 18px;border-top:0.5px solid var(--border);font-size:13px;color:var(--text-muted);line-height:1.6"><span style="color:var(--text);font-weight:500">3 · The drone flies.</span> ArduPilot SITL: <code style="font-family:var(--font-mono);color:var(--pilot-text);font-size:12px">ARM → NAV_TAKEOFF → height 25 → RTL → land → DISARMED</code>. A complete autonomous mission.</div>
       </div>
     </div>
 
     <!-- Safety property -->
-    <div style="margin-top:24px;border-left:3px solid #E24B4A;background:#1F0808;border-radius:0 var(--radius-lg) var(--radius-lg) 0;padding:20px 24px">
+    <div style="margin-top:24px;border-left:3px solid var(--bad);background:var(--bad-tint);border-radius:0 var(--radius-lg) var(--radius-lg) 0;padding:20px 24px">
       <p style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:6px">When the AI guessed wrong, the system caught it.</p>
       <p style="font-size:13px;color:var(--text-muted);line-height:1.65">On the first attempt — with no coordinates given — the model filled the gap with a plausible guess <span style="color:var(--text)">11,000 km away</span> from the drone. The supervisor did not fake success: it waited for a confirmed arrival, none came, and it aborted the mission with a clear diagnosis. <span style="color:var(--text)">The AI can be wrong. The protocol does not have to be.</span></p>
     </div>
@@ -505,20 +496,20 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
 
       <!-- Header -->
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px;flex-wrap:wrap">
-        <div style="background:#1A1830;border:0.5px solid #534AB7;border-radius:var(--radius-lg);padding:14px 18px;flex:1;min-width:220px">
-          <div style="font-size:11px;font-weight:500;color:#7F77DD;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Intent fired</div>
-          <div style="font-family:var(--font-mono);font-size:13px;color:#AFA9EC;line-height:1.9">
-            intent: <span style="color:#F0EEE8">"ensure_safety"</span><br>
-            urgency: <span style="color:#F0EEE8">emergency</span><br>
-            source: <span style="color:#F0EEE8">claude_mcp</span>
+        <div style="background:var(--tint);border:0.5px solid var(--pilot);border-radius:var(--radius-lg);padding:14px 18px;flex:1;min-width:220px">
+          <div style="font-size:11px;font-weight:500;color:var(--pilot-text);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Intent fired</div>
+          <div style="font-family:var(--font-mono);font-size:13px;color:var(--pilot-text);line-height:1.9">
+            intent: <span style="color:var(--text)">"ensure_safety"</span><br>
+            urgency: <span style="color:var(--text)">emergency</span><br>
+            source: <span style="color:var(--text)">claude_mcp</span>
           </div>
         </div>
-        <button id="tl-fire-btn" onclick="tlFire()" style="background:#534AB7;color:#EEEDFE;border:none;padding:11px 24px;border-radius:var(--radius);font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font-sans);align-self:center;white-space:nowrap;transition:opacity .15s">Fire intent →</button>
+        <button id="tl-fire-btn" onclick="tlFire()" style="background:var(--pilot);color:#1E1E1C;border:none;padding:11px 24px;border-radius:var(--radius);font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font-sans);align-self:center;white-space:nowrap;transition:opacity .15s">Fire intent →</button>
       </div>
 
       <!-- Progress bar -->
       <div style="height:2px;background:var(--border);border-radius:1px;margin-bottom:24px;overflow:hidden">
-        <div id="tl-prog" style="height:100%;width:0;background:#534AB7;border-radius:1px;transition:width .1s linear"></div>
+        <div id="tl-prog" style="height:100%;width:0;background:var(--pilot);border-radius:1px;transition:width .1s linear"></div>
       </div>
 
       <!-- Timeline track -->
@@ -528,21 +519,21 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
 
       <!-- Summary -->
       <div id="tl-summary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:24px;opacity:0;transition:opacity .4s">
-        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius);padding:12px;text-align:center">
-          <div style="font-size:22px;font-weight:500;color:#F0EEE8;line-height:1.2">79ms</div>
-          <div style="font-size:11px;color:#8A8A82;margin-top:3px">total latency</div>
+        <div style="background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:500;color:var(--text);line-height:1.2">79ms</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">total latency</div>
         </div>
-        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius);padding:12px;text-align:center">
-          <div style="font-size:22px;font-weight:500;color:#F0EEE8;line-height:1.2">8</div>
-          <div style="font-size:11px;color:#8A8A82;margin-top:3px">devices acted</div>
+        <div style="background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:500;color:var(--text);line-height:1.2">8</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">devices acted</div>
         </div>
-        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius);padding:12px;text-align:center">
-          <div style="font-size:22px;font-weight:500;color:#F0EEE8;line-height:1.2">18</div>
-          <div style="font-size:11px;color:#8A8A82;margin-top:3px">actions fired</div>
+        <div style="background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:500;color:var(--text);line-height:1.2">18</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">actions fired</div>
         </div>
-        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius);padding:12px;text-align:center">
-          <div style="font-size:22px;font-weight:500;color:#F0EEE8;line-height:1.2">0</div>
-          <div style="font-size:11px;color:#8A8A82;margin-top:3px">rules written</div>
+        <div style="background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:500;color:var(--text);line-height:1.2">0</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">rules written</div>
         </div>
       </div>
     </div>
@@ -552,15 +543,15 @@ footer{border-top:0.5px solid var(--border);padding:40px;background:var(--bg-sub
 <script>
 (function(){
 var TL_STEPS=[
-  {id:'tl-s0',delay:300, dot:'#534AB7', time:'t=0ms',  tag:'Hub',         tagBg:'#1A1830', tagColor:'#AFA9EC', title:'Intent received',           sub:'Token validated · intent_id <b>gen:a3f9c2</b> · queued'},
-  {id:'tl-s1',delay:700, dot:'#1D9E75', time:'t=2ms',  tag:'Resolver',    tagBg:'#0A2018', tagColor:'#5DCAA5', title:'Tag index scan',            sub:'33 devices evaluated · <b>8 candidates</b> · O(tags) lookup'},
-  {id:'tl-s2',delay:1050,dot:'#EF9F27', time:'t=3ms',  tag:'Policy Engine',tagBg:'#1E1405',tagColor:'#EF9F27', title:'Emergency bypass',          sub:'urgency=emergency · <b>confirmation skipped</b> · all policies bypassed'},
-  {id:'tl-s3',delay:1400,dot:'#534AB7', time:'t=4ms',  tag:'Hub',         tagBg:'#1A1830', tagColor:'#AFA9EC', title:'ActionPlan built',          sub:'8 actions · <b>parallel execution</b> · AdapterExecutor dispatched'},
-  {id:'tl-s4',delay:1800,dot:'#7F77DD', time:'t=12–18ms',tag:'WiZ UDP',  tagBg:'#1A1830', tagColor:'#AFA9EC', title:'5 bulbs — full brightness', sub:'', bulbs:true},
-  {id:'tl-s5',delay:2600,dot:'#7F77DD', time:'t=18ms', tag:'Alarm',       tagBg:'#1A1830', tagColor:'#AFA9EC', title:'Emergency pattern activated',sub:'alarm-01 · <b>pattern=emergency</b> · ✓'},
-  {id:'tl-s6',delay:3000,dot:'#E24B4A', time:'t=51ms', tag:'SMS',         tagBg:'#1F0808', tagColor:'#E24B4A', title:'Family notified',           sub:'notifier-01 · Twilio → <b>+1555012...</b> · ✓'},
-  {id:'tl-s7',delay:3600,dot:'#888780', time:'t=79ms', tag:'Audit log',   tagBg:'#1A1A18', tagColor:'#888780', title:'SHA-256 chain updated',     sub:'entry #692 · <b>chain intact</b> · tamper-evident'},
-  {id:'tl-s8',delay:3900,dot:'#888780', time:'t=80ms', tag:'WebSocket',   tagBg:'#1A1A18', tagColor:'#888780', title:'Dashboard updated',         sub:'broadcast → <b>all connected clients</b> · real-time feed'},
+  {id:'tl-s0',delay:300, dot:'var(--pilot)', time:'t=0ms',  tag:'Hub',         tagBg:'var(--tint)', tagColor:'var(--pilot-text)', title:'Intent received',           sub:'Token validated · intent_id <b>gen:a3f9c2</b> · queued'},
+  {id:'tl-s1',delay:700, dot:'var(--ok)', time:'t=2ms',  tag:'Resolver',    tagBg:'var(--ok-tint)', tagColor:'var(--ok)', title:'Tag index scan',            sub:'33 devices evaluated · <b>8 candidates</b> · O(tags) lookup'},
+  {id:'tl-s2',delay:1050,dot:'var(--warn)', time:'t=3ms',  tag:'Policy Engine',tagBg:'var(--warn-tint)',tagColor:'var(--warn)', title:'Emergency bypass',          sub:'urgency=emergency · <b>confirmation skipped</b> · all policies bypassed'},
+  {id:'tl-s3',delay:1400,dot:'var(--pilot)', time:'t=4ms',  tag:'Hub',         tagBg:'var(--tint)', tagColor:'var(--pilot-text)', title:'ActionPlan built',          sub:'8 actions · <b>parallel execution</b> · AdapterExecutor dispatched'},
+  {id:'tl-s4',delay:1800,dot:'var(--pilot-text)', time:'t=12–18ms',tag:'WiZ UDP',  tagBg:'var(--tint)', tagColor:'var(--pilot-text)', title:'5 bulbs — full brightness', sub:'', bulbs:true},
+  {id:'tl-s5',delay:2600,dot:'var(--pilot-text)', time:'t=18ms', tag:'Alarm',       tagBg:'var(--tint)', tagColor:'var(--pilot-text)', title:'Emergency pattern activated',sub:'alarm-01 · <b>pattern=emergency</b> · ✓'},
+  {id:'tl-s6',delay:3000,dot:'var(--bad)', time:'t=51ms', tag:'SMS',         tagBg:'var(--bad-tint)', tagColor:'var(--bad)', title:'Family notified',           sub:'notifier-01 · Twilio → <b>+1555012...</b> · ✓'},
+  {id:'tl-s7',delay:3600,dot:'var(--muted)', time:'t=79ms', tag:'Audit log',   tagBg:'var(--plate)', tagColor:'var(--muted)', title:'SHA-256 chain updated',     sub:'entry #692 · <b>chain intact</b> · tamper-evident'},
+  {id:'tl-s8',delay:3900,dot:'var(--muted)', time:'t=80ms', tag:'WebSocket',   tagBg:'var(--plate)', tagColor:'var(--muted)', title:'Dashboard updated',         sub:'broadcast → <b>all connected clients</b> · real-time feed'},
 ];
 var BULBS=[
   {id:'light-zone3-01',ms:12},{id:'light-zone3-02',ms:14},
@@ -582,13 +573,13 @@ function tlBuildSteps(){
     }
     d.innerHTML=
       '<div style="width:13px;height:13px;border-radius:50%;flex-shrink:0;margin-top:3px;position:relative;z-index:1;background:'+s.dot+';border:2px solid var(--bg-subtle)"></div>'+
-      '<div style="flex:1;min-width:0;padding:8px 12px;border-radius:var(--radius);border:0.5px solid #2C2C2A;background:#111110">'+
+      '<div style="flex:1;min-width:0;padding:8px 12px;border-radius:var(--radius);border:0.5px solid var(--edge);background:var(--plate)">'+
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
-          '<span style="font-family:var(--font-mono);font-size:11px;color:#8A8A82;min-width:68px">'+s.time+'</span>'+
+          '<span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);min-width:68px">'+s.time+'</span>'+
           '<span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px;background:'+s.tagBg+';color:'+s.tagColor+'">'+s.tag+'</span>'+
-          '<span style="font-size:13px;font-weight:500;color:#F0EEE8">'+s.title+'</span>'+
+          '<span style="font-size:13px;font-weight:500;color:var(--text)">'+s.title+'</span>'+
         '</div>'+
-        (s.sub?'<div style="font-size:12px;color:#888780;margin-top:4px;font-family:var(--font-mono)">'+s.sub+'</div>':'')+
+        (s.sub?'<div style="font-size:12px;color:var(--muted);margin-top:4px;font-family:var(--font-mono)">'+s.sub+'</div>':'')+
         bulbsHtml+
       '</div>';
     track.appendChild(d);
@@ -602,11 +593,11 @@ function tlBuildBulbs(){
   BULBS.forEach(function(b){
     var d=document.createElement('div');
     d.id='tlb-'+b.id;
-    d.style.cssText='background:#1A1A18;border:0.5px solid #2C2C2A;border-radius:var(--radius);padding:6px 10px;display:flex;align-items:center;gap:8px;opacity:0;transform:scale(.97);transition:opacity .2s,transform .2s';
-    d.innerHTML='<div style="width:6px;height:6px;border-radius:50%;background:#7F77DD;flex-shrink:0"></div>'+
-      '<span style="font-family:var(--font-mono);font-size:11px;color:#888780;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+b.id+'</span>'+
-      '<span style="font-size:11px;color:#8A8A82">'+b.ms+'ms</span>'+
-      '<span style="font-size:11px;color:#1D9E75">✓</span>';
+    d.style.cssText='background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius);padding:6px 10px;display:flex;align-items:center;gap:8px;opacity:0;transform:scale(.97);transition:opacity .2s,transform .2s';
+    d.innerHTML='<div style="width:6px;height:6px;border-radius:50%;background:var(--pilot-text);flex-shrink:0"></div>'+
+      '<span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+b.id+'</span>'+
+      '<span style="font-size:11px;color:var(--muted)">'+b.ms+'ms</span>'+
+      '<span style="font-size:11px;color:var(--ok)">✓</span>';
     c.appendChild(d);
   });
 }
@@ -683,7 +674,7 @@ document.addEventListener('DOMContentLoaded',function(){tlBuildSteps();});
         </div>
         <div class="qs-code">
           <span class="prompt">$</span> pipx install dosync<br>
-            <span style="color:#8A8A82"># or: pip install dosync</span>
+            <span style="color:var(--muted)"># or: pip install dosync</span>
         </div>
       </div>
       <div class="qs-step">
@@ -693,7 +684,7 @@ document.addEventListener('DOMContentLoaded',function(){tlBuildSteps();});
         </div>
         <div class="qs-code">
           <span class="prompt">$</span> dosync-hub<br>
-            <span style="color:#8A8A82"># auth on, audit chain running</span>
+            <span style="color:var(--muted)"># auth on, audit chain running</span>
         </div>
       </div>
       <div class="qs-step">
@@ -703,7 +694,7 @@ document.addEventListener('DOMContentLoaded',function(){tlBuildSteps();});
         </div>
         <div class="qs-code">
           open http://localhost:47200<br>
-          <span style="color:#8A8A82"># hub · devices · audit log</span>
+          <span style="color:var(--muted)"># hub · devices · audit log</span>
         </div>
       </div>
     </div>
@@ -715,18 +706,18 @@ document.addEventListener('DOMContentLoaded',function(){tlBuildSteps();});
   <div class="section-inner">
     <p class="section-eyebrow">Discovery</p>
     <h2 class="section-title">It finds what's there — over WiFi and over radio.</h2>
-    <p class="section-sub">Press <strong style="color:#F0EEE8;font-weight:500">Scan</strong> and the hub asks every transport it can search. Bluetooth included, with nothing extra to install.</p>
+    <p class="section-sub">Press <strong style="color:var(--text);font-weight:500">Scan</strong> and the hub asks every transport it can search. Bluetooth included, with nothing extra to install.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:32px;align-items:start">
       <div class="demo-terminal">
-        <div class="terminal-bar"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span><span style="margin-left:8px;font-family:var(--font-mono);font-size:11.5px;color:#8A8A82">GET /v1/discovery/scan</span></div>
+        <div class="terminal-bar"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span><span style="margin-left:8px;font-family:var(--font-mono);font-size:11.5px;color:var(--muted)">GET /v1/discovery/scan</span></div>
         <div class="terminal-body">{<br>
-&nbsp;&nbsp;<span style="color:#7F77DD">"searched"</span>: [<span style="color:#1D9E75">"wiz (udp broadcast)"</span>, <span style="color:#1D9E75">"ble"</span>],<br>
-&nbsp;&nbsp;<span style="color:#7F77DD">"not_searchable"</span>: [<span style="color:#1D9E75">"homeassistant"</span>, <span style="color:#1D9E75">"mqtt"</span>],<br>
-&nbsp;&nbsp;<span style="color:#7F77DD">"found"</span>: [ ... ]<br>
+&nbsp;&nbsp;<span style="color:var(--pilot-text)">"searched"</span>: [<span style="color:var(--ok)">"wiz (udp broadcast)"</span>, <span style="color:var(--ok)">"ble"</span>],<br>
+&nbsp;&nbsp;<span style="color:var(--pilot-text)">"not_searchable"</span>: [<span style="color:var(--ok)">"homeassistant"</span>, <span style="color:var(--ok)">"mqtt"</span>],<br>
+&nbsp;&nbsp;<span style="color:var(--pilot-text)">"found"</span>: [ ... ]<br>
 }</div>
       </div>
       <div>
-        <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-bottom:16px"><strong style="color:#F0EEE8;font-weight:500">Scanning registers nothing.</strong> It lists candidates; you choose which become devices and what they are called. In a protocol built around being able to account for what is in it, devices appearing because they answered a broadcast — approved by nobody — would contradict the premise.</p>
+        <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-bottom:16px"><strong style="color:var(--text);font-weight:500">Scanning registers nothing.</strong> It lists candidates; you choose which become devices and what they are called. In a protocol built around being able to account for what is in it, devices appearing because they answered a broadcast — approved by nobody — would contradict the premise.</p>
         <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-bottom:16px">The scan reports which transports it searched <em>and which it could not</em>, because "found nothing" means something different when Bluetooth was never scanned.</p>
         <p style="font-size:14px;color:var(--text-muted);line-height:1.7">Bluetooth works out of the box because the library that finds BLE devices is a core dependency — discovery is how you learn what you have, and a library you can only install after knowing you need it is a circle.</p>
       </div>
@@ -745,37 +736,37 @@ document.addEventListener('DOMContentLoaded',function(){tlBuildSteps();});
         <div class="demo-terminal">
           <div class="terminal-bar">
             <span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span>
-            <span style="font-family:var(--font-mono);font-size:11px;color:#8A8A82;margin-left:8px">my_adapter.py</span>
+            <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-left:8px">my_adapter.py</span>
           </div>
           <div class="terminal-body" style="font-size:12px;line-height:1.9">
-<span style="color:#7F77DD">class</span> <span style="color:#EF9F27">MyBrandAdapter</span>(<span style="color:#5DCAA5">DoSyncAdapter</span>):<br>
+<span style="color:var(--pilot-text)">class</span> <span style="color:var(--warn)">MyBrandAdapter</span>(<span style="color:var(--ok)">DoSyncAdapter</span>):<br>
 <br>
-&nbsp;&nbsp;<span style="color:#7F77DD">async def</span> <span style="color:#EF9F27">execute</span>(self, action, urgency):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#8A8A82"># translate DoSync action to your device</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7F77DD">await</span> self.device.send(action.action, action.params)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7F77DD">return</span> <span style="color:#5DCAA5">ActionResult</span>(success=<span style="color:#EF9F27">True</span>)<br>
+&nbsp;&nbsp;<span style="color:var(--pilot-text)">async def</span> <span style="color:var(--warn)">execute</span>(self, action, urgency):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)"># translate DoSync action to your device</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--pilot-text)">await</span> self.device.send(action.action, action.params)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--pilot-text)">return</span> <span style="color:var(--ok)">ActionResult</span>(success=<span style="color:var(--warn)">True</span>)<br>
 <br>
-&nbsp;&nbsp;<span style="color:#888780">@property</span><br>
-&nbsp;&nbsp;<span style="color:#7F77DD">def</span> <span style="color:#EF9F27">adapter_name</span>(self):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#7F77DD">return</span> <span style="color:#5DCAA5">"mybrand"</span><br>
+&nbsp;&nbsp;<span style="color:var(--muted)">@property</span><br>
+&nbsp;&nbsp;<span style="color:var(--pilot-text)">def</span> <span style="color:var(--warn)">adapter_name</span>(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--pilot-text)">return</span> <span style="color:var(--ok)">"mybrand"</span><br>
 <br>
-<span style="color:#8A8A82"># register once — hub uses it automatically</span><br>
-executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
+<span style="color:var(--muted)"># register once — hub uses it automatically</span><br>
+executor.register(<span style="color:var(--warn)">MyBrandAdapter</span>())
           </div>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:14px;padding-top:8px">
-        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
-          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">Available today</p>
-          <p style="font-family:var(--font-mono);font-size:12px;color:#888780;line-height:1.9">homeassistant · matter · mqtt · ble · mavlink · wiz · shelly · declarative</p>
+        <div style="background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px">Available today</p>
+          <p style="font-family:var(--font-mono);font-size:12px;color:var(--muted);line-height:1.9">homeassistant · matter · mqtt · ble · mavlink · wiz · shelly · declarative</p>
         </div>
-        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
-          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">The adapter contract</p>
-          <p style="font-size:13px;color:#888780;line-height:1.6">One method: <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">execute(action, urgency)</code>. The hub handles routing, audit logging, policy evaluation, and state tracking. Your adapter only speaks to the device.</p>
+        <div style="background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px">The adapter contract</p>
+          <p style="font-size:13px;color:var(--muted);line-height:1.6">One method: <code style="font-family:var(--font-mono);color:var(--pilot-text);font-size:12px">execute(action, urgency)</code>. The hub handles routing, audit logging, policy evaluation, and state tracking. Your adapter only speaks to the device.</p>
         </div>
-        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
-          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">Optional: state querying</p>
-          <p style="font-size:13px;color:#888780;line-height:1.6">Implement <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">get_state(device_id)</code> to participate in the background state refresher — the hub polls your device every 60s and skips redundant actions automatically.</p>
+        <div style="background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px">Optional: state querying</p>
+          <p style="font-size:13px;color:var(--muted);line-height:1.6">Implement <code style="font-family:var(--font-mono);color:var(--pilot-text);font-size:12px">get_state(device_id)</code> to participate in the background state refresher — the hub polls your device every 60s and skips redundant actions automatically.</p>
         </div>
       </div>
     </div>
@@ -786,25 +777,25 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
       <p class="section-sub" style="margin-bottom:24px">Most of what a hub needs to reach a device is not interesting code — "send this request, read this field". Requiring Python for that made "domain-agnostic" mean "agnostic across the domains we already wrote".</p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
         <div class="demo-terminal">
-          <div class="terminal-bar"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span><span style="margin-left:8px;font-family:var(--font-mono);font-size:11.5px;color:#8A8A82">hallway-light.yaml</span></div>
-          <div class="terminal-body"><span style="color:#7F77DD">device</span>:<br>
+          <div class="terminal-bar"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span><span style="margin-left:8px;font-family:var(--font-mono);font-size:11.5px;color:var(--muted)">hallway-light.yaml</span></div>
+          <div class="terminal-body"><span style="color:var(--pilot-text)">device</span>:<br>
 &nbsp;&nbsp;id: light-hallway<br>
-&nbsp;&nbsp;tags: [light, energy]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#8A8A82"># how intents find it</span><br>
-&nbsp;&nbsp;emergency_capable: true&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#8A8A82"># may an emergency use it</span><br>
+&nbsp;&nbsp;tags: [light, energy]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)"># how intents find it</span><br>
+&nbsp;&nbsp;emergency_capable: true&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)"># may an emergency use it</span><br>
 <br>
-<span style="color:#7F77DD">transport</span>:<br>
-&nbsp;&nbsp;kind: http&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style="color:#8A8A82"># http or mqtt</span><br>
+<span style="color:var(--pilot-text)">transport</span>:<br>
+&nbsp;&nbsp;kind: http&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style="color:var(--muted)"># http or mqtt</span><br>
 &nbsp;&nbsp;base_url: http://192.168.1.40<br>
 <br>
-<span style="color:#7F77DD">actions</span>:<br>
+<span style="color:var(--pilot-text)">actions</span>:<br>
 &nbsp;&nbsp;turn_on:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;type: turn_on&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#8A8A82"># what it MEANS</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;type: turn_on&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)"># what it MEANS</span><br>
 &nbsp;&nbsp;&nbsp;&nbsp;request: { method: POST, path: /light/on }</div>
         </div>
         <div>
-          <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-bottom:16px">The <code style="font-family:var(--font-mono);font-size:12.5px;color:#AFA9EC">type</code> on each action is the part that matters. A file that only said "POST /on turns it on" would let DoSync switch the device and leave it invisible to everything else: no intent could select it, no policy could name it, an emergency would pass it by.</p>
-          <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-bottom:16px"><strong style="color:#F0EEE8;font-weight:500">Six worked examples ship with the package</strong> — a light, an air conditioner, a 3D printer, a television, a building's lighting controller and an industrial conveyor over MQTT. Run <code style="font-family:var(--font-mono);font-size:12.5px;color:#AFA9EC">dosync-manage examples</code> and edit the one closest to your device.</p>
-          <p style="font-size:14px;color:var(--text-muted);line-height:1.7"><strong style="color:#F0EEE8;font-weight:500">What it cannot do</strong>, stated plainly: it speaks HTTP and MQTT. Not Zigbee, not Z-Wave, not BLE pairing, not an OPC-UA session — those need a code adapter. It covers most simple devices and almost no complex ones.</p>
+          <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-bottom:16px">The <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pilot-text)">type</code> on each action is the part that matters. A file that only said "POST /on turns it on" would let DoSync switch the device and leave it invisible to everything else: no intent could select it, no policy could name it, an emergency would pass it by.</p>
+          <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-bottom:16px"><strong style="color:var(--text);font-weight:500">Six worked examples ship with the package</strong> — a light, an air conditioner, a 3D printer, a television, a building's lighting controller and an industrial conveyor over MQTT. Run <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pilot-text)">dosync-manage examples</code> and edit the one closest to your device.</p>
+          <p style="font-size:14px;color:var(--text-muted);line-height:1.7"><strong style="color:var(--text);font-weight:500">What it cannot do</strong>, stated plainly: it speaks HTTP and MQTT. Not Zigbee, not Z-Wave, not BLE pairing, not an OPC-UA session — those need a code adapter. It covers most simple devices and almost no complex ones.</p>
         </div>
       </div>
     </div>
@@ -812,14 +803,14 @@ executor.register(<span style="color:#EF9F27">MyBrandAdapter</span>())
     <!-- Third-party adapters -->
     <div style="margin-top:56px;padding-top:40px;border-top:0.5px solid var(--border)">
       <h3 style="font-size:20px;font-weight:500;margin-bottom:10px">If you make devices, you don't need us to add them.</h3>
-      <p class="section-sub" style="margin-bottom:24px">Publish a package, your customer runs <code style="font-family:var(--font-mono);font-size:12.5px;color:#AFA9EC">pip install</code>, and the hub finds it. No pull request here, no waiting on one person's agenda — and no promise from this project to maintain code for hardware it has never seen. You answer for your own adapter.</p>
+      <p class="section-sub" style="margin-bottom:24px">Publish a package, your customer runs <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pilot-text)">pip install</code>, and the hub finds it. No pull request here, no waiting on one person's agenda — and no promise from this project to maintain code for hardware it has never seen. You answer for your own adapter.</p>
       <div class="demo-terminal" style="max-width:640px">
-        <div class="terminal-bar"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span><span style="margin-left:8px;font-family:var(--font-mono);font-size:11.5px;color:#8A8A82">pyproject.toml</span></div>
-        <div class="terminal-body">[project.entry-points.<span style="color:#7F77DD">"dosync.adapters"</span>]<br>
-mybrand = <span style="color:#1D9E75">"dosync_adapter_mybrand:MyBrandAdapter"</span></div>
+        <div class="terminal-bar"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span><span style="margin-left:8px;font-family:var(--font-mono);font-size:11.5px;color:var(--muted)">pyproject.toml</span></div>
+        <div class="terminal-body">[project.entry-points.<span style="color:var(--pilot-text)">"dosync.adapters"</span>]<br>
+mybrand = <span style="color:var(--ok)">"dosync_adapter_mybrand:MyBrandAdapter"</span></div>
       </div>
-      <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-top:20px;max-width:760px"><strong style="color:#F0EEE8;font-weight:500">DoSync does not download adapter code from a remote source, and will not.</strong> The whole argument of this protocol is that nothing actuates hardware without passing a policy and leaving a record; fetching executable code from the internet would put the largest possible hole exactly where the guarantee lives. An entry point differs in the two ways that matter: someone chose to install it, and someone's name is on it.</p>
-      <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-top:12px;max-width:760px">Such an adapter runs inside the hub with the hub's permissions, so the hub says so: logged on load, recorded in the audit chain, and reported as <code style="font-family:var(--font-mono);font-size:12.5px;color:#AFA9EC">third_party</code> regardless of what the plugin claims about itself.</p>
+      <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-top:20px;max-width:760px"><strong style="color:var(--text);font-weight:500">DoSync does not download adapter code from a remote source, and will not.</strong> The whole argument of this protocol is that nothing actuates hardware without passing a policy and leaving a record; fetching executable code from the internet would put the largest possible hole exactly where the guarantee lives. An entry point differs in the two ways that matter: someone chose to install it, and someone's name is on it.</p>
+      <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-top:12px;max-width:760px">Such an adapter runs inside the hub with the hub's permissions, so the hub says so: logged on load, recorded in the audit chain, and reported as <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pilot-text)">third_party</code> regardless of what the plugin claims about itself.</p>
     </div>
   </div>
 </section>
@@ -863,18 +854,18 @@ mybrand = <span style="color:#1D9E75">"dosync_adapter_mybrand:MyBrandAdapter"</s
     <p class="section-sub">In July we checked each claim against the code instead of against the README. Two did not hold.</p>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:36px">
-      <div style="border-left:2px solid #C4544E;padding:4px 0 4px 20px">
-        <h3 style="font-size:16px;font-weight:500;margin-bottom:10px;color:#F0EEE8">"The AI cannot route around your policies."</h3>
-        <p style="font-size:14px;color:var(--text-muted);line-height:1.7"><code style="font-family:var(--font-mono);font-size:12.5px;color:#AFA9EC">POST /v1/device/action</code> called the executor directly — no policy evaluation, no audit entry. The MCP tool used that path, so the bypass belonged to the AI rather than to an operator: a lock could be opened with nothing recorded. Closed 25 July. Direct actions are now evaluated under a reserved intent class and always audited.</p>
+      <div style="border-left:2px solid var(--bad);padding:4px 0 4px 20px">
+        <h3 style="font-size:16px;font-weight:500;margin-bottom:10px;color:var(--text)">"The AI cannot route around your policies."</h3>
+        <p style="font-size:14px;color:var(--text-muted);line-height:1.7"><code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pilot-text)">POST /v1/device/action</code> called the executor directly — no policy evaluation, no audit entry. The MCP tool used that path, so the bypass belonged to the AI rather than to an operator: a lock could be opened with nothing recorded. Closed 25 July. Direct actions are now evaluated under a reserved intent class and always audited.</p>
       </div>
-      <div style="border-left:2px solid #C4544E;padding:4px 0 4px 20px">
-        <h3 style="font-size:16px;font-weight:500;margin-bottom:10px;color:#F0EEE8">"The audit chain is tamper-evident."</h3>
+      <div style="border-left:2px solid var(--bad);padding:4px 0 4px 20px">
+        <h3 style="font-size:16px;font-weight:500;margin-bottom:10px;color:var(--text)">"The audit chain is tamper-evident."</h3>
         <p style="font-size:14px;color:var(--text-muted);line-height:1.7">It detected a modified entry. It did <em>not</em> detect a truncated chain or a wholesale rewrite — someone with database access could remove the last hour, or rebuild the history, and verification would still pass. Now three layers: sequence numbers, a head mark in a separate table, and Ed25519-signed checkpoints stored off the hub — the only layer that catches a full rewrite.</p>
       </div>
     </div>
 
-    <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-top:28px;max-width:820px">The <a href="https://github.com/giulianireg-spec/dosync-protocol/blob/main/docs/AUDIT-THREAT-MODEL.md" style="color:#AFA9EC">threat model</a> states what each layer detects and what it does not — including the rows that read <em>not detected</em>, each with the test that demonstrates it.</p>
-    <p style="font-size:14px;color:#8A8A82;line-height:1.7;margin-top:12px;max-width:820px">Nothing here is claimed to be unbreakable. A protocol whose value is honesty cannot make absolute security claims and stay coherent.</p>
+    <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-top:28px;max-width:820px">The <a href="https://github.com/giulianireg-spec/dosync-protocol/blob/main/docs/AUDIT-THREAT-MODEL.md" style="color:var(--pilot-text)">threat model</a> states what each layer detects and what it does not — including the rows that read <em>not detected</em>, each with the test that demonstrates it.</p>
+    <p style="font-size:14px;color:var(--muted);line-height:1.7;margin-top:12px;max-width:820px">Nothing here is claimed to be unbreakable. A protocol whose value is honesty cannot make absolute security claims and stay coherent.</p>
   </div>
 </section>
 
@@ -919,7 +910,7 @@ mybrand = <span style="color:#1D9E75">"dosync_adapter_mybrand:MyBrandAdapter"</s
     <div class="cert-cta">
       <div class="cert-cta-text">
         <div><span class="prompt">$</span> python3 certify.py --host &lt;device-ip&gt; --port 47200 --tier emergency</div>
-        <div style="color:#8A8A82;font-style:italic"># generates dosync-cert.json — signed certification report</div>
+        <div style="color:var(--muted);"># generates dosync-cert.json — signed certification report</div>
       </div>
       <button class="btn-primary" style="white-space:nowrap" onclick="window.open('https://github.com/giulianireg-spec/dosync-protocol','_blank')">View on GitHub ↗</button>
     </div>
@@ -991,23 +982,23 @@ mybrand = <span style="color:#1D9E75">"dosync_adapter_mybrand:MyBrandAdapter"</s
     <p class="section-sub">Home Assistant already solved the hardest problem in the smart home: talking to thousands of devices. DoSync doesn't reinvent that — it reads devices from HA through a bridge that's already in the repo, and adds a semantic, auditable coordination layer above them. HA is one source of devices; the intelligence stays in the connecting AI.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:36px;align-items:start">
       <div style="display:flex;flex-direction:column;gap:14px">
-        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
-          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">HA's MCP server exposes commands</p>
-          <p style="font-size:13px;color:#888780;line-height:1.6">Turn on this light, set that thermostat. The intelligence of <em>what to do</em> lives in an automation you wrote, or in the AI sending commands.</p>
+        <div style="background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px">HA's MCP server exposes commands</p>
+          <p style="font-size:13px;color:var(--muted);line-height:1.6">Turn on this light, set that thermostat. The intelligence of <em>what to do</em> lives in an automation you wrote, or in the AI sending commands.</p>
         </div>
-        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
-          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">DoSync resolves intents</p>
-          <p style="font-size:13px;color:#888780;line-height:1.6">Express a goal — <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">ensure_safety</code> — and a resolver coordinates the right devices across <em>any</em> source, with a tamper-evident audit log of what acted and why.</p>
+        <div style="background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px">DoSync resolves intents</p>
+          <p style="font-size:13px;color:var(--muted);line-height:1.6">Express a goal — <code style="font-family:var(--font-mono);color:var(--pilot-text);font-size:12px">ensure_safety</code> — and a resolver coordinates the right devices across <em>any</em> source, with a tamper-evident audit log of what acted and why.</p>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:14px;padding-top:0">
-        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
-          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">When DoSync earns its place</p>
-          <p style="font-size:13px;color:#888780;line-height:1.6">When coordination <em>and</em> traceability both matter at once — a fall-response that unlocks the door, lights the house, and messages family, with an auditable record of exactly what fired.</p>
+        <div style="background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px">When DoSync earns its place</p>
+          <p style="font-size:13px;color:var(--muted);line-height:1.6">When coordination <em>and</em> traceability both matter at once — a fall-response that unlocks the door, lights the house, and messages family, with an auditable record of exactly what fired.</p>
         </div>
-        <div style="background:#0F1A16;border:0.5px solid #1E3A2E;border-radius:var(--radius-lg);padding:16px 18px">
-          <p style="font-size:13px;font-weight:500;color:#5DCAA5;margin-bottom:6px">When it doesn't</p>
-          <p style="font-size:13px;color:#888780;line-height:1.6">For everyday automation — "porch light when I get home" — you don't need DoSync. HA's automations and its MCP cover that completely. The extra layer is for the narrow set of cases that need auditable coordination.</p>
+        <div style="background:var(--ok-tint);border:0.5px solid var(--ok-tint);border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:var(--ok);margin-bottom:6px">When it doesn't</p>
+          <p style="font-size:13px;color:var(--muted);line-height:1.6">For everyday automation — "porch light when I get home" — you don't need DoSync. HA's automations and its MCP cover that completely. The extra layer is for the narrow set of cases that need auditable coordination.</p>
         </div>
       </div>
     </div>
@@ -1019,10 +1010,10 @@ mybrand = <span style="color:#1D9E75">"dosync_adapter_mybrand:MyBrandAdapter"</s
   <div class="section-inner">
     <p class="section-eyebrow">Constrained hardware</p>
     <h2 class="section-title" style="font-size:28px">Hardware that cannot do TLS still gets to report.</h2>
-    <p class="section-sub" style="max-width:820px">A sensor running a year on a coin cell cannot perform a TLS handshake — it costs more battery than a month of operation. It can still prove it is alive: <code style="font-family:var(--font-mono);font-size:12.5px;color:#AFA9EC">POST /v1/heartbeat/signed</code> accepts a heartbeat authenticated by HMAC over the device's own provisioning token.</p>
+    <p class="section-sub" style="max-width:820px">A sensor running a year on a coin cell cannot perform a TLS handshake — it costs more battery than a month of operation. It can still prove it is alive: <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pilot-text)">POST /v1/heartbeat/signed</code> accepts a heartbeat authenticated by HMAC over the device's own provisioning token.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:32px;align-items:start">
       <div>
-        <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-bottom:16px"><strong style="color:#F0EEE8;font-weight:500">Off by default</strong>, and worth knowing exactly what it trades. It provides message authenticity and replay resistance. It provides <strong style="color:#F0EEE8;font-weight:500">no confidentiality</strong> — device id, timestamp and report travel readable.</p>
+        <p style="font-size:14px;color:var(--text-muted);line-height:1.7;margin-bottom:16px"><strong style="color:var(--text);font-weight:500">Off by default</strong>, and worth knowing exactly what it trades. It provides message authenticity and replay resistance. It provides <strong style="color:var(--text);font-weight:500">no confidentiality</strong> — device id, timestamp and report travel readable.</p>
         <p style="font-size:14px;color:var(--text-muted);line-height:1.7">Devices on this channel are marked, because one reporting over an unencrypted channel is in a different position from one on mTLS, and the two must not look identical to an operator.</p>
       </div>
       <div>
@@ -1040,23 +1031,23 @@ mybrand = <span style="color:#1D9E75">"dosync_adapter_mybrand:MyBrandAdapter"</s
     <p class="section-sub">They're not rivals — they're different layers, and one literally speaks the other. MCP (the Model Context Protocol) standardizes how an AI discovers and calls tools; DoSync is one of those tools — the one that turns a goal into coordinated, supervised, recorded physical action. DoSync ships as an MCP server, so every MCP-speaking AI is already a DoSync client. The AI thinks, MCP connects, DoSync acts with judgment.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:36px;align-items:start">
       <div style="display:flex;flex-direction:column;gap:14px">
-        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
-          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">MCP connects your AI to tools</p>
-          <p style="font-size:13px;color:#888780;line-height:1.6">One protocol instead of bespoke integrations: the model discovers what tools exist and invokes them. It moves the request and the result, faithfully, in both directions — <em>transport isn't judgment</em>, and that's not a flaw, it's the design.</p>
+        <div style="background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px">MCP connects your AI to tools</p>
+          <p style="font-size:13px;color:var(--muted);line-height:1.6">One protocol instead of bespoke integrations: the model discovers what tools exist and invokes them. It moves the request and the result, faithfully, in both directions — <em>transport isn't judgment</em>, and that's not a flaw, it's the design.</p>
         </div>
-        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
-          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">DoSync turns goals into supervised action</p>
-          <p style="font-size:13px;color:#888780;line-height:1.6">One intent — <code style="font-family:var(--font-mono);color:#AFA9EC;font-size:12px">ensure_safety</code> — becomes a coordinated plan over declared capabilities, filtered by the operator's own standing rules, with a tamper-evident record of what was proposed, what the rules decided, and what actually ran.</p>
+        <div style="background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px">DoSync turns goals into supervised action</p>
+          <p style="font-size:13px;color:var(--muted);line-height:1.6">One intent — <code style="font-family:var(--font-mono);color:var(--pilot-text);font-size:12px">ensure_safety</code> — becomes a coordinated plan over declared capabilities, filtered by the operator's own standing rules, with a tamper-evident record of what was proposed, what the rules decided, and what actually ran.</p>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:14px;padding-top:0">
-        <div style="background:#111110;border:0.5px solid #2C2C2A;border-radius:var(--radius-lg);padding:16px 18px">
-          <p style="font-size:13px;font-weight:500;color:#F0EEE8;margin-bottom:6px">Each makes the other worth more</p>
-          <p style="font-size:13px;color:#888780;line-height:1.6">Without something like DoSync, an MCP agent touching the physical world needs a tool per device per action and brings no judgment to it. Without MCP, DoSync would need a bespoke integration per model — instead, MCP gave it its entire front door for free.</p>
+        <div style="background:var(--plate);border:0.5px solid var(--edge);border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px">Each makes the other worth more</p>
+          <p style="font-size:13px;color:var(--muted);line-height:1.6">Without something like DoSync, an MCP agent touching the physical world needs a tool per device per action and brings no judgment to it. Without MCP, DoSync would need a bespoke integration per model — instead, MCP gave it its entire front door for free.</p>
         </div>
-        <div style="background:#0F1A16;border:0.5px solid #1E3A2E;border-radius:var(--radius-lg);padding:16px 18px">
-          <p style="font-size:13px;font-weight:500;color:#5DCAA5;margin-bottom:6px">When MCP alone is enough</p>
-          <p style="font-size:13px;color:#888780;line-height:1.6">For email, calendars, code, files, databases — MCP is complete, full stop. Even casual device commands don't need DoSync. The extra layer earns its place only when coordination, the operator's rules, and a trustworthy record matter at once.</p>
+        <div style="background:var(--ok-tint);border:0.5px solid var(--ok-tint);border-radius:var(--radius-lg);padding:16px 18px">
+          <p style="font-size:13px;font-weight:500;color:var(--ok);margin-bottom:6px">When MCP alone is enough</p>
+          <p style="font-size:13px;color:var(--muted);line-height:1.6">For email, calendars, code, files, databases — MCP is complete, full stop. Even casual device commands don't need DoSync. The extra layer earns its place only when coordination, the operator's rules, and a trustworthy record matter at once.</p>
         </div>
       </div>
     </div>
@@ -1068,18 +1059,7 @@ mybrand = <span style="color:#1D9E75">"dosync_adapter_mybrand:MyBrandAdapter"</s
 <footer>
   <div class="footer-inner">
     <div class="footer-logo">
-      <svg width="18" height="18" viewBox="0 0 22 22" fill="none">
-        <circle cx="11" cy="11" r="3" fill="#534AB7"/>
-        <circle cx="3" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
-        <circle cx="19" cy="5" r="2" stroke="#534AB7" stroke-width="1.5"/>
-        <circle cx="3" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
-        <circle cx="19" cy="17" r="2" stroke="#534AB7" stroke-width="1.5"/>
-        <line x1="5" y1="6" x2="9" y2="10" stroke="#AFA9EC" stroke-width="1"/>
-        <line x1="17" y1="6" x2="13" y2="10" stroke="#AFA9EC" stroke-width="1"/>
-        <line x1="5" y1="16" x2="9" y2="12" stroke="#AFA9EC" stroke-width="1"/>
-        <line x1="17" y1="16" x2="13" y2="12" stroke="#AFA9EC" stroke-width="1"/>
-      </svg>
-      DoSync Protocol
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1E1E1C"/><g transform="translate(.5 1)"><path d="M14 10h14c13 0 21 8 21 21s-8 21-21 21H14z" fill="#F4F3EF"/><circle cx="29" cy="31" r="8" fill="#F26B1D"/></g></svg><span class="wordmark" aria-hidden="true">d<span class="o"></span>sync</span> <span style="font-weight:600">Protocol</span>
     </div>
     <div class="footer-links">
       <a href="https://github.com/giulianireg-spec/dosync-protocol">GitHub</a>

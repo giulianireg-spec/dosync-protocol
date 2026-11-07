@@ -5,14 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DoSync governance vocabulary for WoT Thing Descriptions</title>
 <link rel="alternate" type="application/ld+json" href="/ns/governance.jsonld">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #1a1a1a; }
-  code { background: #f3f3f3; padding: 0 .25rem; border-radius: 3px; }
-  section { border-top: 1px solid #ddd; padding-top: .5rem; }
-  .meta { color: #555; font-size: .9rem; }
+  body { max-width: 46rem; margin: 0 auto; padding: 0 1rem 3rem; line-height: 1.6; }
+  .top { display: flex; align-items: center; gap: 10px; height: 64px; margin-bottom: 1.5rem; text-decoration: none; }
+  h1 { font-size: 2.2rem; line-height: 1.1; margin-bottom: 1rem; }
+  h2 { font-size: 1.15rem; margin: 0 0 .4rem; }
+  p { margin-bottom: .8rem; color: var(--muted); }
+  code { font-family: var(--font-mono); background: var(--wall); padding: 0 .3rem; border-radius: 4px; font-size: .9em; }
+  section { background: var(--plate); border-bottom: 4px solid var(--edge); border-radius: 6px; padding: 1rem 1.2rem .4rem; margin: 0 0 .8rem; }
+  .meta { color: var(--faint); font-size: .85rem; }
+  a { color: var(--pilot-text); }
 </style>
+<link rel="stylesheet" href="/tecla.css">
 </head>
 <body>
+  <a class="top nav-logo" href="/" aria-label="DoSync"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1E1E1C"/><g transform="translate(.5 1)"><path d="M14 10h14c13 0 21 8 21 21s-8 21-21 21H14z" fill="#F4F3EF"/><circle cx="29" cy="31" r="8" fill="#F26B1D"/></g></svg><span class="wordmark" aria-hidden="true">d<span class="o"></span>sync</span></a>
   <h1>DoSync governance vocabulary</h1>
   <p>Namespace: <code>https://dosync.dev/ns/governance#</code> (prefix <code>dosync:</code>). JSON-LD context:
      <a href="/ns/governance.jsonld"><code>/ns/governance.jsonld</code></a>.</p>
