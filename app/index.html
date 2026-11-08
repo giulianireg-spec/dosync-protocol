@@ -92,6 +92,7 @@ p{color:var(--muted)}
 .btn.primary{background:var(--pilot);border-color:var(--pilot);color:#1E1E1C}
 .btn.primary:hover{color:#1E1E1C}
 .btn[aria-disabled="true"]{opacity:.45;cursor:default;pointer-events:none}
+.play-steps{margin:10px 0 12px;padding-left:22px;line-height:1.9;font-weight:600}
 .btn small{font-size:12px;font-weight:400;opacity:.75}
 .cta-note{font-size:13px;color:var(--faint);margin-top:14px}
 .phone{justify-self:center;width:280px;padding:10px;border-radius:34px;background:var(--ink);box-shadow:0 30px 60px rgba(30,30,28,.22)}
@@ -183,8 +184,8 @@ footer{padding:40px 0;background:var(--ink)}
         <a class="btn primary" href="https://github.com/giulianireg-spec/dosync-app-beta/releases/latest">
           <span lang="es">Descargar la beta</span><span lang="en">Download the beta</span> <small>APK · Android 8+</small>
         </a>
-        <a class="btn" aria-disabled="true" title="Muy pronto · Coming soon">
-          Google Play <small><span lang="es">prueba abierta · muy pronto</span><span lang="en">open testing · coming soon</span></small>
+        <a class="btn" href="#play">
+          Google Play <small><span lang="es">prueba cerrada · 3 pasos</span><span lang="en">closed test · 3 steps</span></small>
         </a>
         <a class="btn" href="https://github.com/giulianireg-spec/dosync-app-beta"><span lang="es">Ver el repositorio</span><span lang="en">View the repository</span> ↗</a>
       </div>
@@ -304,10 +305,17 @@ footer{padding:40px 0;background:var(--ink)}
         <p lang="es">En <a href="https://github.com/giulianireg-spec/dosync-app-beta/releases/latest">la última versión</a>, baja <code>DoSync-x.y.z.apk</code> en tu Android (8.0 o más nuevo) y ábrelo. Te va a pedir permiso para instalar desde ese origen.</p>
         <p lang="en">From <a href="https://github.com/giulianireg-spec/dosync-app-beta/releases/latest">the latest version</a>, download <code>DoSync-x.y.z.apk</code> on your Android phone (8.0 or newer) and open it. It will ask permission to install from that source.</p>
       </div>
-      <div class="card">
+      <div class="card" id="play">
         <h3 lang="es">O únete en Google Play</h3><h3 lang="en">Or join on Google Play</h3>
-        <p lang="es">La prueba abierta de Google Play llega muy pronto: el botón de arriba se activa cuando esté lista. Si ya la tienes desde GitHub, desinstálala antes (están firmadas distinto).</p>
-        <p lang="en">Google Play open testing is coming soon: the button above turns on when it's ready. If you installed it from GitHub, uninstall that one first (they're signed differently).</p>
+        <p lang="es">Con la misma cuenta de Google de tu teléfono, en este orden:</p>
+        <p lang="en">With your phone's Google account, in this order:</p>
+        <ol class="play-steps">
+          <li><a href="https://groups.google.com/g/dosync_testers"><span lang="es">Únete al grupo de testers</span><span lang="en">Join the testers group</span> ↗</a></li>
+          <li><a href="https://play.google.com/apps/testing/dev.dosync.app"><span lang="es">Acepta la prueba</span><span lang="en">Accept the test</span> ↗</a></li>
+          <li><a href="https://play.google.com/store/apps/details?id=dev.dosync.app"><span lang="es">Instálala desde Google Play</span><span lang="en">Install it from Google Play</span> ↗</a></li>
+        </ol>
+        <p lang="es">Se actualiza sola e incluye Samuel, la IA de DoSync por suscripción. Si ya la tienes desde GitHub, haz un respaldo en Ajustes y desinstálala antes (están firmadas distinto).</p>
+        <p lang="en">It updates itself and includes Samuel, DoSync's AI by subscription. If you installed it from GitHub, make a backup in Settings and uninstall it first (they're signed differently).</p>
       </div>
       <div class="card">
         <h3 lang="es">Agrega tu casa</h3><h3 lang="en">Add your home</h3>
