@@ -193,35 +193,7 @@ The residuals have precise causes. On the residential set, 24 of DoSync's 30 fal
 Under the earlier emergency rule (Section~\ref{sec:discussion}) the industrial recall was 1.00, earned by sending a lock \code{lock} and \code{unlock} at once; under the rule above, the lock and a press take part without acting. Written entity by entity as Home Assistant automations, the same scenarios need 22, 22 and 15 entity references in 4, 5 and 5 rules, each naming the devices it acts on; DoSync's classes name none.
 
 \subsection{Interoperability with the WoT Thing Description}
-The \code{dosync:} terms are defined at their namespace, \url{https://dosync.dev/ns/governance}, with a JSON-LD context. All 39 devices of the residential and industrial registries export to TD 1.1 Things that validate against the official TD JSON Schema; rebuilt from those TDs alone, all 39 keep every field governance reads, and the 16 scenarios resolve to identical plans. The hub serves these TDs and a WoT Discovery entry point; an action's form addresses the hub, never the device, and invoking it is a governed-direct proposal: a marked action answers 202 and waits for a person. In continuous integration an independent consumer, Eclipse Thingweb node-wot, discovers the hub and, from a production cell's TD alone, runs one action, has a marked one held and reads a property. Fig.~\ref{fig:td} shows an excerpt; on the committed registries places are written as tags, so a test device carrying every governance field checks that none is lost. In the other direction, all 515 distinct TDs of the W3C plugfest repository, whose survey shaped the importer, and all 62 example TDs of the Eclipse Thingweb playground, which did not, import without error; each of their 1{,}641 actions and writable properties is accepted as an \code{operate\_device} proposal, and each of the 41 opposite pairs the mapping exposes is refused when proposed together (G4). The mapping is shallow: of the 810 plugfest actions, 4\% carry a usable semantic \code{@type} and 15\% a recognizable verb; the rest keep their own names, governed by every guarantee but G4.
-
-\begin{figure}[t]
-\centering
-\begin{minipage}{0.97\columnwidth}
-\scriptsize
-\begin{verbatim}
-{ "@context": [
-    "https://www.w3.org/2022/wot/td/v1.1",
-    {"dosync": "https://dosync.dev/ns/governance#"}],
-  "id": "urn:dosync:device:td-probe-1",
-  "title": "Line 3 conveyor",
-  "dosync:location": "plant-1/line-3",
-  "dosync:emergencyCapable": true,
-  "dosync:emergencyActions": [
-      {"action": "stop", "params": {}}],
-  "actions": { "stop": {
-      "dosync:capability": "stop", "synchronous": true,
-      "output": { "type": "object", ... },
-      "forms": [{ "op": "invokeaction", "href":
-          "v1/things/td-probe-1/actions/stop" }] } },
-  "properties": { "temp": { "unit": "C", ...,
-      "dosync:sensorKind": "environment" } }, ... }
-\end{verbatim}
-\end{minipage}
-\caption{Excerpt of a TD 1.1 Thing exported by DoSync (abridged). Governance terms use the \code{dosync:} vocabulary; the action's form addresses the hub, which governs the invocation.}
-\label{fig:td}
-\end{figure}
-
+The \code{dosync:} terms are defined at their namespace, \url{https://dosync.dev/ns/governance}, with a JSON-LD context. All 39 devices of the residential and industrial registries export to TD 1.1 Things that validate against the official TD JSON Schema; rebuilt from those TDs alone, all 39 keep every field governance reads, and the 16 scenarios resolve to identical plans. The hub serves these TDs and a WoT Discovery entry point; an action's form addresses the hub, never the device, and invoking it is a governed-direct proposal: a marked action answers 202 and waits for a person. In continuous integration an independent consumer, Eclipse Thingweb node-wot, discovers the hub and, from a production cell's TD alone, runs one action, has a marked one held and reads a property. An exported Thing carries, beside its TD terms, \code{dosync:location}, \code{dosync:emergencyCapable}, \code{dosync:emergencyActions}, a \code{dosync:capability} per action and a \code{dosync:sensorKind} per property; on the committed registries places are written as tags, so a test device carrying every governance field checks that none is lost. In the other direction, all 515 distinct TDs of the W3C plugfest repository, whose survey shaped the importer, and all 62 example TDs of the Eclipse Thingweb playground, which did not, import without error; each of their 1{,}641 actions and writable properties is accepted as an \code{operate\_device} proposal, and each of the 41 opposite pairs the mapping exposes is refused when proposed together (G4). The mapping is shallow: of the 810 plugfest actions, 4\% carry a usable semantic \code{@type} and 15\% a recognizable verb; the rest keep their own names, governed by every guarantee but G4.
 \subsection{Sensitivity and Latency}
 Varying each ranking weight to $0.5\times$, $1.5\times$ and $10\times$ over the three sets left the selection unchanged in all 15 runs: the weights order, they do not select. Table~\ref{tab:latency} gives the resolver's latency on the reference hardware, a Raspberry Pi~5 (Python 3.11), over registries built by replicating the two registries' devices across a site hierarchy; it grows linearly, and a 1{,}000-device emergency resolves in under 10~ms.
 
