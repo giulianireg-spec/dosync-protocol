@@ -2343,7 +2343,9 @@ def _rejections_by_reason() -> dict:
 
 
 @app.post("/v1/intent/async", tags=["AI"])
-async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_auth)):
+async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_auth),
+                               x_operator_token: str | None = Header(default=None),
+                               x_dosync_operator_token: str | None = Header(default=None)):
     # Validate format: ^[a-z][a-z0-9_]*$
     try:
         intent_class = IntentClass(req.intent)
@@ -2370,13 +2372,25 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
         _record_refusal("invalid_urgency", req.intent, req.urgency)
         raise HTTPException(status_code=422, detail=f"Urgency '{req.urgency}' not valid. Use: emergency, alert, warning, info")
 
+    # Emergency authority (spec §6.8 rule 5a): EMERGENCY relaxes rules, so it is
+    # honoured as such only with the operator credential or an authenticated
+    # emergency event in scope. Otherwise it is admitted, and run, as an ALERT,
+    # with what only the emergency would add held for a person (hub.execute_intent).
+    _emergency_basis = None
+    if urgency == Urgency.EMERGENCY:
+        if _operator_credential_ok(x_operator_token or x_dosync_operator_token):
+            _emergency_basis = "operator"
+        else:
+            _emergency_basis = hub.emergency_basis_for(req.context)
+    _admit_urgency = Urgency.ALERT if urgency == Urgency.EMERGENCY and not _emergency_basis else urgency
+
     # SAMUEL admission (dosync/samuel/intake.py): the intent as a whole -- a
     # restricting place that exists, actions the class grants, opposite actions
     # not left ambiguous, well-formed proposals. The same admit() runs inside
     # hub.execute_intent for every other door; here it runs first so the caller
     # gets a 422 at once, and the refusal is counted under its reason.
     from dosync.samuel import admit as _admit
-    _admission = _admit(req.intent, hub.db.get_intent_class(req.intent), urgency,
+    _admission = _admit(req.intent, hub.db.get_intent_class(req.intent), _admit_urgency,
                         req.context, hub.registry.active())
     if not _admission.admitted:
         _count_rejection(_admission.refused, req.intent, req.urgency)
@@ -2420,6 +2434,7 @@ async def execute_intent_async(req: IntentRequest, auth: str = Depends(require_a
         subject=req.subject,
         source=req.source,
         context=req.context,
+        emergency_basis=_emergency_basis,
     )
 
     # Register the idempotency key now (before execution) so a fast retry that
@@ -2749,7 +2764,8 @@ async def agent_connect_info(auth: str = Depends(require_auth)):
 
 
 @app.post("/v1/event", tags=["Devices"])
-async def receive_event(req: EventRequest, auth: str = Depends(require_auth)):
+async def receive_event(req: EventRequest, auth: str = Depends(require_auth),
+                        x_device_token: str | None = Header(default=None)):
     if not hub.registry.get(req.device_id):
         raise HTTPException(
             status_code=404,
@@ -2761,11 +2777,26 @@ async def receive_event(req: EventRequest, auth: str = Depends(require_auth)):
     except ValueError:
         raise HTTPException(status_code=422, detail=f"Severity '{req.severity}' not valid. Use: info, warning, alert, emergency")
 
+    # Authenticated: sent with the device's OWN provisioning token, which the
+    # operator gives the device and no agent holds. Only such an emergency event
+    # corroborates an EMERGENCY intent (spec §6.8 rule 5a); "permissive" mode's
+    # acceptance of unprovisioned devices does not count.
+    authenticated = False
+    if x_device_token:
+        from dosync.auth import get_device_auth_manager
+        device_auth = get_device_auth_manager()
+        if device_auth is not None and device_auth.is_provisioned(req.device_id):
+            ok, _why = device_auth.verify(req.device_id, x_device_token)
+            if not ok:
+                raise HTTPException(status_code=401, detail=f"Invalid device token for '{req.device_id}'.")
+            authenticated = True
+
     event = DeviceEvent(
         device_id=req.device_id,
         event_id=req.event_id,
         severity=severity,
         data=req.data,
+        authenticated=authenticated,
     )
     await hub.receive_event(event)
 
@@ -2774,6 +2805,7 @@ async def receive_event(req: EventRequest, auth: str = Depends(require_auth)):
         "device_id": req.device_id,
         "event_id":  req.event_id,
         "severity":  req.severity,
+        "authenticated": authenticated,
     }
 
 

@@ -215,7 +215,7 @@ async def _all_tools() -> list[types.Tool]:
                     "intent": intent_schema,
                     "urgency": {
                         "type": "string",
-                        "description": "Urgency level: info=routine, alert=high-priority (action likely), emergency=bypass all policies (immediate execution)",
+                        "description": ("Urgency level: info=routine, alert=high-priority (action likely), emergency=a real emergency. An emergency counts as one only if a device reported it (authenticated) or the operator fired it; otherwise it runs as an alert and the emergency-only actions wait for a person to confirm."),
                         "enum": ["info", "warning", "alert", "emergency"],
                         "default": "info",
                     },
@@ -266,8 +266,8 @@ async def _all_tools() -> list[types.Tool]:
                             "everything below it. For an intent whose location "
                             "restricts (see dosync_get_scenarios), only devices "
                             "there act -- in an emergency too -- and a place no "
-                            "device is at is refused, except in an emergency, "
-                            "which then acts everywhere and records it. For an "
+                            "device is at is refused, except in a corroborated "
+                            "emergency, which then acts everywhere and records it. For an "
                             "intent whose location informs (alerts, notifications, "
                             "ensure_safety) it only says where the situation is."
                         ),

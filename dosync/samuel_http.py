@@ -187,7 +187,9 @@ def _decision(result, location_not_found=None) -> dict:
 
 
 @router.post("/intents")
-async def samuel_fire_intent(body: dict, auth: str = Depends(require_auth)):
+async def samuel_fire_intent(body: dict, auth: str = Depends(require_auth),
+                             x_operator_token: str | None = Header(default=None),
+                             x_dosync_operator_token: str | None = Header(default=None)):
     """Fire an intent: ``class``, ``urgency``, ``context`` (location,
     action_types, proposed_actions). Answers with the decision: what ran, what
     was refused and why, what is held for a person. A refusal of the intent as a
@@ -204,13 +206,22 @@ async def samuel_fire_intent(body: dict, auth: str = Depends(require_auth)):
     if not isinstance(context, dict):
         raise HTTPException(status_code=422, detail={"reason": "invalid_request",
                                                      "detail": "context is an object"})
-    adm = admit(str(cls), srv.hub.db.get_intent_class(str(cls)), urgency, context,
+    # An emergency is corroborated, not claimed (SAMUEL G5, DoSync §6.8 rule 5a):
+    # the operator credential or an authenticated emergency event confirm it;
+    # otherwise it is admitted and run as an alert, its own actions held.
+    basis = None
+    if urgency == Urgency.EMERGENCY:
+        basis = ("operator" if srv._operator_credential_ok(x_operator_token or x_dosync_operator_token)
+                 else srv.hub.emergency_basis_for(context))
+    adm = admit(str(cls), srv.hub.db.get_intent_class(str(cls)),
+                Urgency.ALERT if urgency == Urgency.EMERGENCY and not basis else urgency, context,
                 srv.hub.registry.active())
     if not adm.admitted:
         srv._count_rejection(adm.refused, str(cls), urgency.value)
         srv._record_refusal(adm.refused, str(cls), urgency.value, adm.detail)
         raise HTTPException(status_code=422, detail={"reason": adm.refused, "detail": adm.detail})
-    intent = Intent(intent=cls, urgency=urgency, source="samuel", context=adm.context)
+    intent = Intent(intent=cls, urgency=urgency, source="samuel", context=adm.context,
+                    emergency_basis=basis)
     if adm.location_not_found:
         srv.hub.audit_log.append({"type": "emergency_location_not_found",
                                   "intent_id": intent.intent_id, "intent": str(cls),

@@ -25,6 +25,15 @@ TEMPLATE_V4 = REPO / "tools" / "agent_eval" / "agent-eval-v4.template.html"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="Node.js not installed")
 
 
+@pytest.fixture(autouse=True)
+def _evaluated_emergency_rule(monkeypatch):
+    # Every laboratory port reproduces the hub the adversarial rounds ran against,
+    # which trusted the caller's EMERGENCY. Corroboration (spec §6.8 rule 5a) came
+    # after and is tested in test_emergency_corroboration.py; it is switched off
+    # here so each comparison stays against the evaluated rule.
+    monkeypatch.setenv("DOSYNC_EMERGENCY_CORROBORATION", "off")
+
+
 def _cases(data, rng):
     out = []
     for env, E in data["environments"].items():

@@ -156,7 +156,7 @@ def test_emptied_emergency_leaves_a_dedicated_entry(tmp_path):
     hub.policy_engine = engine
     _run(hub.execute_intent(
         Intent(intent_id="t5", intent=IntentClass("ensure_safety"),
-               urgency=Urgency.EMERGENCY, context={}), _NullExecutor()))
+               urgency=Urgency.EMERGENCY, context={}, emergency_basis="operator"), _NullExecutor()))
 
     unsat = _entries(hub, "emergency_unsatisfiable")
     assert len(unsat) == 1, "an emptied EMERGENCY must be loud in the chain"

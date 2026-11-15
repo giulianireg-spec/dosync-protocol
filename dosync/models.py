@@ -583,6 +583,12 @@ class Intent:
         default_factory=lambda: f"int-{int(time.time())}-{uuid.uuid4().hex[:6]}"
     )
     timestamp: float                   = field(default_factory=time.time)
+    #: Why the hub treats this intent's EMERGENCY urgency as real (spec §6.8
+    #: rule 5a): "operator" (fired with the operator credential), "device_event:<id>"
+    #: (an authenticated emergency event in scope), "person" (a held emergency a
+    #: person confirmed), "not_required" (corroboration switched off). Never set
+    #: from a request body: `source` is the caller's word, this is the hub's.
+    emergency_basis: Optional[str]     = None
 
     def to_dict(self) -> dict:
         return {
@@ -594,6 +600,7 @@ class Intent:
             "context":     self.context,
             "constraints": self.constraints,
             "timestamp":   self.timestamp,
+            **({"emergency_basis": self.emergency_basis} if self.emergency_basis else {}),
         }
 
 
@@ -606,6 +613,9 @@ class DeviceEvent:
     severity: Severity
     data: dict[str, Any]              = field(default_factory=dict)
     timestamp: float                  = field(default_factory=time.time)
+    #: True only when the event arrived with the device's OWN provisioning token
+    #: (not an agent key): only such an event can corroborate an emergency.
+    authenticated: bool               = False
 
     def __post_init__(self):
         if isinstance(self.severity, str):

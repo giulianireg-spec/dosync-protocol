@@ -52,6 +52,9 @@ def test_an_informing_location_is_never_refused():
         "an alert was refused for naming a place no device is at"
 
 
-def test_an_emergency_location_is_never_refused():
+def test_an_emergency_location_is_never_refused(monkeypatch):
+    # A real (corroborated) emergency; an unconfirmed one runs as an alert and is
+    # refused like one (test_device_location.py, spec §6.8 rule 5a).
+    monkeypatch.setenv("DOSYNC_EMERGENCY_CORROBORATION", "off")
     client = _setup()
     assert _fire(client, "light_room_refusal", "nowhere-at-all", urgency="emergency").status_code == 200

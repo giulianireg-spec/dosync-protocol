@@ -71,11 +71,16 @@ def test_the_hub_refuses_an_ambiguous_intent_and_says_how_to_fix_it():
     assert status["intents_rejected"].get("ambiguous_actions", 0) >= 1
 
 
-def test_an_emergency_is_never_refused_for_ambiguity():
+def test_an_emergency_is_never_refused_for_ambiguity(monkeypatch):
+    # A real emergency (the operator's) is never refused for ambiguity...
+    monkeypatch.setenv("DOSYNC_OPERATOR_TOKEN", "the-operator")
     import dosync.server as srv
-    r = TestClient(srv.app).post("/v1/intent/async", json={"intent": "control_access",
-                                                            "urgency": "emergency", "context": {}})
+    body = {"intent": "control_access", "urgency": "emergency", "context": {}}
+    r = TestClient(srv.app).post("/v1/intent/async", json=body, headers={"X-Operator-Token": "the-operator"})
     assert r.status_code == 200
+    # ...one nothing corroborates is an alert, and refused like one (spec §6.8 rule 5a).
+    srv.hub._trusted_emergencies.clear()   # an emergency event another test left would corroborate it
+    assert TestClient(srv.app).post("/v1/intent/async", json=body).status_code == 422
 
 
 def test_in_an_emergency_declared_actions_take_precedence_over_the_class():

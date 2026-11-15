@@ -223,14 +223,17 @@ def test_the_hub_knows_a_place_by_what_is_below_it():
     assert ok.status_code == 200, "a floor that holds a room with a device was refused as unknown"
 
 
-def test_an_emergency_at_an_unknown_location_is_accepted_and_recorded():
+def test_an_emergency_at_an_unknown_location_is_accepted_and_recorded(monkeypatch):
+    # Acting everywhere is a relaxation: it needs a real emergency (here, the operator's).
+    monkeypatch.setenv("DOSYNC_OPERATOR_TOKEN", "the-operator")
     client, srv = _client()
     client.post("/v1/intent-classes", json={"name": "stop_zone_loc", "urgency": "emergency",
                                             "resolution_tags": ["light"],
                                             "resolution_actuators": ["turn_on"]})
     before = client.get("/v1/status").json()["emergency_location_fallbacks"]
     r = client.post("/v1/intent/async", json={"intent": "stop_zone_loc", "urgency": "emergency",
-                                              "context": {"location": "nowhere/at/all"}})
+                                              "context": {"location": "nowhere/at/all"}},
+                    headers={"X-Operator-Token": "the-operator"})
     assert r.status_code == 200, "an emergency was refused"
     assert r.json()["location_not_found"] == "nowhere/at/all"
     assert client.get("/v1/status").json()["emergency_location_fallbacks"] == before + 1
@@ -243,3 +246,15 @@ def test_a_leading_slash_is_named_in_the_error():
     # segment the operator cannot see; the error says what is actually wrong.
     with pytest.raises(ValueError, match="leading or trailing '/'"):
         normalize_location("/plant-1")
+
+
+def test_an_unconfirmed_emergency_at_an_unknown_location_is_refused():
+    # Nothing corroborates it: it is admitted as an alert, and an unknown place is
+    # refused outside a real emergency (G3), instead of acting everywhere.
+    client, srv = _client()
+    client.post("/v1/intent-classes", json={"name": "stop_zone_unc", "urgency": "emergency",
+                                            "resolution_tags": ["light"],
+                                            "resolution_actuators": ["turn_on"]})
+    r = client.post("/v1/intent/async", json={"intent": "stop_zone_unc", "urgency": "emergency",
+                                              "context": {"location": "nowhere/at/all"}})
+    assert r.status_code == 422

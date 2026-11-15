@@ -139,6 +139,8 @@ even when the class grants other actions it declares — on both paths. A propos
 action that is not one of them is refused (`not_its_emergency_action`); one that
 is, runs even if the class does not grant it.
 
+**R5a — An emergency is corroborated, not claimed.** Every relaxation above (R3, R4, R5, and an emergency's exemption from R9 and from bypassable policies) needs a real emergency, and the caller's `urgency` is only a claim: an injected agent can claim anything. An `emergency` intent is **confirmed** when it carries the operator credential, when the hub received an emergency event authenticated by a device's own credential (never an agent's) within a bounded window and, if the intent names a place, at, above or below it, or when a person releases it. An unconfirmed emergency MUST be treated as `alert` in every rule; the actions only the emergency would have added MUST be held for a person (§8) with the reason `unconfirmed_emergency` — those that only warn people (alarms and messages) MAY run at once — and releasing them confirms the emergency. A hub MAY let an operator switch corroboration off, and MUST report that it is off. (rev. 2026-11-14: the second adversarial round obtained a declared `unlock` through a false emergency, which no hold stopped.)
+
 **R6 — A plan never undoes itself.** No plan sends one device both actions of an
 opposite pair. `action_types` MUST be a non-empty subset of the class's grants
 (else `invalid_actions`). Outside an emergency, an intent to be resolved whose
@@ -198,7 +200,7 @@ returned to the caller with their reason and appended to the record (§9).
 | **G2** | **Authorized.** An action runs only if the intent's class grants it. | R6, R7 |
 | **G3** | **Placed.** When the class restricts, only devices at or below the named place act; an unknown restricting place is refused outside an emergency. | R2, R3 |
 | **G4** | **Consistent.** No plan sends a device two opposite actions; no device oscillates across intents. | R6, R10 |
-| **G5** | **Declared first in emergencies.** An emergency-capable device with declared emergency actions performs exactly those, on both paths. | R4, R5 |
+| **G5** | **Declared first in real emergencies.** In an emergency the operator, a device or a person confirmed, an emergency-capable device with declared emergency actions performs exactly those, on both paths; an emergency nothing confirms runs as an alert, its own actions held for a person. | R4, R5, R5a |
 | **G6** | **Accountable.** Nothing refused, dropped or held is silent: it is returned with its reason and recorded. | R12, §9 |
 | **G7** | **Policed.** The operator's policies evaluate every plan before it runs. | R11 |
 | **G8** | **No side door.** Direct control is closed, or open only to the operator credential; placement and the record are the operator's. | R8, §3 |
@@ -317,7 +319,7 @@ check against its binding, in conformance mode:
 | G2 Authorized | S04, S05, S18 |
 | G3 Placed | S06, S07, S08 (if the hub resolves) |
 | G4 Consistent | S09, S10 |
-| G5 Declared first | S11, S12 (if the hub resolves) |
+| G5 Declared first | S11, S12 (if the hub resolves), S22 |
 | G6 Accountable | S19, S20 |
 | G7 Policed | S13 |
 | G8 No side door | S01, S02, S21 |

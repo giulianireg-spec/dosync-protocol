@@ -139,6 +139,7 @@ def test_what_a_plan_reports_survives_a_policy_that_rebuilds_it():
                                               excluded_device_ids=["siren"],
                                               bypass_on_emergency=False))
     asyncio.run(h.execute_intent(Intent(intent=IntentClass("ensure_safety"),
-                                        urgency=Urgency.EMERGENCY, context={}), SimulatedExecutor()))
+                                        urgency=Urgency.EMERGENCY, context={},
+                                        emergency_basis="operator"), SimulatedExecutor()))
     entry = [e for e in h.audit_log.entries() if e.get("type") == "intent_executed"][-1]
     assert entry.get("included_without_action") == ["lamp"]

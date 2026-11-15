@@ -155,7 +155,8 @@ def test_emergency_skips_validation():
     ], urgency=Urgency.EMERGENCY)
     hub.resolver.resolve = lambda intent: plan
 
-    intent = Intent(intent=IntentClass("ensure_safety"), urgency=Urgency.EMERGENCY, context={})
+    intent = Intent(intent=IntentClass("ensure_safety"), urgency=Urgency.EMERGENCY, context={},
+                    emergency_basis="operator")
     intent.intent_id = "t5"
     result = _run(hub.execute_intent(intent, SimulatedExecutor()))
 

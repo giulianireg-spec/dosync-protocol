@@ -10,6 +10,20 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+- **An emergency is corroborated, not claimed** (spec §6.8 rule 5a, SAMUEL R5a/G5). EMERGENCY urgency relaxed
+  rules on the caller's word, and the second adversarial round obtained a lock's declared `unlock` through a false
+  emergency. Now an EMERGENCY is confirmed only by the operator credential, by an `emergency` event a provisioned
+  device sent with its own token (`X-Device-Token` on `POST /v1/event`) from the named place within
+  `DOSYNC_EMERGENCY_CORROBORATION_SECONDS` (300 s), or by a person releasing it. An unconfirmed one keeps the
+  emergency's limits (an emergency-capable device does only what it declared) and loses its exemptions: it runs
+  what both an emergency and an alert allow, holds what only the emergency adds for a person
+  (`unconfirmed_emergency`; releasing it confirms the emergency), and runs alarms and messages at once. Recorded as
+  `emergency_unconfirmed`; every confirmed emergency carries its `emergency_basis`. Replaying the round's 146
+  replayable runs, no action runs that did not run before, and four of the six runs that obtained the unlock no
+  longer do. **Migration:** a deployment whose sensors post emergencies with an agent key should provision device
+  tokens; `DOSYNC_EMERGENCY_CORROBORATION=off` keeps the old trust meanwhile. Certification check S22.
+
 ### Added
 - **Confirm part of a hold.** `POST /v1/intents/{id}/confirm` accepts `{"actions": [{device_id, action}, ...]}`:
   those run and the rest of that hold is denied (`confirmation_denied`, `partial: true`); an action the hold does

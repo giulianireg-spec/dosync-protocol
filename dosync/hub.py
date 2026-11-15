@@ -103,6 +103,10 @@ class DoSyncHub:
         # never holds that credential and the MCP server offers no way to confirm.
         self._pending_confirmations: dict[str, dict] = {}
         self.last_readings: dict[str, dict] = {}
+        # Authenticated emergency events (time, device_id): what can corroborate an
+        # agent's EMERGENCY (spec §6.8 rule 5a).
+        from collections import deque as _deque
+        self._trusted_emergencies = _deque(maxlen=1000)
         from collections import deque as _deque
         self._recent_runs = _deque(maxlen=10000)   # (time, device_id, action) that ran
         self._hold_outcomes: dict[str, dict] = {}   # intent_id -> how its hold ended   # device_id -> key -> {value, timestamp, event_id}
@@ -779,6 +783,79 @@ class DoSyncHub:
                 "actions": [{"device_id": a.device_id, "action": a.action,
                              "reason": r} for a, r in pend["held_pairs"]]}
 
+    # ── Emergency authority (spec §6.8 rule 5a) ───────────────────────────────
+
+    def _corroboration_window(self) -> float:
+        try:
+            return float(os.environ.get("DOSYNC_EMERGENCY_CORROBORATION_SECONDS", "300"))
+        except ValueError:
+            return 300.0
+
+    def emergency_basis_for(self, context: dict | None) -> Optional[str]:
+        """Why an EMERGENCY with this context is real, or None if nothing says so.
+
+        EMERGENCY urgency relaxes rules (a place nobody is at acts everywhere,
+        declared emergency actions run, bypassable policies are skipped), so it
+        cannot rest on the caller's word: an agent misled into "there is a fire"
+        would otherwise open a lock whose declared emergency action is unlock --
+        the one attack the second adversarial round could not stop. Corroborated
+        means an emergency event from a device, authenticated with that device's
+        own token (no agent key can produce one), within the window and inside
+        the intent's place when it names one. The operator credential and a
+        person's confirmation are checked by their callers.
+        ``DOSYNC_EMERGENCY_CORROBORATION=off`` restores the old trust, loudly.
+        """
+        from .models import location_contains
+        if os.environ.get("DOSYNC_EMERGENCY_CORROBORATION", "required").lower() == "off":
+            return "not_required"
+        place = ((context or {}).get("location") or "").strip("/")
+        horizon = time.time() - self._corroboration_window()
+        for ts, device_id in reversed(self._trusted_emergencies):
+            if ts < horizon:
+                break
+            if place:
+                dev = self.registry.get(device_id)
+                where = (getattr(dev, "location", "") or "") if dev else ""
+                if not (location_contains(place, where) or location_contains(where, place)):
+                    continue
+            return f"device_event:{device_id}"
+        return None
+
+    #: What only warns people (spec CAPABILITY-TYPES: alarm; notify, call, display).
+    #: An unconfirmed emergency still runs these at once: a false one costs a
+    #: needless alarm, a real one is not kept silent waiting for a confirmation.
+    _WARNING_ACTIONS = frozenset({"alarm", "notify", "call", "display"})
+
+    def _emergency_only_actions(self, intent: Intent, class_row):
+        """(what an EMERGENCY would add over the same intent at ALERT, every pair
+        the EMERGENCY allows). An unconfirmed emergency keeps the emergency's
+        restrictions -- an emergency-capable device does only what it declared
+        (rule 5) -- and loses its relaxations: it runs what both allow."""
+        import dataclasses
+        from .samuel import ClassGrant, admit, validate_proposals
+
+        def plan_at(urgency):
+            probe = dataclasses.replace(intent, urgency=urgency,
+                                        context=dict(intent.context or {}))
+            adm = admit(probe.intent.value, class_row, urgency, probe.context, self.registry.active())
+            if not adm.admitted:
+                return []
+            probe.context = adm.context
+            if (probe.context or {}).get("proposed_actions"):
+                p = validate_proposals(probe, ClassGrant.from_row(class_row, probe.context),
+                                       self.registry.get, self.registry.active())
+            else:
+                p = self.resolver.resolve(probe)
+            return list(p.actions)
+        try:
+            urgent, calm = plan_at(Urgency.EMERGENCY), plan_at(Urgency.ALERT)
+        except Exception as e:  # a resolver that fails here: nothing runs on the emergency's say-so
+            log.warning("Could not compute the emergency-only actions of %s: %s", intent.intent_id, e)
+            return [], set()
+        have = {(a.device_id, a.action) for a in calm}
+        return ([a for a in urgent if (a.device_id, a.action) not in have],
+                {(a.device_id, a.action) for a in urgent})
+
     async def execute_intent(
         self,
         intent: Intent,
@@ -804,6 +881,37 @@ class DoSyncHub:
         # fails explicitly (never silently falls to the flat path): a declared
         # composition the hub cannot compose is a configuration error that must shout.
         intent_class_row = self.db.get_intent_class(intent.intent.value)
+
+        # ── Emergency authority (spec §6.8 rule 5a, G5) ──────────────────────
+        # An EMERGENCY nothing corroborates runs as an ALERT; what only the
+        # emergency would add is held for a person below, who confirms it as an
+        # emergency. A real fire costs one confirmation; a false one gains nothing.
+        _emergency_only: list = []
+        _emergency_warnings: list = []
+        _emergency_allowed = None   # set: an unconfirmed emergency runs only what an emergency allows
+        _emergency_refused: list = []
+        if intent.urgency == Urgency.EMERGENCY and not getattr(intent, "emergency_basis", None):
+            _basis = self.emergency_basis_for(intent.context)
+            if _basis:
+                intent.emergency_basis = _basis
+            else:
+                _emergency_only, _emergency_allowed = self._emergency_only_actions(intent, intent_class_row)
+                # Warnings run now (with the alert's plan, under its policies); the
+                # rest waits for a person.
+                _emergency_warnings = [a for a in _emergency_only if a.action in self._WARNING_ACTIONS]
+                _emergency_only = [a for a in _emergency_only if a.action not in self._WARNING_ACTIONS]
+                intent.urgency = Urgency.ALERT
+                log.warning("EMERGENCY intent %s is not corroborated: running it as an alert, "
+                            "%d emergency-only action(s) held for a person",
+                            intent.intent.value, len(_emergency_only))
+                self.audit_log.append({
+                    "type": "emergency_unconfirmed", "intent_id": intent.intent_id,
+                    "intent": intent.intent.value, "source": getattr(intent, "source", "api"),
+                    "location": (intent.context or {}).get("location"),
+                    "held": [{"device_id": a.device_id, "action": a.action} for a in _emergency_only],
+                    "warnings_run": [{"device_id": a.device_id, "action": a.action}
+                                     for a in _emergency_warnings],
+                })
 
         # ── SAMUEL admission (G2, G3, G4; refusals are G6) ───────────────────
         # The intent as a whole: its class is registered and grants what it
@@ -849,6 +957,15 @@ class DoSyncHub:
                                       self.registry.get, self.registry.active())
         else:
             plan = self.resolver.resolve(intent)
+        if _emergency_allowed is not None:
+            # What the alert grants but the emergency would not (an emergency-capable
+            # device asked for something other than its declared emergency action)
+            # is refused, as in a real emergency; warnings the emergency adds run.
+            _emergency_refused = [{"device_id": a.device_id, "action": a.action,
+                                   "reason": "not_its_emergency_action"}
+                                  for a in plan.actions if (a.device_id, a.action) not in _emergency_allowed]
+            plan.actions = [a for a in plan.actions
+                            if (a.device_id, a.action) in _emergency_allowed] + _emergency_warnings
         # Parameter validation and the policy engine rebuild the plan from its
         # actions alone; what the plan says about devices that took part without
         # acting, and about refused proposals, is captured here so no later step
@@ -856,6 +973,15 @@ class DoSyncHub:
         # whenever a policy modified the plan, from 2026-09-30 to 2026-10-02.)
         _plan_idle = list(getattr(plan, "included_without_action", None) or [])
         _plan_refused = list(getattr(plan, "refused_proposals", None) or [])
+        if _emergency_allowed is not None:
+            # Held for a person below (or, warnings, run), not refused: an unconfirmed emergency's own
+            # actions fall outside the alert's class, and are reported once, as held.
+            _eo = {(a.device_id, a.action) for a in _emergency_only + _emergency_warnings}
+            _seen = {(r.get("device_id"), r.get("action")) for r in _emergency_refused}
+            _plan_refused = [r for r in _plan_refused
+                             if (r.get("device_id"), r.get("action")) not in _eo | _seen] + _emergency_refused
+            if hasattr(plan, "refused_proposals"):
+                plan.refused_proposals = _plan_refused
         # No-oscillation guard (spec §6.8 rule 10): drop an action that would
         # revert a device more than the allowed number of times within the
         # window, across intents. A declared emergency action is exempt.
@@ -1016,6 +1142,8 @@ class DoSyncHub:
         # with no confirmation policy (_held is empty, plan unchanged).
         from .models import ActionPlan as _APlanC
         _runnable, _held = self._split_plan_by_confirmation(plan, intent)
+        if _emergency_only:
+            _held = list(_held) + [(a, "unconfirmed_emergency") for a in _emergency_only]
         _held_desc = []
         if _held:
             plan = _APlanC(intent_id=plan.intent_id, actions=_runnable, urgency=plan.urgency,
@@ -1023,10 +1151,15 @@ class DoSyncHub:
             _held_desc = [{"device_id": a.device_id, "action": a.action, "reason": r}
                           for a, r in _held]
             _now = time.time()
+            # A person who releases an unconfirmed emergency confirms it: the held
+            # actions then run as the emergency they were asked for.
+            import dataclasses as _dc
+            _hold_intent = (_dc.replace(intent, urgency=Urgency.EMERGENCY, emergency_basis="person")
+                            if _emergency_only else intent)
             self._pending_confirmations[intent.intent_id] = {
                 "actions": [a for a, _ in _held],
                 "held_pairs": _held,
-                "intent": intent,
+                "intent": _hold_intent,
                 "intent_value": intent.intent.value,
                 "created_at": _now,
                 "deadline": _now + self._confirmation_timeout(),
@@ -1312,13 +1445,17 @@ class DoSyncHub:
         log.info("Event received: %s from %s [%s]",
                  event.event_id, event.device_id, event.severity.value)
 
+        _authenticated = bool(getattr(event, "authenticated", False))
         self.audit_log.append({
             "type":      "device_event",
             "device_id": event.device_id,
             "event_id":  event.event_id,
             "severity":  event.severity.value,
             "data":      event.data,
+            **({"authenticated": True} if _authenticated else {}),
         })
+        if _authenticated and getattr(event.severity, "value", event.severity) == "emergency":
+            self._trusted_emergencies.append((event.timestamp, event.device_id))
         # Last value reported per key, so a WoT consumer can read a property
         # (GET /v1/things/{id}/properties/{name}) without subscribing first.
         if isinstance(event.data, dict):

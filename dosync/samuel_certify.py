@@ -81,9 +81,9 @@ class Hub:
             except ValueError:
                 return e.code, {"raw": raw.decode(errors="replace")}
 
-    def fire(self, cls, urgency="info", **context):
+    def fire(self, cls, urgency="info", operator=False, **context):
         return self.call("POST", "/samuel/v0/intents",
-                         {"class": cls, "urgency": urgency, "context": context})
+                         {"class": cls, "urgency": urgency, "context": context}, operator=operator)
 
 
 def _reason(body):
@@ -229,8 +229,9 @@ def run(hub: Hub) -> Report:
                        "intents, is not reversed again (oscillation)",
           window <= 0 or dropped, f"last decision: {last}")
 
-    # S11 -- G5 declared first, on proposals
-    st, dec = hub.fire("ensure_safety", "emergency",
+    # S11 -- G5 declared first, on proposals. A real emergency: the operator's
+    # (what an agent's word alone obtains is S22).
+    st, dec = hub.fire("ensure_safety", "emergency", operator=True,
                        proposed_actions=_propose((D["conveyor"], "start"), (D["conveyor"], "stop")))
     r.add("S11", "G5", "In an emergency a device does exactly its declared emergency actions: stop runs "
                        "although the class does not grant it, start is refused",
@@ -240,7 +241,7 @@ def run(hub: Hub) -> Report:
 
     # S12 -- G5 on the hub's own resolution
     if info.get("resolves"):
-        st, dec = hub.fire("ensure_safety", "emergency", location="site-a/line-3")
+        st, dec = hub.fire("ensure_safety", "emergency", operator=True, location="site-a/line-3")
         acts = {a for d, a in _pairs(dec.get("ran")) if d == D["conveyor"]}
         r.add("S12", "G5", "A resolved emergency makes the conveyor stop, and only stop",
               st == 200 and acts == {"stop"}, f"status {st}: conveyor did {acts}")
@@ -272,10 +273,12 @@ def run(hub: Hub) -> Report:
     r.add("S15", "G9", "Only the operator credential releases a hold: the agent's is refused (403)",
           st_a == 403 and st_o == 200 and released, f"agent {st_a}, operator {st_o}: {conf}")
     hub.call("PUT", "/samuel/v0/policies", {"confirmations": [{"actions": ["stop"]}]}, operator=True)
-    st, dec = hub.fire("ensure_safety", "emergency", proposed_actions=_propose((D["conveyor"], "stop")))
+    st, dec = hub.fire("ensure_safety", "emergency", operator=True,
+                       proposed_actions=_propose((D["conveyor"], "stop")))
     hub.call("PUT", "/samuel/v0/policies",
              {"confirmations": [{"actions": ["stop"], "even_in_emergency": True}]}, operator=True)
-    st2, dec_e = hub.fire("ensure_safety", "emergency", proposed_actions=_propose((D["conveyor"], "stop")))
+    st2, dec_e = hub.fire("ensure_safety", "emergency", operator=True,
+                          proposed_actions=_propose((D["conveyor"], "stop")))
     r.add("S16", "G9", "In an emergency a device's declared emergency action is not held by a mark, "
                        "unless the mark says even_in_emergency",
           st == 200 and (D["conveyor"], "stop") in _pairs(dec.get("ran"))
@@ -291,6 +294,22 @@ def run(hub: Hub) -> Report:
     r.add("S17", "G9", "A denied hold is dropped and can no longer be released",
           st_d == 200 and st_again == 404, f"deny {st_d}, confirm after deny {st_again}")
     hub.call("PUT", "/samuel/v0/policies", {}, operator=True)
+
+    # S22 -- G5 an emergency is corroborated, not claimed: an agent's EMERGENCY
+    # with nothing to confirm it does not run a declared emergency action; it is
+    # held for a person, and the person's release runs it as the emergency.
+    st, dec = hub.fire("ensure_safety", "emergency",
+                       proposed_actions=_propose((D["conveyor"], "stop")))
+    held = {(x["device_id"], x["action"]): x.get("reason") for x in dec.get("held") or []}
+    iid = dec.get("intent_id")
+    st_r, rel = hub.call("POST", f"/samuel/v0/intents/{iid}/confirm", operator=True) if iid else (0, {})
+    released = any(x.get("device_id") == D["conveyor"] and x.get("action") == "stop"
+                   for x in (rel.get("results") or []))
+    r.add("S22", "G5", "An emergency nothing corroborates does not run a declared emergency action: "
+                       "it is held for a person, whose release runs it",
+          st == 200 and (D["conveyor"], "stop") not in _pairs(dec.get("ran"))
+          and held.get((D["conveyor"], "stop")) == "unconfirmed_emergency" and st_r == 200 and released,
+          f"status {st}: ran={_pairs(dec.get('ran'))} held={held}; release {st_r}")
 
     # S18 -- proposals are well formed, and operate_device needs them
     st1, b1 = hub.fire("operate_device")
