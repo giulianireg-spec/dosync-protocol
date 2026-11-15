@@ -85,6 +85,7 @@ def request(
     url: str,
     body: Optional[dict] = None,
     token_override: Optional[str] = None,
+    as_operator: bool = False,
 ) -> tuple[int, dict]:
     data = json.dumps(body).encode() if body else None
     token = token_override if token_override is not None else os.environ.get("DOSYNC_TOKEN", "")
@@ -100,8 +101,8 @@ def request(
     # is refused (C26, C28) never carry it.
     import re
     operator = os.environ.get("DOSYNC_OPERATOR_TOKEN", "")
-    if operator and method in ("POST", "PATCH", "PUT", "DELETE") and re.search(
-            r"/v1/(intent-classes|devices/register$|things$|devices/[^/]+$)", url):
+    if operator and (as_operator or (method in ("POST", "PATCH", "PUT", "DELETE") and re.search(
+            r"/v1/(intent-classes|devices/register$|things$|devices/[^/]+$)", url))):
         headers["X-Operator-Token"] = operator
 
     ctx = ssl.create_default_context()
@@ -856,10 +857,14 @@ def run_emergency(base: str, report: CertReport):
         "chain intact" if body_audit.get("integrity") else "chain compromised",
     ))
 
-    # E5. Audit log recorded the emergency event
+    # E5. Audit log recorded the emergency event. E01 fires it with an agent's
+    # credential, so a hub that corroborates emergencies (spec §6.8 rule 5a)
+    # records it as `emergency_unconfirmed` and runs it as an alert; one that does
+    # not (or a corroborated one) records it at emergency urgency. Either is a record.
     entries = body_audit.get("entries", [])
     has_emergency = any(
-        e.get("intent") == "ensure_safety" and e.get("urgency") == "emergency"
+        e.get("intent") == "ensure_safety"
+        and (e.get("urgency") == "emergency" or e.get("type") == "emergency_unconfirmed")
         for e in entries
     )
     report.add(TestResult(
@@ -1219,13 +1224,15 @@ def run_conformance_05(base: str, report: CertReport):
 
         # C21. The hub accepts that emergency and records it. Only in certify
         # mode: firing an emergency on a production hub would act on physical
-        # devices, which no conformance check may do.
+        # devices, which no conformance check may do. A real emergency: acting
+        # everywhere is an exemption only a corroborated one has (spec §6.8 rule
+        # 5a), so it is fired with the operator credential when the suite has it.
         _, st = request("GET", f"{base}/v1/status")
         name = "C21  An emergency at an unknown location is accepted and recorded"
         if st.get("certify_mode"):
             e_st, e_body = request("POST", f"{base}/v1/intent/async", {
                 "intent": _CLASS_RESTRICTS, "urgency": "emergency",
-                "context": {"location": "certify-nowhere"}})
+                "context": {"location": "certify-nowhere"}}, as_operator=True)
             report.add(TestResult(
                 name, e_st == 200 and e_body.get("location_not_found") == "certify-nowhere",
                 f"HTTP {e_st}, location_not_found={e_body.get('location_not_found')!r}"))
